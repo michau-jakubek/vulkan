@@ -11,20 +11,6 @@
 
 namespace vtf
 {
-/*
-UNUSED static strings addInstanceExtensions(const strings& instanceExtensions)
-{
-	strings extensions(instanceExtensions);
-	extensions.emplace_back(VK_KHR_SURFACE_EXTENSION_NAME);
-	return extensions;
-}
-UNUSED static strings addDeviceExtensions(const strings& deviceExtensions)
-{
-	strings extensions(deviceExtensions);
-	extensions.emplace_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-	return extensions;
-}
-*/
 
 Canvas::~Canvas	()
 {
