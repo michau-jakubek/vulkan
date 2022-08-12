@@ -46,6 +46,16 @@ void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout, con
 	commandBufferPushConstants(cmd, layout, range.stageFlags, range.offset, range.size, &pc);
 }
 
+void commandBufferClearColorImage (ZCommandBuffer cmd, VkImage image,
+								   const VkClearColorValue&	clearValue,
+								   VkImageLayout			srclayout		= VK_IMAGE_LAYOUT_UNDEFINED,
+								   VkImageLayout			dstlayout		= VK_IMAGE_LAYOUT_GENERAL,
+								   VkAccessFlags			srcAccessMask	= 0,
+								   VkAccessFlags			dstAccessMask	= (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT),
+								   VkPipelineStageFlags		srcStage		= VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+								   VkPipelineStageFlags		dstStage		= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+
 } // namespace vtf
 
 #endif // __VTF_ZCOMMANDBUFFER_HPP_INCLUDED__

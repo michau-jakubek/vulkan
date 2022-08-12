@@ -287,7 +287,7 @@ typedef add_ptr<VkAllocationCallbacks> VkAllocationCallbacksPtr;
 
 typedef ZDeletable<VkInstance,
 	decltype(&vkDestroyInstance), &vkDestroyInstance,
-	swizzle_one_param, VkAllocationCallbacksPtr,
+	swizzle_one_param, VkAllocationCallbacksPtr, /*apiVersion*/ uint32_t,
 	ZDistType<RequiredLayers, std::vector<std::string>>,
 	ZDistType<AvailableLayerExtensions, std::vector<std::string>>>					ZInstance;
 

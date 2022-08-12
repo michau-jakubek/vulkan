@@ -101,3 +101,8 @@ std::size_t printBts (std::ostream& ss, void** bts, std::size_t nbt, std::size_t
 }
 
 #endif // SYSTEM_OS_LINUX
+
+static bool appVerboseFlag;
+bool getAppVerboseFlag () { return appVerboseFlag; }
+void setAppVerboseFlag (bool enable) { appVerboseFlag = enable; }
+

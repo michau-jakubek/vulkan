@@ -314,9 +314,9 @@ ZFence VulkanContext::createFence (bool signaled)
 	return ::vtf::createFence(device, signaled);
 }
 
-ZSemaphore VulkanContext::createSemaphore (bool signaled)
+ZSemaphore VulkanContext::createSemaphore ()
 {
-	return ::vtf::createSemaphore(device, signaled);
+	return ::vtf::createSemaphore(device);
 }
 
 ZCommandPool VulkanContext::createGraphicsCommandPool ()
@@ -502,8 +502,8 @@ VkFormat selectBestDepthStencilFormat (ZPhysicalDevice					device,
 	return VK_FORMAT_UNDEFINED;
 }
 
-ZRenderPass VulkanContext::createRenderPass (std::vector<VkFormat> colorFormats,
-											 std::optional<VkClearValue> clearColor, VkImageLayout finalColorLayout,
+ZRenderPass VulkanContext::createRenderPass (std::vector<VkFormat> colorFormats, std::optional<VkClearValue> clearColor,
+											 VkImageLayout initialColorLayout, VkImageLayout finalColorLayout,
 											 bool enableDepthTest, float maxDepth)
 {
 	const uint32_t colorAttachmentCount = static_cast<uint32_t>(colorFormats.size());
@@ -536,11 +536,15 @@ ZRenderPass VulkanContext::createRenderPass (std::vector<VkFormat> colorFormats,
 	colorAttachmentTemplate.flags			= 0;
 	colorAttachmentTemplate.format			= VK_FORMAT_UNDEFINED;
 	colorAttachmentTemplate.samples			= VK_SAMPLE_COUNT_1_BIT;
-	colorAttachmentTemplate.loadOp			= clearColor.has_value() ?  VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+	colorAttachmentTemplate.loadOp			= clearColor.has_value()
+												? VK_ATTACHMENT_LOAD_OP_CLEAR
+												: (VK_IMAGE_LAYOUT_UNDEFINED != initialColorLayout)
+													? VK_ATTACHMENT_LOAD_OP_LOAD
+													: VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	colorAttachmentTemplate.storeOp			= VK_ATTACHMENT_STORE_OP_STORE;
 	colorAttachmentTemplate.stencilLoadOp	= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	colorAttachmentTemplate.stencilStoreOp	= VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	colorAttachmentTemplate.initialLayout	= VK_IMAGE_LAYOUT_UNDEFINED;
+	colorAttachmentTemplate.initialLayout	= initialColorLayout;
 	colorAttachmentTemplate.finalLayout		= finalColorLayout;
 
 	std::vector<VkAttachmentDescription> attachments(colorAttachmentCount, colorAttachmentTemplate);

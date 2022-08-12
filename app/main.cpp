@@ -3,19 +3,20 @@
 #include <sstream>
 #include <string_view>
 
+#include "main.hpp"
+#include "vtfBacktrace.hpp"
 #include "vtfCUtils.hpp"
 #include "vtfZUtils.hpp"
 #include "vtfContext.hpp"
 #include "vtfFilesystem.hpp"
-#include "main.hpp"
 #include "allTests.hpp"
 
 using namespace vtf;
 
 std::vector<TestRecord> AllTestRecords;
 
-void printUsage(std::ostream& str);
-std::string constructCompleteCommand(const char* appPath);
+static void printUsage(std::ostream& str);
+static std::string constructCompleteCommand(const char* appPath);
 
 int main(int argc, char* argv[])
 {
@@ -61,6 +62,11 @@ int main(int argc, char* argv[])
 	Option layer	{ "-l", 1 };		options.push_back(layer);
 	Option layList	{ "-ll", 0 };		options.push_back(layList);
 	Option btrace	{ "-bt", 0 };		options.push_back(btrace);
+
+	Option vulkan	{ "-vulkan", 1 };	options.push_back(vulkan);
+	Option spirv	{ "-spirv",  1 };	options.push_back(spirv);
+	Option spvValid	{ "-spvvalid", 0 };	options.push_back(spvValid);
+	Option verbose	{ "-verbose", 0 };	options.push_back(verbose);
 
 	if (consumeOptions(help1, options, appArgs, sink) > 0
 		|| consumeOptions(help2, options, appArgs, sink) > 0)
@@ -111,6 +117,41 @@ int main(int argc, char* argv[])
 		backtraceEnabled(fromText(sink.back(), 0, status) != 0);
 	}
 
+	uint32_t	vulkanVer	= Version::make(1, 0);
+	if (consumeOptions(vulkan, options, appArgs, sink) > 0)
+	{
+		vulkanVer = fromText(sink.back(), 10u, status);
+		if (!status)
+		{
+			std::cout << "Unable to parse Vulkan version, default 1.0 will be used" << std::endl;
+		}
+		else
+		{
+			const Version version = Version::from10xMajorPlusMinor(vulkanVer);
+			ASSERTMSG(version.nmajor > 0u && version.nmajor <= 9u, "Mojor Vulkan version must be from 1 to 9");
+			vulkanVer = version;
+		}
+	}
+
+	uint32_t	spirvVer	= Version::make(1, 0);
+	if (consumeOptions(spirv, options, appArgs, sink) > 0)
+	{
+		spirvVer= fromText(sink.back(), 10u, status);
+		if (!status)
+		{
+			std::cout << "Unable to parse SPIR-V version, default 1.0 will be used" << std::endl;
+		}
+		else
+		{
+			const Version version = Version::from10xMajorPlusMinor(spirvVer);
+			ASSERTMSG(version.nmajor > 0u && version.nmajor <= 9u, "Mojor SPIR-V version must be from 1 to 9");
+			spirvVer = version;
+		}
+	}
+
+	bool	spirvValidate	= consumeOptions(spvValid, options, appArgs, sink) > 0;
+	setAppVerboseFlag(consumeOptions(verbose, options, appArgs, sink) > 0);
+
 	if (allArgs.end() == testNamePos)
 	{
 		std::cout << "Unable to find any test name in app parameters" << std::endl;
@@ -122,7 +163,10 @@ int main(int argc, char* argv[])
 	findTestByName(testRecord, AllTestRecords, testNamePos->c_str());
 	testRecord.deviceIndex = VulkanContext::deviceIndex;
 	consumeOptions(layer, options, appArgs, testRecord.layers);
-	testRecord.assets = (fs::path(ASSETS_PATH) / *testNamePos / "").generic_u8string().c_str();
+	testRecord.assets			= (fs::path(ASSETS_PATH) / *testNamePos / "").generic_u8string().c_str();
+	testRecord.vulkanVer		= vulkanVer;
+	testRecord.spirvVer			= spirvVer;
+	testRecord.spvValidation	= spirvValidate;
 
 	strings testArgs;
 	std::copy(std::next(testNamePos), allArgs.end(), std::back_inserter(testArgs));
@@ -136,14 +180,18 @@ void printUsage(std::ostream& str)
 {
 	str << "Usage: app [options] <test_name> [<test_param>,...]" << std::endl;
 	str << "Options:" << std::endl;
-	str << "  -h, --help: prints this help" << std::endl;
-	str << "  -t: prints available test names" << std::endl;
-	str << "  -c: builds auto-complete command" << std::endl;
-	str << "  -dl: prints available device list" <<std::endl;
-	str << "  -d <id>: picks device by id" <<std::endl;
+	str << "  -h, --help:     prints this help and exits" << std::endl;
+	str << "  -t:             prints available test names" << std::endl;
+	str << "  -c:             builds auto-complete command" << std::endl;
+	str << "  -dl:            prints available device list" <<std::endl;
+	str << "  -d <id>:        picks device by id" <<std::endl;
+	str << "  -ll:            prints available instance layer names" << std::endl;
 	str << "  -l <layer> [-l <layer>]: enable layer(s)" << std::endl;
-	str << "  -ll: prints available instance layer names" << std::endl;
-	str << "  -bt: enable backtrace" << std::endl;
+	str << "  -bt:            enable backtrace" << std::endl;
+	str << "  -vulkan <ver>:  (major * 10 + minor), default is 10 aka vulkan1.0" << std::endl;
+	str << "  -spirv <ver>:   (major * 10 + minor), default is 10 aka spirv1.0" << std::endl;
+	str << "  -spvvalid:      enable SPIR-V assembly validation" << std::endl;
+	str << "  -verbose:       enable application diagnostic messages" << std::endl;
 	str << "Available tests are:" << std::endl;
 	printAvailableTests(str, AllTestRecords, "\t", true);
 }
@@ -163,3 +211,8 @@ std::string constructCompleteCommand(const char* appPath)
 	ss << ' ' << appPath; // getRealPath(appPath, realpathStatus);
 	return ss.str();
 }
+
+static bool globalDebugApp;
+
+bool getGlobalAppDebug () { return globalDebugApp; }
+void setGlobalAppDebug (bool enable) { globalDebugApp = enable; }

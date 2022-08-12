@@ -33,7 +33,7 @@ public:
 	bool addFromFile(VkShaderStageFlagBits type,
 					 const std::string& fileName, const strings& includePaths = {},
 					 const std::string& entryName = "main", bool verbose = true);
-	void buildAndVerify ();
+	void buildAndVerify (bool enableValidation = false, std::optional<uint32_t> spirvVer = {});
 	std::optional<ZShaderModule>	getShader (VkShaderStageFlagBits stage, bool verbose = false) const;
 };
 

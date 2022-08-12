@@ -25,8 +25,8 @@ public:
 					 const strings&		instanceExtensions	= {},
 					 const strings&		deviceExtensions	= {},
 					 uint32_t			apiVersion			= VK_API_VERSION_1_0,
-					 uint32_t			engVersion			= VK_MAKE_VERSION(1, 0, 0),
-					 uint32_t			appVersion			= VK_MAKE_VERSION(1, 0, 0));
+					 uint32_t			engVersion			= VK_API_VERSION_1_0,
+					 uint32_t			appVersion			= VK_API_VERSION_1_0);
 
 	VulkanContext	(VkAllocationCallbacksPtr	allocationCallbacks,
 					 VkDebugUtilsMessengerEXT	debugMessengerHandle,
@@ -49,7 +49,7 @@ public:
 	static uint32_t					deviceIndex;
 
 	ZFence			createFence					(bool signaled = false);
-	ZSemaphore		createSemaphore				(bool signaled = false);
+	ZSemaphore		createSemaphore				();
 	ZCommandPool	createGraphicsCommandPool	();
 	ZCommandPool	createComputeCommandPool	();
 	ZCommandBuffer	createCommandBuffer			(ZCommandPool commandPool);
@@ -61,7 +61,7 @@ public:
 											 VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, bool enableDepthTest = false, uint32_t patchControlPoints = 0);
 	ZPipeline		createGraphicsPipeline	(ZPipelineLayout layout, ZRenderPass renderPass, std::optional<VkExtent2D> extent,
 											 ZShaderModule vertShaderModule, ZShaderModule fragShaderModule, bool enableDepthTest = false);
-	ZBuffer			createBuffer		(VkDeviceSize size, ZBufferUsageFlags usage,
+	ZBuffer			createBuffer		(VkDeviceSize size, ZBufferUsageFlags usage = ZBufferUsageFlags::empty(),
 										 ZMemoryPropertyFlags properties = { VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT }) const;
 	ZBuffer			createBuffer		(ZImage image, ZBufferUsageFlags usage = ZBufferUsageFlags::empty(),
 										 uint32_t baseLevel = 0, uint32_t levels = (~0u),
@@ -80,7 +80,9 @@ public:
 	ZFramebuffer	createFramebuffer	(ZRenderPass renderPass, uint32_t width, uint32_t height, const std::vector<ZImageView>& attachments);
 
 	ZRenderPass		createRenderPass	(std::vector<VkFormat> colorFormats,
-										 std::optional<VkClearValue> clearColor = {}, VkImageLayout finalColorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+										 std::optional<VkClearValue> clearColor = {},
+										 VkImageLayout initialColorLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+										 VkImageLayout finalColorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 										 bool enableDepthBuffer = false, float maxDepth = 1.0f);
 	VkRenderPassBeginInfo	makeRenderPassBeginInfo(ZRenderPass rp, ZFramebuffer fb, const VkExtent2D& extent) const;
 

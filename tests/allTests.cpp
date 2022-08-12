@@ -198,8 +198,8 @@ static int consumeOptions (const Option& opt, const std::vector<Option>& opts, u
 {
 	if (arg >= args.size()) return 0;
 
-	int skip	= 0;
-	int found	= 0;
+	uint32_t	skip	= 0;
+	int			found	= 0;
 
 	if (std::strcmp(opt.name, args[arg].c_str()) == 0)
 	{

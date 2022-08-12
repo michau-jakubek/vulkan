@@ -30,34 +30,35 @@ bool userEnforcesFloat32 (const strings& params)
 	return consumeOptions(enforceFloate32, options, args, sink) > 0;
 }
 
-int performTest (Canvas& canvas, const std::string&	assets, bool enableFloat64);
+int performTest (Canvas& canvas, const std::string&	assets, bool enableFloat64, uint32_t spvVer, bool enableValidation);
 
 int prepareTest (const TestRecord& record, const strings& params)
 {
 	UNREF(params);
 
-	std::cout << "Arguments"													<< std::endl;
-	std::cout << "  [-f] Enforce using Float32 in shader"						<< std::endl;
-	std::cout << "  Otherwise Float64 will be used if available"				<< std::endl;
-	std::cout																	<< std::endl;
-	std::cout << "Navigation keys combination"									<< std::endl;
-	std::cout << "  Scroll Left|Right|Up|Down: Move the picture slowly"			<< std::endl;
-	std::cout << "  Ctrl or|and Mice Button pressed:"							<< std::endl;
-	std::cout << "   * cursor move:            Move the picture fast"			<< std::endl;
-	std::cout << "   * scroll dowm:            Zoom in"							<< std::endl;
-	std::cout << "   * scroll dowm:            Zoom out"						<< std::endl;
-	std::cout << "  R:                         Restore to start settings"		<< std::endl;
-	std::cout << "  S:                         Print diagnostic information"	<< std::endl;
-	std::cout << "  Gray(+)                    Increment iteration count"		<< std::endl;
-	std::cout << "  Gray(-)                    Decrement iteration count"		<< std::endl;
-	std::cout << "  Esc:                       Quit"							<< std::endl;
+	std::cout << "Arguments"														<< std::endl;
+	std::cout << "  [-f] Enforce using Float32 in shader"							<< std::endl;
+	std::cout << "  Otherwise Float64 will be used if available"					<< std::endl;
+	std::cout																		<< std::endl;
+	std::cout << "Navigation keys combination"										<< std::endl;
+	std::cout << "  Scroll Left|Right|Up|Down: Move the picture slowly"				<< std::endl;
+	std::cout << "  Ctrl or|and Mice Button pressed:"								<< std::endl;
+	std::cout << "   * cursor move:            Move the picture fast"				<< std::endl;
+	std::cout << "   * scroll dowm:            Zoom in"								<< std::endl;
+	std::cout << "   * scroll dowm:            Zoom out"							<< std::endl;
+	std::cout << "   (Mice's buttons might not work correctly on some platforms)"	<< std::endl;
+	std::cout << "  R:                         Restore to start settings"			<< std::endl;
+	std::cout << "  S:                         Print diagnostic information"		<< std::endl;
+	std::cout << "  Gray(+)                    Increment iteration count"			<< std::endl;
+	std::cout << "  Gray(-)                    Decrement iteration count"			<< std::endl;
+	std::cout << "  Esc:                       Quit"								<< std::endl;
 
-	Canvas	cs (record.name, record.layers);
+	Canvas	cs (record.name, record.layers, {}, {}, Canvas::DefaultStyle, record.vulkanVer);
 
 	const bool	enableFloat64	= userEnforcesFloat32(params) ? false : isFloat64Supported(cs.physicalDevice);
 	std::cout << "Current shader mode Float" << (enableFloat64 ? "64" : "32") << std::endl;
 
-	return performTest(cs, record.assets, enableFloat64);
+	return performTest(cs, record.assets, enableFloat64, record.spirvVer, record.spvValidation);
 }
 
 template<class Float>
@@ -133,7 +134,7 @@ struct UserInput : UserInput_
 
 		step = !step ? iterationStep : std::abs(step);
 
-		const bool inc = tick ? ((iterationTick % tick) == 0) : true;
+		const bool inc = tick ? (((uint32_t)iterationTick % tick) == 0) : true;
 
 		if (inc) pc.iterCount += step;
 	}
@@ -145,7 +146,7 @@ struct UserInput : UserInput_
 
 		step = !step ? iterationStep : std::abs(step);
 
-		const bool inc = tick ? ((iterationTick % tick) == 0) : true;
+		const bool inc = tick ? (((uint32_t)iterationTick % tick) == 0) : true;
 
 		if (inc && pc.iterCount > iterationCount)
 			pc.iterCount = std::max(iterationCount, (pc.iterCount - step));
@@ -202,7 +203,7 @@ void onKey (Canvas& cs, void* userData, int key, int scancode, int action, int m
 	{
 		ui->miceKeyXcursor = ui->xCursor;
 		ui->miceKeyYcursor = ui->yCursor;
-		ui->ctrlPressed = action == GLFW_PRESS;
+		ui->ctrlPressed = (GLFW_PRESS == action || GLFW_REPEAT == action);
 	}
 	else if (action == GLFW_PRESS)
 	{
@@ -356,12 +357,12 @@ void commandBufferPushConstants (ZCommandBuffer cmdBuffer, ZPipelineLayout pipel
 	else ::vtf::commandBufferPushConstants(cmdBuffer, pipelineLayout, std::get<UserInput<float>>(vui).pc);
 }
 
-int performTest (Canvas& cs, const std::string&	assets, bool enableFloat64)
+int performTest (Canvas& cs, const std::string&	assets, bool enableFloat64, uint32_t spvVer, bool enableValidation)
 {
 	ProgramCollection		programs(cs);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, (assets + "shader.vert"));
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, (assets + (enableFloat64 ? "dshader.frag" : "fshader.frag")));
-	programs.buildAndVerify();
+	programs.buildAndVerify(enableValidation, spvVer);
 
 	ZShaderModule			vertShaderModule	= *programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
 	ZShaderModule			fragShaderModule	= *programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);
@@ -381,7 +382,7 @@ int performTest (Canvas& cs, const std::string&	assets, bool enableFloat64)
 	}
 
 	PipelineLayout			pm					(cs);
-	const VkClearValue		clearColor			= {0.5f, 0.5f, 0.5, 0.5f};
+	const VkClearValue		clearColor			= {{{0.5f, 0.5f, 0.5, 0.5f}}};
 	ZRenderPass				renderPass			= cs.createRenderPass({cs.format.format}, clearColor);
 	ZPipelineLayout			pipelineLayout		= enableFloat64
 													? pm.createPipelineLayout<PushConstant<double>>()

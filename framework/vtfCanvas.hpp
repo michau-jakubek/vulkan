@@ -155,8 +155,10 @@ public:
 	const CanvasStyle&		style;
 	GLFWEvents&				events();
 
+	VkImage					getSwapchainImage (uint32_t swapImageIndex) const;
 	VkRenderPassBeginInfo	makeRenderPassBeginInfo	(ZRenderPass rp, uint32_t swapImageIndex) const;
-	void					transitionImageForPresent (ZCommandBuffer cmdBuffer, uint32_t swapImageIndex);
+	void					transitionImageForPresent (ZCommandBuffer cmdBuffer, uint32_t swapImageIndex,
+													   VkImageLayout oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	typedef std::function<bool (Canvas& canvas, ZCommandBuffer cmdBuffer, uint32_t swapImageIndex)> OnCommandRecordingCallback;
 	int						run					(ZRenderPass					rp,
 												 OnCommandRecordingCallback		onCommandRecording,

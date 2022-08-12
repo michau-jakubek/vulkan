@@ -8,8 +8,8 @@
 namespace vtf
 {
 
-int				computePixelByteWidth (VkFormat format);
-int				computePixelChannelCount (VkFormat format);
+uint32_t		computePixelByteWidth (VkFormat format);
+uint32_t		computePixelChannelCount (VkFormat format);
 uint32_t		sampleFlagsToSampleCount(VkSampleCountFlags flags);
 uint32_t		computeMipLevelCount (uint32_t width, uint32_t height);
 VkDeviceSize	computeBufferSize (VkFormat format, uint32_t baseLevelWidth, uint32_t baseLevelHeight, uint32_t baseLevel, uint32_t levels, uint32_t layers, VkSampleCountFlags samples);
@@ -28,7 +28,7 @@ uint32_t		readBufferData	(ZBuffer buffer, uint8_t* dst, VkDeviceSize size = VK_W
 template<template<class, class...> class C, class T, class... V>
 bool writeBuffer(ZBuffer buffer, const C<T, V...>& c, uint32_t count = INVALID_UINT32)
 {
-	if (count == INVALID_UINT32 || count > c.size()) count = c.size();
+	if (count == INVALID_UINT32 || count > c.size()) count = static_cast<uint32_t>(c.size());
 	const VkDeviceSize	dataSize	= count * sizeof(T);
 	const VkDeviceSize	bufferSize	= buffer.getParam<VkDeviceSize>();
 	const VkDeviceSize	writeSize	= writeBufferData(buffer, reinterpret_cast<const uint8_t*>(c.data()), dataSize);
@@ -61,7 +61,7 @@ template<class T>
 uint32_t readBuffer(ZBuffer buffer, std::vector<T>& container, uint32_t count = INVALID_UINT32)
 {
 	const VkDeviceSize	bufferSize		= buffer.getParam<VkDeviceSize>();
-	const uint32_t		availableCount	= bufferSize / sizeof(T);
+	const uint32_t		availableCount	= static_cast<uint32_t>(bufferSize / sizeof(T));
 	if (count == INVALID_UINT32 || count > availableCount)
 		count = availableCount;
 	const VkDeviceSize	readSize		= count * sizeof(T);

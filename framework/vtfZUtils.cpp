@@ -12,7 +12,7 @@ namespace vtf
 
 VkClearValue makeClearColor (const Vec4& color)
 {
-	return { color[0], color[1], color[2], color[3] };
+	return {{{ color[0], color[1], color[2], color[3] }}};
 }
 
 std::ostream& operator<<(std::ostream& str, const Version& v)
@@ -61,7 +61,7 @@ ZImage createImage (ZDevice device, VkFormat format, uint32_t width, uint32_t he
 {
 	const auto availableLevels	= computeMipLevelCount(width, height);
 	const auto effectiveUsage	= usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-	const auto effectiveLevels	= (uint32_t(~0) == mipLevels) ? availableLevels : mipLevels ? std::min(mipLevels, availableLevels) : 1;
+	const auto effectiveLevels	= (INVALID_UINT32 == mipLevels) ? availableLevels : mipLevels ? std::min(mipLevels, availableLevels) : 1;
 	const auto callbacks		= device.getParam<VkAllocationCallbacksPtr>();
 
 	VkImageCreateInfo imageInfo{};
@@ -290,7 +290,7 @@ ZInstance		createInstance (const char*					appName,
 								uint32_t					engVersion,
 								uint32_t					appVersion)
 {
-	ZInstance			instance			(getAllocationCallbacks(), requiredLayers, {});
+	ZInstance			instance			(getAllocationCallbacks(), apiVersion, requiredLayers, {});
 	add_ref<strings>	availableExtensions	= instance.getParamRef<ZDistType<AvailableLayerExtensions, strings>>().data;
 
 	strings availableLayers;
@@ -373,6 +373,7 @@ ZPhysicalDevice selectPhysicalDevice(const uint32_t							proposedDeviceIndex,
 	add_cref<strings>	layers				= instance.getParamRef<ZDistType<RequiredLayers, strings>>().data;
 	ZPhysicalDevice		physicalDevice		(instance.getParam<VkAllocationCallbacksPtr>(), instance, physicalDeviceIndex, {});
 	add_ref<strings>	availableExtensions	= physicalDevice.getParamRef<strings>();
+	const strings		extensionToRemove	{ VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME };
 
 	ASSERTION(queuesToIndices.size());
 	ASSERTION(!(surface.has_value() ^ (nullptr != pPresentQueueFamilyIndex)));
@@ -404,6 +405,7 @@ ZPhysicalDevice selectPhysicalDevice(const uint32_t							proposedDeviceIndex,
 		{
 			const VkPhysicalDevice device = devices.at(i);
 			availableExtensions = enumerateDeviceExtensions(device, layers);
+			removeStrings(extensionToRemove, availableExtensions);
 			if (containsAllString(requiredExtensions, availableExtensions) && updateQueues(device))
 			{
 				physicalDeviceIndex = i;
@@ -416,6 +418,7 @@ ZPhysicalDevice selectPhysicalDevice(const uint32_t							proposedDeviceIndex,
 	{
 		VkPhysicalDevice device = devices[proposedDeviceIndex];
 		availableExtensions = enumerateDeviceExtensions(device, layers);
+		removeStrings(extensionToRemove, availableExtensions);
 		if (containsAllString(requiredExtensions, availableExtensions) && updateQueues(device))
 		{
 			physicalDeviceIndex = proposedDeviceIndex;
@@ -567,7 +570,7 @@ void waitForFences (std::initializer_list<ZFence> fences, uint64_t timeout)
 		for (auto i = b; i != fences.end(); ++i)
 		{
 			ASSERTION(device == i->getParam<ZDevice>());
-			handles[std::distance(b, i)] = **i;
+			handles[make_unsigned(std::distance(b, i))] = **i;
 		}
 		VKASSERT2(vkWaitForFences(*device, count, handles.data(), VK_TRUE, timeout));
 	}
@@ -583,7 +586,7 @@ void waitForFences (std::vector<ZFence> fences, uint64_t timeout)
 		for (auto i = b; i != fences.end(); ++i)
 		{
 			ASSERTION(device == i->getParam<ZDevice>());
-			handles[std::distance(b, i)] = **i;
+			handles[make_unsigned(std::distance(b, i))] = **i;
 		}
 		VKASSERT2(vkWaitForFences(*device, count, handles.data(), VK_TRUE, timeout));
 	}
@@ -605,7 +608,7 @@ void resetFences (std::initializer_list<ZFence> fences)
 		for (auto i = b; i != fences.end(); ++i)
 		{
 			ASSERTION(device == i->getParam<ZDevice>());
-			handles[std::distance(b, i)] = **i;
+			handles[make_unsigned(std::distance(b, i))] = **i;
 		}
 		VKASSERT2(vkResetFences(*device, count, handles.data()));
 	}
@@ -621,13 +624,13 @@ void resetFences (std::vector<ZFence> fences)
 		for (auto i = b; i != fences.end(); ++i)
 		{
 			ASSERTION(device == i->getParam<ZDevice>());
-			handles[std::distance(b, i)] = **i;
+			handles[make_unsigned(std::distance(b, i))] = **i;
 		}
 		VKASSERT2(vkResetFences(*device, count, handles.data()));
 	}
 }
 
-ZSemaphore createSemaphore (ZDevice device, bool signaled)
+ZSemaphore createSemaphore (ZDevice device)
 {
 	VkSemaphore handle = VK_NULL_HANDLE;
 	auto callbacks = device.getParam<VkAllocationCallbacksPtr>();
@@ -635,7 +638,7 @@ ZSemaphore createSemaphore (ZDevice device, bool signaled)
 	VkSemaphoreCreateInfo semInfo{};
 	semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 	semInfo.pNext = nullptr;
-	semInfo.flags = signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0;
+	semInfo.flags = VkSemaphoreCreateFlags(0);
 
 	VKASSERT2(vkCreateSemaphore(*device, &semInfo, callbacks, &handle));
 
@@ -720,7 +723,7 @@ void commandBufferSubmitAndWait (std::initializer_list<ZCommandBuffer> commandBu
 	for (auto i = ii; i != commandBuffers.end(); ++i)
 	{
 		ASSERTION(	device== i->getParam<ZDevice>()	);
-		auto at = std::distance(ii, i);
+		auto at = make_unsigned(std::distance(ii, i));
 
 		submits[at].sType				= VK_STRUCTURE_TYPE_SUBMIT_INFO;
 		submits[at].pNext				= nullptr;
@@ -741,7 +744,7 @@ void commandBufferSubmitAndWait (std::initializer_list<ZCommandBuffer> commandBu
 
 	for (auto i = ii; i != commandBuffers.end(); ++i)
 	{
-		auto at = std::distance(ii, i);
+		auto at = make_unsigned(std::distance(ii, i));
 		ZQueue queue = i->getParam<ZCommandPool>().getParam<ZQueue>();
 		if (vkQueueSubmit(*queue, 1, &submits[at], fences[at]) != VK_SUCCESS)
 		{
@@ -753,6 +756,54 @@ void commandBufferSubmitAndWait (std::initializer_list<ZCommandBuffer> commandBu
 	{
 		throw std::runtime_error("failed to wait for command buffer!");
 	}
+}
+
+void commandBufferClearColorImage (ZCommandBuffer cmd, VkImage image, const VkClearColorValue& clearValue,
+								   VkImageLayout srclayout, VkImageLayout dstlayout,
+								   VkAccessFlags	srcAccessMask, VkAccessFlags	dstAccessMask,
+								   VkPipelineStageFlags	srcStage, VkPipelineStageFlags	dstStage)
+{
+	VkImageSubresourceRange		range{};
+	range.aspectMask			= VK_IMAGE_ASPECT_COLOR_BIT;
+	range.baseMipLevel			= 0;
+	range.levelCount			= 1;
+	range.baseArrayLayer		= 0;
+	range.layerCount			= 1;
+
+	VkImageMemoryBarrier		before {};
+	before.sType				= VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	before.pNext				= nullptr;
+	before.oldLayout			= srclayout;
+	before.newLayout			= VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	before.srcAccessMask		= srcAccessMask;
+	before.dstAccessMask		= VK_ACCESS_TRANSFER_WRITE_BIT;
+	before.srcQueueFamilyIndex	= VK_QUEUE_FAMILY_IGNORED;
+	before.dstQueueFamilyIndex	= VK_QUEUE_FAMILY_IGNORED;
+	before.image				= image;
+	before.subresourceRange		= range;
+
+	VkImageMemoryBarrier		after {};
+	after.sType					= VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	after.pNext					= nullptr;
+	after.oldLayout				= VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	after.newLayout				= dstlayout;
+	after.srcAccessMask			= VK_ACCESS_TRANSFER_WRITE_BIT;
+	after.dstAccessMask			= dstAccessMask;
+	after.srcQueueFamilyIndex	= VK_QUEUE_FAMILY_IGNORED;
+	after.dstQueueFamilyIndex	= VK_QUEUE_FAMILY_IGNORED;
+	after.image					= image;
+	after.subresourceRange		= range;
+
+	vkCmdPipelineBarrier(*cmd, srcStage, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, //VK_DEPENDENCY_BY_REGION_BIT,
+						 0, (const VkMemoryBarrier*)nullptr,
+						 0, (const VkBufferMemoryBarrier*)nullptr,
+						 1, &before);
+	vkCmdClearColorImage(*cmd, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1u, &range);
+
+	vkCmdPipelineBarrier(*cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, dstStage, 0, //VK_DEPENDENCY_BY_REGION_BIT,
+						 0, (const VkMemoryBarrier*)nullptr,
+						 0, (const VkBufferMemoryBarrier*)nullptr,
+						 1, &after);
 }
 
 uint32_t findMemoryTypeIndex(ZDevice device, uint32_t memoryTypeBits, VkMemoryPropertyFlags properties)
@@ -902,10 +953,9 @@ ZBuffer createBuffer (ZDevice device, ZImage image, ZBufferUsageFlags usage, uin
 
 ZBuffer createBuffer (ZDevice device, VkFormat format, uint32_t elements, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties)
 {
-	const VkDeviceSize bufferSize = computePixelByteWidth(format) * elements;
+	const VkDeviceSize bufferSize = make_unsigned(computePixelByteWidth(format)) * elements;
 	return createBuffer(device, bufferSize, usage, properties);
 }
-
 uint32_t writeBufferData (ZBuffer buffer, const uint8_t* src, VkDeviceSize size)
 {
 	const VkDeviceSize		bufferSize	= buffer.getParam<VkDeviceSize>();
@@ -962,7 +1012,7 @@ uint32_t writeBufferData (ZBuffer buffer, const uint8_t* src, const VkBufferCopy
 		VKASSERT2(vkFlushMappedMemoryRanges(*device, 1, &range));
 	}
 
-	std::copy(src, std::next(src, copy.size), dst);
+	std::copy(src, std::next(src, make_signed(copy.size)), dst);
 	vkUnmapMemory(*device, *memory);
 
 	return static_cast<uint32_t>(copy.size);
@@ -1007,7 +1057,7 @@ uint32_t readBufferData (ZBuffer buffer, uint8_t* dst, const VkBufferCopy& copy)
 		VKASSERT2(vkInvalidateMappedMemoryRanges(*device, 1, &range));
 	}
 
-	std::copy(src, std::next(src, copy.size), dst);
+	std::copy(src, std::next(src, make_signed(copy.size)), dst);
 	vkUnmapMemory(*device, *memory);
 
 	return static_cast<uint32_t>(copy.size);
@@ -1059,6 +1109,35 @@ void copyBufferToImage (ZCommandPool commandPool, ZBuffer buffer, ZImageView vie
 	copyBufferToImage(commandPool, buffer, image, info.subresourceRange.baseMipLevel, info.subresourceRange.levelCount, newLayout);
 }
 
+void	transitionImage (ZCommandBuffer cmd, VkImage image, VkFormat format,
+						 VkImageLayout			initialLayout,	VkImageLayout			targetLayout,
+						 VkAccessFlags			sourceAccess,	VkAccessFlags			destinationAccess,
+						 VkPipelineStageFlags	sourceStage,	VkPipelineStageFlags	destinationStage)
+{
+	UNREF(format);
+
+	VkImageMemoryBarrier	barrier			{};
+	barrier.sType				= VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.pNext				= nullptr;
+	barrier.oldLayout			= initialLayout;
+	barrier.newLayout			= targetLayout;
+	barrier.srcAccessMask		= sourceAccess;
+	barrier.dstAccessMask		= destinationAccess;
+	barrier.srcQueueFamilyIndex	= VK_QUEUE_FAMILY_IGNORED;
+	barrier.dstQueueFamilyIndex	= VK_QUEUE_FAMILY_IGNORED;
+	barrier.image				= image;
+	barrier.subresourceRange.aspectMask		= VK_IMAGE_ASPECT_COLOR_BIT; // TODO: It should depend on image format
+	barrier.subresourceRange.baseMipLevel	= 0;
+	barrier.subresourceRange.levelCount		= 1;
+	barrier.subresourceRange.baseArrayLayer	= 0;
+	barrier.subresourceRange.layerCount		= 1;
+
+	vkCmdPipelineBarrier(*cmd, sourceStage, destinationStage, VK_DEPENDENCY_BY_REGION_BIT,
+						 0, (const VkMemoryBarrier*)nullptr,
+						 0, (const VkBufferMemoryBarrier*)nullptr,
+						 1, &barrier);
+}
+
 void transitionImage (ZCommandBuffer cmd, ZImage image, VkImageLayout targetLayout,
 					  VkAccessFlags			sourceAccess,	VkAccessFlags			destinationAccess,
 					  VkPipelineStageFlags	sourceStage,	VkPipelineStageFlags	destinationStage)
@@ -1092,7 +1171,7 @@ void transitionImage (ZCommandBuffer cmd, ZImage image, VkImageLayout targetLayo
 void copyBufferToImage (ZCommandPool commandPool, ZBuffer buffer, ZImage image, uint32_t baseLevel, uint32_t levels, VkImageLayout newLayout)
 {
 	auto&				createInfo		= image.getParamRef<VkImageCreateInfo>();
-	const auto			pixelWidth		= computePixelByteWidth(createInfo.format);
+	const uint32_t		pixelWidth		= make_unsigned(computePixelByteWidth(createInfo.format));
 	const uint32_t		effectiveLevels = (INVALID_UINT32 == levels) ? createInfo.mipLevels : levels;
 	const VkDeviceSize	bufferSize		= computeBufferSize(image, baseLevel, levels);
 
@@ -1113,7 +1192,7 @@ void copyBufferToImage (ZCommandPool commandPool, ZBuffer buffer, ZImage image, 
 	{
 		ASSERTION(width > 0 && height > 0);
 
-		region.bufferOffset = 0;
+		region.bufferOffset = offset;
 		region.bufferRowLength = 0;
 		region.bufferImageHeight = 0;
 		region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1153,8 +1232,8 @@ void copyImageToBuffer (ZCommandPool commandPool, ZImage image, ZBuffer buffer, 
 void copyImageToBuffer (ZCommandBuffer commandBuffer, ZImage image, ZBuffer buffer, uint32_t baseLevel, uint32_t levels)
 {
 	const auto			createInfo		= image.getParam<VkImageCreateInfo>();
-	const auto			pixelWidth		= computePixelByteWidth(createInfo.format);
-	const uint32_t		effectiveLevels = ((~0u) == levels) ? createInfo.mipLevels : levels;
+	const uint32_t		pixelWidth		= make_unsigned(computePixelByteWidth(createInfo.format));
+	const uint32_t		effectiveLevels = (INVALID_UINT32 == levels) ? createInfo.mipLevels : levels;
 	const VkDeviceSize	bufferSize		= computeBufferSize(image, baseLevel, levels);
 
 	ASSERTION(0 < effectiveLevels && (baseLevel + effectiveLevels) <= createInfo.mipLevels);
@@ -1205,19 +1284,19 @@ void copyImageToBuffer (ZCommandBuffer commandBuffer, ZImage image, ZBuffer buff
 	}
 }
 
-int computePixelByteWidth(VkFormat format)
+uint32_t computePixelByteWidth (VkFormat format)
 {
 	const ZFormatInfo info = getFormatInfo(format);
 	return info.pixelByteSize;
 }
 
-int computePixelChannelCount(VkFormat format)
+uint32_t computePixelChannelCount (VkFormat format)
 {
 	const ZFormatInfo info = getFormatInfo(format);
 	return info.componentCount;
 }
 
-uint32_t sampleFlagsToSampleCount(VkSampleCountFlags flags)
+uint32_t sampleFlagsToSampleCount (VkSampleCountFlags flags)
 {
 	struct
 	{
@@ -1244,12 +1323,12 @@ uint32_t sampleFlagsToSampleCount(VkSampleCountFlags flags)
 	return count;
 }
 
-uint32_t computeMipLevelCount(uint32_t width, uint32_t height)
+uint32_t computeMipLevelCount (uint32_t width, uint32_t height)
 {
 	return static_cast<uint32_t>(std::min(std::floor(std::log2(width)), std::floor(std::log2(height)))) + 1;
 }
 
-static int computeBufferPixelCount (uint32_t baseLevelWidth, uint32_t baseLevelHeight,
+static uint32_t computeBufferPixelCount (uint32_t baseLevelWidth, uint32_t baseLevelHeight,
 									uint32_t levels, uint32_t layers, VkSampleCountFlags samples)
 {
 	ASSERTION(baseLevelWidth > 0 && baseLevelHeight > 0 && levels > 0 && layers > 0 && samples != 0);
@@ -1269,8 +1348,8 @@ static int computeBufferPixelCount (uint32_t baseLevelWidth, uint32_t baseLevelH
 		tmpHeight /= 2;
 	}
 
-	const int count = (pixelCount * sampleCount * layers);
-	ASSERTION(count > 0);
+	const uint32_t count = (pixelCount * sampleCount * layers);
+	ASSERTION(count != 0);
 
 	return count;
 }
@@ -1287,17 +1366,18 @@ VkDeviceSize computeBufferSize (VkFormat format,
 	return (pixelCount * pixelWidth);
 }
 
-int computeBufferPixelCount (ZImage image, uint32_t baseLevel, uint32_t levels)
+uint32_t computeBufferPixelCount (ZImage image, uint32_t baseLevel, uint32_t levels)
 {
-	const auto ici = image.getParam<VkImageCreateInfo>();
-	const uint32_t effectiveLevels = ((~0u) == levels) ? ici.mipLevels : levels;
+	const auto& ici = image.getParamRef<VkImageCreateInfo>();
+	const uint32_t effectiveLevels = (INVALID_UINT32 == levels) ? ici.mipLevels : levels;
 	ASSERTION(0 < effectiveLevels && (baseLevel + effectiveLevels) <= ici.mipLevels);
+	static_assert(std::is_unsigned<decltype(ici.extent.width >> baseLevel)>::value, "");
 	return computeBufferPixelCount((ici.extent.width >> baseLevel),
 								   (ici.extent.height >> baseLevel),
 								   effectiveLevels, ici.arrayLayers, ici.samples);
 }
 
-int computeBufferPixelCount (ZImageView view)
+uint32_t computeBufferPixelCount (ZImageView view)
 {
 	ZImage							image		= view.getParam<ZImage>();
 	const VkImageCreateInfo&		imageInfo	= image.getParamRef<VkImageCreateInfo>();
@@ -1312,7 +1392,7 @@ int computeBufferPixelCount (ZImageView view)
 VkDeviceSize computeBufferSize (ZImage image, uint32_t baseLevel, uint32_t levels)
 {
 	const auto ici = image.getParam<VkImageCreateInfo>();
-	const uint32_t effectiveLevels = ((~0u) == levels) ? ici.mipLevels : levels;
+	const uint32_t effectiveLevels = (INVALID_UINT32 == levels) ? ici.mipLevels : levels;
 	ASSERTION(0 < effectiveLevels && (baseLevel + effectiveLevels) <= ici.mipLevels);
 	return computeBufferSize(ici.format,
 							 (ici.extent.width >> baseLevel),
@@ -1341,6 +1421,21 @@ void computeBufferRange(ZImage image, uint32_t level, uint32_t& bufferSize, uint
 	UNREF(level);
 	UNREF(bufferSize);
 	UNREF(pixelCount);
+}
+
+bool pointInTriangle2D (const Vec2& p, const Vec2& p0, const Vec2& p1, const Vec2& p2)
+{
+	float s = p0.y() * p2.x() - p0.x() * p2.y() + (p2.y() - p0.y()) * p.x() + (p0.x() - p2.x()) * p.y();
+	float t = p0.x() * p1.y() - p0.y() * p1.x() + (p0.y() - p1.y()) * p.x() + (p1.x() - p0.x()) * p.y();
+
+	if ((s < 0) != (t < 0))
+		return false;
+
+	float a = -p1.y() * p2.x() + p0.y() * (p2.x() - p1.x()) + p0.x() * (p1.y() - p2.y()) + p1.x() * p2.y();
+
+	return a < 0 ?
+		(s <= 0 && s + t >= a) :
+		(s >= 0 && s + t <= a);
 }
 
 bool pointInTriangle2D(const Vec3& p, const Vec3& p0, const Vec3& p1, const Vec3& p2)

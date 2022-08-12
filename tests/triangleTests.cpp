@@ -1,6 +1,5 @@
 #include "triangleTests.hpp"
 #include "vtfCanvas.hpp"
-//#include "vkPipelineElements.hpp" // do wywalenia
 #include "vtfPipelineLayout.hpp"
 #include "vtfProgramCollection.hpp"
 #include "vtfGlfwEvents.hpp"
@@ -10,14 +9,14 @@ namespace
 {
 using namespace vtf;
 
-int performTests (Canvas& canvas, const std::string& assets);
+int performTests (Canvas& canvas, const std::string& assets, const uint32_t spirvVer, bool enableValidation);
 
 int prepareTests (const TestRecord& record, const strings& cmdLineParams)
 {
 	UNREF(cmdLineParams);
 	std::cout << "Press Escape to exit" << std::endl;
-	Canvas	cs(record.name, record.layers);
-	return performTests(cs, record.assets);
+	Canvas	cs(record.name, record.layers, {}, {}, Canvas::DefaultStyle, record.vulkanVer);
+	return performTests(cs, record.assets, record.spirvVer, record.spvValidation);
 }
 
 void onResize (Canvas& cs, void* userData, int width, int height)
@@ -39,13 +38,13 @@ void onKey (Canvas& cs, void* userData, const int key, int scancode, int action,
 	}
 }
 
-int performTests (Canvas& cs, const std::string& assets)
+int performTests (Canvas& cs, const std::string& assets, const uint32_t spirvVer, bool enableValidation)
 {
 	PipelineLayout				pl(cs);
 	ProgramCollection			programs(cs, assets);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
-	programs.buildAndVerify();
+	programs.buildAndVerify(enableValidation, spirvVer);
 
 	ZShaderModule				vertShaderModule	= *programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
 	ZShaderModule				fragShaderModule	= *programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);
@@ -54,7 +53,7 @@ int performTests (Canvas& cs, const std::string& assets)
 	std::vector<Vec3>			colors				{ { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } };
 	cs.vertexInput.binding(0).addAttributes(vertices, colors);
 
-	const VkClearValue			clearColor			{ 0.5f, 0.5f, 0.5f, 0.5f };
+	const VkClearValue			clearColor			{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
 	ZRenderPass					renderPass			= cs.createRenderPass({cs.format.format}, clearColor);
 	ZPipelineLayout				pipelineLayout		= pl.createPipelineLayout();
 	ZPipeline					pipeline			= cs.createGraphicsPipeline(pipelineLayout, renderPass, {/*dynamic viewport & scissor*/},

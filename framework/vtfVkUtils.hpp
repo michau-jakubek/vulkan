@@ -47,11 +47,39 @@ struct Version
 	uint32_t nmajor;
 	uint32_t nminor;
 	uint32_t npatch;
-	Version (uint32_t v)
-		: nmajor	(VK_VERSION_MAJOR(v))
-		, nminor	(VK_VERSION_MINOR(v))
-		, npatch	(VK_VERSION_PATCH(v))
+	uint32_t nvariant;
+	Version (uint32_t major, uint32_t minor)
+		: nmajor	(major)
+		, nminor	(minor)
+		, npatch	(0)
+		, nvariant	(0)
 	{ }
+	Version (uint32_t v) { update(v); }
+	void update (uint32_t v)
+	{
+		nmajor		= (VK_API_VERSION_MAJOR(v));
+		nminor		= (VK_API_VERSION_MINOR(v));
+		npatch		= (VK_API_VERSION_PATCH(v));
+		nvariant	= (VK_API_VERSION_VARIANT(v))		;
+	}
+	static Version fromUint (uint32_t v) { return Version(v); }
+	static Version from10xMajorPlusMinor (uint32_t v)
+	{
+		Version		x(0);
+		x.npatch	= 0;
+		x.nvariant	= 0;
+		x.nminor	= v % 10;
+		x.nmajor	= v / 10;
+		return x;
+	}
+	operator uint32_t () const
+	{
+		return VK_MAKE_API_VERSION(nvariant, nmajor, nminor, npatch);
+	}
+	static uint32_t make (uint32_t major, uint32_t minor, uint32_t variant = 0, uint32_t patch = 0)
+	{
+		return VK_MAKE_API_VERSION(variant, major, minor, patch);
+	}
 };
 std::ostream& operator<<(std::ostream& str, const Version& v);
 
@@ -87,39 +115,39 @@ typedef Flags<VkMemoryPropertyFlags, VkMemoryPropertyFlagBits>	ZMemoryPropertyFl
 //
 template<class T,bool=false> std::bad_typeid type_to_vk_format;
 
-template<> constexpr VkFormat type_to_vk_format<int8_t>			= VK_FORMAT_R8_SINT;
-template<> constexpr VkFormat type_to_vk_format<int8_t,true>	= VK_FORMAT_R8_SNORM;
-template<> constexpr VkFormat type_to_vk_format<uint8_t>		= VK_FORMAT_R8_UINT;
-template<> constexpr VkFormat type_to_vk_format<uint8_t,true>	= VK_FORMAT_R8_UNORM;
+template<> inline constexpr VkFormat type_to_vk_format<int8_t>			= VK_FORMAT_R8_SINT;
+template<> inline constexpr VkFormat type_to_vk_format<int8_t,true>		= VK_FORMAT_R8_SNORM;
+template<> inline constexpr VkFormat type_to_vk_format<uint8_t>			= VK_FORMAT_R8_UINT;
+template<> inline constexpr VkFormat type_to_vk_format<uint8_t,true>	= VK_FORMAT_R8_UNORM;
 
-template<> constexpr VkFormat type_to_vk_format<BVec1>			= VK_FORMAT_R8_SINT;
-template<> constexpr VkFormat type_to_vk_format<BVec1,true>		= VK_FORMAT_R8_SNORM;
-template<> constexpr VkFormat type_to_vk_format<UBVec1>			= VK_FORMAT_R8_UINT;
-template<> constexpr VkFormat type_to_vk_format<UBVec1,true>	= VK_FORMAT_R8_UNORM;
+template<> inline constexpr VkFormat type_to_vk_format<BVec1>			= VK_FORMAT_R8_SINT;
+template<> inline constexpr VkFormat type_to_vk_format<BVec1,true>		= VK_FORMAT_R8_SNORM;
+template<> inline constexpr VkFormat type_to_vk_format<UBVec1>			= VK_FORMAT_R8_UINT;
+template<> inline constexpr VkFormat type_to_vk_format<UBVec1,true>		= VK_FORMAT_R8_UNORM;
 
-template<> constexpr VkFormat type_to_vk_format<float>		= VK_FORMAT_R32_SFLOAT;
-template<> constexpr VkFormat type_to_vk_format<int32_t>	= VK_FORMAT_R32_SINT;
-template<> constexpr VkFormat type_to_vk_format<uint32_t>	= VK_FORMAT_R32_UINT;
+template<> inline constexpr VkFormat type_to_vk_format<float>		= VK_FORMAT_R32_SFLOAT;
+template<> inline constexpr VkFormat type_to_vk_format<int32_t>		= VK_FORMAT_R32_SINT;
+template<> inline constexpr VkFormat type_to_vk_format<uint32_t>	= VK_FORMAT_R32_UINT;
 
-template<> constexpr VkFormat type_to_vk_format<WVec1>		=          VK_FORMAT_R16_SNORM;
-template<> constexpr VkFormat type_to_vk_format<WVec2>		=       VK_FORMAT_R16G16_SNORM;
-template<> constexpr VkFormat type_to_vk_format<WVec3>		=    VK_FORMAT_R16G16B16_SNORM;
-template<> constexpr VkFormat type_to_vk_format<WVec4>		= VK_FORMAT_R16G16B16A16_SNORM;
+template<> inline constexpr VkFormat type_to_vk_format<WVec1>		=          VK_FORMAT_R16_SNORM;
+template<> inline constexpr VkFormat type_to_vk_format<WVec2>		=       VK_FORMAT_R16G16_SNORM;
+template<> inline constexpr VkFormat type_to_vk_format<WVec3>		=    VK_FORMAT_R16G16B16_SNORM;
+template<> inline constexpr VkFormat type_to_vk_format<WVec4>		= VK_FORMAT_R16G16B16A16_SNORM;
 
-template<> constexpr VkFormat type_to_vk_format<Vec1>		=          VK_FORMAT_R32_SFLOAT;
-template<> constexpr VkFormat type_to_vk_format<Vec2>		=       VK_FORMAT_R32G32_SFLOAT;
-template<> constexpr VkFormat type_to_vk_format<Vec3>		=    VK_FORMAT_R32G32B32_SFLOAT;
-template<> constexpr VkFormat type_to_vk_format<Vec4>		= VK_FORMAT_R32G32B32A32_SFLOAT;
+template<> inline constexpr VkFormat type_to_vk_format<Vec1>		=          VK_FORMAT_R32_SFLOAT;
+template<> inline constexpr VkFormat type_to_vk_format<Vec2>		=       VK_FORMAT_R32G32_SFLOAT;
+template<> inline constexpr VkFormat type_to_vk_format<Vec3>		=    VK_FORMAT_R32G32B32_SFLOAT;
+template<> inline constexpr VkFormat type_to_vk_format<Vec4>		= VK_FORMAT_R32G32B32A32_SFLOAT;
 
-template<> constexpr VkFormat type_to_vk_format<IVec1>		=          VK_FORMAT_R32_SINT;
-template<> constexpr VkFormat type_to_vk_format<IVec2>		=       VK_FORMAT_R32G32_SINT;
-template<> constexpr VkFormat type_to_vk_format<IVec3>		=    VK_FORMAT_R32G32B32_SINT;
-template<> constexpr VkFormat type_to_vk_format<IVec4>		= VK_FORMAT_R32G32B32A32_SINT;
+template<> inline constexpr VkFormat type_to_vk_format<IVec1>		=          VK_FORMAT_R32_SINT;
+template<> inline constexpr VkFormat type_to_vk_format<IVec2>		=       VK_FORMAT_R32G32_SINT;
+template<> inline constexpr VkFormat type_to_vk_format<IVec3>		=    VK_FORMAT_R32G32B32_SINT;
+template<> inline constexpr VkFormat type_to_vk_format<IVec4>		= VK_FORMAT_R32G32B32A32_SINT;
 
-template<> constexpr VkFormat type_to_vk_format<UVec1>		=          VK_FORMAT_R32_UINT;
-template<> constexpr VkFormat type_to_vk_format<UVec2>		=       VK_FORMAT_R32G32_UINT;
-template<> constexpr VkFormat type_to_vk_format<UVec3>		=    VK_FORMAT_R32G32B32_UINT;
-template<> constexpr VkFormat type_to_vk_format<UVec4>		= VK_FORMAT_R32G32B32A32_UINT;
+template<> inline constexpr VkFormat type_to_vk_format<UVec1>		=          VK_FORMAT_R32_UINT;
+template<> inline constexpr VkFormat type_to_vk_format<UVec2>		=       VK_FORMAT_R32G32_UINT;
+template<> inline constexpr VkFormat type_to_vk_format<UVec3>		=    VK_FORMAT_R32G32B32_UINT;
+template<> inline constexpr VkFormat type_to_vk_format<UVec4>		= VK_FORMAT_R32G32B32A32_UINT;
 
 template<VkFormat,bool> struct vk_format_to_type_impl;
 template<VkFormat fmt, bool agg = true>

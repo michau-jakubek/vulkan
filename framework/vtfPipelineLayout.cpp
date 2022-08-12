@@ -33,7 +33,7 @@ static std::unique_ptr<VkPhysicalDeviceProperties> getPhysDevProperties(ZDevice 
 {
 	auto props = std::make_unique<VkPhysicalDeviceProperties>();
 	vkGetPhysicalDeviceProperties(*device.getParam<ZPhysicalDevice>(), props.get());
-	return std::move(props);
+	return props;
 }
 
 #define UNIQUE_IBINDING std::numeric_limits<int>::min()
@@ -422,13 +422,13 @@ ZDescriptorSet PipelineLayout::getDescriptorSet (ZDescriptorSetLayout layout)
 }
 VarDescriptorInfo PipelineLayout::getDescriptorInfo (uint32_t binding)
 {
-	//VarDescriptorInfo var{};
+	VarDescriptorInfo var;
 	const collection_element_t<decltype(m_extbindings)>& b = verifyGetExtBinding(binding);
 	if (isBufferDescriptorType(b.descriptorType))
 	{
 		VkDeviceSize range = ROUNDUP( (b.size * b.elementCount), getDescriptorAlignment(b.descriptorType) );
 		auto buffer = m_buffers.at({b.descriptorType, (b.shared ? UNIQUE_IBINDING : static_cast<int>(binding))});
-		return VarDescriptorInfo(std::in_place_type<DescriptorBufferInfo>,  DescriptorBufferInfo{buffer, b.offset, range});
+		var.emplace<DescriptorBufferInfo>(buffer, b.offset, range);
 	}
 	else if (isImageDescriptorType(b.descriptorType))
 	{
@@ -442,13 +442,14 @@ VarDescriptorInfo PipelineLayout::getDescriptorInfo (uint32_t binding)
 				ZImage					image	= view.getParam<ZImage>();
 				auto					layout	= image.getParamRef<VkImageCreateInfo>().initialLayout;
 				std::optional<ZSampler>	sampler;
-				return VarDescriptorInfo(std::in_place_type<DescriptorImageInfo>,  DescriptorImageInfo{sampler, view, image, layout});
+				var.emplace<DescriptorImageInfo>(sampler, view, image, layout);
 			}
+			break;
 		default:
 		ASSERTMSG(0, "Not implemented yet");
 		}
 	}
-	return VarDescriptorInfo(std::in_place_type<bool>, false);
+	return var;
 }
 const PipelineLayout::ExtBinding& PipelineLayout::verifyGetExtBinding (uint32_t binding) const
 {

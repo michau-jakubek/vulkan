@@ -32,11 +32,11 @@ template<class T> T fromText(const std::string& text, const T& defResult, bool& 
 	status = false;
 	return defResult;
 }
-template int fromText<int>(const std::string& text, const int& defResult, bool& status);
-template float fromText<float>(const std::string& text, const float& defResult, bool& status);
-template std::string fromText<std::string>(const std::string& text, const std::string& defResult, bool& status);
-template uint32_t fromText<uint32_t>(const std::string& text, const uint32_t& defResult, bool& status);
-template<> bool fromText<bool>(const std::string& text, const bool& defResult, bool& status)
+template int			fromText<int>			(const std::string& text, const int&			defResult, bool& status);
+template float			fromText<float>			(const std::string& text, const float&			defResult, bool& status);
+template std::string	fromText<std::string>	(const std::string& text, const std::string&	defResult, bool& status);
+template uint32_t		fromText<uint32_t>		(const std::string& text, const uint32_t&		defResult, bool& status);
+template<> bool			fromText<bool>			(const std::string& text, const bool&			defResult, bool& status)
 {
 	int logic = fromText<int>(text, defResult, status);
 	if (status)
@@ -67,8 +67,8 @@ std::string readFile (const std::string& filename)
 		throw std::runtime_error("failed to open file! " + filename);
 	}
 
-	size_t fileSize = (size_t) file.tellg();
-	std::string			buffer(fileSize, ' ');
+	long fileSize	= static_cast<long>(file.tellg());
+	std::string		buffer(make_unsigned(fileSize), ' ');
 
 	file.seekg(0);
 	file.read(buffer.data(), fileSize);

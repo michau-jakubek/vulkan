@@ -56,6 +56,18 @@ concise_convert(const convFrom_&, const convTo_& to)
 	return static_cast<convTo_>(to);
 }
 
+template<class X, class SX = typename std::make_signed<X>::type>
+SX make_signed (const X& x)
+{
+	return static_cast<SX>(x);
+}
+
+template<class X, class UX = typename std::make_unsigned<X>::type>
+UX make_unsigned (const X& x)
+{
+	return static_cast<UX>(x);
+}
+
 // iterator_if
 
 template<template<class, class...> class Container_, class... X_>

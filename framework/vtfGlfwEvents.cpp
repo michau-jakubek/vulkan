@@ -10,7 +10,6 @@ GLFWEvents::GLFWEvents (Canvas& canvas)
 	, cbKey			(canvas, &glfwSetKeyCallback, &GLFWEvents::onKey)
 	, cbMouseButton	(canvas, &glfwSetMouseButtonCallback, &GLFWEvents::onMuseBtn)
 	, cbWindowSize	(canvas, &glfwSetWindowSizeCallback, &GLFWEvents::onResize)
-	, m_canvas		(canvas)
 {
 }
 

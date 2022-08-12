@@ -20,14 +20,28 @@ struct DescriptorImageInfo
 	ZImageView				view;
 	ZImage					image;
 	VkImageLayout			layout;
+	DescriptorImageInfo (std::optional<ZSampler>	sampler_,
+						 ZImageView					view_,
+						 ZImage						image_,
+						 VkImageLayout				layout_)
+		: sampler	(sampler_)
+		, view		(view_)
+		, image		(image_)
+		, layout	(layout_) {}
 };
 struct DescriptorBufferInfo
 {
 	ZBuffer			buffer;
 	VkDeviceSize    offset;
 	VkDeviceSize    range;
+	DescriptorBufferInfo (ZBuffer		buffer_,
+						  VkDeviceSize	offset_,
+						  VkDeviceSize	range_)
+		: buffer(buffer_)
+		, offset(offset_)
+		, range	(range_) { }
 };
-typedef std::variant<DescriptorBufferInfo, DescriptorImageInfo, bool>	VarDescriptorInfo;
+typedef std::variant<std::monostate, DescriptorBufferInfo, DescriptorImageInfo>	VarDescriptorInfo;
 
 class PipelineLayout
 {

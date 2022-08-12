@@ -55,7 +55,7 @@ void			waitForFences	(std::initializer_list<ZFence> fences, uint64_t timeout = U
 void			resetFences		(std::initializer_list<ZFence> fences);
 void			waitForFences	(std::vector<ZFence> fences, uint64_t timeout = UINT64_MAX);
 void			resetFences		(std::vector<ZFence> fences);
-ZSemaphore		createSemaphore	(ZDevice device, bool signaled = false);
+ZSemaphore		createSemaphore	(ZDevice device);
 
 ZShaderModule	createShaderModule(ZDevice device, const std::string& code);
 ZShaderModule	createShaderModule(ZDevice device, const std::vector<unsigned char>& code);
@@ -79,10 +79,14 @@ ZImageView			createImageView			(ZImage image, VkImageAspectFlags aspect = VK_IMA
 VkImageLayout	changeImageLayout (ZImage image, VkImageLayout layout);
 VkImageLayout	changeImageLayout (ZImageView view, VkImageLayout layout);
 
-int				computeBufferPixelCount (ZImage image, uint32_t baseLevel = 0, uint32_t levels = INVALID_UINT32);
-int				computeBufferPixelCount (ZImageView image);
+uint32_t		computeBufferPixelCount (ZImage image, uint32_t baseLevel = 0, uint32_t levels = INVALID_UINT32);
+uint32_t		computeBufferPixelCount (ZImageView image);
 VkDeviceSize	computeBufferSize (ZImage image, uint32_t baseLevel = 0, uint32_t levels = INVALID_UINT32);
 VkDeviceSize	computeBufferSize (ZImageView view);
+void			transitionImage (ZCommandBuffer cmd, VkImage image, VkFormat format,
+								 VkImageLayout			initialLayout,	VkImageLayout			targetLayout,
+								 VkAccessFlags			sourceAccess,	VkAccessFlags			destinationAccess,
+								 VkPipelineStageFlags	sourceStage,	VkPipelineStageFlags	destinationStage);
 void			transitionImage (ZCommandBuffer cmd, ZImage image, VkImageLayout targetLayout,
 								 VkAccessFlags			sourceAccess,	VkAccessFlags			destinationAccess,
 								 VkPipelineStageFlags	sourceStage,	VkPipelineStageFlags	destinationStage);
@@ -94,6 +98,7 @@ void			copyImageToBuffer (ZCommandPool commandPool, ZImage image, ZBuffer buffer
 void			copyImageToBuffer (ZCommandPool commandPool, ZImageView view, ZBuffer buffer);
 void			copyImageToBuffer (ZCommandBuffer commandBuffer, ZImage image, ZBuffer buffer, uint32_t baseLevel = 0, uint32_t levels = INVALID_UINT32);
 void			copyBufferToBuffer (ZCommandBuffer cmd, ZBuffer src, ZBuffer dst, const VkBufferCopy& region);
+bool			pointInTriangle2D (const Vec2& p, const Vec2& p0, const Vec2& p1, const Vec2& p2);
 bool			pointInTriangle2D (const Vec3& p, const Vec3& p0, const Vec3& p1, const Vec3& p2);
 
 /*

@@ -17,4 +17,7 @@ void printBacktrace (std::ostream& ss, std::size_t skip = 0)
 
 #endif // SYSTEM_OS_LINUX
 
+bool getAppVerboseFlag ();
+void setAppVerboseFlag (bool);
+
 #endif // __VTF_BACKTRACE_HPP_INCLUDED__

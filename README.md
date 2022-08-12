@@ -2,7 +2,7 @@
 
 <h3>About:</h3>
 <p align="justify">
-Vulkan is excellent and awesome. Although it is terribly huge, I'm fascinated by it and I want to learn it every day, deeper and depper. I recognize there is a lot of similar 'frameworks' on the Internet but I wanted to have my own. This is actually VTF. The main idea when writing the code was to get the fastest result with as little code as possible. The project was written absolutely in C ++ in the C++17 standard with lots of language templates and features. As you study the code, you will find some interesting solutions, I think. For example, the VertexInput class tries to wrap everything up for creating an interface for shaders with automatic conversions from STS's vectors. In turn, the PipelineLayout class deals with the improvement of the creation of a wide range of descriptor sets and pipelines themselves. Other methods or routines generalize to a greater or lesser extent the Vulkan API.<br>I hope one will find the following sources useful not only for fun but also for getting to know Vulkan better.</p> 
+Vulkan is excellent and awesome. Although it is terribly huge, I'm fascinated by it and I want to learn it every day, deeper and depper. I recognize there is a lot of similar 'frameworks' on the Internet but I wanted to have my own. This is actually VTF. The main idea when writing the code was to get the fastest result with as little code as possible. The project was written absolutely in C ++ in the C++17 standard with lots of language templates and features. As you study the code, you will find some interesting solutions, I think. For example, the VertexInput class tries to wrap everything up for creating an interface for shaders with automatic conversions from STL's vectors. In turn, the PipelineLayout class deals with the improvement of the creation of a wide range of descriptor sets and pipelines themselves. Other methods or routines generalize to a greater or lesser extent the Vulkan API.<br>I hope one will find the following sources useful not only for fun but also for getting to know Vulkan better.</p> 
 <h3>Prerequisites:</h3>
 <ul>
   <li>Vulkan SDK</li>
@@ -77,6 +77,10 @@ Vulkan is excellent and awesome. Although it is terribly huge, I'm fascinated by
       -l <layer> [-l <layer>]: enable layer(s)
       -ll: prints available instance layer names
       -bt: enable backtrace
+      -vulkan <ver>:  (major * 10 + minor), default is 10 aka vulkan1.0
+      -spirv <ver>:   (major * 10 + minor), default is 10 aka spirv1.0
+      -spvvalid:      enable SPIR-V assembly validation
+      -verbose:       enable application diagnostic messages
     Available tests are:
         fractals
         triangle
@@ -91,4 +95,12 @@ Vulkan is excellent and awesome. Although it is terribly huge, I'm fascinated by
    Ultimately to run the fractals test the command would look like:
      <pre>    app -d 0 fractals</pre>
 <br>
+<h3>Triangle test</h3>
+In my opinion "Hello Triangle" must exist in every presentation, thus...<BR />
+<img src="triangle.png" alt="triangle" />
+<h3>Fractals test</h3>
+<p align="justify">
+This test will take you to a land where you can admire the beauty of the Mandelbrot's fractal. While holding down the mouse button, find any place where you would like to dive and then, by scrolling, go deeper and deeper. The test automatically detects if your machine supports Float64. If so, the journey will be even more interesting.</p>
+<img src="fractals.png" alt="fractals" />
 <h2>Enjoy!</h2>
+

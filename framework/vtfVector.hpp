@@ -99,22 +99,38 @@ public:
     }
 
     template<class U>
-    VecX<T,N> operator+(const VecX<U,N>& v) const
+	VecX operator+(const VecX<U,N>& v) const
     {
-        VecX<T,N> result;
+		VecX result;
         for (size_t i = 0; i < N; ++i)
             result[i] = data[i] + T(v[i]);
         return result;
     }
 
-    template<class U>
-    VecX<T,N> operator-(const VecX<U,N>& v) const
+	template<class U>
+	VecX& operator+=(const VecX<U,N>& v)
+	{
+		for (size_t i = 0; i < N; ++i)
+			data[i] += static_cast<T>(v[i]);
+		return *this;
+	}
+
+	template<class U>
+	VecX operator-(const VecX<U,N>& v) const
     {
-        VecX<T,N> result;
+		VecX result;
         for (size_t i = 0; i < N; ++i)
             result[i] = data[i] - T(v[i]);
         return result;
     }
+
+	template<class U>
+	VecX& operator-=(const VecX<U,N>& v)
+	{
+		for (size_t i = 0; i < N; ++i)
+			data[i] -= static_cast<T>(v[i]);
+		return *this;
+	}
 
     template<class U>
 	VecX operator*(const VecX<U,N>& v) const
@@ -395,28 +411,28 @@ inline std::ostream& operator<<(std::ostream& s, const VecX<T,N>& p)
 template<class T, class... Others>
 struct VectorAccess2D
 {
-	typedef std::vector<T, Others...> wrapped_type;
-	wrapped_type&	wrapped_object;
-	const uint32_t	columns;
-	VectorAccess2D (wrapped_type& w, uint32_t colCount) : wrapped_object(w), columns(colCount) {}
-	uint32_t makeFlatIndex (uint32_t row, uint32_t col) {
-		const uint32_t flatIndex = row * columns + col;
+	typedef std::vector<T, Others...> vector_type;
+	vector_type&	vector;
+	const uint32_t	colCount;
+	VectorAccess2D (vector_type& v, uint32_t width) : vector(v), colCount(width) {}
+	uint32_t makeFlatIndex (uint32_t col, uint32_t row) {
+		const uint32_t flatIndex = row * colCount + col;
 		return flatIndex;
 	}
-	T& operator ()(uint32_t row, uint32_t col) {
-		const uint32_t flatIndex = makeFlatIndex(row, col);
-		return wrapped_object.at(flatIndex);
+	T& operator ()(uint32_t col, uint32_t row) {
+		const uint32_t flatIndex = makeFlatIndex(col, row);
+		return vector.at(flatIndex);
 	}
-	const T& operator ()(uint32_t row, uint32_t col) const {
-		const uint32_t flatIndex = makeFlatIndex(row, col);
-		return wrapped_object.at(flatIndex);
+	const T& operator ()(uint32_t col, uint32_t row) const {
+		const uint32_t flatIndex = makeFlatIndex(col, row);
+		return vector.at(flatIndex);
 	}
 };
 
 template<class T, class... Others>
-VectorAccess2D<T,Others...> makeVectorAccess2D (std::vector<T, Others...>& vec, uint32_t columns)
+VectorAccess2D<T,Others...> makeVectorAccess2D (std::vector<T, Others...>& vec, uint32_t width)
 {
-	return VectorAccess2D<T, Others...>(vec, columns);
+	return VectorAccess2D<T, Others...>(vec, width);
 }
 
 } // namespace vtf

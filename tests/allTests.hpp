@@ -15,6 +15,9 @@ struct TestRecord
 	std::string		assets;			// given by caller
 	vtf::strings	layers;			// given by caller
 	uint32_t		deviceIndex;	// given by caller or default INVALID_UINT32
+	uint32_t		vulkanVer;		// Vulkan version
+	uint32_t		spirvVer;		// SPIR-V version
+	bool			spvValidation;	// SPIR-V assembly validation
 	int (*call)(const TestRecord& record, const vtf::strings& args);
 	TestRecord ();
 	void valid () const;
@@ -41,7 +44,7 @@ std::vector<const char*> getTestNames(const std::vector<TestRecord>& records);
 enum TestIdentifier
 {
 	ALL_TESTS_ORIGIN,
-    TRIANGLE,
+	TRIANGLE,
 	FRACTALS,
 
 	ALL_TESTS_TAIL = FRACTALS

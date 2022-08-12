@@ -112,7 +112,7 @@ ZGLFWwindowPtr createWindow (const CanvasStyle& style, const char* title, add_pt
 	// invisible at start, if style.visible is set the call glfwShowWindows() later
 	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 	glfwWindowHint(GLFW_RESIZABLE, (style.resizable ? GLFW_TRUE : GLFW_FALSE));
-	GLFWwindow* pWindow = glfwCreateWindow(style.width, style.height, (title ? title : "Vulkan"), nullptr, nullptr);
+	GLFWwindow* pWindow = glfwCreateWindow(static_cast<int>(style.width), static_cast<int>(style.height), (title ? title : "Vulkan"), nullptr, nullptr);
 	ZGLFWwindowPtr window = ZGLFWwindowPtr::create(pWindow);
 	ASSERTMSG(*window, "Failed to create GLFW window");
 	glfwSetWindowUserPointer(*window, windowUserPointer);
@@ -158,8 +158,8 @@ void Canvas::BackBuffer::destroy (VulkanContext& ctx)
 
 Canvas::BackBuffer::BackBuffer (VulkanContext& ctx)
 	: imageIndex		(0)
-	, acquireSemaphore	(ctx.createSemaphore(true))
-	, renderSemaphore	(ctx.createSemaphore(true))
+	, acquireSemaphore	(ctx.createSemaphore())
+	, renderSemaphore	(ctx.createSemaphore())
 	, presentFence		(ctx.createFence(true))
 {
 	acquireSemaphore.use_count();
@@ -370,7 +370,7 @@ void Canvas::SwapChain::setup (ZRenderPass rp, uint32_t hintWidth, uint32_t hint
 	swapchainCreateInfo.imageColorSpace		= m_canvas.format.colorSpace;
 	swapchainCreateInfo.imageExtent			= caps.currentExtent;
 	swapchainCreateInfo.imageArrayLayers	= 1;
-	swapchainCreateInfo.imageUsage			= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	swapchainCreateInfo.imageUsage			= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	swapchainCreateInfo.preTransform		= caps.currentTransform;
 	swapchainCreateInfo.compositeAlpha		= compositeAlpha;
 	swapchainCreateInfo.presentMode			= mode;
@@ -422,6 +422,11 @@ void Canvas::setTimer (Canvas::TimerCallback callback, void* userData, uint64_t 
 	m_timerPeriodMS	= milliseconds;
 }
 
+VkImage Canvas::getSwapchainImage (uint32_t swapImageIndex) const
+{
+	return m_swapChain.buffers.at(swapImageIndex).image;
+}
+
 VkRenderPassBeginInfo Canvas::makeRenderPassBeginInfo (ZRenderPass rp, uint32_t swapImageIndex) const
 {
 	auto&					clearColors		= rp.getParamRef<std::vector<VkClearValue>>();
@@ -440,7 +445,7 @@ VkRenderPassBeginInfo Canvas::makeRenderPassBeginInfo (ZRenderPass rp, uint32_t 
 	return renderPassInfo;
 }
 
-void Canvas::transitionImageForPresent (ZCommandBuffer cmdBuffer, uint32_t swapImageIndex)
+void Canvas::transitionImageForPresent (ZCommandBuffer cmdBuffer, uint32_t swapImageIndex, VkImageLayout oldLayout)
 {
 	VkPipelineStageFlags	stage			= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	VkImageMemoryBarrier	transitionBarrier{};
@@ -448,7 +453,7 @@ void Canvas::transitionImageForPresent (ZCommandBuffer cmdBuffer, uint32_t swapI
 	transitionBarrier.pNext					= nullptr;
 	transitionBarrier.srcAccessMask			= VK_ACCESS_MEMORY_READ_BIT;
 	transitionBarrier.dstAccessMask			= VK_ACCESS_MEMORY_WRITE_BIT;
-	transitionBarrier.oldLayout				= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	transitionBarrier.oldLayout				= oldLayout;
 	transitionBarrier.newLayout				= VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 	transitionBarrier.srcQueueFamilyIndex	= VK_QUEUE_FAMILY_IGNORED;
 	transitionBarrier.dstQueueFamilyIndex	= VK_QUEUE_FAMILY_IGNORED;
@@ -484,7 +489,7 @@ Canvas::BackBuffer Canvas::acquireBackBuffer (ZRenderPass rp)
 	do
 	{
 		res = vkAcquireNextImageKHR(*device, m_swapChain.handle, UINT64_MAX, *acquireSemaphore, (VkFence)VK_NULL_HANDLE, &buffer.imageIndex);
-		if (res == VK_ERROR_OUT_OF_DATE_KHR)
+		if (VK_ERROR_OUT_OF_DATE_KHR == res || VK_SUBOPTIMAL_KHR == res)
 		{
 			m_swapChain.setup(rp);
 			m_width	= m_swapChain.extent.width;
@@ -492,9 +497,9 @@ Canvas::BackBuffer Canvas::acquireBackBuffer (ZRenderPass rp)
 		}
 		else
 		{
-			ASSERTION(VK_SUCCESS == res);
+			VKASSERT2(res);
 		}
-	} while (res != VK_SUCCESS);
+	} while (VK_SUCCESS != res);
 
 	Canvas::BackBuffer result(buffer);
 	m_backBuffers.pop_front();
@@ -558,7 +563,7 @@ int Canvas::run (ZRenderPass rp, OnCommandRecordingCallback onCommandRecording, 
 
 	if (style.visible) glfwShowWindow(*cc_window);
 
-	for (uint32_t call = 0; doContinue && !glfwWindowShouldClose(*cc_window); ++call)
+	while (doContinue && !glfwWindowShouldClose(*cc_window))
 	{
 		glfwPollEvents();
 

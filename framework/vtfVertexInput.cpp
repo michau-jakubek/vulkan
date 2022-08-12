@@ -29,14 +29,18 @@ VertexBinding::VertexBinding (const VertexInput& vertexInput)
 	, m_buffer			(makeEmptyBuffer(vertexInput.context))
 	, m_descriptions	()
 {
+	binding		= INVALID_UINT32;
+	stride		= INVALID_UINT32;
+	inputRate	= VK_VERTEX_INPUT_RATE_MAX_ENUM;
 }
 
 VertexBinding::VertexBinding (VertexBinding&& other)
-	: vertexInput		(other.vertexInput)
-	, bufferType		(m_bufferType)
-	, m_bufferType		(other.m_bufferType)
-	, m_buffer			(other.m_buffer)
-	, m_descriptions	(std::move(other.m_descriptions))
+	: VkVertexInputBindingDescription	(other)
+	, vertexInput						(other.vertexInput)
+	, bufferType						(m_bufferType)
+	, m_bufferType						(other.m_bufferType)
+	, m_buffer							(other.m_buffer)
+	, m_descriptions					(std::move(other.m_descriptions))
 {
 }
 
@@ -227,7 +231,8 @@ VertexBinding& VertexInput::binding (uint32_t binding)
 	if (m_freeBindings.end() == b)
 	{
 		m_freeBindings.emplace_back(*this);
-		b = iterator_from_index(m_freeBindings, binding);
+		const uint32_t	last = (uint32_t)(m_freeBindings.size() - 1u);
+		b = iterator_from_index(m_freeBindings, last);
 		b->binding		= binding;
 		b->stride		= 0u;
 		b->inputRate	= VK_VERTEX_INPUT_RATE_VERTEX;
@@ -289,28 +294,29 @@ std::vector<VkBuffer> VertexInput::getVertexBuffers (std::initializer_list<ZBuff
 {
 	ASSERTMSG(m_freeBindings.size(), "There is no vertex inputs");
 
-	uint32_t bindingCount			= 0;
+	uint32_t maxBinding				= 0;
 	uint32_t internalBindingCount	= 0;
+	uint32_t externalBindingCount	= 0; UNREF(externalBindingCount);
 	for (const VertexBinding& bind : m_freeBindings)
 	{
-		ASSERTMSG(bind.bufferType != VertexBinding::BufferType::Undefined,
-				  "Unable to process empty binding");
+		switch (bind.bufferType)
+		{
+		case VertexBinding::BufferType::Internal: ++internalBindingCount; break;
+		case VertexBinding::BufferType::External: ++externalBindingCount; break;
+		case VertexBinding::BufferType::Undefined: ASSERTMSG(0, "Unable to process empty binding");
+		}
 
-		if (bind.bufferType == VertexBinding::BufferType::Internal)
-			internalBindingCount = internalBindingCount + 1;
-
-		bindingCount = std::max(bind.binding, bindingCount);
+		maxBinding = std::max(bind.binding, maxBinding);
 	}
-	bindingCount = bindingCount + 1;
 
-	const uint32_t externalBindingCount = bindingCount - internalBindingCount;
-	ASSERTMSG(externalBindingCount <= static_cast<uint32_t>(externalBuffers.size()),
-			  "External buffers list must be greater or equal to free binding count");
+	const auto externalBufferCount = externalBuffers.size();
+	ASSERTMSG(externalBufferCount >= (maxBinding + 1u - internalBindingCount),
+			  "externalBuffers.size() must be greater or equal unbound bindings count");
 
-	std::vector<VkBuffer> buffers(bindingCount);
+	std::vector<VkBuffer> buffers(maxBinding + 1);
 	auto itExternalBuffers = externalBuffers.begin();
 
-	for (uint32_t i = 0; i < bindingCount; ++i)
+	for (uint32_t i = 0; i <= maxBinding; ++i)
 	{
 		auto bind = std::find_if(m_freeBindings.begin(), m_freeBindings.end(),
 								 [i](const VertexBinding& b) {

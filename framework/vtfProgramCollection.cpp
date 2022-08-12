@@ -20,6 +20,7 @@
 #include <sstream>
 #include <iostream>
 
+#include "vtfBacktrace.hpp"
 #include "vtfVkUtils.hpp"
 #include "vtfZDeletable.hpp"
 #include "vtfCUtils.hpp"
@@ -278,13 +279,27 @@ static const char* shaderStageToCommand (VkShaderStageFlagBits stage)
 }
 
 static std::string makeFileName (VkShaderStageFlagBits stage, const strings& code,
+								 const uint32_t apiVer, std::optional<uint32_t> spvVer,
+								 const bool enableValidation,
 								 const char* prefix = nullptr, const char* suffix = nullptr)
 {
 	size_t hash = 0;
 	{
 		std::stringstream ss;
 		for (const auto& c : code)
+		{
 			ss << c;
+		}
+		ss << (enableValidation ? 777 : 392);
+		Version v(apiVer);
+		ss << v.nmajor ;
+		ss << v.nminor;
+		if (spvVer.has_value())
+		{
+			v.update(*spvVer);
+			ss << v.nmajor;
+			ss << v.nminor;
+		}
 		ss.flush();
 		hash = std::hash<std::string>()(ss.str());
 	}
@@ -317,49 +332,119 @@ static bool containsErrorString(const std::string& text)
 	return result;
 }
 
-static	bool verifyShaderCode (VkShaderStageFlagBits stage, uint32_t spvVer, const strings& codeAndEntryAndIncludes,
-							   std::vector<unsigned char>& binary, std::string& error)
+static auto makeCompileGlslCommand (VkShaderStageFlagBits stage,
+									const strings& codeAndEntryAndIncludes,
+									uint32_t apiVer, std::optional<uint32_t> spirvVer,
+									const fs::path& input, const fs::path& output) -> std::string
 {
-	auto makeCommand = [&](const fs::path& input, const fs::path& output) -> std::string
+	Version vulkanVer(apiVer);
+	Version spvVer(spirvVer.has_value() ? *spirvVer : 0);
+	const char* space = " ";
+
+	const std::string entryName = codeAndEntryAndIncludes[1];
+	UNREF(entryName);
+
+	std::stringstream cmd;
+	cmd << "glslc -c ";
+	for (size_t i = 2; i < codeAndEntryAndIncludes.size(); ++i)
 	{
-		const char* space = " ";
-		const std::string entryName = codeAndEntryAndIncludes[1];
-		UNREF(entryName);
-		Version ver(spvVer);
-		std::stringstream cmd;
-		cmd << "glslc -c ";
-		for (size_t i = 2; i < codeAndEntryAndIncludes.size(); ++i)
-		{
-			cmd << "-I " << codeAndEntryAndIncludes[i] << space;
-		}
-		cmd	<< "--target-spv=spv" << ver.nmajor << "." << ver.nminor << space
-			<< "-fshader-stage=" << shaderStageToCommand(stage) << space
-			//<< "-e " << entryName << space
-			<< input << space
-			<< "-o " << output << space
+		cmd << "-I " << codeAndEntryAndIncludes[i] << space;
+	}
+	cmd	<< "--target-env=vulkan" << vulkanVer.nmajor << "." << vulkanVer.nminor << space;
+	if (spirvVer.has_value())
+	{
+		cmd << "--target-spv=spv" << spvVer.nmajor << "." << spvVer.nminor << space;
+	}
+	cmd << "-fshader-stage=" << shaderStageToCommand(stage) << space
+		// ***** "-e " << entryName << space
+		<< input << space
+		<< "-o " << output << space
 #if SYSTEM_OS_LINUX
-			<< "2>&1 && ls "
+		<< "2>&1 && ls "
 #else
-			<< "2>&1 && dir "
+		<< "2>&1 && dir "
 #endif
-			<< output;
-		return cmd.str();
-	};
+		<< output;
+	return cmd.str();
+}
+
+static auto makeCompileSpvCommand (uint32_t apiVer, std::optional<uint32_t> spirvVer,
+							const fs::path& input, const fs::path& output) -> std::string
+{
+	Version vulkanVer(apiVer);
+	Version spvVer(spirvVer.has_value() ? *spirvVer : 0);
+	const char* space = " ";
+
+	std::stringstream cmd;
+	cmd << "spirv-as ";
+	if (spirvVer.has_value())
+		cmd << "--target-env spv" << spvVer.nmajor << "." << spvVer.nminor << space;
+	else cmd << "--target-env vulkan" << vulkanVer.nmajor << "." << vulkanVer.nminor << space;
+	cmd << "-o " << output << space;
+	cmd << input << space
+#if SYSTEM_OS_LINUX
+		<< "2>&1 && ls "
+#else
+		<< "2>&1 && dir "
+#endif
+		<< output;
+	return cmd.str();
+}
+
+static auto makeBuildSpvAsm (VkShaderStageFlagBits stage,
+							 uint32_t apiVer, std::optional<uint32_t> spirvVer,
+							 const fs::path& input, const fs::path& output) -> std::string
+{
+	// glslangValidator -S vert -H --target-env spirv1.4 14580917305851103956.vert.glsl >>
+	Version vulkanVer(apiVer);
+	Version spvVer(spirvVer.has_value() ? *spirvVer : 0);
+	const char* space = " ";
+
+	std::stringstream cmd;
+	cmd << "glslangValidator -H ";
+	cmd << "-S " << shaderStageToCommand(stage) << space;
+	if (spirvVer.has_value())
+		cmd << "--target-env spirv" << spvVer.nmajor << "." << spvVer.nminor << space;
+	else cmd << "--target-env vulkan" << vulkanVer.nmajor << "." << vulkanVer.nminor << space;
+	cmd << input << space << ">> " << output;
+	return cmd.str();
+}
+
+static auto makeValidateCommand (uint32_t apiVer, std::optional<uint32_t> spirvVer, const fs::path& output) -> std::string
+{
+	Version vulkanVer(apiVer);
+	Version spvVer(spirvVer.has_value() ? *spirvVer : 0);
+	const char* space = " ";
+
+	std::stringstream cmd;
+	cmd << "spirv-val ";
+	if (spirvVer.has_value())
+		cmd << "--target-env spv" << spvVer.nmajor << "." << spvVer.nminor;
+	else cmd << "--target-env vulkan" << vulkanVer.nmajor << "." << vulkanVer.nminor;
+	cmd << space << output;
+	return cmd.str();
+}
+
+static	bool verifyShaderCode (VkShaderStageFlagBits stage,
+							   uint32_t apiVer, std::optional<uint32_t> spirvVer, bool enableValidation,
+							   const strings& codeAndEntryAndIncludes, std::vector<unsigned char>& binary, std::string& error)
+{
+	const bool isGlsl = codeAndEntryAndIncludes[0].find("#version") != std::string::npos;
 
 	bool status = false;
-	const std::string pathName(makeFileName(stage, codeAndEntryAndIncludes,
+	const std::string pathName(makeFileName(stage, codeAndEntryAndIncludes, apiVer, spirvVer, enableValidation,
 											(fs::temp_directory_path() / "").generic_u8string().c_str()));
-	const fs::path glslPath(pathName + ".glsl");
-	const fs::path spvPath(pathName + ".spv");
-	if (!fs::exists(glslPath))
+	const fs::path textPath(pathName + (isGlsl ? ".glsl" : "spvasm"));
+	const fs::path binPath(pathName + ".spvbin");
+	if (!fs::exists(textPath))
 	{
-		std::ofstream glslFile(glslPath.c_str());
-		ASSERTION(glslFile.is_open());
-		glslFile << codeAndEntryAndIncludes[0];
+		std::ofstream textFile(textPath.c_str());
+		ASSERTION(textFile.is_open());
+		textFile << codeAndEntryAndIncludes[0];
 	}
-	if (fs::exists(spvPath))
+	if (fs::exists(binPath))
 	{
-		uint32_t readed = readFile(spvPath, binary); UNREF(readed);
+		uint32_t readed = readFile(binPath, binary); UNREF(readed);
 		ASSERTION(readed != INVALID_UINT32);
 		ASSERTION(readed % 4 == 0);
 		status = true;
@@ -367,8 +452,24 @@ static	bool verifyShaderCode (VkShaderStageFlagBits stage, uint32_t spvVer, cons
 	else
 	{
 		ASSERTION(verifyIncludes(codeAndEntryAndIncludes));
-		const std::string cmd = makeCommand(glslPath, spvPath);
-		std::string result = captureSystemCommandResult(cmd.c_str(), status, '\n');
+		const std::string compileCmd = isGlsl
+				? makeCompileGlslCommand(stage, codeAndEntryAndIncludes, apiVer, spirvVer, textPath, binPath)
+				: makeCompileSpvCommand(apiVer, spirvVer, textPath, binPath);
+		if (getAppVerboseFlag())
+		{
+			std::cout << "[APP] Compile command: \"" << compileCmd << "\"" << std::endl;
+		}
+		if (isGlsl)
+		{
+			const fs::path asmPath(pathName + ".spvasm");
+			const std::string buildAsmCmd = makeBuildSpvAsm(stage, apiVer, spirvVer, textPath, asmPath);
+			captureSystemCommandResult(buildAsmCmd.c_str(), status, '\n');
+			if (getAppVerboseFlag())
+			{
+				std::cout << "[APP] Build assembly command: \"" << buildAsmCmd << "\"" << std::endl;
+			}
+		}
+		std::string result = captureSystemCommandResult(compileCmd.c_str(), status, '\n');
 		if (status)
 		{
 			if (containsErrorString(result))
@@ -379,11 +480,28 @@ static	bool verifyShaderCode (VkShaderStageFlagBits stage, uint32_t spvVer, cons
 				error = result;
 				status = false;
 			}
-			else if (fs::exists(spvPath))
+			else if (fs::exists(binPath))
 			{
-				uint32_t readed = readFile(spvPath, binary); UNREF(readed);
+				uint32_t readed = readFile(binPath, binary); UNREF(readed);
 				ASSERTION(readed != INVALID_UINT32);
 				ASSERTION(readed % 4 == 0);
+
+				if (enableValidation)
+				{
+					const std::string validateCmd = makeValidateCommand(apiVer, spirvVer, binPath);
+					result = captureSystemCommandResult(validateCmd.c_str(), status, '\n');
+					if (getAppVerboseFlag())
+					{
+						std::cout << "[APP] Validate command: \"" << validateCmd << "\"" << std::endl;
+					}
+					if (result.length())
+					{
+						fs::remove(binPath);
+						error = "In stage: " + std::string(shaderStageToCommand(stage)) + "\n" + result;
+						status = false;
+					}
+					else status = true;
+				}
 			}
 			else
 			{
@@ -396,7 +514,7 @@ static	bool verifyShaderCode (VkShaderStageFlagBits stage, uint32_t spvVer, cons
 		}
 		else
 		{
-			fs::remove(spvPath);
+			fs::remove(binPath);
 			error = result;
 		}
 	}
@@ -443,16 +561,16 @@ bool ProgramCollection::addFromFile(VkShaderStageFlagBits type,
 	return result;
 }
 
-void ProgramCollection::buildAndVerify ()
+void ProgramCollection::buildAndVerify (bool enableValidation, std::optional<uint32_t> spirvVer)
 {
 	std::string error;
-	const uint32_t spvVer(VK_MAKE_API_VERSION(0,1,4,0));
+	const uint32_t apiVer = m_context.instance.getParam<uint32_t>();
 	for (auto stage : availableShaderStages)
 	{
 		if (mapHasKey(stage, m_stageToCode))
 		{
 			std::vector<unsigned char> binary;
-			if (verifyShaderCode(stage, spvVer, m_stageToCode[stage], binary, error))
+			if (verifyShaderCode(stage, apiVer, spirvVer, enableValidation, m_stageToCode[stage], binary, error))
 				m_stageToBinary[stage] = binary;
 			else ASSERTMSG(false, error);
 		}
