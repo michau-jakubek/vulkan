@@ -29,9 +29,11 @@ struct CanvasEvent
 	CanvasEvent (Canvas& canvas, GLFWSetCallback* setCallback, routine_arg_t<GLFWSetCallback, 1> callCallback)
 		: callback			(m_callback)
 		, userData			(m_userData)
+		, enabled			(m_enabled)
 		, m_canvas			(canvas)
 		, m_callback		()
 		, m_userData		(nullptr)
+		, m_enabled			(false)
 		, m_setCallback		(setCallback)
 		, m_callCallback	(callCallback)
 	{
@@ -40,23 +42,31 @@ struct CanvasEvent
 	}
 	const Callback&	callback;
 	const UserData&	userData;
+	const bool&		enabled;
 	void set (Callback aCallback, UserData anUserData)
 	{
 		m_callback	= aCallback;
 		m_userData	= anUserData;
+		m_enabled	= true;
 		(*m_setCallback)(*m_canvas.window, m_callCallback);
 	}
-	void reset ()
+	void enable ()
 	{
+		ASSERTION(m_callback);
+		m_enabled = true;
+		(*m_setCallback)(*m_canvas.window, m_callCallback);
+	}
+	void disable ()
+	{
+		m_enabled	= false;
 		(*m_setCallback)(*m_canvas.window, nullptr);
-		m_callback = Callback{};
-		m_userData = nullptr;
 	}
 
 private:
 	Canvas&								m_canvas;
 	Callback							m_callback;
 	UserData							m_userData;
+	bool								m_enabled;
 	GLFWSetCallback*					m_setCallback;
 	routine_arg_t<GLFWSetCallback, 1>	m_callCallback;
 };

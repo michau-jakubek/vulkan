@@ -20,7 +20,7 @@ Vulkan is excellent and awesome. Although it is terribly huge, I'm fascinated by
   <li>Download project from this site using: git clone https://github.com/michau-jakubek/vulkan.git</li>
   <li>Move to the root folder of the project</li>
   <li>Inside make a build folder (e.g. 'build') and go into</li>
-  <BR>
+  <BR />
   <li>In general to create a project or a solution type:
   <pre>
     cmake -G "???" -DCMAKE_BUILD_TYPE=??? -DVULKAN_INCLUDE_PATH=??? -DVULKAN_LIB_PATH=???
@@ -35,22 +35,23 @@ Vulkan is excellent and awesome. Although it is terribly huge, I'm fascinated by
     <li>.. (do not forget)    must point to the folder with project CMakeLists.txt</li>
     <li>You can also specify -DCMAKE_CXX_COMPILER for your favorite one</li>
   </ul>
-  <BR>
+  <BR />
     Linux example:
     <pre>
-      cmake -DCMAKE_BUILD_TYPE=DEBUG -DVULKAN_INCLUDE_PATH=/opt/vulkan/1.3.204.1/x86_64/include \
-                                     -DVULKAN_LIB_PATH=/opt/vulkan/1.3.204.1/x86_64/lib/libvulkan.so \
-                                     -DGLFW3_INCLUDE_PATH=/usr/include \
-                                     -DGLFW3_LIB_PATH=/usr/lib/x86_64-linux-gnu/libglfw.so.3 ..
+    cmake -DCMAKE_BUILD_TYPE=DEBUG -DVULKAN_INCLUDE_PATH=/opt/vulkan/1.3.204.1/x86_64/include \
+                                   -DVULKAN_LIB_PATH=/opt/vulkan/1.3.204.1/x86_64/lib/libvulkan.so \
+                                   -DGLFW3_INCLUDE_PATH=/usr/include \
+                                   -DGLFW3_LIB_PATH=/usr/lib/x86_64-linux-gnu/libglfw.so.3 ..
     </pre>
     Windows example:
     <pre>
-      cmake -G "Visual Studio 16 2019" -DVULKAN_INCLUDE_PATH=c:\\VulkanSDK\\1.3.216.0\\Include ^
-                                       -DVULKAN_LIB_PATH=c:\\VulkanSDK\\1.3.216.0\\Lib\\vulkan-1.lib ^
-                                       -DGLFW3_INCLUDE_PATH=c:\\VulkanDeps\\glfw-3.3.8.bin.WIN64\\include ^
-                                       -DGLFW3_LIB_PATH=c:\\VulkanDeps\\glfw-3.3.8.bin.WIN64\\lib-vc2019\\glfw3.lib ..
+    cmake -G "Visual Studio 16 2019" -DVULKAN_INCLUDE_PATH=c:\\VulkanSDK\\1.3.216.0\\Include ^
+                                     -DVULKAN_LIB_PATH=c:\\VulkanSDK\\1.3.216.0\\Lib\\vulkan-1.lib ^
+                                     -DGLFW3_INCLUDE_PATH=c:\\VulkanDeps\\glfw-3.3.8.bin.WIN64\\include ^
+                                     -DGLFW3_LIB_PATH=c:\\VulkanDeps\\glfw-3.3.8.bin.WIN64\\lib-vc2019\\glfw3.lib ..
     </pre>
-    </ul>
+    </li>
+</ul>
 <h3>Build an executable:</h3>
     On Linux simply call <code>make -j23</code> command. Why 23? Because J23 is my favorite parameter, it is a cryptonym of intelligence agent Hans Kloss. You can omit multhreaded compilation at all.
     <br>
@@ -64,7 +65,7 @@ Vulkan is excellent and awesome. Although it is terribly huge, I'm fascinated by
   The project consists of two static libraries: framework and tests linked together into the only one executable which is app.
   Next to the mentioned earlier there is another one folder 'assets' which holds all assets visible to the application, i.e. shaders.
   After app is invoked without any arguments you should see a list of available options:
-    <pre>
+<pre>
     Pass available option as a parameter:
     Usage: app [options] <test_name> [<test_param>,...]
     Options:

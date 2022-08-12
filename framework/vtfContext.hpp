@@ -83,8 +83,6 @@ public:
 										 std::optional<VkClearValue> clearColor = {}, VkImageLayout finalColorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 										 bool enableDepthBuffer = false, float maxDepth = 1.0f);
 	VkRenderPassBeginInfo	makeRenderPassBeginInfo(ZRenderPass rp, ZFramebuffer fb, const VkExtent2D& extent) const;
-	ZShaderModule	createShaderModule	(const std::vector<unsigned char>& code);
-	ZShaderModule	createShaderModule	(const std::string& code);
 
 protected:
 	ZFramebuffer	createFramebufferImpl	(ZRenderPass renderPass, uint32_t width, uint32_t height, const ZImageView* attachments, uint32_t attachmentCount);

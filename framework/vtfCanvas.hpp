@@ -93,7 +93,7 @@ public:
 		const VkRect2D&			scissor;
 		const VkExtent2D&		extent;
 		const FrameBuffers&		buffers;
-		const uint32_t			bufferCount;
+		const uint32_t&			bufferCount;
 		const uint32_t&			refreshCount;
 		void setup (ZRenderPass rp, uint32_t hintWidth = 0, uint32_t hintHeight = 0, bool force = false);
 	private:
@@ -106,6 +106,7 @@ public:
 		VkViewport					m_viewport;
 		VkRect2D					m_scissor;
 		VkExtent2D					m_extent;
+		uint32_t					m_bufferCount;
 	};
 
 	struct CommandAndFence
@@ -136,12 +137,10 @@ public:
 			 const strings&		instanceLayers		= {},
 			 const strings&		instanceExtensions	= {},
 			 const strings&		deviceExtensions	= {},
+			 const CanvasStyle&	style				= DefaultStyle,
 			 uint32_t			apiVersion			= VK_API_VERSION_1_0,
 			 uint32_t			engVersion			= VK_MAKE_VERSION(1, 0, 0),
-			 uint32_t			appVersion			= VK_MAKE_VERSION(1, 0, 0),
-			 const CanvasStyle&	style				= DefaultStyle,
-			 // remeber that your App must use of backBufferCount command buffers
-			 uint32_t			backBufferCount		= 2);
+			 uint32_t			appVersion			= VK_MAKE_VERSION(1, 0, 0));
 	virtual ~Canvas	();
 
 	ZQueue					getPresentQueue () const;
@@ -154,7 +153,6 @@ public:
 	const uint32_t&			width;
 	const uint32_t&			height;
 	const CanvasStyle&		style;
-	const uint32_t			backBufferCount;
 	GLFWEvents&				events();
 
 	VkRenderPassBeginInfo	makeRenderPassBeginInfo	(ZRenderPass rp, uint32_t swapImageIndex) const;

@@ -9,6 +9,8 @@
 #include "vtfCanvas.hpp"
 #include "vtfZCommandBuffer.hpp"
 
+#define MAX_BACK_BUFFER_COUNT 2
+
 namespace vtf
 {
 
@@ -54,11 +56,10 @@ Canvas::Canvas	(const char*		appName,
 				 const strings&		instanceLayers,
 				 const strings&		instanceExtensions,
 				 const strings&		deviceExtensions,
+				 const CanvasStyle&	style,
 				 uint32_t			apiVersion,
 				 uint32_t			engVersion,
-				 uint32_t			appVersion,
-				 const CanvasStyle&	style,
-				 uint32_t			backBufferCount)
+				 uint32_t			appVersion)
 	: GlfwInitializerFinalizer()
 	, CanvasContext(appName, apiVersion, engVersion, appVersion, instanceLayers, instanceExtensions, deviceExtensions, style, this)
 	, VulkanContext	(cc_callbacks, cc_debugMessenger, cc_debugReport, cc_instance, cc_physicalDevice, cc_device)
@@ -71,7 +72,6 @@ Canvas::Canvas	(const char*		appName,
 	, width						(m_width)
 	, height					(m_height)
 	, style						(m_style)
-	, backBufferCount			(backBufferCount)
 	// end of references initialization
 	, m_surfaceDetails			()
 	, m_format					()
@@ -86,8 +86,7 @@ Canvas::Canvas	(const char*		appName,
 	, m_timerUserData			(nullptr)
 	, m_timerPeriodMS			(0)
 {
-	ASSERTION(backBufferCount > 0);
-	for (uint32_t i = 0; i < backBufferCount; ++i)
+	for (uint32_t i = 0; i < MAX_BACK_BUFFER_COUNT; ++i)
 	{
 		m_backBuffers.push_back(BackBuffer(*this));
 		m_commandFences.emplace_back(*this);
@@ -199,7 +198,7 @@ Canvas::SwapChain::SwapChain (Canvas& canvas)
 	, scissor		(m_scissor)
 	, extent		(m_extent)
 	, buffers		(m_buffers)
-	, bufferCount	(canvas.backBufferCount)
+	, bufferCount	(m_bufferCount)
 	, refreshCount	(m_refreshCount)
 	, m_canvas		(canvas)
 	, m_handle		(VK_NULL_HANDLE)
@@ -208,6 +207,7 @@ Canvas::SwapChain::SwapChain (Canvas& canvas)
 	, m_viewport	()
 	, m_scissor		()
 	, m_extent		()
+	, m_bufferCount	()
 {
 	m_viewport.x		= 0.0f;
 	m_viewport.y		= 0.0f;
@@ -348,12 +348,9 @@ void Canvas::SwapChain::setup (ZRenderPass rp, uint32_t hintWidth, uint32_t hint
 
 	m_extent			= caps.currentExtent;
 
-	uint32_t imageCount = m_canvas.backBufferCount;
-	ASSERTION(imageCount <= caps.maxImageCount);
-	if (imageCount < caps.minImageCount)
-	{
-		imageCount = caps.minImageCount;
-	}
+	// avoid caps.maxImageCount is 0, it means no limit
+	caps.maxImageCount	= std::max(caps.maxImageCount, (uint32_t)MAX_BACK_BUFFER_COUNT);
+	m_bufferCount		= std::min(caps.maxImageCount, (uint32_t)MAX_BACK_BUFFER_COUNT);
 
 	ASSERTION(caps.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
 	ASSERTION(caps.supportedTransforms & caps.currentTransform);
@@ -368,7 +365,7 @@ void Canvas::SwapChain::setup (ZRenderPass rp, uint32_t hintWidth, uint32_t hint
 	VkSwapchainCreateInfoKHR swapchainCreateInfo = {};
 	swapchainCreateInfo.sType				= VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	swapchainCreateInfo.surface				= *m_canvas.surface;
-	swapchainCreateInfo.minImageCount		= imageCount;
+	swapchainCreateInfo.minImageCount		= m_bufferCount;
 	swapchainCreateInfo.imageFormat			= m_canvas.format.format;
 	swapchainCreateInfo.imageColorSpace		= m_canvas.format.colorSpace;
 	swapchainCreateInfo.imageExtent			= caps.currentExtent;
@@ -468,13 +465,7 @@ void Canvas::transitionImageForPresent (ZCommandBuffer cmdBuffer, uint32_t swapI
 void Canvas::releaseBackBuffers ()
 {
 	std::vector<ZFence>	fences;
-	for (uint32_t i = 0; i < backBufferCount; ++i)
-	{
-		BackBuffer buffer = m_backBuffers.front();
-		fences.emplace_back(buffer.presentFence);
-		m_backBuffers.pop_front();
-		m_backBuffers.push_back(buffer);
-	}
+	std::transform(m_backBuffers.begin(), m_backBuffers.end(), std::back_inserter(fences), [](const auto& buf) { return buf.presentFence; });
 	waitForFences(fences);
 	resetFences(fences);
 }
@@ -553,16 +544,17 @@ int Canvas::run (ZRenderPass rp, OnCommandRecordingCallback onCommandRecording, 
 	ASSERTION(onCommandRecording != nullptr);
 	if (&m_drawTrigger != &drawTrigger.get())
 	{
-		ASSERTMSG((drawTrigger > 0), "Plase call onCommandRecording at leat once");
+		ASSERTMSG((drawTrigger > 0), "Plase call onCommandRecording at least once");
 	}
+
+	m_swapChain.setup(rp, m_width, m_height, true);
 
 	bool							doContinue			= true;
 	uint32_t						commandBufferIndex	= 0;
 	std::vector<CommandAndFence>	commandBuffers		{};
+	const uint32_t					backBufferCount		= m_swapChain.bufferCount;
 	ZCommandPool					commandPool			= createGraphicsCommandPool();
 	for (uint32_t i = 0; i < backBufferCount; ++i)	{ commandBuffers.emplace_back(commandPool); }
-
-	m_swapChain.setup(rp, m_width, m_height, true);
 
 	if (style.visible) glfwShowWindow(*cc_window);
 

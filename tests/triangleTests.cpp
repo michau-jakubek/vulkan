@@ -22,9 +22,10 @@ int prepareTests (const TestRecord& record, const strings& cmdLineParams)
 
 void onResize (Canvas& cs, void* userData, int width, int height)
 {
+	UNREF(cs);
 	UNREF(width);
 	UNREF(height);
-	*((int*)userData) += cs.backBufferCount;
+	*((int*)userData) += 1;
 }
 
 void onKey (Canvas& cs, void* userData, const int key, int scancode, int action, int mods)
@@ -59,7 +60,7 @@ int performTests (Canvas& cs, const std::string& assets)
 	ZPipeline					pipeline			= cs.createGraphicsPipeline(pipelineLayout, renderPass, {/*dynamic viewport & scissor*/},
 																				vertShaderModule, fragShaderModule);
 
-	int drawTrigger = cs.backBufferCount;
+	int drawTrigger = 1;
 	cs.events().cbKey.set(onKey, nullptr);
 	cs.events().cbWindowSize.set(onResize, &drawTrigger);
 

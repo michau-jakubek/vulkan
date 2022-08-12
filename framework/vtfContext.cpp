@@ -457,16 +457,6 @@ ZFramebuffer VulkanContext::createFramebufferImpl (ZRenderPass renderPass, uint3
 	return ZFramebuffer::create(framebuffer, device, callbacks);
 }
 
-ZShaderModule VulkanContext::createShaderModule	(const std::string& code)
-{
-	return ::vtf::createShaderModule(device, code);
-}
-
-ZShaderModule VulkanContext::createShaderModule	(const std::vector<unsigned char>& code)
-{
-	return ::vtf::createShaderModule(device, code);
-}
-
 VkRenderPassBeginInfo VulkanContext::makeRenderPassBeginInfo(ZRenderPass rp, ZFramebuffer fb, const VkExtent2D& extent) const
 {
 	auto&					clearColors		= rp.getParamRef<std::vector<VkClearValue>>();

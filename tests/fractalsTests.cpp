@@ -7,63 +7,85 @@
 #include "vtfPipelineLayout.hpp"
 #include "vtfZCommandBuffer.hpp"
 
+#include <variant>
+
 using namespace vtf;
 
 namespace
 {
 
-int performTest (Canvas& canvas, const std::string&	assets);
+bool isFloat64Supported (ZPhysicalDevice device)
+{
+	VkPhysicalDeviceFeatures f;
+	vkGetPhysicalDeviceFeatures(*device, &f);
+	return (VK_FALSE != f.shaderFloat64);
+}
+
+bool userEnforcesFloat32 (const strings& params)
+{
+	strings				sink;
+	strings				args(params);
+	Option				enforceFloate32	{ "-f", 0 };
+	std::vector<Option>	options { enforceFloate32 };
+	return consumeOptions(enforceFloate32, options, args, sink) > 0;
+}
+
+int performTest (Canvas& canvas, const std::string&	assets, bool enableFloat64);
 
 int prepareTest (const TestRecord& record, const strings& params)
 {
 	UNREF(params);
 
-	std::cout << "Navigation keys combination" << std::endl;
-	std::cout << "  Scroll Left|Right|Up|Down: Move the picture slowly" << std::endl;
-	std::cout << "  Ctrl or|and Mice Button &&" << std::endl;
-	std::cout << "   * cursor move:            Move the picture fast" << std::endl;
-	std::cout << "   * scroll dowm:            Zoom in" << std::endl;
-	std::cout << "   * scroll dowm:            Zoom out" << std::endl;
-	std::cout << "  R:                         Restore to start settings" << std::endl;
-	std::cout << "  Esc:                       Quit" << std::endl;
+	std::cout << "Arguments"													<< std::endl;
+	std::cout << "  [-f] Enforce using Float32 in shader"						<< std::endl;
+	std::cout << "  Otherwise Float64 will be used if available"				<< std::endl;
+	std::cout																	<< std::endl;
+	std::cout << "Navigation keys combination"									<< std::endl;
+	std::cout << "  Scroll Left|Right|Up|Down: Move the picture slowly"			<< std::endl;
+	std::cout << "  Ctrl or|and Mice Button pressed:"							<< std::endl;
+	std::cout << "   * cursor move:            Move the picture fast"			<< std::endl;
+	std::cout << "   * scroll dowm:            Zoom in"							<< std::endl;
+	std::cout << "   * scroll dowm:            Zoom out"						<< std::endl;
+	std::cout << "  R:                         Restore to start settings"		<< std::endl;
+	std::cout << "  S:                         Print diagnostic information"	<< std::endl;
+	std::cout << "  Gray(+)                    Increment iteration count"		<< std::endl;
+	std::cout << "  Gray(-)                    Decrement iteration count"		<< std::endl;
+	std::cout << "  Esc:                       Quit"							<< std::endl;
 
-	Canvas	cs (record.name,
-				record.layers, {}, {},
-				VK_API_VERSION_1_0,
-				VK_MAKE_VERSION(1, 0, 0),
-				VK_MAKE_VERSION(1, 0, 0),
-				Canvas::DefaultStyle,
-				2);
+	Canvas	cs (record.name, record.layers);
 
-	return performTest(cs, record.assets);
+	const bool	enableFloat64	= userEnforcesFloat32(params) ? false : isFloat64Supported(cs.physicalDevice);
+	std::cout << "Current shader mode Float" << (enableFloat64 ? "64" : "32") << std::endl;
+
+	return performTest(cs, record.assets, enableFloat64);
 }
 
+template<class Float>
 struct PushConstant
 {
-	float width;
-	float height;
-	float xMin;
-	float xMax;
-	float yMin;
-	float yMax;
+	Float width;
+	Float height;
+	Float xMin;
+	Float xMax;
+	Float yMin;
+	Float yMax;
 	int   iterCount;
 };
 
-struct UserInput
+struct UserInput_
 {
-	int				drawTrigger;
-	double			xCursor;
-	double			yCursor;
-	bool			ctrlPressed;
-	bool			micePressed;
-	double			miceKeyXcursor;
-	double			miceKeyYcursor;
-	PushConstant	pc;
-	const int		iterationCount;
-	const int		iterationStep;
-	const bool		adaptiveIteration;
-	int				iterationTick;
-	UserInput()
+	int					drawTrigger;
+	double				xCursor;
+	double				yCursor;
+	bool				ctrlPressed;
+	bool				micePressed;
+	double				miceKeyXcursor;
+	double				miceKeyYcursor;
+	const int			iterationCount;
+	const int			iterationStep;
+	const bool			adaptiveIteration;
+	int					iterationTick;
+	UserInput_ ()
 		: drawTrigger		(1)
 		, xCursor			()
 		, yCursor			()
@@ -71,14 +93,22 @@ struct UserInput
 		, micePressed		()
 		, miceKeyXcursor	()
 		, miceKeyYcursor	()
-		, pc				()
 		, iterationCount	(50)
 		, iterationStep		(20)
 		, adaptiveIteration	(true)
 		, iterationTick		(1)
 	{
 	}
-	void reset (Canvas& cs)
+	virtual void reset (Canvas& cs) = 0;
+	virtual void updateDim (Canvas& cs) = 0;
+};
+
+template<class Float>
+struct UserInput : UserInput_
+{
+	PushConstant<Float>	pc;
+	UserInput() : pc() {}
+	void reset (Canvas& cs) override
 	{
 		pc.iterCount = iterationCount;
 		updateDim(cs);
@@ -90,10 +120,10 @@ struct UserInput
 		micePressed	= false;
 		glfwGetCursorPos(*cs.window, &xCursor, &yCursor);
 	}
-	void updateDim (Canvas& cs)
+	void updateDim (Canvas& cs) override
 	{
-		pc.width = float(cs.swapchain.extent.width);
-		pc.height = float(cs.swapchain.extent.height);
+		pc.width = Float(cs.swapchain.extent.width);
+		pc.height = Float(cs.swapchain.extent.height);
 	}
 	void incIterationCount (int step = 0, uint32_t tick = 1)
 	{
@@ -121,12 +151,20 @@ struct UserInput
 			pc.iterCount = std::max(iterationCount, (pc.iterCount - step));
 	}
 };
-
-typedef Canvas::Area<float> ZArea;
-
-ZArea areaFromPC (const PushConstant& pc)
+typedef std::variant<UserInput<float>, UserInput<double>>	VarUserInput;
+VarUserInput selectUserInputVariant (bool enableFloat64)
 {
-	ZArea a;
+	VarUserInput vui;
+	if (enableFloat64)
+		vui.emplace<UserInput<double>>();
+	else vui.emplace<UserInput<float>>();
+	return vui;
+}
+
+template<class Float>
+Canvas::Area<Float> areaFromPC (const PushConstant<Float>& pc)
+{
+	Canvas::Area<Float> a;
 	a.xMin = pc.xMin;
 	a.xMax = pc.xMax;
 	a.yMin = pc.yMin;
@@ -134,7 +172,8 @@ ZArea areaFromPC (const PushConstant& pc)
 	return a;
 }
 
-void areaToPC (const ZArea& a, PushConstant& pc)
+template<class Float>
+void areaToPC (const Canvas::Area<Float>& a, PushConstant<Float>& pc)
 {
 	pc.xMin = a.xMin;
 	pc.xMax = a.xMax;
@@ -142,20 +181,22 @@ void areaToPC (const ZArea& a, PushConstant& pc)
 	pc.yMax = a.yMax;
 }
 
+template<class Float>
 void onResize (Canvas& canvas, void* userData, int width, int height)
 {
 	UNREF(canvas);
 	UNREF(width);
 	UNREF(height);
-	UserInput* ui = reinterpret_cast<UserInput*>(userData);
+	UserInput<Float>* ui = reinterpret_cast<UserInput<Float>*>(userData);
 	++ui->drawTrigger;
 }
 
+template<class Float>
 void onKey (Canvas& cs, void* userData, int key, int scancode, int action, int mods)
 {
 	UNREF(scancode);
 	UNREF(mods);
-	UserInput* ui = reinterpret_cast<UserInput*>(userData);
+	UserInput<Float>* ui = reinterpret_cast<UserInput<Float>*>(userData);
 	++ui->drawTrigger;
 	if (key == GLFW_KEY_LEFT_CONTROL)
 	{
@@ -175,6 +216,12 @@ void onKey (Canvas& cs, void* userData, int key, int scancode, int action, int m
 				ui->reset(cs);
 				break;
 
+			case GLFW_KEY_S:
+				std::cout << "xMin:" << ui->pc.xMin << ", xMax:" << ui->pc.xMax << std::endl;
+				std::cout << "yMin:" << ui->pc.yMin << ", yMax:" << ui->pc.yMax << std::endl;
+				std::cout << "iter:" << ui->pc.iterCount << std::endl;
+				break;
+
 			case GLFW_KEY_KP_ADD:
 				ui->incIterationCount();
 				break;
@@ -186,12 +233,13 @@ void onKey (Canvas& cs, void* userData, int key, int scancode, int action, int m
 	}
 }
 
+template<class Float>
 void onMouseBtn (Canvas&, void* userData, int button, int action, int mods)
 {
 	UNREF(mods);
 	if (button == GLFW_MOUSE_BUTTON_LEFT || button == GLFW_MOUSE_BUTTON_RIGHT)
 	{
-		UserInput* ui = reinterpret_cast<UserInput*>(userData);
+		UserInput<Float>* ui = reinterpret_cast<UserInput<Float>*>(userData);
 		++ui->drawTrigger;
 		ui->miceKeyXcursor = ui->xCursor;
 		ui->miceKeyYcursor = ui->yCursor;
@@ -199,11 +247,12 @@ void onMouseBtn (Canvas&, void* userData, int button, int action, int mods)
 	}
 }
 
+template<class Float>
 void onCursorPos (Canvas& canvas, void* userData, double xpos, double ypos)
 {
 	UNREF(canvas);
 
-	UserInput* ui = reinterpret_cast<UserInput*>(userData);
+	UserInput<Float>* ui = reinterpret_cast<UserInput<Float>*>(userData);
 	++ui->drawTrigger;
 
 	ui->xCursor = xpos;
@@ -214,8 +263,8 @@ void onCursorPos (Canvas& canvas, void* userData, double xpos, double ypos)
 		double wx = ui->miceKeyXcursor - xpos;
 		double wy = ypos - ui->miceKeyYcursor;
 		Canvas::Area a = areaFromPC(ui->pc);
-		float dx = (float(wx) * a.width()) / float(canvas.width);
-		float dy = (float(wy) * a.height()) / float(canvas.height);
+		Float dx = (Float(wx) * a.width()) / Float(canvas.width);
+		Float dy = (Float(wy) * a.height()) / Float(canvas.height);
 		a.move(dx, dy);
 		areaToPC(a, ui->pc);
 		ui->miceKeyXcursor = xpos;
@@ -223,9 +272,10 @@ void onCursorPos (Canvas& canvas, void* userData, double xpos, double ypos)
 	}
 }
 
+template<class Float>
 void onScroll (Canvas& canvas, void* userData, double xScrollOffset, double yScrollOffset)
 {
-	auto allowScroll = [&](UserInput* ui) {
+	auto allowScroll = [&](UserInput<Float>* ui) {
 		return	(yScrollOffset != 0.0)
 				&& (ui->xCursor >= 2.0 && ui->xCursor < double(canvas.width - 1))
 				&& (ui->yCursor >= 2.0 && ui->yCursor < double(canvas.height - 1));
@@ -234,19 +284,19 @@ void onScroll (Canvas& canvas, void* userData, double xScrollOffset, double yScr
 	// xScrollOffset > 0 - scroll right
 	// yScrollOffset > 0 - scroll down
 
-	const float width = float(canvas.width);	UNREF(width);
-	const float height = float(canvas.height);	UNREF(height);
-	UserInput* ui = reinterpret_cast<UserInput*>(userData);
+	const Float width = Float(canvas.width);	UNREF(width);
+	const Float height = Float(canvas.height);	UNREF(height);
+	UserInput<Float>* ui = reinterpret_cast<UserInput<Float>*>(userData);
 	++ui->drawTrigger;
 
 	if (ui->ctrlPressed || ui->micePressed)
 	{
 		if (!allowScroll(ui)) return;
 
-		float scale = 1.0f + 1.0f / 32.0f;
+		Float scale = Float(1.0) + Float(1.0) / Float(32.0);
 		if (yScrollOffset > 0.0)
 		{
-			scale = 1.0f / scale;
+			scale = Float(1.0) / scale;
 
 			if (ui->adaptiveIteration)
 				ui->incIterationCount(8,10);
@@ -254,34 +304,63 @@ void onScroll (Canvas& canvas, void* userData, double xScrollOffset, double yScr
 		else if (ui->adaptiveIteration)
 			ui->decIterationCount(8,10);
 
-		Vec2 oldPoint;
-		Canvas::Area a = areaFromPC(ui->pc);
-		canvas.windowToUser(a, Vec2(ui->xCursor, (height - ui->yCursor)), oldPoint);
+		VecX<Float,2> oldPoint;
+		Canvas::Area<Float> a = areaFromPC(ui->pc);
+		canvas.windowToUser(a, VecX<Float,2>(ui->xCursor, (height - ui->yCursor)), oldPoint);
 
 		a.scale(scale);
-		Vec2 newPoint = oldPoint * scale;
-		float xoffset = oldPoint.x() - newPoint.x();
-		float yoffset = oldPoint.y() - newPoint.y();
+		VecX<Float,2> newPoint = oldPoint * scale;
+		Float xoffset = oldPoint.x() - newPoint.x();
+		Float yoffset = oldPoint.y() - newPoint.y();
 		a.move(xoffset, yoffset);
 		areaToPC(a, ui->pc);
 	}
 	else
 	{
-		const Canvas::Area a = areaFromPC(ui->pc);
-		const float dx = (a.width() * 3.0f) / width;
-		const float dy = (a.height() * 2.0f) / height;
-		ui->pc.xMin -= static_cast<float>(dx * xScrollOffset);
-		ui->pc.xMax -= static_cast<float>(dx * xScrollOffset);
-		ui->pc.yMin += static_cast<float>(dy * yScrollOffset);
-		ui->pc.yMax += static_cast<float>(dy * yScrollOffset);
+		const Canvas::Area<Float> a = areaFromPC(ui->pc);
+		const Float dx = (a.width() * Float(3.0)) / width;
+		const Float dy = (a.height() * Float(2.0f)) / height;
+		ui->pc.xMin -= static_cast<Float>(dx * xScrollOffset);
+		ui->pc.xMax -= static_cast<Float>(dx * xScrollOffset);
+		ui->pc.yMin += static_cast<Float>(dy * yScrollOffset);
+		ui->pc.yMax += static_cast<Float>(dy * yScrollOffset);
 	}
 }
 
-int performTest (Canvas& cs, const std::string&	assets)
+void initEvents (Canvas& cs, VarUserInput& vui, bool enableFloat64)
+{
+	if (enableFloat64)
+	{
+		cs.events().cbWindowSize.set(onResize<double>,		&std::get<UserInput<double>>(vui));
+		cs.events().cbCursorPos.set(onCursorPos<double>,	&std::get<UserInput<double>>(vui));
+		cs.events().cbScroll.set(onScroll<double>,			&std::get<UserInput<double>>(vui));
+		cs.events().cbMouseButton.set(onMouseBtn<double>,	&std::get<UserInput<double>>(vui));
+		cs.events().cbKey.set(onKey<double>,				&std::get<UserInput<double>>(vui));
+	}
+	else
+	{
+		cs.events().cbWindowSize.set(onResize<float>,		&std::get<UserInput<float>>(vui));
+		cs.events().cbCursorPos.set(onCursorPos<float>,		&std::get<UserInput<float>>(vui));
+		cs.events().cbScroll.set(onScroll<float>,			&std::get<UserInput<float>>(vui));
+		cs.events().cbMouseButton.set(onMouseBtn<float>,	&std::get<UserInput<float>>(vui));
+		cs.events().cbKey.set(onKey<float>,					&std::get<UserInput<float>>(vui));
+	}
+}
+
+using namespace std::placeholders;
+void commandBufferPushConstants (ZCommandBuffer cmdBuffer, ZPipelineLayout pipelineLayout,
+								 const VarUserInput& vui, bool enableFloat64)
+{
+	if (enableFloat64)
+		::vtf::commandBufferPushConstants(cmdBuffer, pipelineLayout, std::get<UserInput<double>>(vui).pc);
+	else ::vtf::commandBufferPushConstants(cmdBuffer, pipelineLayout, std::get<UserInput<float>>(vui).pc);
+}
+
+int performTest (Canvas& cs, const std::string&	assets, bool enableFloat64)
 {
 	ProgramCollection		programs(cs);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, (assets + "shader.vert"));
-	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, (assets + "shader.frag"));
+	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, (assets + (enableFloat64 ? "dshader.frag" : "fshader.frag")));
 	programs.buildAndVerify();
 
 	ZShaderModule			vertShaderModule	= *programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
@@ -304,18 +383,18 @@ int performTest (Canvas& cs, const std::string&	assets)
 	PipelineLayout			pm					(cs);
 	const VkClearValue		clearColor			= {0.5f, 0.5f, 0.5, 0.5f};
 	ZRenderPass				renderPass			= cs.createRenderPass({cs.format.format}, clearColor);
-	ZPipelineLayout			pipelineLayout		= pm.createPipelineLayout<PushConstant>();
-	ZPipeline				pipeline			= cs.createGraphicsPipeline(pipelineLayout, renderPass, {/*dynamic viewport & scissor*/},
+	ZPipelineLayout			pipelineLayout		= enableFloat64
+													? pm.createPipelineLayout<PushConstant<double>>()
+													: pm.createPipelineLayout<PushConstant<float>>();
+	ZPipeline				pipeline			= cs.createGraphicsPipeline(pipelineLayout, renderPass, {},
 																			vertShaderModule, fragShaderModule);
-
-	UserInput				ui;
+	VarUserInput			vui					= selectUserInputVariant(enableFloat64);
+	add_ref<UserInput_>		ui					= enableFloat64
+													? static_cast<add_ref<UserInput_>>(std::get<UserInput<double>>(vui))
+													: static_cast<add_ref<UserInput_>>(std::get<UserInput<float>>(vui));
 	ui.reset(cs);
 
-	cs.events().cbWindowSize.set(onResize, &ui);
-	cs.events().cbCursorPos.set(onCursorPos, &ui);
-	cs.events().cbScroll.set(onScroll, &ui);
-	cs.events().cbMouseButton.set(onMouseBtn, &ui);
-	cs.events().cbKey.set(onKey, &ui);
+	initEvents(cs, vui, enableFloat64);
 
 	auto onCommandRecording = [&](Canvas&, ZCommandBuffer cmdBuffer, uint32_t swapImageIndex)
 	{
@@ -326,7 +405,7 @@ int performTest (Canvas& cs, const std::string&	assets)
 		commandBufferBegin(cmdBuffer);
 			commandBufferBindPipeline(cmdBuffer, pipeline);
 			commandBufferBindVertexBuffers(cmdBuffer, cs.vertexInput);
-			commandBufferPushConstants(cmdBuffer, pipelineLayout, ui.pc);
+			commandBufferPushConstants(cmdBuffer, pipelineLayout, vui, enableFloat64);
 			vkCmdSetViewport(*cmdBuffer, 0, 1, &cs.swapchain.viewport);
 			vkCmdSetScissor(*cmdBuffer, 0, 1, &cs.swapchain.scissor);
 			vkCmdBeginRenderPass(*cmdBuffer, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
