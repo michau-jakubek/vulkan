@@ -37,6 +37,7 @@ struct VertexBinding : public VkVertexInputBindingDescription
 
 	template<class Attr, class... OtherAttrs>
 		Location	declareAttributes	();
+	Location		appendAttribute		(uint32_t location, VkFormat format, uint32_t offset);
 	template<class Attr, class... OtherAttrs>
 		uint32_t	addAttributes		(const std::vector<Attr>& attr, const std::vector<OtherAttrs>&... others);
 
@@ -80,9 +81,11 @@ public:
 
 	const VulkanContext&		context;
 
-	VertexBinding&				binding				(uint32_t binding);
+	VertexBinding&				binding				(uint32_t binding, uint32_t stride = 0,
+													VkVertexInputRate rate = VK_VERTEX_INPUT_RATE_VERTEX);
 	std::vector<VkBuffer>		getVertexBuffers	(std::initializer_list<ZBuffer> externalBuffers = {}) const;
 	std::vector<VkDeviceSize>	getVertexOffsets	() const;
+	uint32_t					getBindingCount		() const;
 	uint32_t					getAttributeCount	(uint32_t binding) const;
 	void						clean				();
 
@@ -91,7 +94,7 @@ public:
 private:
 	std::vector<VertexBinding>								m_freeBindings;
 	mutable std::vector<VkVertexInputBindingDescription>	m_pipeBindings;
-	mutable std::vector<VkVertexInputAttributeDescription>	m_pipeSescriptions;
+	mutable std::vector<VkVertexInputAttributeDescription>	m_pipeDescriptions;
 };
 
 template<class Attr>

@@ -1,24 +1,14 @@
 #ifndef __VTF_GLFW_EVENTS_HPP_INCLUDED__
 #define __VTF_GLFW_EVENTS_HPP_INCLUDED__
 
+#include "vtfCUtils.hpp"
+#include "vtfCanvas.hpp"
+
 #include <functional>
 #include <tuple>
-#include "vtfCanvas.hpp"
 
 namespace vtf
 {
-
-template<class R, class... Args>
-struct routine_signature
-{
-	typedef std::tuple<Args...> ArgList;
-};
-template<class R, class... Args> struct routine_t;
-template<class R, class... Args> struct routine_t<R(Args...)>
-	: routine_signature<R, Args...> { };
-
-template<class routine_type__, std::size_t at__>
-using routine_arg_t = std::tuple_element_t<at__, typename routine_t<routine_type__>::ArgList>;
 
 template<class GLFWSetCallback, class... X>
 struct CanvasEvent

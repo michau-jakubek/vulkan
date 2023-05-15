@@ -5,11 +5,10 @@
 #include "allTests.hpp"
 
 TestRecord::TestRecord ()
-	: name			()
-	, desc			()
-	, assets		()
-	, layers		()
-	, deviceIndex	(vtf::INVALID_UINT32)
+	: name				()
+	, desc				()
+	, assets			()
+	, deviceIndex		(vtf::INVALID_UINT32)
 	, call			()
 {
 }
@@ -28,7 +27,7 @@ void TestRecord::valid () const
 }
 
 #ifdef USE_TEST_IDENTIFIER
-template<> struct TestRecorder<ALL_TESTS_ORIGIN>
+template<> struct TestRecorder<ALL_TESTS_BEGIN>
 #else
 template<> struct TestRecorder<0>
 #endif
@@ -37,7 +36,7 @@ template<> struct TestRecorder<0>
 };
 
 #ifdef USE_TEST_IDENTIFIER
-bool TestRecorder<ALL_TESTS_ORIGIN>::record (TestRecord&)
+bool TestRecorder<ALL_TESTS_BEGIN>::record (TestRecord&)
 #else
 bool TestRecorder<0>::record (TestRecord&)
 #endif
@@ -55,7 +54,7 @@ template<int Tail_> void recordTailTest (TestRecord& rec, std::vector<TestRecord
 	}
 	recordTailTest<Tail_-1>(rec, records);
 }
-template<> void recordTailTest<ALL_TESTS_ORIGIN>(TestRecord&, std::vector<TestRecord>&) { }
+template<> void recordTailTest<ALL_TESTS_BEGIN>(TestRecord&, std::vector<TestRecord>&) { }
 
 void assertUiqueTest (const std::vector<TestRecord>& records)
 {
@@ -75,7 +74,7 @@ void recordAllTests (std::vector<TestRecord>& records)
 {
 	TestRecord rec;
 #ifdef USE_TEST_IDENTIFIER
-	recordTailTest<ALL_TESTS_TAIL>(rec, records);
+	recordTailTest<ALL_TESTS_END>(rec, records);
 #else
 	recordTailTest<globalTestIdentifier>(rec, records);
 #endif
@@ -111,7 +110,7 @@ void printAvailableTests (const std::vector<TestRecord>& records, const char* in
 	printAvailableTests(std::cout, records, indent, true);
 }
 
-bool findTestByName(TestRecord& rec, const std::vector<TestRecord>& records, const char* name)
+bool findAndUpdateTestByName (TestRecord& rec, const std::vector<TestRecord>& records, const char* name)
 {
 	for (auto& test : records)
 	{
@@ -193,6 +192,13 @@ template<class T> bool warnParamRange(const std::string& paramName,
 }
 template bool warnParamRange(const std::string&, int&, const int&, const int&, const int&, bool);
 template bool warnParamRange(const std::string&, float&, const float&, const float&, const float&, bool);
+
+bool Option::operator==(const Option& other) const
+{
+	if (name == nullptr && name == other.name)
+		return other.follows == follows;
+	return std::string(name).compare(other.name) == 0 && other.follows == follows;
+}
 
 static int consumeOptions (const Option& opt, const std::vector<Option>& opts, uint32_t arg, vtf::strings& args, vtf::strings& values, bool& error)
 {

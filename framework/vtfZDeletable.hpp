@@ -31,6 +31,7 @@ size_t	alloc_get_allocation_size	();
 #define ASSERTMSG(x,msg) assertion( !!(x), __func__, __FILE__, __LINE__, (msg))
 #define VKASSERT(expr,msg) assertion( ((expr) == VK_SUCCESS), __func__, __FILE__, __LINE__, (msg))
 #define ASSERTION(x) ASSERTMSG((x), std::string())
+#define ASSERT_NOT_IMPLEMENTED() ASSERTMSG(false, "Not implemented yet")
 
 template<class C> using add_cst		= typename std::add_const<C>::type;
 template<class P> using add_ptr		= typename std::add_pointer<P>::type;
@@ -41,17 +42,6 @@ template<class R> using add_cref	= add_ref<add_cst<R>>;
 template<class X> struct add_extent
 {
 	typedef X type[];
-};
-
-template<class X, uint32_t I>
-struct TypeWrapper
-{
-	X field;
-	TypeWrapper() : field() {}
-	TypeWrapper(const X& x) : field(x) {}
-	TypeWrapper(const TypeWrapper& other) : field(other.field) {}
-	operator X& () { return field; }
-	X& operator()() { return field; }
 };
 
 template<class Z> struct ZAccess
@@ -273,7 +263,8 @@ enum ZDistName
 	None,
 	RequiredLayers,				AvailableLayers,
 	RequiredLayerExtensions,	AvailableLayerExtensions,
-	RequiredDeviceExtensions,	AvailableDeviceExtensions
+	RequiredDeviceExtensions,	AvailableDeviceExtensions,
+	Width, Height, Depth
 };
 template<ZDistName, class CType_>
 struct ZDistType
@@ -281,6 +272,7 @@ struct ZDistType
 	CType_ data;
 	ZDistType () : data() {}
 	ZDistType (const CType_& v) : data(v) {}
+	operator add_ref<CType_> () { return data; }
 };
 
 typedef add_ptr<VkAllocationCallbacks> VkAllocationCallbacksPtr;
@@ -292,12 +284,13 @@ typedef ZDeletable<VkInstance,
 	ZDistType<AvailableLayerExtensions, std::vector<std::string>>>					ZInstance;
 
 typedef ZDeletable<VkPhysicalDevice,
-	void(*)(void), nullptr,
-	std::integer_sequence<int>,
-	VkAllocationCallbacksPtr,
-	ZInstance,
-	uint32_t, /*Physical device index across the system*/
-	std::vector<std::string> /*extensions*/>					ZPhysicalDevice;
+	void(*)(void), nullptr
+	, std::integer_sequence<int>
+	, VkAllocationCallbacksPtr
+	, ZInstance
+	, uint32_t /*Physical device index across the system*/
+	, std::vector<std::string> /*Device extensions*/
+	, VkPhysicalDeviceProperties>					ZPhysicalDevice;
 
 typedef ZDeletable<VkQueue,
 	void(*)(void), nullptr,
@@ -333,7 +326,8 @@ typedef ZDeletable<VkImageView,
 
 typedef ZDeletable<VkFramebuffer,
 	decltype(&vkDestroyFramebuffer), &vkDestroyFramebuffer,
-	swizzle_two_params, ZDevice, VkAllocationCallbacksPtr>		ZFramebuffer;
+	swizzle_two_params, ZDevice, VkAllocationCallbacksPtr,
+	ZDistType<Width, uint32_t>, ZDistType<Height, uint32_t>>		ZFramebuffer;
 
 typedef ZDeletable<VkRenderPass,
 	decltype(&vkDestroyRenderPass), &vkDestroyRenderPass,

@@ -6,6 +6,7 @@
 #include "vtfProgramCollection.hpp"
 #include "vtfPipelineLayout.hpp"
 #include "vtfZCommandBuffer.hpp"
+#include "vtfBacktrace.hpp"
 
 #include <variant>
 
@@ -14,30 +15,23 @@ using namespace vtf;
 namespace
 {
 
-bool isFloat64Supported (ZPhysicalDevice device)
-{
-	VkPhysicalDeviceFeatures f;
-	vkGetPhysicalDeviceFeatures(*device, &f);
-	return (VK_FALSE != f.shaderFloat64);
-}
-
 bool userEnforcesFloat32 (const strings& params)
 {
 	strings				sink;
 	strings				args(params);
-	Option				enforceFloate32	{ "-f", 0 };
+	Option				enforceFloate32	{ "-float32", 0 };
 	std::vector<Option>	options { enforceFloate32 };
 	return consumeOptions(enforceFloate32, options, args, sink) > 0;
 }
 
-int performTest (Canvas& canvas, const std::string&	assets, bool enableFloat64, uint32_t spvVer, bool enableValidation);
+int performTest (Canvas& canvas, const std::string&	assets, bool enableFloat64, const GlobalAppFlags& flags);
 
 int prepareTest (const TestRecord& record, const strings& params)
 {
 	UNREF(params);
 
 	std::cout << "Arguments"														<< std::endl;
-	std::cout << "  [-f] Enforce using Float32 in shader"							<< std::endl;
+	std::cout << "  [-float32] Enforce using Float32 in shader"							<< std::endl;
 	std::cout << "  Otherwise Float64 will be used if available"					<< std::endl;
 	std::cout																		<< std::endl;
 	std::cout << "Navigation keys combination"										<< std::endl;
@@ -53,12 +47,25 @@ int prepareTest (const TestRecord& record, const strings& params)
 	std::cout << "  Gray(-)                    Decrement iteration count"			<< std::endl;
 	std::cout << "  Esc:                       Quit"								<< std::endl;
 
-	Canvas	cs (record.name, record.layers, {}, {}, Canvas::DefaultStyle, record.vulkanVer);
+	bool	enableFloat64 = false;
+	auto onGetEnabledFeatures = [&](ZPhysicalDevice physDevice, add_ref<strings> /*deviceExtensions*/) -> VkPhysicalDeviceFeatures2
+	{
+		VkPhysicalDeviceFeatures features{};
+		vkGetPhysicalDeviceFeatures(*physDevice, &features);
 
-	const bool	enableFloat64	= userEnforcesFloat32(params) ? false : isFloat64Supported(cs.physicalDevice);
+		VkPhysicalDeviceFeatures2 result{};
+		result.features.shaderFloat64 = features.shaderFloat64;
+		enableFloat64 = !userEnforcesFloat32(params) && (features.shaderFloat64 != VK_FALSE);
+
+		return result;;
+	};
+
+	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
+	Canvas	cs(record.name, gf.layers, {}, {}, Canvas::DefaultStyle, onGetEnabledFeatures, false, gf.apiVer);
+
 	std::cout << "Current shader mode Float" << (enableFloat64 ? "64" : "32") << std::endl;
 
-	return performTest(cs, record.assets, enableFloat64, record.spirvVer, record.spvValidation);
+	return performTest(cs, record.assets, enableFloat64, gf);
 }
 
 template<class Float>
@@ -357,12 +364,12 @@ void commandBufferPushConstants (ZCommandBuffer cmdBuffer, ZPipelineLayout pipel
 	else ::vtf::commandBufferPushConstants(cmdBuffer, pipelineLayout, std::get<UserInput<float>>(vui).pc);
 }
 
-int performTest (Canvas& cs, const std::string&	assets, bool enableFloat64, uint32_t spvVer, bool enableValidation)
+int performTest (Canvas& cs, const std::string&	assets, bool enableFloat64, const GlobalAppFlags& flags)
 {
 	ProgramCollection		programs(cs);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, (assets + "shader.vert"));
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, (assets + (enableFloat64 ? "dshader.frag" : "fshader.frag")));
-	programs.buildAndVerify(enableValidation, spvVer);
+	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
 
 	ZShaderModule			vertShaderModule	= *programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
 	ZShaderModule			fragShaderModule	= *programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);

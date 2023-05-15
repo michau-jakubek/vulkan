@@ -27,6 +27,7 @@ constexpr uint64_t INVALID_UINT64 = (~(static_cast<uint64_t>(0u)));
 #define UNUSED __attribute__((unused))
 
 #define ROUNDUP(x__, multipler__) ((((x__)+((multipler__)-1))/(multipler__))*(multipler__))
+#define ROUNDDOWN(x__, multipler__) (((x__)/(multipler__))*(multipler__))
 
 #define VKASSERT2(expr__) {				\
 	auto res__ = (expr__);				\
@@ -54,7 +55,6 @@ struct Version
 		, npatch	(0)
 		, nvariant	(0)
 	{ }
-	Version (uint32_t v) { update(v); }
 	void update (uint32_t v)
 	{
 		nmajor		= (VK_API_VERSION_MAJOR(v));
@@ -62,10 +62,15 @@ struct Version
 		npatch		= (VK_API_VERSION_PATCH(v));
 		nvariant	= (VK_API_VERSION_VARIANT(v))		;
 	}
-	static Version fromUint (uint32_t v) { return Version(v); }
+	static Version fromUint (uint32_t v)
+	{
+		Version ver(0, 0);
+		ver.update(v);
+		return ver;
+	}
 	static Version from10xMajorPlusMinor (uint32_t v)
 	{
-		Version		x(0);
+		Version		x(0, 0);
 		x.npatch	= 0;
 		x.nvariant	= 0;
 		x.nminor	= v % 10;
@@ -92,16 +97,19 @@ struct Flags
 	Flags(const Bits& bit, const OtherBits&... others)
 		: Flags(nullptr, std::forward<const Bits>(bit), std::forward<const OtherBits>(others)...) {}
 	Flags(const Flags& other) : m_flags(other.m_flags) {}
-	operator ResultFlags() const { return m_flags; }
+	explicit operator ResultFlags() const { return m_flags; }
 	ResultFlags operator()() const { return m_flags; }
-	static Flags empty() { return Flags(); }
+	static Flags empty() { return Flags(ResultFlags(0)); }
 	bool isEmpty() const { return m_flags == empty(); }
 	Flags& operator+=(Bits bit) { m_flags |= bit; return *this; }
 	Flags& operator|=(Bits bit) { m_flags |= bit; return *this; }
 	Flags& operator-=(Bits bit) { m_flags &= (~bit); return *this; }
+	Flags operator+(Bits bit) const { Flags f(*this); f.m_flags |= bit; return f; }
+	Flags operator-(Bits bit) const { Flags f(*this); f.m_flags &= (~bit); return f; }
+	static Flags fromFlags(const ResultFlags& flags) { return Flags(flags); }
 protected:
 	ResultFlags m_flags;
-	Flags() : m_flags(0) {}
+	Flags(const ResultFlags& flags) : m_flags(flags) {}
 	template<class... OtherBits>
 	Flags(std::nullptr_t sink, const Bits& bit, const OtherBits&... others)
 		: Flags(sink, std::forward<const OtherBits>(others)...) { m_flags |= bit; }
@@ -110,6 +118,7 @@ protected:
 typedef Flags<VkBufferUsageFlags, VkBufferUsageFlagBits>		ZBufferUsageFlags;
 typedef Flags<VkImageUsageFlags, VkImageUsageFlagBits>			ZImageUsageFlags;
 typedef Flags<VkMemoryPropertyFlags, VkMemoryPropertyFlagBits>	ZMemoryPropertyFlags;
+static const ZMemoryPropertyFlags ZMemoryPropertyHostFlags(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 //
 // types
 //
@@ -206,17 +215,24 @@ std::vector<const char*> to_cstrings(const C<T, U...>& iss)
 //
 // regular routines
 //
-uint32_t			findQueueFamilyIndex (VkPhysicalDevice phDevice, VkQueueFlagBits bit);
-uint32_t			findSurfaceSupportedQueueFamilyIndex (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR);
-bool				hasFormatsAndModes (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR);
-VkClearValue		makeClearColor (const Vec4& color);
-const char*			vkResultToString (VkResult res);
-strings				enumerateInstanceLayers ();
-strings				enumerateInstanceExtensions (const strings& layerNames = {});
-strings				enumerateDeviceExtensions (VkPhysicalDevice device, const strings& layerNames = {});
-uint32_t			enumeratePhysicalDevices (VkInstance instance, std::vector<VkPhysicalDevice>& devices);
-uint32_t			enumerateSwapchainImages (VkDevice device, VkSwapchainKHR swapchain, std::vector<VkImage>& images);
-std::ostream&		printPhysicalDevices (VkInstance instance, std::ostream& str);
+uint32_t					findQueueFamilyIndex (VkPhysicalDevice phDevice, VkQueueFlagBits bit);
+uint32_t					findSurfaceSupportedQueueFamilyIndex (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR);
+bool						hasFormatsAndModes (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR);
+VkClearValue				makeClearColor (const Vec4& color);
+const char*					vkResultToString (VkResult res);
+strings						enumerateInstanceLayers ();
+strings						enumerateInstanceExtensions (const strings& layerNames = {});
+strings						enumerateDeviceExtensions (VkPhysicalDevice device, const strings& layerNames = {});
+uint32_t					enumeratePhysicalDevices (VkInstance instance, std::vector<VkPhysicalDevice>& devices);
+uint32_t					enumerateSwapchainImages (VkDevice device, VkSwapchainKHR swapchain, std::vector<VkImage>& images);
+std::ostream&				printPhysicalDevices (VkInstance instance, std::ostream& str);
+uint32_t					computePixelByteWidth (VkFormat format);
+uint32_t					computePixelChannelCount (VkFormat format);
+uint32_t					sampleFlagsToSampleCount(VkSampleCountFlags flags);
+uint32_t					computeMipLevelCount (uint32_t width, uint32_t height);
+VkImageSubresourceRange		makeImageSubresourceRange (VkImageAspectFlagBits aspect = VK_IMAGE_ASPECT_COLOR_BIT,
+														uint32_t baseMipLevel = 0u, uint32_t levelCount = 1u,
+														uint32_t baseArrayLayer = 0u, uint32_t layerCount = 1u);
 
 } // namespace vtf
 

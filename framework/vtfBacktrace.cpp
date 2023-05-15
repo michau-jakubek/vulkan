@@ -102,7 +102,19 @@ std::size_t printBts (std::ostream& ss, void** bts, std::size_t nbt, std::size_t
 
 #endif // SYSTEM_OS_LINUX
 
-static bool appVerboseFlag;
-bool getAppVerboseFlag () { return appVerboseFlag; }
-void setAppVerboseFlag (bool enable) { appVerboseFlag = enable; }
+static GlobalAppFlags globalAppFlags;
+const GlobalAppFlags& getGlobalAppFlags () { return globalAppFlags; }
+void setGlobalAppFlags(const GlobalAppFlags& flags) { globalAppFlags = flags; }
+GlobalAppFlags::GlobalAppFlags()
+    : apiVer        (1, 1)
+    , vulkanVer     (1, 0)
+    , spirvVer      (1, 0)
+    , layers        ()
+    , spirvValidate (false)
+    , verbose       (false)
+    , nowerror      (false)
+    , debugPrintfEnabled        (false)
+    , noWarning_VUID_Undefined  (false)
+{
+}
 

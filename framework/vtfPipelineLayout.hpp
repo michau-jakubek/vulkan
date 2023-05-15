@@ -11,6 +11,18 @@
 #include "vtfZDeletable.hpp"
 #include "vtfContext.hpp"
 
+/*
+ * +===========================================+=====================+==============================+
+ * | Descriptor Type                           | shader access       | GLSL functions example       |
+ * +===========================================+=====================+==============================+
+ * | VK_DESCRIPTOR_TYPE_STORAGE_IMAGE          | uniform image2D u   | imageLoad|Store(u, ...)      |
+ * +-------------------------------------------+---------------------+------------------------------+
+ * | VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE          | uniform texture2D t |                              |
+ * |                                           | uniform sampler   s | texture(sampler2D(t,s), ...) |
+ * +-------------------------------------------+---------------------+------------------------------+
+ * | VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER | uniform sampler2D s | texture(s, ...)              |
+ * +-------------------------------------------+---------------------+------------------------------+
+ */
 namespace vtf
 {
 
@@ -55,20 +67,24 @@ public:
 	template<class X> uint32_t				joinBindings				(VkDescriptorType type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 																		 VkShaderStageFlags stages = VK_SHADER_STAGE_ALL, uint32_t count = 1);
 	/**
-	 * Especially for vectors. Creates a separate binding.
+	 * Creates a separate binding, usefull for vectors SSBO.
 	 * In the case where X is a std::vector<Y> an elementCount is the element count of that vector.
 	 * In the case that X is standalone type (e.q. user structure) the elementCount param is ignored.
 	 */
-	template<class X> uint32_t				addBinding					(uint32_t elementCount = 1, VkDescriptorType type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
+	template<class VecOrElemT> uint32_t		addBinding					(uint32_t elementCount = 1, VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
 	/**
 	 * Basically does the same things like addBinding().
 	 * The one difference is that it automatically treat Y as std::vector<Y>
 	 */
-	template<class Y> uint32_t				addBindingAsVector			(uint32_t elementCount = 1, VkDescriptorType type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
-	uint32_t								addBinding					(std::optional<ZImageView> view, std::optional<ZSampler> sampler = {}, VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
+	template<class ElemType> uint32_t		addBindingAsVector			(uint32_t elementCount = 1, VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
+	template<class ElemType> uint32_t		addBindingAsVector			(const std::vector<ElemType>& vector, VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
+	uint32_t								addBinding					(std::optional<ZImageView> view, std::optional<ZSampler> sampler = {},
+																		 bool forceStorageImageIfStorageUsageIsSet = false,
+																		 VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
 	template<class X> std::optional<X>		getBinding					(uint32_t binding) const;
 	template<class Data__> void				writeBinding				(uint32_t binding, const Data__& data);
-	template<class Data__> void				readBinding					(uint32_t binding, Data__& data);
+	void									zeroBinding					(uint32_t binding);
+	template<class Data__> void				readBinding					(uint32_t binding, Data__& data) const;
 	VarDescriptorInfo						getDescriptorInfo			(uint32_t binding);
 	ZDescriptorSetLayout					createDescriptorSetLayout	();
 	ZDescriptorSet							getDescriptorSet			(ZDescriptorSetLayout dsLayout);
@@ -103,14 +119,14 @@ private:
 	const ExtBinding&						verifyGetExtBinding			(uint32_t binding) const;
 	const ExtBinding&						verifyGetExtBinding			(std::type_index index, uint32_t binding) const;
 	void									writeBinding_				(std::type_index index, uint32_t binding, const uint8_t* data, VkDeviceSize bytes);
-	void									readBinding_				(std::type_index index, uint32_t binding, uint8_t* data, VkDeviceSize bytes);
+	void									readBinding_				(std::type_index index, uint32_t binding, uint8_t* data, VkDeviceSize bytes) const;
 	void									getBinding_					(uint32_t binding, std::optional<ZImageView>&) const;
 	void									getBinding_					(uint32_t binding, std::optional<ZSampler>&) const;
 	void									getBinding_					(uint32_t binding, std::optional<std::pair<ZImageView,ZSampler>>&) const;
 	uint32_t								getDescriptorAlignment		(const VkDescriptorType type) const;
 	void									updateBuffersOffsets		();
 	void									recreateUpdateBuffers		(std::map<std::pair<VkDescriptorType, int>, ZBuffer>&	buffers);
-	void									updateDescriptorSet			(ZDescriptorSet											ds,
+	void									updateDescriptorSet			(ZDescriptorSet	descriptorSet,
 																		 std::map<std::pair<VkDescriptorType, int>, ZBuffer>&	buffers) const;
 	ZPipelineLayout							createPipelineLayout_		(std::initializer_list<ZDescriptorSetLayout> descriptorSetLayouts,
 																		 const VkPushConstantRange* pPushConstantRanges, std::type_index typeOfPushConstant);
@@ -165,12 +181,17 @@ template<class Y> uint32_t PipelineLayout::addBindingAsVector (uint32_t elementC
 	auto index = std::type_index(typeid(typename add_extent<std::vector<Y>>::type));
 	return addBinding_(index, hidden::BoundType<Y>::size(), true, type, stages, std::max(elementCount, 1u));
 }
+template<class X> uint32_t PipelineLayout::addBindingAsVector (const std::vector<X>& vector, VkDescriptorType type, VkShaderStageFlags stages)
+{
+	auto index = std::type_index(typeid(typename add_extent<std::vector<X>>::type));
+	return addBinding_(index, sizeof(X), true, type, stages, std::max(static_cast<uint32_t>(vector.size()), 1u));
+}
 template<class Data__> void PipelineLayout::writeBinding (uint32_t binding, const Data__& data)
 {
 	auto index = std::type_index(typeid(typename add_extent<Data__>::type));
 	writeBinding_(index, binding, hidden::BoundType<Data__>::data(data), hidden::BoundType<Data__>::length(data));
 }
-template<class Data__> void PipelineLayout::readBinding (uint32_t binding, Data__& data)
+template<class Data__> void PipelineLayout::readBinding (uint32_t binding, Data__& data) const
 {
 	auto index = std::type_index(typeid(typename add_extent<Data__>::type));
 	readBinding_(index, binding, hidden::BoundType<Data__>::data(data), hidden::BoundType<Data__>::length(data));

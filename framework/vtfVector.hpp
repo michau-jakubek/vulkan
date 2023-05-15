@@ -65,11 +65,19 @@ public:
     {
     }
 
+	template<class U>
+	explicit VecX(const VecX<U, N>& other)
+	{
+		for (size_t i = 0; i < N; ++i)
+			data[i] = static_cast<T>(other[i]);
+	}
+
 	template<class U, size_t M>
-	VecX(const VecX<U, M>& other)
+	VecX& assign(const VecX<U, M>& other)
 	{
 		for (size_t i = 0; i < N && i < M; ++i)
-			data[i] = other[i];
+			data[i] = static_cast<T>(other[i]);
+		return *this;
 	}
 
 	template<class X, size_t M>
@@ -281,9 +289,10 @@ public:
 		return v;
 	}
 
+	typedef T type;
 	static constexpr size_t count () { return N; }
 	static constexpr size_t size () { return N * sizeof(T); }
-    template<class U, size_t I> VecX<T,N>& operator=(const VecX<U,I>&);
+	template<class U> VecX<T,N>& operator=(const VecX<U,N>&);
 
 	template<class U, size_t M> bool operator==(const VecX<U,M>&) const;
 	template<class U, size_t M> bool operator!=(const VecX<U,M>& other) const {
@@ -359,15 +368,12 @@ typedef VecX<uint32_t,3> UVec3;
 typedef VecX<uint32_t,4> UVec4;
 
 template<class T, size_t N>
-template<class U, size_t I>
-inline VecX<T,N>& VecX<T,N>::operator=(const VecX<U,I>& s)
+template<class U>
+inline VecX<T,N>& VecX<T,N>::operator=(const VecX<U,N>& s)
 {
-    size_t ni = 0;
-    for ( ; ni < N && ni < I; ++ni)
-        data[ni] = s.data[ni];
-    for ( ; ni < N; ++ni)
-        data[ni] = T{};
-   return *this;
+	for (size_t i = 0; i < N; ++i)
+		data[i] = static_cast<T>(s.data[i]);
+	return *this;
 }
 
 template<class T, size_t N>

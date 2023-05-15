@@ -11,6 +11,7 @@
 #include <fstream>
 
 #include "vtfFilesystem.hpp"
+#include "vtfZDeletable.hpp"
 
 namespace vtf
 {
@@ -30,6 +31,7 @@ bool		containsAllString (const vtf::strings& all, const vtf::strings& range);
 uint32_t	removeStrings (const vtf::strings& strs, vtf::strings& list);
 strings		mergeStrings (const strings& a, const strings& b);
 strings		mergeStringsDistinct (const strings& a, const strings& b);
+strings		splitString(const std::string& delimitedString, char delimiter = ',');
 
 template<class T, class... U> inline
 void emplace(T& t, U&&... u)
@@ -42,6 +44,26 @@ inline X select_if(const C<X, Y...>& c, const X& defaultResult, S&& s)
 {
 	auto x = std::find_if(c.begin(), c.end(), s);
 	return x != c.end() ? *x : defaultResult;
+}
+
+template<template<class, class...> class Ctr, class T, class... Aux>
+uint32_t data_byte_length(const Ctr<T, Aux...>& ctr)
+{
+	return uint32_t(ctr.size() * sizeof(T));
+}
+
+template<class X> struct collection_element;
+template<template<class,class...> class coll__, class X, class... Y>
+struct collection_element<coll__<X, Y...>>
+{
+	typedef X type;
+};
+template<class coll__> using collection_element_t = typename collection_element<coll__>::type;
+
+template<template<class, class...> class coll__, class T, class... Aux>
+uint32_t elem_byte_length(const coll__<T, Aux...>&)
+{
+	return uint32_t(sizeof(T));
 }
 
 template<class key__, class val__>
@@ -57,7 +79,13 @@ concise_convert(const convFrom_&, const convTo_& to)
 }
 
 template<class X, class SX = typename std::make_signed<X>::type>
-SX make_signed (const X& x)
+const SX make_signed (const X& x)
+{
+	return static_cast<SX>(x);
+}
+
+template<class X, class SX = typename std::make_signed<X>::type>
+SX make_signed (X& x)
 {
 	return static_cast<SX>(x);
 }
@@ -68,7 +96,47 @@ UX make_unsigned (const X& x)
 	return static_cast<UX>(x);
 }
 
-// iterator_if
+template<class X, class NCX = add_ref<typename std::remove_const<X>::type>>
+NCX remove_const (X& x)
+{
+	return const_cast<NCX>(x);
+}
+
+template<class T, class P = T(*)[1], class R = decltype(std::begin(*std::declval<P>()))>
+static auto makeStdBeginEnd(void* p, uint32_t n) -> std::pair<R, R>
+{
+	auto tmp = std::begin(*P(p));
+	auto begin = tmp;
+	std::advance(tmp, n);
+	return { begin, tmp };
+}
+
+template<class ListItem, std::size_t N>
+void copy_initializer_list(const std::initializer_list<ListItem>& src, ListItem(&dst)[N])
+{
+	typename std::initializer_list<ListItem>::size_type j = 0;
+	for (auto begin = src.begin(), i = begin; i != src.end() && j < N; ++i, ++j)
+	{
+		dst[j] = *i;
+	}
+}
+
+template<class X>
+struct ExplicitWrapper
+{
+	X value;
+	explicit ExplicitWrapper() : value() {}
+	explicit ExplicitWrapper(const X& x) : value(x) {}
+	ExplicitWrapper(const ExplicitWrapper& other) : value(other.value) {}
+	operator X& () { return value; }
+	operator const X& () const { return value; }
+	X& operator()() { return value; }
+	const X& operator()() const { return value; }
+};
+template<class X> ExplicitWrapper<X> makeExplicitWrapper (const X& x)
+{
+	return ExplicitWrapper<X>(x);
+}
 
 template<template<class, class...> class Container_, class... X_>
 auto iterator_from_index (Container_<X_...>& c, uint32_t index)
@@ -96,49 +164,25 @@ bool mapHasKey (const std::map<Key_, Val_, X_...> map, const Key_& key)
 template<class T> T fromText (const std::string& text, const T& defResult, bool& status);
 
 template<class T> bool between (const T& paramValue, const T& paramMin, const T& paramMax);
-/*
-template<class S, class V, class... Sy, class... Vy> inline
-void setFromVector (std::set<S, Sy...>& s, const std::vector<V, Vy...>& vec)
-{
-	for (auto& v : vec) s.insert(v);
-}
 
-template<class S, class V, class Conv, class... Sy, class... Vy> inline
-void setFromVector (std::set<S, Sy...>& s, const std::vector<V, Vy...>& vec, Conv&& conv)
-{
-	for (auto& v : vec) s.insert(conv(v));
-}
-
-template<class V, class S, class... Vy, class... Sy> inline
-void vectorFromSet (std::vector<V, Vy...>& vec, std::set<S, Sy...>& s)
-{
-	for (auto& i : s) vec.emplace_back(i);
-}
-
-template<class V, class S, class Conv, class... Vy, class... Sy> inline
-void vectorFromSet(std::vector<V, Vy...>& vec, std::set<S, Sy...>& s, Conv&& conv)
-{
-	for (auto& i : s) vec.emplace_back(conv(i));
-}
-
-static const auto c_str_compare = [](const char* s1, const char* s2) -> bool
-{
-	return std::strcmp(s1, s2) < 0;
-};
-typedef typename std::remove_reference<decltype(c_str_compare)>::type CStrComparer;
-*/
 static const auto string_to_c_str = [](const std::string& s) -> const char* { return s.c_str(); };
 
-template<class X> struct collection_element
+
+template<class R, class... Args>
+struct routine_signature
 {
-	typedef X type;
+	typedef R Result;
+	typedef std::tuple<Args...> ArgList;
 };
-template<template<class,class...> class coll__, class X, class... Y>
-struct collection_element<coll__<X, Y...>>
-{
-	typedef X type;
-};
-template<class coll__> using collection_element_t = typename collection_element<coll__>::type;
+template<class R, class... Args> struct routine_t;
+template<class R, class... Args> struct routine_t<R(Args...)>
+	: routine_signature<R, Args...> { };
+
+template<class routine_type__, std::size_t at__>
+using routine_arg_t = std::tuple_element_t<at__, typename routine_t<routine_type__>::ArgList>;
+
+template<class routine_type__>
+using routine_res_t = typename routine_t<routine_type__>::Result;
 
 } // namespace vtf
 

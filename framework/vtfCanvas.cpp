@@ -7,7 +7,9 @@
 #include "vtfCUtils.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfCanvas.hpp"
+#include "vtfZImage.hpp"
 #include "vtfZCommandBuffer.hpp"
+#include "vtfDebugMessenger.hpp"
 
 #define MAX_BACK_BUFFER_COUNT 2
 
@@ -35,33 +37,35 @@ ZSurfaceKHR		createSurface (ZInstance instance, VkAllocationCallbacksPtr callbac
 
 CanvasContext::CanvasContext (const char*			appName,
 							  uint32_t				apiVersion,
-							  uint32_t				engVersion,
-							  uint32_t				appVersion,
 							  const strings&		instanceLayers,
 							  const strings&		instanceExtensions,
 							  const strings&		deviceExtensions,
+							  GetEnabledFeaturesCB	onGetEnabledFeatures,
+							  bool					enableDebugPrintf,
 							  const CanvasStyle&	style,
 							  add_ptr<Canvas>		canvas)
 	: cc_callbacks		(getAllocationCallbacks())
 	, cc_debugMessenger	(VK_NULL_HANDLE)
 	, cc_debugReport	(VK_NULL_HANDLE)
 	, cc_instance		(createInstance(appName, cc_callbacks, instanceLayers, mergeStringsDistinct(getGlfwRequiredInstanceExtensions(), instanceExtensions),
-										&cc_debugMessenger, this, apiVersion, engVersion, appVersion))
+										&cc_debugMessenger, this, &cc_debugReport, this, apiVersion, enableDebugPrintf))
 	, cc_window			(createWindow(style, appName, canvas))
 	, cc_surface		(createSurface(cc_instance, cc_callbacks, cc_window))
 	, cc_physicalDevice	(selectPhysicalDevice(VulkanContext::deviceIndex, cc_instance, deviceExtensions, globalQueuesToIndices, cc_surface, &globalPresentQueueFamilyIndex))
-	, cc_device			(createLogicalDevice(cc_physicalDevice, globalQueuesToIndices, globalPresentQueueFamilyIndex)) {}
+	, cc_device			(createLogicalDevice(cc_physicalDevice, globalQueuesToIndices, onGetEnabledFeatures, globalPresentQueueFamilyIndex))
+{
+}
 
-Canvas::Canvas	(const char*		appName,
-				 const strings&		instanceLayers,
-				 const strings&		instanceExtensions,
-				 const strings&		deviceExtensions,
-				 const CanvasStyle&	style,
-				 uint32_t			apiVersion,
-				 uint32_t			engVersion,
-				 uint32_t			appVersion)
+Canvas::Canvas	(const char*			appName,
+				 const strings&			instanceLayers,
+				 const strings&			instanceExtensions,
+				 const strings&			deviceExtensions,
+				 const CanvasStyle&		style,
+				 GetEnabledFeaturesCB	onGetEnabledFeatures,
+				 bool					enableDebugPrintf,
+				 uint32_t				apiVersion)
 	: GlfwInitializerFinalizer()
-	, CanvasContext(appName, apiVersion, engVersion, appVersion, instanceLayers, instanceExtensions, deviceExtensions, style, this)
+	, CanvasContext(appName, apiVersion, instanceLayers, instanceExtensions, deviceExtensions, onGetEnabledFeatures, enableDebugPrintf, style, this)
 	, VulkanContext	(cc_callbacks, cc_debugMessenger, cc_debugReport, cc_instance, cc_physicalDevice, cc_device)
 	// beginning references initialization
 	, window					(cc_window)
@@ -72,6 +76,7 @@ Canvas::Canvas	(const char*		appName,
 	, width						(m_width)
 	, height					(m_height)
 	, style						(m_style)
+	// TODO , drawTrigger				(m_drawTrigger)
 	// end of references initialization
 	, m_surfaceDetails			()
 	, m_format					()

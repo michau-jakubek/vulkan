@@ -4,19 +4,21 @@
 #include "vtfProgramCollection.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfZCommandBuffer.hpp"
+#include "vtfBacktrace.hpp"
 
 namespace
 {
 using namespace vtf;
 
-int performTests (Canvas& canvas, const std::string& assets, const uint32_t spirvVer, bool enableValidation);
+int performTests (Canvas& canvas, const std::string& assets, const GlobalAppFlags& flags);
 
 int prepareTests (const TestRecord& record, const strings& cmdLineParams)
 {
 	UNREF(cmdLineParams);
 	std::cout << "Press Escape to exit" << std::endl;
-	Canvas	cs(record.name, record.layers, {}, {}, Canvas::DefaultStyle, record.vulkanVer);
-	return performTests(cs, record.assets, record.spirvVer, record.spvValidation);
+    add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
+    Canvas cs(record.name, gf.layers, {}, {}, Canvas::DefaultStyle, nullptr, false, gf.vulkanVer);
+	return performTests(cs, record.assets, gf);
 }
 
 void onResize (Canvas& cs, void* userData, int width, int height)
@@ -38,13 +40,13 @@ void onKey (Canvas& cs, void* userData, const int key, int scancode, int action,
 	}
 }
 
-int performTests (Canvas& cs, const std::string& assets, const uint32_t spirvVer, bool enableValidation)
+int performTests (Canvas& cs, const std::string& assets, const GlobalAppFlags& flags)
 {
 	PipelineLayout				pl(cs);
 	ProgramCollection			programs(cs, assets);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
-	programs.buildAndVerify(enableValidation, spirvVer);
+	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
 
 	ZShaderModule				vertShaderModule	= *programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
 	ZShaderModule				fragShaderModule	= *programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);

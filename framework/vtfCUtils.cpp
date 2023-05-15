@@ -155,6 +155,18 @@ strings mergeStringsDistinct (const strings& a, const strings& b)
 	return c;
 }
 
+strings splitString(const std::string& delimitedString, char delimiter)
+{
+	strings result;
+	std::stringstream ss(delimitedString);
+	while (ss.good())
+	{
+		result.resize(result.size() + 1);
+		std::getline(ss, result.back(), delimiter);
+	}
+	return result;
+}
+
 std::string captureSystemCommandResult (const char* cmd, bool& status, const char LF)
 {
 	std::string result;

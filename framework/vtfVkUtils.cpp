@@ -1,6 +1,7 @@
 #include <functional>
 #include "vtfVkUtils.hpp"
 #include "vtfZUtils.hpp"
+#include "vtfFormatUtils.hpp"
 
 #define MKP(enumConstant) { enumConstant, #enumConstant }
 
@@ -227,12 +228,73 @@ std::ostream& printPhysicalDevices (VkInstance instance, std::ostream& str)
 			VkPhysicalDeviceProperties p;
 			vkGetPhysicalDeviceProperties(devices[i], &p);
 
+			Version apiVersion = Version::fromUint(p.apiVersion);
+			Version driverVersion = Version::fromUint(p.driverVersion);
+
 			str << i << ") Name: \"" << p.deviceName << "\"  Vendor: " << std::hex << p.vendorID
 				  << "  Device: " << std::hex << p.deviceID << std::endl;
-			str << std::dec << "  " << " API: " << Version(p.apiVersion) << ", Driver version: " << Version(p.driverVersion) << std::endl;
+			str << std::dec << "  " << " API: " << apiVersion << ", Driver version: " << driverVersion << std::endl;
 		}
 	}
 	return str;
+}
+
+uint32_t computePixelByteWidth (VkFormat format)
+{
+	const ZFormatInfo info = getFormatInfo(format);
+	return info.pixelByteSize;
+}
+
+uint32_t computePixelChannelCount (VkFormat format)
+{
+	const ZFormatInfo info = getFormatInfo(format);
+	return info.componentCount;
+}
+
+uint32_t sampleFlagsToSampleCount (VkSampleCountFlags flags)
+{
+	struct
+	{
+		VkSampleCountFlagBits	bits;
+		uint32_t				mask;
+	}
+	inf[] =
+	{
+		{ VK_SAMPLE_COUNT_1_BIT,	0x00000001 },
+		{ VK_SAMPLE_COUNT_2_BIT,	0x00000002 },
+		{ VK_SAMPLE_COUNT_4_BIT,	0x00000004 },
+		{ VK_SAMPLE_COUNT_8_BIT,	0x00000008 },
+		{ VK_SAMPLE_COUNT_16_BIT,	0x00000010 },
+		{ VK_SAMPLE_COUNT_32_BIT,	0x00000020 },
+		{ VK_SAMPLE_COUNT_64_BIT,	0x00000040 },
+	};
+	uint32_t count = 0;
+	for (auto i : inf)
+	{
+		if (flags & i.bits)
+			count |= i.mask;
+	}
+	ASSERTION(count > 0);
+	return count;
+}
+
+uint32_t computeMipLevelCount (uint32_t width, uint32_t height)
+{
+	if (width == 0u || height == 0) return 0u;
+	return static_cast<uint32_t>(std::min(std::floor(std::log2(width)), std::floor(std::log2(height)))) + 1;
+}
+
+VkImageSubresourceRange makeImageSubresourceRange (VkImageAspectFlagBits aspect,
+													uint32_t baseMipLevel, uint32_t levelCount,
+													uint32_t baseArrayLayer, uint32_t layerCount)
+{
+	VkImageSubresourceRange r;
+	r.aspectMask		= aspect;
+	r.baseMipLevel		= baseMipLevel;
+	r.levelCount		= levelCount;
+	r.baseArrayLayer	= baseArrayLayer;
+	r.layerCount		= layerCount;
+	return r;
 }
 
 } // namespace vtf

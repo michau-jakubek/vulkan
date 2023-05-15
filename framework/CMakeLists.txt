@@ -1,5 +1,7 @@
 set(framework_files
         demangle.hpp
+        stb_image.h
+        stb_image_resize.h
         vtfFilesystem.hpp
         vtfZDeletable.cpp
         vtfZDeletable.hpp
@@ -13,8 +15,13 @@ set(framework_files
         vtfVkUtils.cpp
         vtfFormatUtils.cpp
         vtfFormatUtils.hpp
+        vtfTermColor.cpp
+        vtfTermColor.hpp
         vtfVector.hpp
         vtfZBuffer.hpp
+        vtfZImage.cpp
+        vtfZImage.hpp
+        vtfZCommandBuffer.cpp
         vtfZCommandBuffer.hpp
         vtfZDeviceMemory.hpp
         vtfProgramCollection.cpp

@@ -39,15 +39,16 @@ struct CanvasContext
 	ZSurfaceKHR					cc_surface;
 	ZPhysicalDevice				cc_physicalDevice;
 	ZDevice						cc_device;
-	CanvasContext	(const char*		appName,
-					 uint32_t			apiVersion,
-					 uint32_t			engVersion,
-					 uint32_t			appVersion,
-					 const strings&		instanceLayers,
-					 const strings&		instanceExtensions,
-					 const strings&		deviceExtensions,
-					 const CanvasStyle& style,
-					 add_ptr<Canvas>	canvas);
+	CanvasContext	(const char*			appName,
+					 uint32_t				apiVersion,
+					 const strings&			instanceLayers,
+					 const strings&			instanceExtensions,
+					 const strings&			deviceExtensions,
+					 GetEnabledFeaturesCB	onGetEnabledFeatures,
+					 bool					enableDebugPrintf,
+					 const CanvasStyle&		style,
+					 add_ptr<Canvas>		canvas);
+	virtual ~CanvasContext() = default;
 };
 
 class Canvas : public GlfwInitializerFinalizer, public CanvasContext, public VulkanContext
@@ -133,14 +134,14 @@ public:
 	static const CanvasStyle DefaultStyle; // 800,600,0,1,true,true
 
 public:
-	Canvas	(const char*		appName,
-			 const strings&		instanceLayers		= {},
-			 const strings&		instanceExtensions	= {},
-			 const strings&		deviceExtensions	= {},
-			 const CanvasStyle&	style				= DefaultStyle,
-			 uint32_t			apiVersion			= VK_API_VERSION_1_0,
-			 uint32_t			engVersion			= VK_MAKE_VERSION(1, 0, 0),
-			 uint32_t			appVersion			= VK_MAKE_VERSION(1, 0, 0));
+	Canvas	(const char*			appName,
+			 const strings&			instanceLayers			= {},
+			 const strings&			instanceExtensions		= {},
+			 const strings&			deviceExtensions		= {},
+			 const CanvasStyle&		style					= DefaultStyle,
+			 GetEnabledFeaturesCB	onGetEnabledFeatures	= {},
+			 bool					enableDebugPrintf		= false,
+			 uint32_t				apiVersion				= VK_API_VERSION_1_0);
 	virtual ~Canvas	();
 
 	ZQueue					getPresentQueue () const;
@@ -153,6 +154,7 @@ public:
 	const uint32_t&			width;
 	const uint32_t&			height;
 	const CanvasStyle&		style;
+	// TODO add_ref<int>			drawTrigger;
 	GLFWEvents&				events();
 
 	VkImage					getSwapchainImage (uint32_t swapImageIndex) const;
@@ -163,7 +165,6 @@ public:
 	int						run					(ZRenderPass					rp,
 												 OnCommandRecordingCallback		onCommandRecording,
 												 std::reference_wrapper<int>	= m_drawTrigger);
-
 	typedef std::function<void(Canvas&, void*, uint64_t)> TimerCallback;
 	void					setTimer			(TimerCallback callback, void* userData, uint64_t milliseconds);
 	template<class F> bool	userToWindow		(const Area<F>& userArea, const VecX<F,2>& userPoint, VecX<F,2>& windowPoint) const;

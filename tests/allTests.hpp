@@ -13,11 +13,7 @@ struct TestRecord
 	const char*		name;			// test name (mandatory)
 	const char*		desc;			// test description (mandatory)
 	std::string		assets;			// given by caller
-	vtf::strings	layers;			// given by caller
 	uint32_t		deviceIndex;	// given by caller or default INVALID_UINT32
-	uint32_t		vulkanVer;		// Vulkan version
-	uint32_t		spirvVer;		// SPIR-V version
-	bool			spvValidation;	// SPIR-V assembly validation
 	int (*call)(const TestRecord& record, const vtf::strings& args);
 	TestRecord ();
 	void valid () const;
@@ -32,8 +28,8 @@ template<int> struct TestRecorder
 void recordAllTests (std::vector<TestRecord>& records);
 void printAvailableTests (const std::vector<TestRecord>& records, const char* indent = "\t");
 std::ostream& printAvailableTests (std::ostream& str, const std::vector<TestRecord>& records, const char* indent = "\t", bool includeNewLine = true);
-bool findTestByName(TestRecord& rec, const std::vector<TestRecord>& records, const char* name);
-std::vector<const char*> getTestNames(const std::vector<TestRecord>& records);
+bool findAndUpdateTestByName (TestRecord& rec, const std::vector<TestRecord>& records, const char* name);
+std::vector<const char*> getTestNames (const std::vector<TestRecord>& records);
 
 #define USE_TEST_IDENTIFIER
 #ifdef USE_TEST_IDENTIFIER
@@ -43,11 +39,11 @@ std::vector<const char*> getTestNames(const std::vector<TestRecord>& records);
  *********************************************************/
 enum TestIdentifier
 {
-	ALL_TESTS_ORIGIN,
+	ALL_TESTS_BEGIN,
 	TRIANGLE,
 	FRACTALS,
 
-	ALL_TESTS_TAIL = FRACTALS
+	ALL_TESTS_END = FRACTALS
 };
 #else
 static uint32_t globalTestIdentifier;
@@ -77,6 +73,7 @@ struct Option
 {
 	const char* name;
 	uint32_t follows;
+	bool operator==(const Option& other) const;
 };
 int consumeOptions (const Option& opt, const std::vector<Option>& opts, vtf::strings& args, vtf::strings& values);
 

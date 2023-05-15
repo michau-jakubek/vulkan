@@ -4,6 +4,7 @@
 #include <sstream>
 #include "vtfCUtils.hpp"
 #include "vtfContext.hpp"
+#include "vtfZImage.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfDebugMessenger.hpp"
 
@@ -38,13 +39,13 @@ VulkanContext::VulkanContext (VkAllocationCallbacksPtr	allocationCallbacks,
 	VulkanContext::deviceIndex = aPhysicalDevice.getParam<uint32_t>();
 }
 
-VulkanContext::VulkanContext (const char*		appName,
-							  const strings&	instanceLayers,
-							  const strings&	instanceExtensions,
-							  const strings&	deviceExtensions,
-							  uint32_t			apiVersion,
-							  uint32_t			engVersion,
-							  uint32_t			appVersion)
+VulkanContext::VulkanContext (const char*			appName,
+							  const strings&		instanceLayers,
+							  const strings&		instanceExtensions,
+							  const strings&		deviceExtensions,
+							  GetEnabledFeaturesCB	onGetEnabledFeatures,
+							  uint32_t				apiVersion,
+							  bool					enableDebugPrintf)
 	// begining references initialization
 	: callbacks						(m_callbacks)
 	, instance						(m_instance)
@@ -55,19 +56,19 @@ VulkanContext::VulkanContext (const char*		appName,
 	, m_callbacks					(getAllocationCallbacks())
 	, m_debugMessenger				(VK_NULL_HANDLE)
 	, m_debugReport					(VK_NULL_HANDLE)
-	, m_instance					(createInstance(appName, m_callbacks, instanceLayers, instanceExtensions, &m_debugMessenger, this, apiVersion, engVersion, appVersion))
+	, m_instance					(createInstance(appName, m_callbacks, instanceLayers, instanceExtensions,
+									&m_debugMessenger, this, &m_debugReport, this,
+									apiVersion, enableDebugPrintf))
 	, m_physicalDevice				(selectPhysicalDevice(VulkanContext::deviceIndex, m_instance, deviceExtensions, globalQueuesToIndices))
-	, m_device						(createLogicalDevice(m_physicalDevice, globalQueuesToIndices))
+	, m_device						(createLogicalDevice(m_physicalDevice, globalQueuesToIndices, onGetEnabledFeatures))
 	, m_vertexInput					(*this)
 {
 }
 
 VulkanContext::~VulkanContext ()
 {
-	if (m_debugMessenger != VK_NULL_HANDLE)
-		destroyDebugMessenger(m_instance, m_callbacks, m_debugMessenger);
-	if (m_debugReport != VK_NULL_HANDLE)
-		destroyDebugReport(m_instance, m_callbacks, m_debugReport);
+	destroyDebugMessenger(m_instance, m_callbacks, m_debugMessenger);
+	destroyDebugReport(m_instance, m_callbacks, m_debugReport);
 }
 
 ZQueue VulkanContext::getGraphicsQueue() const
@@ -102,16 +103,108 @@ const strings& VulkanContext::getAvailablePhysicalDeviceExtensions() const
 	return physicalDevice.getParamRef<strings>();
 }
 
-ZPipeline VulkanContext::createComputePipeline (ZPipelineLayout layout, ZShaderModule computeShaderModule, const char* entryName)
+ZPipeline VulkanContext::createComputePipeline (ZPipelineLayout layout, ZShaderModule computeShaderModule, const UVec3& localSize, bool enableFullGroups)
 {
+	ZDevice									aDevice		= layout.getParam<ZDevice>();
+	ZPhysicalDevice							aPhysDevice	= aDevice.getParam<ZPhysicalDevice>();
+	add_cref<VkPhysicalDeviceProperties>	properties	= aPhysDevice.getParamRef<VkPhysicalDeviceProperties>();
+
+	VkPhysicalDeviceSubgroupSizeControlFeatures			sizeCtrlFeatures{};
+	sizeCtrlFeatures.sType				= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES;
+	sizeCtrlFeatures.pNext				= nullptr;
+
+	VkPhysicalDeviceFeatures2							features2{};
+	features2.sType	= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+	features2.pNext = &sizeCtrlFeatures;
+
+	VkPhysicalDeviceSubgroupProperties					subgroupProperties{};
+	subgroupProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+
+	VkPhysicalDeviceProperties2							physicalDeviceProperties2{};
+	physicalDeviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+	physicalDeviceProperties2.pNext = &subgroupProperties;
+
+	VkPipelineShaderStageRequiredSubgroupSizeCreateInfo	subgroupCreateInfo{};
+	subgroupCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+
+	VkPipelineShaderStageCreateFlags	shaderStageCreateFlags	= 0;
+	void*								shaderStagePNext		= nullptr;
+
+	if (enableFullGroups)
+	{
+		vkGetPhysicalDeviceFeatures2(*aPhysDevice, &features2);
+		if (sizeCtrlFeatures.computeFullSubgroups)
+		{
+			vkGetPhysicalDeviceProperties2(*aPhysDevice, &physicalDeviceProperties2);
+			subgroupCreateInfo.requiredSubgroupSize = subgroupProperties.subgroupSize;
+			shaderStageCreateFlags = VK_PIPELINE_SHADER_STAGE_CREATE_REQUIRE_FULL_SUBGROUPS_BIT_EXT;
+			shaderStagePNext = &subgroupCreateInfo;
+		}
+	}
+
+	UVec3 limits;
+	uint32_t maxComputeWorkGroupInvocations = 0;
+	{
+		limits.x(properties.limits.maxComputeWorkGroupSize[0]);
+		limits.y(properties.limits.maxComputeWorkGroupSize[1]);
+		limits.z(properties.limits.maxComputeWorkGroupSize[2]);
+		maxComputeWorkGroupInvocations = properties.limits.maxComputeWorkGroupInvocations;
+	}
+
+	const VkSpecializationMapEntry entryTemplates[3]
+	{
+		{ 0, (uint32_t)(sizeof(uint32_t) * 0), sizeof(uint32_t) },
+		{ 1, (uint32_t)(sizeof(uint32_t) * 1), sizeof(uint32_t) },
+		{ 2, (uint32_t)(sizeof(uint32_t) * 2), sizeof(uint32_t) }
+	};
+
+	VkSpecializationMapEntry	entries[3];
+	uint32_t					specData[3];
+	uint32_t					entryCount	= 0;
+
+	for (size_t i = 0; i < 3; ++i)
+	{
+		if (localSize[i] != INVALID_UINT32)
+		{
+			entries[entryCount]		= entryTemplates[i];
+			specData[entryCount]	= localSize[i];
+			if (localSize[i] > limits[i])
+			{
+				std::stringstream ss;
+				ss << "localSize[" << i << "] of " << localSize[i] << " is greaten than available " << limits;
+				ASSERTMSG(false, ss.str());
+			}
+			entryCount += 1;
+		}
+	}
+
+	if (3 == entryCount)
+	{
+		const uint32_t product = localSize.x() * localSize.y() * localSize.z();
+		if (product >  maxComputeWorkGroupInvocations)
+		{
+			std::stringstream ss;
+			ss << "localSize product of " << product << " is grater than available " << maxComputeWorkGroupInvocations;
+			ASSERTMSG(false, ss.str());
+		}
+	}
+
+	const VkSpecializationInfo specInfo
+	{
+		entryCount,									// mapEntryCount
+		entries,									// pMapEntries
+		(uint32_t)(entryCount * sizeof(uint32_t)),	// dataSize
+		specData									// pData
+	};
+
 	VkPipelineShaderStageCreateInfo	sci{};
 	sci.sType	= VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	sci.pNext	= nullptr;
-	sci.flags	= VkPipelineShaderStageCreateFlags(0);
+	sci.pNext	= shaderStagePNext;
+	sci.flags	= shaderStageCreateFlags;
 	sci.stage	= VK_SHADER_STAGE_COMPUTE_BIT;
 	sci.module	= *computeShaderModule;
-	sci.pName	= entryName;
-	sci.pSpecializationInfo	= static_cast<const VkSpecializationInfo*>(nullptr);
+	sci.pName	= "main";
+	sci.pSpecializationInfo	= entryCount ? &specInfo : nullptr;
 
 	VkComputePipelineCreateInfo	ci{};
 	ci.sType	= VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -121,8 +214,6 @@ ZPipeline VulkanContext::createComputePipeline (ZPipelineLayout layout, ZShaderM
 	ci.layout	= *layout;
 	ci.basePipelineHandle	= VK_NULL_HANDLE;
 	ci.basePipelineIndex	= 0;
-
-	ZDevice aDevice = layout.getParam<ZDevice>();
 
 	ZPipeline	computePipeline (aDevice, callbacks, layout, VK_PIPELINE_BIND_POINT_COMPUTE);
 	VKASSERT2(vkCreateComputePipelines(*aDevice, VkPipelineCache(VK_NULL_HANDLE), 1u, &ci, callbacks, computePipeline.setter()));
@@ -134,14 +225,15 @@ ZPipeline VulkanContext::createGraphicsPipeline	(ZPipelineLayout layout, ZRender
 												 ZShaderModule vertShaderModule, ZShaderModule fragShaderModule, bool enableDepthTest)
 {
 	return createGraphicsPipeline(layout, renderPass, extent, vertShaderModule, fragShaderModule, {}, {}, {},
-								  VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, enableDepthTest);
+								  VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, enableDepthTest, 0, VK_POLYGON_MODE_FILL);
 }
 
 ZPipeline VulkanContext::createGraphicsPipeline (ZPipelineLayout layout, ZRenderPass renderPass, std::optional<VkExtent2D> extent,
 												 ZShaderModule vertShaderModule, ZShaderModule fragShaderModule,
 												 std::optional<ZShaderModule> tessCtrlModule, std::optional<ZShaderModule> tessEvalModule,
 												 std::optional<ZShaderModule> geomModule,
-												 VkPrimitiveTopology topology, bool enableDepthTest, uint32_t patchControlPoints)
+												 VkPrimitiveTopology topology, bool enableDepthTest, uint32_t patchControlPoints,
+												 VkPolygonMode polygonMode, std::initializer_list<VkDynamicState> dynamicStates)
 {
 	ZDevice						localDevice				(layout.getParam<ZDevice>());
 	VkAllocationCallbacksPtr	localCallbacks			(localDevice.getParam<VkAllocationCallbacksPtr>());
@@ -226,13 +318,21 @@ ZPipeline VulkanContext::createGraphicsPipeline (ZPipelineLayout layout, ZRender
 	scissor.offset = {0, 0};
 	if (extent.has_value()) scissor.extent = *extent;
 
-	const VkDynamicState dynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+	std::set<VkDynamicState> ss;
+	for (VkDynamicState s : dynamicStates) ss.insert(s);
+	if (false == extent.has_value())
+	{
+		ss.insert(VK_DYNAMIC_STATE_VIEWPORT);
+		ss.insert(VK_DYNAMIC_STATE_SCISSOR);
+	}
+	std::vector<VkDynamicState> dynamicStateList(ss.size());
+	std::copy_n(ss.begin(), ss.size(), dynamicStateList.begin());
 	VkPipelineDynamicStateCreateInfo dynamicState{};
 	dynamicState.sType				= VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 	dynamicState.pNext				= nullptr;
 	dynamicState.flags				= 0;
-	dynamicState.dynamicStateCount	= 2;
-	dynamicState.pDynamicStates		= dynamicStates;
+	dynamicState.dynamicStateCount	= static_cast<uint32_t>(dynamicStateList.size());
+	dynamicState.pDynamicStates		= dynamicStateList.size() ? dynamicStateList.data() : nullptr;
 
 	VkPipelineViewportStateCreateInfo viewportState{};
 	viewportState.sType			= VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -245,7 +345,7 @@ ZPipeline VulkanContext::createGraphicsPipeline (ZPipelineLayout layout, ZRender
 	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 	rasterizer.depthClampEnable			= VK_FALSE;
 	rasterizer.rasterizerDiscardEnable	= VK_FALSE;
-	rasterizer.polygonMode				= VK_POLYGON_MODE_FILL;
+	rasterizer.polygonMode				= polygonMode;
 	rasterizer.lineWidth				= 1.0f;
 	//rasterizer.rasterizerDiscardEnable	= VK_TRUE;
 	rasterizer.cullMode					= VK_CULL_MODE_BACK_BIT;
@@ -297,7 +397,7 @@ ZPipeline VulkanContext::createGraphicsPipeline (ZPipelineLayout layout, ZRender
 	pipelineInfo.pMultisampleState		= &multisampling;
 	pipelineInfo.pDepthStencilState		= enableDepthTest ? &depthStencilState : nullptr;
 	pipelineInfo.pColorBlendState		= &colorBlending;
-	pipelineInfo.pDynamicState			= extent.has_value() ? nullptr : &dynamicState;
+	pipelineInfo.pDynamicState			= dynamicStateList.size() ? &dynamicState : nullptr;
 	pipelineInfo.layout					= *layout;
 	pipelineInfo.renderPass				= *renderPass;
 	pipelineInfo.subpass				= 0;
@@ -334,28 +434,28 @@ ZCommandBuffer VulkanContext::createCommandBuffer (ZCommandPool commandPool)
 	return ::vtf::createCommandBuffer(commandPool);
 }
 
-ZBuffer	VulkanContext::createBuffer (ZImage image, ZBufferUsageFlags usage, uint32_t baseLevel, uint32_t levels, ZMemoryPropertyFlags properties) const
-{
-	const VkImageCreateInfo& ici = image.getParamRef<VkImageCreateInfo>();
-	return ::vtf::createBuffer(device, image, usage, baseLevel, (((~0u) == levels) ? ici.mipLevels : levels), properties);
-}
+// TODO
+//ZBuffer	VulkanContext::createBuffer (ZImage image, ZBufferUsageFlags usage, uint32_t baseLevel, uint32_t levels, ZMemoryPropertyFlags properties) const
+//{
+//	const VkImageCreateInfo& ici = image.getParamRef<VkImageCreateInfo>();
+//	return ::vtf::createBuffer(image, usage, baseLevel, ((INVALID_UINT32 == levels) ? ici.mipLevels : levels), properties);
+//}
 
 ZBuffer	VulkanContext::createBuffer (VkDeviceSize size, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties) const
 {
-	return ::vtf::createBuffer(device, size, usage, properties);
+	return ::vtf::createBuffer(device, makeExplicitWrapper(size), usage, properties);
 }
 
-ZImage	VulkanContext::createImage (VkFormat format, uint32_t width, uint32_t height, ZImageUsageFlags usage,
-									uint32_t mipLevels, uint32_t layers, VkSampleCountFlagBits samples, VkMemoryPropertyFlags properties) const
+ZImage	VulkanContext::createImage2D (VkFormat format, uint32_t width, uint32_t height, ZImageUsageFlags usage,
+									  uint32_t mipLevels, uint32_t layers, VkSampleCountFlagBits samples, VkMemoryPropertyFlags properties) const
 {
 	return ::vtf::createImage(device, format, width, height, usage, mipLevels, layers, samples, properties);
 }
 
-ZImageView	VulkanContext::createImageView (ZImage image, VkImageAspectFlags aspect, VkFormat chgfmt,
-											uint32_t baseLevel, uint32_t levels,
-											uint32_t baseLayer, uint32_t layers) const
+ZImageView VulkanContext::createImageView	(ZImage image, VkImageAspectFlags aspect, VkFormat chgfmt, VkImageViewType viewType,
+											 uint32_t baseLevel, uint32_t levels, uint32_t baseLayer, uint32_t layers) const
 {
-	return ::vtf::createImageView(image, aspect, chgfmt, baseLevel, levels, baseLayer, layers);
+	return ::vtf::createImageView(image, aspect, chgfmt, viewType, baseLevel, levels, baseLayer, layers);
 }
 
 ZSampler VulkanContext::createSampler (ZImageView view, bool filterLinearORnearest, bool normalized, bool mipMapEnable, bool anisotropyEnable) const
@@ -395,9 +495,9 @@ ZSampler VulkanContext::createSampler (ZImageView view, bool filterLinearORneare
 		samplerInfo.maxLod				= normalized ? 0.225f : 0.0f;
 		samplerInfo.mipLodBias			= 0.0f;
 	}
-	samplerInfo.addressModeU			= VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-	samplerInfo.addressModeV			= VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-	samplerInfo.addressModeW			= VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+	samplerInfo.addressModeU			= VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV			= VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeW			= VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 	samplerInfo.borderColor				= VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 	if (anisotropyEnable)
 	{
@@ -423,13 +523,10 @@ ZSampler VulkanContext::createSampler (ZImageView view, bool filterLinearORneare
 
 ZFramebuffer VulkanContext::createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t height, const std::vector<ZImageView>& attachments)
 {
-	return createFramebufferImpl(renderPass, width, height, attachments.data(), static_cast<uint32_t>(attachments.size()));
-}
+	const uint32_t renderAttachmentCount	= renderPass.getParam<uint32_t>();
+	const uint32_t attachmentCount			= static_cast<uint32_t>(attachments.size());
 
-ZFramebuffer VulkanContext::createFramebufferImpl (ZRenderPass renderPass, uint32_t width, uint32_t height, const ZImageView* attachments, uint32_t attachmentCount)
-{
-	const uint32_t renderAttachmentCount = renderPass.getParam<uint32_t>();
-
+	ASSERTION(attachmentCount > 0);
 	ASSERTION(attachmentCount >= renderAttachmentCount);
 	VkPhysicalDeviceProperties	props{};
 	vkGetPhysicalDeviceProperties(*physicalDevice, &props);
@@ -454,20 +551,22 @@ ZFramebuffer VulkanContext::createFramebufferImpl (ZRenderPass renderPass, uint3
 
 	VKASSERT2(vkCreateFramebuffer(*device, &framebufferInfo, callbacks, &framebuffer));
 
-	return ZFramebuffer::create(framebuffer, device, callbacks);
+	return ZFramebuffer::create(framebuffer, device, callbacks, width, height);
 }
 
-VkRenderPassBeginInfo VulkanContext::makeRenderPassBeginInfo(ZRenderPass rp, ZFramebuffer fb, const VkExtent2D& extent) const
+VkRenderPassBeginInfo VulkanContext::makeRenderPassBeginInfo(ZRenderPass rp, ZFramebuffer fb) const
 {
 	auto&					clearColors		= rp.getParamRef<std::vector<VkClearValue>>();
 	const VkClearValue*		pClearValues	= clearColors.size() ? clearColors.data() : nullptr;
+	const uint32_t			width			= fb.getParam<ZDistType<Width, uint32_t>>();
+	const uint32_t			height			= fb.getParam<ZDistType<Height, uint32_t>>();
 	VkRenderPassBeginInfo	renderPassInfo{};
 
 	renderPassInfo.sType				= VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderPassInfo.renderPass			= *rp;
 	renderPassInfo.framebuffer			= *fb;
 	renderPassInfo.renderArea.offset	= {0, 0};
-	renderPassInfo.renderArea.extent	= extent;
+	renderPassInfo.renderArea.extent	= { width, height };
 	renderPassInfo.clearValueCount		= static_cast<uint32_t>(clearColors.size());
 	renderPassInfo.pClearValues			= pClearValues;
 	return renderPassInfo;

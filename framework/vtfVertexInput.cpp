@@ -90,6 +90,31 @@ VertexBinding::Location VertexBinding::declareAttributes_ (const AttrFwd* fwd, c
 	return location;
 }
 
+VertexBinding::Location VertexBinding::appendAttribute(uint32_t location, VkFormat format, uint32_t offset)
+{
+	if (BufferType::Undefined == m_bufferType)
+		m_bufferType = BufferType::External;
+	else if (BufferType::External != m_bufferType)
+	{
+		std::ostringstream s;
+		s << "Cannot declare vertex attribs in binding (" << binding << ") with buffer";
+		s.flush();
+		ASSERTMSG(VK_FALSE, s.str());
+	}
+
+	Description d;
+	d.location	= location;
+	d.binding	= this->binding;
+	d.format	= format;
+	d.offset	= offset;
+	d.sizeOf	= 1;
+	d.count		= 0;
+
+	m_descriptions.push_back(d);
+
+	return (uint32_t)m_descriptions.size();
+}
+
 VertexBinding::Location VertexBinding::addAttributes_ (const AttrFwd* fwd, const uint32_t count)
 {
 	if (BufferType::Undefined == m_bufferType)
@@ -153,7 +178,7 @@ VertexBinding::Location VertexBinding::addAttributes_ (const AttrFwd* fwd, const
 	const uint32_t		oldStride		= this->stride;
 	const uint32_t		newStride		= oldStride + attributesStride;
 	const VkDeviceSize	newBufferSize	= elementCount * newStride;
-	ZBuffer				newBuffer		= createBuffer(device, newBufferSize, usage, props);
+	ZBuffer				newBuffer		= createBuffer(device, makeExplicitWrapper(newBufferSize), usage, props);
 
 	uint8_t*			dst				= nullptr;
 	uint8_t*			bindingSource	= nullptr;
@@ -223,7 +248,7 @@ VertexBinding::Location VertexBinding::addAttributes_ (const AttrFwd* fwd, const
 	return location;
 }
 
-VertexBinding& VertexInput::binding (uint32_t binding)
+VertexBinding& VertexInput::binding (uint32_t binding, uint32_t stride, VkVertexInputRate rate)
 {
 	assertVertexBinding(context, binding);
 	auto b = std::find_if(m_freeBindings.begin(), m_freeBindings.end(),
@@ -234,8 +259,8 @@ VertexBinding& VertexInput::binding (uint32_t binding)
 		const uint32_t	last = (uint32_t)(m_freeBindings.size() - 1u);
 		b = iterator_from_index(m_freeBindings, last);
 		b->binding		= binding;
-		b->stride		= 0u;
-		b->inputRate	= VK_VERTEX_INPUT_RATE_VERTEX;
+		b->stride		= stride;
+		b->inputRate	= rate;
 	}
 	return *b;
 }
@@ -258,11 +283,11 @@ VkPipelineVertexInputStateCreateInfo VertexInput::createPipelineVertexInputState
 	m_pipeBindings.resize(bindingCount);
 	for (uint32_t i = 0; i < bindingCount; ++i) m_pipeBindings[i] = {};
 
-	m_pipeSescriptions.reserve(descriptionCount);
+	m_pipeDescriptions.reserve(descriptionCount);
 	for (const VertexBinding& bind : m_freeBindings)
 	{
 		m_pipeBindings[bind.binding] = bind;
-		m_pipeSescriptions.insert(m_pipeSescriptions.end(), bind.m_descriptions.begin(), bind.m_descriptions.end());
+		m_pipeDescriptions.insert(m_pipeDescriptions.end(), bind.m_descriptions.begin(), bind.m_descriptions.end());
 	}
 
 	VkPipelineVertexInputStateCreateInfo	pisc{};
@@ -272,9 +297,14 @@ VkPipelineVertexInputStateCreateInfo VertexInput::createPipelineVertexInputState
 	pisc.vertexBindingDescriptionCount		= bindingCount;
 	pisc.pVertexBindingDescriptions			= m_pipeBindings.data();
 	pisc.vertexAttributeDescriptionCount	= descriptionCount;
-	pisc.pVertexAttributeDescriptions		= m_pipeSescriptions.data();
+	pisc.pVertexAttributeDescriptions		= m_pipeDescriptions.data();
 
 	return pisc;
+}
+
+uint32_t VertexInput::getBindingCount() const
+{
+	return static_cast<uint32_t>(m_freeBindings.size());
 }
 
 uint32_t VertexInput::getAttributeCount (uint32_t binding) const
@@ -341,7 +371,7 @@ void VertexInput::clean ()
 {
 	m_freeBindings.clear();
 	m_pipeBindings.clear();
-	m_pipeSescriptions.clear();
+	m_pipeDescriptions.clear();
 }
 
 } // namespace vtf

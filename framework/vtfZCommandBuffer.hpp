@@ -8,20 +8,21 @@ namespace vtf
 
 class VertexInput;
 
-struct OneShotCommandBuffer
+class OneShotCommandBuffer
 {
+	bool			m_submitted;
+	ZCommandBuffer	m_commandBuffer;
+
+public:
 	const bool&				submitted;
 	const ZCommandBuffer&	commandBuffer;
+	const ZCommandPool&		commandPool;
 
 	OneShotCommandBuffer	(ZCommandPool pool);
+	OneShotCommandBuffer	(ZDevice device, ZQueue queue);
 	~OneShotCommandBuffer	() { submit(); }
 
 	void submit ();
-
-private:
-	bool			m_submitted;
-	ZCommandPool	m_commandPool;
-	ZCommandBuffer	m_commandBuffer;
 };
 std::unique_ptr<OneShotCommandBuffer> createOneShotCommandBuffer (ZCommandPool commandPool);
 
@@ -32,8 +33,13 @@ void			commandBufferBegin (ZCommandBuffer commandBuffer);
 void			commandBufferSubmitAndWait (ZCommandBuffer commandBuffer);
 void			commandBufferSubmitAndWait (std::initializer_list<ZCommandBuffer> commandBuffers);
 void			commandBufferBindPipeline(ZCommandBuffer cmd, ZPipeline pipeline);
-void			commandBufferBindVertexBuffers (ZCommandBuffer cmd, const VertexInput& input, std::initializer_list<ZBuffer> externalBuffers = {});
-void			commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkIndexType indexType);
+void			commandBufferBindVertexBuffers (ZCommandBuffer cmd, const VertexInput& input,
+												std::initializer_list<ZBuffer> externalBuffers = {},
+												std::initializer_list<VkDeviceSize> offsets = {});
+void			commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer,
+												VkIndexType indexType = VK_INDEX_TYPE_UINT32, VkDeviceSize offset = 0);
+void			commandBufferDispatch (ZCommandBuffer cmd, const UVec3& workGroupCount = UVec3(1,1,1));
+void			commandBufferSetPolygonModeEXT(ZCommandBuffer commandBuffer, VkPolygonMode polygonMode);
 
 template<class PC__>
 void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout, const PC__& pc)
@@ -47,14 +53,25 @@ void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout, con
 }
 
 void commandBufferClearColorImage (ZCommandBuffer cmd, VkImage image,
+								   const VkClearColorValue&			clearValue,
+								   VkImageLayout					srclayout		= VK_IMAGE_LAYOUT_UNDEFINED,
+								   VkImageLayout					dstlayout		= VK_IMAGE_LAYOUT_GENERAL,
+								   VkAccessFlags					srcAccessMask	= 0,
+								   VkAccessFlags					dstAccessMask	= (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT),
+								   VkPipelineStageFlags				srcStage		= VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+								   VkPipelineStageFlags				dstStage		= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+								   const VkImageSubresourceRange&	subResRange		= makeImageSubresourceRange());
+
+void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image,
 								   const VkClearColorValue&	clearValue,
-								   VkImageLayout			srclayout		= VK_IMAGE_LAYOUT_UNDEFINED,
 								   VkImageLayout			dstlayout		= VK_IMAGE_LAYOUT_GENERAL,
 								   VkAccessFlags			srcAccessMask	= 0,
 								   VkAccessFlags			dstAccessMask	= (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT),
 								   VkPipelineStageFlags		srcStage		= VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
 								   VkPipelineStageFlags		dstStage		= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
+template<class Barrier>
+void commandBufferPipelineBarrier	(ZCommandBuffer cmd, const Barrier& barrier, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask);
 
 } // namespace vtf
 

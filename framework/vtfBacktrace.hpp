@@ -1,6 +1,9 @@
 #ifndef __VTF_BACKTRACE_HPP_INCLUDED__
 #define __VTF_BACKTRACE_HPP_INCLUDED__
 
+#include <cstdlib>
+#include <ostream>
+
 #if SYSTEM_OS_LINUX == 1
 
 #include <execinfo.h>
@@ -17,7 +20,28 @@ void printBacktrace (std::ostream& ss, std::size_t skip = 0)
 
 #endif // SYSTEM_OS_LINUX
 
-bool getAppVerboseFlag ();
-void setAppVerboseFlag (bool);
+#include "vtfVkUtils.hpp"
+
+#ifndef _MAX_PATH
+#define _MAX_PATH 260
+#endif
+
+struct GlobalAppFlags
+{
+	vtf::Version	apiVer;
+	vtf::Version	vulkanVer;
+	vtf::Version	spirvVer;
+	vtf::strings	layers;
+	char            tmpDir[_MAX_PATH];
+	bool			spirvValidate;
+	bool			verbose;
+	bool			nowerror;
+	bool			debugPrintfEnabled;
+	bool			noWarning_VUID_Undefined;
+
+	GlobalAppFlags ();
+};
+const GlobalAppFlags& getGlobalAppFlags ();
+void setGlobalAppFlags (const GlobalAppFlags&);
 
 #endif // __VTF_BACKTRACE_HPP_INCLUDED__

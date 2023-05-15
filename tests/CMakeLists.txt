@@ -12,7 +12,10 @@ set(tests_files
     )
 
 add_library(tests STATIC ${tests_files})
-target_include_directories(tests BEFORE PRIVATE ${VULKAN_INCLUDE_PATH})
+target_include_directories(tests
+                           BEFORE PRIVATE ${VULKAN_INCLUDE_PATH}
+                           AFTER PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+                           )
 target_link_libraries(tests ${tests_libs})
 
 

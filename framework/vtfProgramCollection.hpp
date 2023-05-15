@@ -24,16 +24,16 @@ class ProgramCollection
 {
 	VulkanContext&		m_context;
 	const std::string	m_basePath;
+	const std::string	m_tempDir;
 	std::map<VkShaderStageFlagBits, strings> m_stageToCode; // [0]: glsl code, [1]: entry name, [2...]: include path(s)
 	std::map<VkShaderStageFlagBits, std::vector<unsigned char>> m_stageToBinary;
 public:
 	ProgramCollection (VulkanContext& vc, const std::string& basePath = std::string());
-	void add (VkShaderStageFlagBits type, const std::string& code);
-	void add (VkShaderStageFlagBits type, const std::vector<unsigned char>& code);
+	void add (VkShaderStageFlagBits type, const std::string& code, const strings& includePaths = {}, const std::string& entryName = "main");
 	bool addFromFile(VkShaderStageFlagBits type,
 					 const std::string& fileName, const strings& includePaths = {},
 					 const std::string& entryName = "main", bool verbose = true);
-	void buildAndVerify (bool enableValidation = false, std::optional<uint32_t> spirvVer = {});
+	void buildAndVerify (const Version& vulkanVer = Version(1,0), const Version& spirvVer = Version(1,0), bool enableValidation = false, bool buildAlways = false);
 	std::optional<ZShaderModule>	getShader (VkShaderStageFlagBits stage, bool verbose = false) const;
 };
 
