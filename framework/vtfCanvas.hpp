@@ -173,7 +173,7 @@ public:
 protected:
 
 	BackBuffer			acquireBackBuffer		(ZRenderPass rp);
-	void				presentBackBuffer		(ZRenderPass rp, const BackBuffer& backBuffer);
+	bool				presentBackBuffer		(ZRenderPass rp, const BackBuffer& backBuffer);
 	void				releaseBackBuffers		();
 
 	friend struct GLFWEvents;

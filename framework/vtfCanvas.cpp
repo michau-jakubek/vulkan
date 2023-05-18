@@ -355,7 +355,7 @@ void Canvas::SwapChain::setup (ZRenderPass rp, uint32_t hintWidth, uint32_t hint
 
 	// avoid caps.maxImageCount is 0, it means no limit
 	caps.maxImageCount	= std::max(caps.maxImageCount, (uint32_t)MAX_BACK_BUFFER_COUNT);
-	m_bufferCount		= std::min(caps.maxImageCount, (uint32_t)MAX_BACK_BUFFER_COUNT);
+	m_bufferCount		= std::min(caps.minImageCount, (uint32_t)MAX_BACK_BUFFER_COUNT);
 
 	ASSERTION(caps.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
 	ASSERTION(caps.supportedTransforms & caps.currentTransform);
@@ -373,7 +373,7 @@ void Canvas::SwapChain::setup (ZRenderPass rp, uint32_t hintWidth, uint32_t hint
 	swapchainCreateInfo.minImageCount		= m_bufferCount;
 	swapchainCreateInfo.imageFormat			= m_canvas.format.format;
 	swapchainCreateInfo.imageColorSpace		= m_canvas.format.colorSpace;
-	swapchainCreateInfo.imageExtent			= caps.currentExtent;
+	swapchainCreateInfo.imageExtent			= m_extent;
 	swapchainCreateInfo.imageArrayLayers	= 1;
 	swapchainCreateInfo.imageUsage			= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	swapchainCreateInfo.preTransform		= caps.currentTransform;
@@ -383,7 +383,7 @@ void Canvas::SwapChain::setup (ZRenderPass rp, uint32_t hintWidth, uint32_t hint
 	swapchainCreateInfo.oldSwapchain		= m_handle;
 
 	const std::array<uint32_t, 2> queueFamilies { m_canvas.getGraphicsQueueFamilyIndex(), m_canvas.getPresentQueueFamilyIndex() };
-	if (m_canvas.getGraphicsQueueFamilyIndex() !=m_canvas.getPresentQueueFamilyIndex())
+	if (m_canvas.getGraphicsQueueFamilyIndex() != m_canvas.getPresentQueueFamilyIndex())
 	{
 		swapchainCreateInfo.imageSharingMode		= VK_SHARING_MODE_CONCURRENT;
 		swapchainCreateInfo.queueFamilyIndexCount	= 2;
@@ -512,8 +512,9 @@ Canvas::BackBuffer Canvas::acquireBackBuffer (ZRenderPass rp)
 	return result;
 }
 
-void Canvas::presentBackBuffer (ZRenderPass rp, const Canvas::BackBuffer& buffer)
+bool Canvas::presentBackBuffer (ZRenderPass rp, const Canvas::BackBuffer& buffer)
 {
+	bool		result			= true;
 	ZFence		presentFence	= buffer.presentFence;
 	ZSemaphore	renderSemaphore = buffer.renderSemaphore;
 
@@ -533,6 +534,7 @@ void Canvas::presentBackBuffer (ZRenderPass rp, const Canvas::BackBuffer& buffer
 		m_swapChain.setup(rp);
 		m_width	= m_swapChain.extent.width;
 		m_height = m_swapChain.extent.height;
+		result = false;
 	}
 	else
 	{
@@ -542,6 +544,7 @@ void Canvas::presentBackBuffer (ZRenderPass rp, const Canvas::BackBuffer& buffer
 	VKASSERT2(vkQueueSubmit(*getPresentQueue(), 0, (const VkSubmitInfo*)nullptr, *presentFence));
 
 	m_backBuffers.push_back(buffer);
+	return result;
 }
 
 GLFWEvents& Canvas::events()
@@ -582,7 +585,10 @@ int Canvas::run (ZRenderPass rp, OnCommandRecordingCallback onCommandRecording, 
 			--drawTrigger;
 		}
 
-		for (uint32_t i = 0; doContinue && i < backBufferCount; ++i)
+		// TODO: Terrible flickering when resizing, this must be fixed immediately
+		bool	renderAgain			= true;
+		int		renderAttemptions	= 2;
+		while (renderAgain && renderAttemptions-- > 0)
 		{
 			auto buf = acquireBackBuffer(rp);
 			{
@@ -611,7 +617,7 @@ int Canvas::run (ZRenderPass rp, OnCommandRecordingCallback onCommandRecording, 
 
 				commandBufferIndex = (commandBufferIndex + 1) % backBufferCount;
 			}
-			presentBackBuffer(rp, buf);
+			renderAgain = (false == presentBackBuffer(rp, buf));
 		}
 	}
 
