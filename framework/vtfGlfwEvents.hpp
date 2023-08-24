@@ -40,16 +40,11 @@ struct CanvasEvent
 		m_enabled	= true;
 		(*m_setCallback)(*m_canvas.window, m_callCallback);
 	}
-	void enable ()
+	void enable (bool activate)
 	{
 		ASSERTION(m_callback);
-		m_enabled = true;
-		(*m_setCallback)(*m_canvas.window, m_callCallback);
-	}
-	void disable ()
-	{
-		m_enabled	= false;
-		(*m_setCallback)(*m_canvas.window, nullptr);
+		m_enabled = activate;
+		(*m_setCallback)(*m_canvas.window, (activate ? m_callCallback : nullptr));
 	}
 
 private:

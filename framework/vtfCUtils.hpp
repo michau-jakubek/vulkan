@@ -26,30 +26,67 @@ std::string	readFile (const std::string& filename);
 uint32_t	readFile(const fs::path& path, std::vector<unsigned char>& buffer);
 std::string captureSystemCommandResult (const char* cmd, bool& status, const char LF = '\0');
 
-bool		containsString (const std::string& ext, const vtf::strings& list);
-bool		containsAllString (const vtf::strings& all, const vtf::strings& range);
+bool		containsString (const std::string& s, const vtf::strings& list);
+bool		containsAllStrings (const vtf::strings& range, const vtf::strings& all);
+bool		containsAnyString (const vtf::strings& range, const vtf::strings& include);
 uint32_t	removeStrings (const vtf::strings& strs, vtf::strings& list);
 strings		mergeStrings (const strings& a, const strings& b);
 strings		mergeStringsDistinct (const strings& a, const strings& b);
 strings		splitString(const std::string& delimitedString, char delimiter = ',');
 
-template<class T, class... U> inline
-void emplace(T& t, U&&... u)
+// Be careful, source strings must be alive after to_strings() is invoked.
+template<template<class T, class... U> class C, class T, class... U>
+void to_cstrings (const C<T, U...>& iss, std::vector<const char*>& oss)
 {
-	new (&t) T(std::forward<U>(u)...);
+	oss.resize(iss.size());
+	std::transform(iss.begin(), iss.end(), oss.begin(), [](const std::string& s) { return s.data(); });
+}
+template<template<class T, class... U> class C, class T, class... U>
+std::vector<const char*> to_cstrings (const C<T, U...>& iss)
+{
+	std::vector<const char*> oss;
+	to_cstrings(iss, oss);
+	return oss;
+}
+
+template<class Creator, class... CreatorArgs>
+auto createVector (uint32_t count, Creator&& creator, CreatorArgs&&... args)
+	-> std::vector<typename std::invoke_result<Creator, CreatorArgs...>::type>
+{
+	std::vector<typename std::invoke_result<Creator, CreatorArgs...>::type> v;
+	for (uint32_t i = 0; i < count; ++i) v.push_back(creator(std::forward<CreatorArgs>(args)...));
+	return v;
 }
 
 template<class X, class S, template<class, class...> class C, class... Y>
-inline X select_if(const C<X, Y...>& c, const X& defaultResult, S&& s)
+inline X select_if (const C<X, Y...>& c, const X& defaultResult, S&& s)
 {
 	auto x = std::find_if(c.begin(), c.end(), s);
 	return x != c.end() ? *x : defaultResult;
 }
 
 template<template<class, class...> class Ctr, class T, class... Aux>
-uint32_t data_byte_length(const Ctr<T, Aux...>& ctr)
+VkDeviceSize data_byte_length (const Ctr<T, Aux...>& ctr)
 {
-	return uint32_t(ctr.size() * sizeof(T));
+	return static_cast<VkDeviceSize>(ctr.size() * sizeof(T));
+}
+
+template<template<class, class...> class Ctr, class T, class... Aux>
+uint32_t data_count (const Ctr<T, Aux...>& ctr)
+{
+	return static_cast<uint32_t>(ctr.size());
+}
+
+template<template<class, class...> class Ctr, class T, class... Aux>
+add_ptr<T> data_or_null (Ctr<T, Aux...>& ctr)
+{
+	return ctr.size() ? ctr.data() : nullptr;
+}
+
+template<template<class, class...> class Ctr, class T, class... Aux>
+add_ptr<T> data_or_null (const Ctr<T, Aux...>& ctr)
+{
+	return ctr.size() ? ctr.data() : nullptr;
 }
 
 template<class X> struct collection_element;
@@ -61,7 +98,7 @@ struct collection_element<coll__<X, Y...>>
 template<class coll__> using collection_element_t = typename collection_element<coll__>::type;
 
 template<template<class, class...> class coll__, class T, class... Aux>
-uint32_t elem_byte_length(const coll__<T, Aux...>&)
+uint32_t elem_byte_length (const coll__<T, Aux...>&)
 {
 	return uint32_t(sizeof(T));
 }
@@ -73,19 +110,19 @@ inline bool mapHasKey (const key__& key, const std::map<key__, val__>& mp)
 }
 
 template<class convFrom_, class convTo_> convTo_
-concise_convert(const convFrom_&, const convTo_& to)
+concise_convert (const convFrom_&, const convTo_& to)
 {
 	return static_cast<convTo_>(to);
 }
 
 template<class X, class SX = typename std::make_signed<X>::type>
-const SX make_signed (const X& x)
+const SX make_signed (X& x)
 {
 	return static_cast<SX>(x);
 }
 
 template<class X, class SX = typename std::make_signed<X>::type>
-SX make_signed (X& x)
+SX make_signed (const X& x)
 {
 	return static_cast<SX>(x);
 }
@@ -103,7 +140,7 @@ NCX remove_const (X& x)
 }
 
 template<class T, class P = T(*)[1], class R = decltype(std::begin(*std::declval<P>()))>
-static auto makeStdBeginEnd(void* p, uint32_t n) -> std::pair<R, R>
+static auto makeStdBeginEnd (void* p, uint32_t n) -> std::pair<R, R>
 {
 	auto tmp = std::begin(*P(p));
 	auto begin = tmp;
@@ -112,7 +149,7 @@ static auto makeStdBeginEnd(void* p, uint32_t n) -> std::pair<R, R>
 }
 
 template<class ListItem, std::size_t N>
-void copy_initializer_list(const std::initializer_list<ListItem>& src, ListItem(&dst)[N])
+void copy_initializer_list (const std::initializer_list<ListItem>& src, ListItem(&dst)[N])
 {
 	typename std::initializer_list<ListItem>::size_type j = 0;
 	for (auto begin = src.begin(), i = begin; i != src.end() && j < N; ++i, ++j)
@@ -121,22 +158,17 @@ void copy_initializer_list(const std::initializer_list<ListItem>& src, ListItem(
 	}
 }
 
-template<class X>
-struct ExplicitWrapper
-{
-	X value;
-	explicit ExplicitWrapper() : value() {}
-	explicit ExplicitWrapper(const X& x) : value(x) {}
-	ExplicitWrapper(const ExplicitWrapper& other) : value(other.value) {}
-	operator X& () { return value; }
-	operator const X& () const { return value; }
-	X& operator()() { return value; }
-	const X& operator()() const { return value; }
-};
-template<class X> ExplicitWrapper<X> makeExplicitWrapper (const X& x)
-{
-	return ExplicitWrapper<X>(x);
-}
+#define BEGIN_SWITCH_STR(variable_lhs_, variable_rhs_, switch__) {	\
+	const char* variable_rhs_ = nullptr;							\
+	const char*& variable_rhs_ref_ = variable_rhs_;					\
+	const char* variable_lhs_ = (switch__); if (false) {
+#define CASE_STR(variable_lhs_, some_str_)	} else					\
+	if (variable_rhs_ref_ = (some_str_);							\
+		std::strncmp(variable_lhs_, variable_rhs_ref_,				\
+		std::strlen(variable_rhs_ref_)) == 0) {
+#define CASE_STR_DEFAULT(variable_lhs_) } else {
+#define END_SWITCH_STR(variable_lhs_)	\
+	} static_cast<void>(variable_lhs_); }
 
 template<template<class, class...> class Container_, class... X_>
 auto iterator_from_index (Container_<X_...>& c, uint32_t index)

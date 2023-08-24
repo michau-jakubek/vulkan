@@ -24,7 +24,11 @@ constexpr uint64_t INVALID_UINT64 = (~(static_cast<uint64_t>(0u)));
 
 #define UNREF(x) static_cast<void>(x)
 
-#define UNUSED __attribute__((unused))
+#ifdef _MSC_VER
+	#define UNUSED
+#else
+	#define UNUSED __attribute__((unused))
+#endif
 
 #define ROUNDUP(x__, multipler__) ((((x__)+((multipler__)-1))/(multipler__))*(multipler__))
 #define ROUNDDOWN(x__, multipler__) (((x__)/(multipler__))*(multipler__))
@@ -39,7 +43,7 @@ constexpr uint64_t INVALID_UINT64 = (~(static_cast<uint64_t>(0u)));
 #define VKASSERT3(expr__, msg__) {		\
 	auto res__ = (expr__);				\
 	if (res__ != VK_SUCCESS) {			\
-		assertion( false, __func__, __FILE__, __LINE__, (std::string(msg__) + vkResultToString(res__))); \
+		assertion( false, __func__, __FILE__, __LINE__, (std::string(msg__) + ' ' + vkResultToString(res__))); \
 	} \
 }
 
@@ -92,7 +96,7 @@ template<class ResultFlags, class Bits> //, class... OtherBits>
 struct Flags
 {
 	static_assert(!std::is_same<ResultFlags, Bits>::value, "");
-	//static_assert(std::negate<bool>(std::is_same<ResultFlags, Bits>::value), "");
+	Flags() : m_flags{} {}
 	template<class... OtherBits>
 	Flags(const Bits& bit, const OtherBits&... others)
 		: Flags(nullptr, std::forward<const Bits>(bit), std::forward<const OtherBits>(others)...) {}
@@ -118,121 +122,56 @@ protected:
 typedef Flags<VkBufferUsageFlags, VkBufferUsageFlagBits>		ZBufferUsageFlags;
 typedef Flags<VkImageUsageFlags, VkImageUsageFlagBits>			ZImageUsageFlags;
 typedef Flags<VkMemoryPropertyFlags, VkMemoryPropertyFlagBits>	ZMemoryPropertyFlags;
+static const ZMemoryPropertyFlags ZMemoryPropertyDeviceFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 static const ZMemoryPropertyFlags ZMemoryPropertyHostFlags(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-//
-// types
-//
-template<class T,bool=false> std::bad_typeid type_to_vk_format;
 
-template<> inline constexpr VkFormat type_to_vk_format<int8_t>			= VK_FORMAT_R8_SINT;
-template<> inline constexpr VkFormat type_to_vk_format<int8_t,true>		= VK_FORMAT_R8_SNORM;
-template<> inline constexpr VkFormat type_to_vk_format<uint8_t>			= VK_FORMAT_R8_UINT;
-template<> inline constexpr VkFormat type_to_vk_format<uint8_t,true>	= VK_FORMAT_R8_UNORM;
+uint32_t		findQueueFamilyIndex (VkPhysicalDevice phDevice, VkQueueFlagBits bit);
+uint32_t		findSurfaceSupportedQueueFamilyIndex (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR);
+std::vector<uint32_t> findSurfaceSupportedQueueFamilyIndices (VkPhysicalDevice physDevice, ZSurfaceKHR surface);
+bool			hasFormatsAndModes (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR);
+const char*		vkResultToString (VkResult res);
+std::ostream&	operator<<(std::ostream& str, add_cref<ZDistType<QueueFlags, VkQueueFlags>> flags);
+std::ostream&	operator<<(std::ostream& str, add_cref<VkDeviceQueueCreateInfoEx> props);
+strings			enumerateInstanceLayers ();
+strings			enumerateInstanceExtensions (const strings& layerNames = {});
+strings			enumerateDeviceExtensions (VkPhysicalDevice device, const strings& layerNames = {});
+uint32_t		enumeratePhysicalDevices (VkInstance instance, std::vector<VkPhysicalDevice>& devices);
+uint32_t		enumerateSwapchainImages (VkDevice device, VkSwapchainKHR swapchain, std::vector<VkImage>& images);
+std::ostream&	printPhysicalDevices (VkInstance instance, std::ostream& str);
+uint32_t		computePixelByteSize (VkFormat format);
+uint32_t		computePixelChannelCount (VkFormat format);
 
-template<> inline constexpr VkFormat type_to_vk_format<BVec1>			= VK_FORMAT_R8_SINT;
-template<> inline constexpr VkFormat type_to_vk_format<BVec1,true>		= VK_FORMAT_R8_SNORM;
-template<> inline constexpr VkFormat type_to_vk_format<UBVec1>			= VK_FORMAT_R8_UINT;
-template<> inline constexpr VkFormat type_to_vk_format<UBVec1,true>		= VK_FORMAT_R8_UNORM;
+/**
+ * @brief Calculates available mip level count starting from given width and height
+ */
+uint32_t		computeMipLevelCount (uint32_t width, uint32_t height);
 
-template<> inline constexpr VkFormat type_to_vk_format<float>		= VK_FORMAT_R32_SFLOAT;
-template<> inline constexpr VkFormat type_to_vk_format<int32_t>		= VK_FORMAT_R32_SINT;
-template<> inline constexpr VkFormat type_to_vk_format<uint32_t>	= VK_FORMAT_R32_UINT;
+/**
+ * @brief Calculates a dimension of hypothetical mip level assuming that width and height belong to level 0
+ */
+auto			computeMipLevelWidthAndHeight (uint32_t width, uint32_t height, uint32_t level) -> std::pair<uint32_t,uint32_t>;
 
-template<> inline constexpr VkFormat type_to_vk_format<WVec1>		=          VK_FORMAT_R16_SNORM;
-template<> inline constexpr VkFormat type_to_vk_format<WVec2>		=       VK_FORMAT_R16G16_SNORM;
-template<> inline constexpr VkFormat type_to_vk_format<WVec3>		=    VK_FORMAT_R16G16B16_SNORM;
-template<> inline constexpr VkFormat type_to_vk_format<WVec4>		= VK_FORMAT_R16G16B16A16_SNORM;
+/**
+ * @brief Counts the sum of the texels on each mip level where width and height are the dimension of level 0
+ */
+VkDeviceSize	computeMipLevelsPixelCount (uint32_t width, uint32_t height, uint32_t levelCount);
 
-template<> inline constexpr VkFormat type_to_vk_format<Vec1>		=          VK_FORMAT_R32_SFLOAT;
-template<> inline constexpr VkFormat type_to_vk_format<Vec2>		=       VK_FORMAT_R32G32_SFLOAT;
-template<> inline constexpr VkFormat type_to_vk_format<Vec3>		=    VK_FORMAT_R32G32B32_SFLOAT;
-template<> inline constexpr VkFormat type_to_vk_format<Vec4>		= VK_FORMAT_R32G32B32A32_SFLOAT;
+/**
+ * @brief Calculates offset and size of hypothetical mip level
+ */
+auto			computeMipLevelsOffsetAndSize (VkFormat format, uint32_t level0Width, uint32_t level0Height,
+											   uint32_t baseMipLevel, uint32_t mipLevelCount) -> std::pair<VkDeviceSize, VkDeviceSize>;
 
-template<> inline constexpr VkFormat type_to_vk_format<IVec1>		=          VK_FORMAT_R32_SINT;
-template<> inline constexpr VkFormat type_to_vk_format<IVec2>		=       VK_FORMAT_R32G32_SINT;
-template<> inline constexpr VkFormat type_to_vk_format<IVec3>		=    VK_FORMAT_R32G32B32_SINT;
-template<> inline constexpr VkFormat type_to_vk_format<IVec4>		= VK_FORMAT_R32G32B32A32_SINT;
 
-template<> inline constexpr VkFormat type_to_vk_format<UVec1>		=          VK_FORMAT_R32_UINT;
-template<> inline constexpr VkFormat type_to_vk_format<UVec2>		=       VK_FORMAT_R32G32_UINT;
-template<> inline constexpr VkFormat type_to_vk_format<UVec3>		=    VK_FORMAT_R32G32B32_UINT;
-template<> inline constexpr VkFormat type_to_vk_format<UVec4>		= VK_FORMAT_R32G32B32A32_UINT;
-
-template<VkFormat,bool> struct vk_format_to_type_impl;
-template<VkFormat fmt, bool agg = true>
-	using vk_format_to_type = typename vk_format_to_type_impl<fmt,agg>::type;
-#define VKFORMATTOTYPEIMPL(aggregated_, format_, type_)				\
-	template<> struct vk_format_to_type_impl<format_,aggregated_> { typedef type_ type; }
-
-VKFORMATTOTYPEIMPL(true,			VK_FORMAT_R8_SINT,	BVec1);
-VKFORMATTOTYPEIMPL(true,			VK_FORMAT_R8_UINT,	UBVec1);
-VKFORMATTOTYPEIMPL(true,			VK_FORMAT_R8_UNORM,	UBVec1);
-
-VKFORMATTOTYPEIMPL(true,          VK_FORMAT_R32_SFLOAT, Vec1);
-VKFORMATTOTYPEIMPL(true,       VK_FORMAT_R32G32_SFLOAT, Vec2);
-VKFORMATTOTYPEIMPL(true,    VK_FORMAT_R32G32B32_SFLOAT, Vec3);
-VKFORMATTOTYPEIMPL(true, VK_FORMAT_R32G32B32A32_SFLOAT, Vec4);
-
-VKFORMATTOTYPEIMPL(true,          VK_FORMAT_R32_SINT, IVec1);
-VKFORMATTOTYPEIMPL(true,       VK_FORMAT_R32G32_SINT, IVec2);
-VKFORMATTOTYPEIMPL(true,    VK_FORMAT_R32G32B32_SINT, IVec3);
-VKFORMATTOTYPEIMPL(true, VK_FORMAT_R32G32B32A32_SINT, IVec4);
-
-VKFORMATTOTYPEIMPL(true,          VK_FORMAT_R32_UINT, UVec1);
-VKFORMATTOTYPEIMPL(true,       VK_FORMAT_R32G32_UINT, UVec2);
-VKFORMATTOTYPEIMPL(true,    VK_FORMAT_R32G32B32_UINT, UVec3);
-VKFORMATTOTYPEIMPL(true, VK_FORMAT_R32G32B32A32_UINT, UVec4);
-
-VKFORMATTOTYPEIMPL(true,          VK_FORMAT_R16_SNORM, WVec1);
-VKFORMATTOTYPEIMPL(true,       VK_FORMAT_R16G16_SNORM, WVec2);
-VKFORMATTOTYPEIMPL(true,    VK_FORMAT_R16G16B16_SNORM, WVec3);
-VKFORMATTOTYPEIMPL(true, VK_FORMAT_R16G16B16A16_SNORM, WVec4);
-
-VKFORMATTOTYPEIMPL(true,          VK_FORMAT_R8_SNORM, BVec1);
-VKFORMATTOTYPEIMPL(true,        VK_FORMAT_R8G8_SNORM, BVec2);
-VKFORMATTOTYPEIMPL(true,      VK_FORMAT_R8G8B8_SNORM, BVec3);
-VKFORMATTOTYPEIMPL(true,    VK_FORMAT_R8G8B8A8_SNORM, BVec4);
-
-//
-// function templates
-//
-
-// Be careful, source strings must be alive after to_strings() is invoked.
-template<template<class T, class... U> class C, class T, class... U>
-void to_cstrings(const C<T, U...>& iss, std::vector<const char*>& oss)
-{
-	oss.resize(iss.size());
-	std::transform(iss.begin(), iss.end(), oss.begin(), [](const std::string& s) { return s.data(); });
-}
-template<template<class T, class... U> class C, class T, class... U>
-std::vector<const char*> to_cstrings(const C<T, U...>& iss)
-{
-	std::vector<const char*> oss;
-	to_cstrings(iss, oss);
-	return oss;
-}
-
-//
-// regular routines
-//
-uint32_t					findQueueFamilyIndex (VkPhysicalDevice phDevice, VkQueueFlagBits bit);
-uint32_t					findSurfaceSupportedQueueFamilyIndex (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR);
-bool						hasFormatsAndModes (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR);
-VkClearValue				makeClearColor (const Vec4& color);
-const char*					vkResultToString (VkResult res);
-strings						enumerateInstanceLayers ();
-strings						enumerateInstanceExtensions (const strings& layerNames = {});
-strings						enumerateDeviceExtensions (VkPhysicalDevice device, const strings& layerNames = {});
-uint32_t					enumeratePhysicalDevices (VkInstance instance, std::vector<VkPhysicalDevice>& devices);
-uint32_t					enumerateSwapchainImages (VkDevice device, VkSwapchainKHR swapchain, std::vector<VkImage>& images);
-std::ostream&				printPhysicalDevices (VkInstance instance, std::ostream& str);
-uint32_t					computePixelByteWidth (VkFormat format);
-uint32_t					computePixelChannelCount (VkFormat format);
-uint32_t					sampleFlagsToSampleCount(VkSampleCountFlags flags);
-uint32_t					computeMipLevelCount (uint32_t width, uint32_t height);
-VkImageSubresourceRange		makeImageSubresourceRange (VkImageAspectFlagBits aspect = VK_IMAGE_ASPECT_COLOR_BIT,
-														uint32_t baseMipLevel = 0u, uint32_t levelCount = 1u,
-														uint32_t baseArrayLayer = 0u, uint32_t layerCount = 1u);
+uint32_t		sampleFlagsToSampleCount (VkSampleCountFlags flags);
+VkExtent2D		makeExtent2D (uint32_t width, uint32_t height);
+VkRect2D		makeRect2D (uint32_t width, uint32_t height, int32_t Xoffset = 0u, int32_t Yoffset = 0u);
+VkExtent3D		makeExtent3D (uint32_t width = 0u, uint32_t height = 0u, uint32_t depth = 0u);
+VkOffset3D		makeOffset3D (uint32_t x = 0u, uint32_t y = 0u, uint32_t z = 0u);
+VkViewport		makeViewport (uint32_t width, uint32_t height, uint32_t x = 0, uint32_t y = 0, float minDepth = 0.0f, float maxDepth = +1.0);
+VkRect2D		clampScissorToViewport (add_cref<VkViewport> viewport, add_ref<VkRect2D> inOutScissor);
+template<class CompType> // int32_t: IVec4, uint32_t: UVec4, float: Vec4
+VkClearColorValue makeClearColorValue (const VecX<CompType,4>& color);
 
 } // namespace vtf
 

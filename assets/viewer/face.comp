@@ -1,0 +1,64 @@
+#version 450
+
+layout(local_size_x_ID = 0, local_size_y_ID = 1, local_size_z = 1) in;
+layout(push_constant) uniform PC { vec4 imageSize; }; // (panImageWidth, panImageHeight, faceWidth, faceHeight)
+layout(rgba32f, binding = 0) uniform image2D panImage;
+layout(rgba32f, binding = 1) uniform imageCube cubeImage;
+
+#define RIGHT	0
+#define LEFT	1
+#define TOP		2
+#define BOTTOM	3
+#define BACK	4
+#define FRONT	5
+
+const float PI = atan(1.0) * 4.0;
+
+vec3 faceToPanorama (uint x, uint y, uint z)
+{
+	float fx = 2.0 * float(x) / imageSize.z;
+	float fy = 2.0 * float(y) / imageSize.w;
+	switch (z)
+	{
+		case FRONT:		return vec3( 1.0 - fx,    -1.0,    1.0 - fy );
+		case BACK:		return vec3( fx - 1.0,     1.0,    1.0 - fy );
+		case RIGHT:		return vec3(   1.0,     1.0 - fx,  1.0 - fy );
+		case LEFT:		return vec3(  -1.0,     fx - 1.0,  1.0 - fy );
+		case TOP:		return vec3( fx - 1.0,  fy - 1.0,    +1.0   );
+		case BOTTOM:	return vec3( fx - 1.0,  1.0 - fy,    -1.0   );
+	}
+	return vec3(0.0);
+}
+
+void main()
+{
+	const uint	x		= gl_WorkGroupID.x * gl_WorkGroupSize.x + gl_LocalInvocationID.x;
+	const uint	y		= gl_WorkGroupID.y * gl_WorkGroupSize.y + gl_LocalInvocationID.y;
+	const uint	z		= gl_WorkGroupID.z * gl_WorkGroupSize.z + gl_LocalInvocationID.z;
+
+	const vec3	xyz		= faceToPanorama(x, y, z);
+	const float	r		= length(xyz.xy);
+	const float	theta	= atan(xyz.y, xyz.x);	// from -PI to PI
+	const float	phi		= atan(xyz.z / r);		// from -PI/2 to PI/2
+
+	// panorama image coordinates
+	const float	fx		= 0.5 * imageSize.x * (theta + PI) / PI;
+	const float	fy		= 0.5 * imageSize.x * ((PI / 2.0) - phi) / PI;
+
+	float		jx, sx	= modf(fx, jx);
+	float		jy, sy	= modf(fy, jy);
+	const float	kx		= mod(jx, imageSize.x);
+	const float ky		= clamp(jy, 0.0, (imageSize.y - 1.0));
+	const float ox		= mod((jx + 1.0), imageSize.x);
+	const float oy		= clamp((jy + 1.0), 0.0, (imageSize.y - 1.0));
+	const vec4	kc		= imageLoad(panImage, ivec2(kx, ky));
+	const vec4	lc		= imageLoad(panImage, ivec2(ox, ky));
+	const vec4	ic		= imageLoad(panImage, ivec2(kx, oy));
+	const vec4	oc		= imageLoad(panImage, ivec2(ox, oy));
+	const vec4	ckl		= mix(kc, lc, sx);
+	const vec4	cio		= mix(ic, oc, sx);
+	const vec4	cklio	= mix(ckl, cio, sy);
+
+	imageStore(cubeImage, ivec3(x, y, z), cklio);
+}
+

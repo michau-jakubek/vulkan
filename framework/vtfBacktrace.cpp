@@ -106,13 +106,16 @@ static GlobalAppFlags globalAppFlags;
 const GlobalAppFlags& getGlobalAppFlags () { return globalAppFlags; }
 void setGlobalAppFlags(const GlobalAppFlags& flags) { globalAppFlags = flags; }
 GlobalAppFlags::GlobalAppFlags()
-    : apiVer        (1, 1)
-    , vulkanVer     (1, 0)
-    , spirvVer      (1, 0)
-    , layers        ()
-    , spirvValidate (false)
-    , verbose       (false)
-    , nowerror      (false)
+	: apiVer					(1, 1)
+	, vulkanVer					(1, 0)
+	, spirvVer					(1, 0)
+	, layers					()
+	, physicalDeviceIndex		(0)
+	, verbose					(0)
+	, tmpDir					()
+	, assetsPath				()
+	, spirvValidate				(false)
+	, nowerror					(false)
     , debugPrintfEnabled        (false)
     , noWarning_VUID_Undefined  (false)
 {

@@ -1,10 +1,16 @@
 #ifndef __VTF_CANVAS_HPP_INCLUDED__
 #define __VTF_CANVAS_HPP_INCLUDED__
 
-#include <deque>
-#include <optional>
 #include "GLFW/glfw3.h"
+#include "vtfVkUtils.hpp"
 #include "vtfContext.hpp"
+#include "vtfZImage.hpp"
+#include "vtfThreadSafeLogger.hpp"
+
+#include <condition_variable>
+#include <thread>
+#include <mutex>
+#include <queue>
 
 namespace vtf
 {
@@ -20,12 +26,13 @@ struct GlfwInitializerFinalizer
 
 struct CanvasStyle
 {
-	uint32_t	width;
-	uint32_t	height;
-	float		minDepth;
-	float		maxDepth;
-	bool		visible;
-	bool		resizable;
+	uint32_t				width;
+	uint32_t				height;
+	float					minDepth;
+	float					maxDepth;
+	bool					visible;
+	bool					resizable;
+	VkFormatFeatureFlags	surfaceFormatFlags;
 };
 
 
@@ -39,14 +46,14 @@ struct CanvasContext
 	ZSurfaceKHR					cc_surface;
 	ZPhysicalDevice				cc_physicalDevice;
 	ZDevice						cc_device;
-	CanvasContext	(const char*			appName,
-					 uint32_t				apiVersion,
-					 const strings&			instanceLayers,
-					 const strings&			instanceExtensions,
-					 const strings&			deviceExtensions,
-					 GetEnabledFeaturesCB	onGetEnabledFeatures,
+	CanvasContext	(add_cptr<char>			appName,
+					 add_cref<Version>		apiVersion,
+					 add_cref<strings>		instanceLayers,
+					 add_cref<strings>		instanceExtensions,
+					 add_cref<strings>		deviceExtensions,
+					 OnEnablingFeatures		onEnablingFeatures,
 					 bool					enableDebugPrintf,
-					 const CanvasStyle&		style,
+					 add_cref<CanvasStyle>	style,
 					 add_ptr<Canvas>		canvas);
 	virtual ~CanvasContext() = default;
 };
@@ -60,62 +67,62 @@ public:
 		std::vector<VkSurfaceFormatKHR>	formats;
 		std::vector<VkPresentModeKHR>	modes;
 		SurfaceDetails ();
-		void update (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR);
+		void update (ZPhysicalDevice physDevice, ZSurfaceKHR surfaceKHR);
+		uint32_t selectFormat (ZPhysicalDevice device, VkFormatFeatureFlags formatFlags);
 	};
 
-	struct BackBuffer
-	{
-		uint32_t	imageIndex;
-		ZSemaphore	acquireSemaphore;
-		ZSemaphore	renderSemaphore;
-		ZFence		presentFence;
-
-		BackBuffer (VulkanContext& ctx);
-		BackBuffer (const BackBuffer&);
-		void destroy (VulkanContext&);
-	};
-
-	class SwapChain
+	class Swapchain
 	{
 	public:
-		struct Framebuffer
-		{
-			VkImage						image;
-			VkImageView					view;
-			std::optional<ZImageView>	depth;
-			VkFramebuffer				framebuffer;
-			Framebuffer ();
-		};
-		typedef std::vector<Framebuffer> FrameBuffers;
-		SwapChain (Canvas&);
-		~SwapChain ();
-		const VkSwapchainKHR&	handle;
-		const VkViewport&		viewport;
-		const VkRect2D&			scissor;
-		const VkExtent2D&		extent;
-		const FrameBuffers&		buffers;
-		const uint32_t&			bufferCount;
-		const uint32_t&			refreshCount;
-		void setup (ZRenderPass rp, uint32_t hintWidth = 0, uint32_t hintHeight = 0, bool force = false);
+		typedef std::vector<ZFramebuffer> Framebuffers;
+		typedef std::vector<ZNonDeletableImage> Images;
+		friend class Canvas;
+		Swapchain (add_cref<Canvas>);
+		Swapchain (Swapchain&&) = delete;
+		~Swapchain ();
+		add_cref<Canvas>			canvas;
+		add_cref<VkSwapchainKHR>	handle;
+		add_cref<VkViewport>		viewport;
+		add_cref<VkRect2D>			scissor;
+		add_cref<VkExtent2D>		extent;
+		add_cref<Images>			images;
+		add_cref<Framebuffers>		framebuffers;
+		add_cref<uint32_t>			bufferCount;
+		add_cref<uint32_t>			refreshCount;
+		add_cref<ZRenderPass>		renderPass;	// accessible after recreation
+		void recreate (ZRenderPass rp, uint32_t acquirableImageCount, uint32_t hintWidth = 0, uint32_t hintHeight = 0, bool force = false);
 	private:
-		void rebuild (ZRenderPass rp);
-		void destroy (bool clear);
-		Canvas&						m_canvas;
+		// If rp has no handle then creates only images, otherwise views and framebuffers as well
+		void createFramebuffers (ZRenderPass rp, uint32_t minImageCount);
+		void destroyFramebuffers ();
 		VkSwapchainKHR				m_handle;
-		FrameBuffers				m_buffers;
+		Images						m_images;
+		Framebuffers				m_framebuffers;
 		uint32_t					m_refreshCount;
 		VkViewport					m_viewport;
 		VkRect2D					m_scissor;
 		VkExtent2D					m_extent;
 		uint32_t					m_bufferCount;
+		ZRenderPass					m_renderPass;
 	};
 
-	struct CommandAndFence
+	struct BackBuffer
 	{
-		CommandAndFence (Canvas&);
-		CommandAndFence (ZCommandPool);
-		ZFence			fence;
-		ZCommandBuffer	cmdBuffer;
+		uint32_t		imageIndex;
+		ZImage			blitImage;
+		ZCommandBuffer	blitCommand;
+		ZFence			blitFence;
+		ZSemaphore		acquireSemaphore;
+		ZSemaphore		renderSemaphore;
+		ZFence			presentFence;
+		ZCommandBuffer	renderCommand;
+		ZFence			renderFence;
+		uint32_t		threadIndex;
+		std::thread::id	threadID;
+
+		BackBuffer (ZCommandPool renderPool, ZCommandPool blitPool);
+		BackBuffer (add_cref<BackBuffer>);
+		add_ref<BackBuffer> operator=(add_cref<BackBuffer>);
 	};
 
 	template<class Float> struct Area
@@ -134,60 +141,75 @@ public:
 	static const CanvasStyle DefaultStyle; // 800,600,0,1,true,true
 
 public:
-	Canvas	(const char*			appName,
-			 const strings&			instanceLayers			= {},
-			 const strings&			instanceExtensions		= {},
-			 const strings&			deviceExtensions		= {},
-			 const CanvasStyle&		style					= DefaultStyle,
-			 GetEnabledFeaturesCB	onGetEnabledFeatures	= {},
+	Canvas	(add_cptr<char>			appName,
+			 add_cref<strings>		instanceLayers			= {},
+			 add_cref<strings>		instanceExtensions		= {},
+			 add_cref<strings>		deviceExtensions		= {},
+			 add_cref<CanvasStyle>	canvasStyle				= DefaultStyle,
+			 OnEnablingFeatures		onEnablingFeatures		= {},
 			 bool					enableDebugPrintf		= false,
-			 uint32_t				apiVersion				= VK_API_VERSION_1_0);
+			 add_cref<Version>		apiVersion				= Version(1,0));
 	virtual ~Canvas	();
 
-	ZQueue					getPresentQueue () const;
-	uint32_t				getPresentQueueFamilyIndex () const;
-	ZGLFWwindowPtr&			window;
-	ZSurfaceKHR&			surface;
-	const SurfaceDetails&	surfaceDetails;
-	VkSurfaceFormatKHR&		format;
-	const SwapChain&		swapchain;
-	const uint32_t&			width;
-	const uint32_t&			height;
-	const CanvasStyle&		style;
-	// TODO add_ref<int>			drawTrigger;
-	GLFWEvents&				events();
+	add_cref<ZGLFWwindowPtr>	window;
+	add_cref<ZSurfaceKHR>		surface;
+	add_cref<SurfaceDetails>	surfaceDetails;
+	add_cref<uint32_t>			surfaceFormatIndex;
+	add_cref<VkFormat>			surfaceFormat;
+	const CanvasStyle			style;
+	add_cref<uint32_t>			width;
+	add_cref<uint32_t>			height;
+	add_cref<ZQueue>			presentQueue;
+	uint32_t					getPresentQueueFamilyIndex () const;
+	inline add_ref<GLFWEvents>	events () { return *m_events; }
 
-	VkImage					getSwapchainImage (uint32_t swapImageIndex) const;
-	VkRenderPassBeginInfo	makeRenderPassBeginInfo	(ZRenderPass rp, uint32_t swapImageIndex) const;
-	void					transitionImageForPresent (ZCommandBuffer cmdBuffer, uint32_t swapImageIndex,
-													   VkImageLayout oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	typedef std::function<bool (Canvas& canvas, ZCommandBuffer cmdBuffer, uint32_t swapImageIndex)> OnCommandRecordingCallback;
-	int						run					(ZRenderPass					rp,
-												 OnCommandRecordingCallback		onCommandRecording,
-												 std::reference_wrapper<int>	= m_drawTrigger);
-	typedef std::function<void(Canvas&, void*, uint64_t)> TimerCallback;
-	void					setTimer			(TimerCallback callback, void* userData, uint64_t milliseconds);
+	void updateExtent();
+
+	typedef std::function<void (add_ref<Canvas>, add_ref<int> drawTrigger)> OnIdle;
+	typedef std::function<void (add_ref<Canvas>, add_cref<Swapchain>, ZCommandBuffer, ZFramebuffer)> OnCommandRecording;
+	typedef std::function<ZImage (add_ref<Canvas>, add_cref<Swapchain>, ZCommandBuffer, uint32_t threadID)> OnSubcommandRecordingThenBlit;
+	int						run					(OnCommandRecording				onCommandRecording,
+												 ZRenderPass					renderPass,
+												 std::reference_wrapper<int>	drawTrigger,
+												 OnIdle							onIdle = nullptr);
+	int						run					(OnSubcommandRecordingThenBlit	onCommandRecordingThenBlit,
+												 add_cref<std::vector<ZQueue>>	threadQueues);
+
 	template<class F> bool	userToWindow		(const Area<F>& userArea, const VecX<F,2>& userPoint, VecX<F,2>& windowPoint) const;
 	template<class F> bool	windowToUser		(const Area<F>& userArea, const VecX<F,2>& windowPoint, VecX<F,2>& userPoint) const;
 
 protected:
 
-	BackBuffer			acquireBackBuffer		(ZRenderPass rp);
-	bool				presentBackBuffer		(ZRenderPass rp, const BackBuffer& backBuffer);
-	void				releaseBackBuffers		();
+	BackBuffer			acquireBackBuffer		(add_ref<std::queue<BackBuffer>>	buffers,
+												 add_ptr<std::mutex>				buffersMutex,
+												 add_ref<Swapchain>					swapchain,
+												 uint32_t							acquirableImageCount);
+	bool				presentBackBuffer		(add_cref<BackBuffer>				buffer,
+												 add_ref<Swapchain>					swapchain,
+												 add_ptr<std::queue<BackBuffer>>	readyBuffersStack,
+												 add_ptr<std::mutex>				readyBuffersStackMutex,
+												 add_ptr<std::condition_variable>	readyBufferCondition,
+												 add_ref<std::queue<BackBuffer>>	readyBuffersQueue,
+												 const bool							silent);
+	void				render					(add_ref<Swapchain>					swapchain,
+												 uint32_t							acquirableImageCount,
+												 add_ref<std::queue<BackBuffer>>	buffersQueue,
+												 add_ptr<std::mutex>				buffersQueueMutex,
+												 add_ptr<std::queue<BackBuffer>>	readyBuffersStack,
+												 add_ptr<std::mutex>				readyBuffersStackMutex,
+												 add_ptr<std::condition_variable>	readyBufferCondition,
+												 OnCommandRecording					onCommandRecording);
+
 
 	friend struct GLFWEvents;
 
 	SurfaceDetails					m_surfaceDetails;
-	VkSurfaceFormatKHR				m_format;
+	uint32_t						m_surfaceFormatIndex;
+	VkFormat						m_surfaceFormat;
 	uint32_t						m_width;
 	uint32_t						m_height;
-	CanvasStyle						m_style;
-	std::deque<BackBuffer>			m_backBuffers;
-	std::vector<CommandAndFence>	m_commandFences;
-	SwapChain						m_swapChain;
+	ZQueue							m_presentQueue;
 	std::unique_ptr<GLFWEvents>		m_events;
-	TimerCallback					m_timerCallback;
 	void*							m_timerUserData;
 	uint64_t						m_timerPeriodMS;
 	static int						m_drawTrigger;

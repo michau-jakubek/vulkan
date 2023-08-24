@@ -1,4 +1,5 @@
 #include "vtfVertexInput.hpp"
+#include "vtfZBuffer.hpp"
 #include "vtfContext.hpp"
 #include "vtfCUtils.hpp"
 #include <sstream>
@@ -6,27 +7,18 @@
 namespace vtf
 {
 
-void assertVertexBinding (const VulkanContext& ctx, uint32_t binding)
+void assertVertexBinding (add_cref<ZDevice> device, uint32_t binding)
 {
 	VkPhysicalDeviceProperties p;
-	vkGetPhysicalDeviceProperties(*ctx.physicalDevice, &p);
+	vkGetPhysicalDeviceProperties(*device.getParam<ZPhysicalDevice>(), &p);
 	ASSERTMSG(binding < p.limits.maxVertexInputBindings, "Binding exceeds maxVertexInput limit");
-}
-
-ZDeviceMemory makeEmptyMemory (const VulkanContext& ctx)
-{
-	return ZDeviceMemory::createEmpty(ctx.device, ctx.callbacks, {}, 0, nullptr);
-}
-ZBuffer makeEmptyBuffer (const VulkanContext& ctx)
-{
-	return ZBuffer::createEmpty(ctx.device, ctx.callbacks, {}, makeEmptyMemory(ctx), 0);
 }
 
 VertexBinding::VertexBinding (const VertexInput& vertexInput)
 	: vertexInput		(vertexInput)
 	, bufferType		(m_bufferType)
 	, m_bufferType		(BufferType::Undefined)
-	, m_buffer			(makeEmptyBuffer(vertexInput.context))
+	, m_buffer			()
 	, m_descriptions	()
 {
 	binding		= INVALID_UINT32;
@@ -90,7 +82,7 @@ VertexBinding::Location VertexBinding::declareAttributes_ (const AttrFwd* fwd, c
 	return location;
 }
 
-VertexBinding::Location VertexBinding::appendAttribute(uint32_t location, VkFormat format, uint32_t offset)
+VertexBinding::Location VertexBinding::appendAttribute (uint32_t location, VkFormat format, uint32_t offset)
 {
 	if (BufferType::Undefined == m_bufferType)
 		m_bufferType = BufferType::External;
@@ -152,7 +144,7 @@ VertexBinding::Location VertexBinding::addAttributes_ (const AttrFwd* fwd, const
 
 	const ZBufferUsageFlags		usage		= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 	const ZMemoryPropertyFlags	props		(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-	ZDevice						device		= vertexInput.context.device;
+	ZDevice						device		= vertexInput.device;
 	const Location				location	= static_cast<Location>(m_descriptions.size());
 	uint32_t					offset		= m_descriptions.empty() ? 0 : (m_descriptions.back().offset + m_descriptions.back().sizeOf);
 
@@ -178,7 +170,7 @@ VertexBinding::Location VertexBinding::addAttributes_ (const AttrFwd* fwd, const
 	const uint32_t		oldStride		= this->stride;
 	const uint32_t		newStride		= oldStride + attributesStride;
 	const VkDeviceSize	newBufferSize	= elementCount * newStride;
-	ZBuffer				newBuffer		= createBuffer(device, makeExplicitWrapper(newBufferSize), usage, props);
+	ZBuffer				newBuffer		= createBuffer(device, newBufferSize, usage, props);
 
 	uint8_t*			dst				= nullptr;
 	uint8_t*			bindingSource	= nullptr;
@@ -193,12 +185,14 @@ VertexBinding::Location VertexBinding::addAttributes_ (const AttrFwd* fwd, const
 		ZDeviceMemory oldMemory = m_buffer.getParam<ZDeviceMemory>();
 		VKASSERT(vkMapMemory(*device, *oldMemory, 0, oldBufferSize, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&bindingSource)), "");
 
+		/*
 		VkMappedMemoryRange	range{};
 		range.sType		= VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
 		range.memory	= *oldMemory;
 		range.offset	= 0;
 		range.size		= oldBufferSize;
 		VKASSERT2(vkInvalidateMappedMemoryRanges(*device, 1, &range));
+		*/
 
 		for (uint32_t elem = 0; elem < elementCount; ++elem)
 		{
@@ -228,12 +222,14 @@ VertexBinding::Location VertexBinding::addAttributes_ (const AttrFwd* fwd, const
 		attributeOffset += attributeSize;
 	}
 
+	/*
 	VkMappedMemoryRange	range{};
 	range.sType		= VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
 	range.memory	= *newMemory;
 	range.offset	= 0;
 	range.size		= newBufferSize;
 	VKASSERT2(vkFlushMappedMemoryRanges(*device, 1, &range));
+	*/
 	vkUnmapMemory(*device, *newMemory);
 
 	if (oldStride)
@@ -250,7 +246,7 @@ VertexBinding::Location VertexBinding::addAttributes_ (const AttrFwd* fwd, const
 
 VertexBinding& VertexInput::binding (uint32_t binding, uint32_t stride, VkVertexInputRate rate)
 {
-	assertVertexBinding(context, binding);
+	assertVertexBinding(device, binding);
 	auto b = std::find_if(m_freeBindings.begin(), m_freeBindings.end(),
 						  [&](const VertexBinding& b) { return b.binding == binding; });
 	if (m_freeBindings.end() == b)
@@ -265,13 +261,34 @@ VertexBinding& VertexInput::binding (uint32_t binding, uint32_t stride, VkVertex
 	return *b;
 }
 
-VkPipelineVertexInputStateCreateInfo VertexInput::createPipelineVertexInputStateCreateInfo () const
+ZPipelineVertexInputStateCreateInfo::ZPipelineVertexInputStateCreateInfo ()
+	: m_pipeBindings(), m_pipeDescriptions()
 {
-	ASSERTMSG(m_freeBindings.size(), "There is no vertex inputs");
+}
+
+void ZPipelineVertexInputStateCreateInfo::swap (ZPipelineVertexInputStateCreateInfo&& other)
+{
+	m_pipeBindings.swap(other.m_pipeBindings);
+	m_pipeDescriptions.swap(other.m_pipeDescriptions);
+}
+
+ZPipelineVertexInputStateCreateInfo::ZPipelineVertexInputStateCreateInfo (add_cref<VertexBinding> vertexBinding)
+{
+	m_pipeBindings.resize(1u, vertexBinding);
+	m_pipeDescriptions.insert(m_pipeDescriptions.end(),
+							  vertexBinding.m_descriptions.begin(), vertexBinding.m_descriptions.end());
+}
+
+ZPipelineVertexInputStateCreateInfo::ZPipelineVertexInputStateCreateInfo (add_cref<VertexInput> vertexInput)
+	: m_pipeBindings(), m_pipeDescriptions()
+{
+	add_cref<decltype(vertexInput.m_freeBindings)> freeBindings = vertexInput.m_freeBindings;
+
+	ASSERTMSG(freeBindings.size(), "There is no vertex inputs");
 
 	uint32_t bindingCount		= 0;
 	uint32_t descriptionCount	= 0;
-	for (const VertexBinding& bind : m_freeBindings)
+	for (const VertexBinding& bind : freeBindings)
 	{
 		ASSERTMSG(bind.bufferType != VertexBinding::BufferType::Undefined,
 				  "Unable to process empty binding");
@@ -281,28 +298,28 @@ VkPipelineVertexInputStateCreateInfo VertexInput::createPipelineVertexInputState
 	bindingCount += 1;
 
 	m_pipeBindings.resize(bindingCount);
-	for (uint32_t i = 0; i < bindingCount; ++i) m_pipeBindings[i] = {};
-
 	m_pipeDescriptions.reserve(descriptionCount);
-	for (const VertexBinding& bind : m_freeBindings)
+	for (const VertexBinding& bind : freeBindings)
 	{
 		m_pipeBindings[bind.binding] = bind;
 		m_pipeDescriptions.insert(m_pipeDescriptions.end(), bind.m_descriptions.begin(), bind.m_descriptions.end());
 	}
+}
 
+VkPipelineVertexInputStateCreateInfo ZPipelineVertexInputStateCreateInfo::operator ()() const
+{
 	VkPipelineVertexInputStateCreateInfo	pisc{};
 	pisc.sType								= VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 	pisc.pNext								= nullptr;
 	pisc.flags								= 0;
-	pisc.vertexBindingDescriptionCount		= bindingCount;
+	pisc.vertexBindingDescriptionCount		= static_cast<uint32_t>(m_pipeBindings.size());
 	pisc.pVertexBindingDescriptions			= m_pipeBindings.data();
-	pisc.vertexAttributeDescriptionCount	= descriptionCount;
+	pisc.vertexAttributeDescriptionCount	= static_cast<uint32_t>(m_pipeDescriptions.size());
 	pisc.pVertexAttributeDescriptions		= m_pipeDescriptions.data();
-
 	return pisc;
 }
 
-uint32_t VertexInput::getBindingCount() const
+uint32_t VertexInput::getBindingCount () const
 {
 	return static_cast<uint32_t>(m_freeBindings.size());
 }
@@ -349,8 +366,10 @@ std::vector<VkBuffer> VertexInput::getVertexBuffers (std::initializer_list<ZBuff
 	for (uint32_t i = 0; i <= maxBinding; ++i)
 	{
 		auto bind = std::find_if(m_freeBindings.begin(), m_freeBindings.end(),
-								 [i](const VertexBinding& b) {
-									return b.binding == i;	});
+								 [i](const VertexBinding& b)
+								 {
+									return b.binding == i;
+								 });
 		const bool isInternal = (m_freeBindings.end() != bind && bind->bufferType == VertexBinding::BufferType::Internal);
 		buffers[i] = isInternal ? *bind->m_buffer : **itExternalBuffers++;
 	}
@@ -367,11 +386,35 @@ std::vector<VkDeviceSize> VertexInput::getVertexOffsets	() const
 	return std::vector<VkDeviceSize>(( bindingCount + 1 ), 0u);
 }
 
-void VertexInput::clean ()
+void VertexInput::clear ()
 {
 	m_freeBindings.clear();
-	m_pipeBindings.clear();
-	m_pipeDescriptions.clear();
 }
+
+template<> ZBuffer createIndexBuffer<uint32_t> (ZDevice device, uint32_t indexCount)
+{
+	return createIndexBuffer(device, indexCount, VK_INDEX_TYPE_UINT32);
+}
+
+template<> ZBuffer createIndexBuffer<uint16_t> (ZDevice device, uint32_t indexCount)
+{
+	return createIndexBuffer(device, indexCount, VK_INDEX_TYPE_UINT16);
+}
+
+template<class IndexType> // Actually uint32_t or uint16_t only
+ZBuffer createIndexBuffer (ZDevice device, const std::vector<IndexType>& indices, uint32_t repeatCount)
+{
+	ASSERTMSG(repeatCount, "RepeatCount must be positive number");
+	ZBuffer buffer = createIndexBuffer(device, (data_count(indices) * repeatCount), index_type_to_vk_index_type<IndexType>);
+	PixelBufferAccess<IndexType>	access(buffer, data_count(indices), repeatCount);
+	for (uint32_t r = 0u; r < repeatCount; ++r)
+	for (uint32_t i = 0u; i < data_count(indices); ++i)
+	{
+		access.at(i, r) = indices[i];
+	}
+	return buffer;
+}
+template ZBuffer createIndexBuffer<uint32_t> (ZDevice, const std::vector<uint32_t>&, uint32_t);
+template ZBuffer createIndexBuffer<uint16_t> (ZDevice, const std::vector<uint16_t>&, uint32_t);
 
 } // namespace vtf

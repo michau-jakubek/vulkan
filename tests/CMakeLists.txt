@@ -9,6 +9,10 @@ set(tests_files
     triangleTests.hpp
     fractalsTests.cpp
     fractalsTests.hpp
+    viewerTests.cpp
+    viewerTests.hpp
+    lineWidthTests.cpp
+    lineWidthTests.hpp
     )
 
 add_library(tests STATIC ${tests_files})

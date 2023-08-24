@@ -59,6 +59,7 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	Option testList{ "-t", 0 };					options.push_back(testList);
 	Option complCmd{ "-c", 0 };					options.push_back(complCmd);
 	Option devList{ "-dl", 0 };					options.push_back(devList);
+	Option extList{ "-de", 1 };					options.push_back(extList);
 	Option curDev{ "-d", 1 };					options.push_back(curDev);
 	Option layer{ "-l", 1 };					options.push_back(layer);
 	Option layList{ "-ll", 0 };					options.push_back(layList);
@@ -70,7 +71,7 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	Option vulkan{ "-vulkan", 1 };				options.push_back(vulkan);
 	Option spirv{ "-spirv",  1 };				options.push_back(spirv);
 	Option spvValid{ "-spvvalid", 0 };			options.push_back(spvValid);
-	Option verbose{ "-verbose", 0 };			options.push_back(verbose);
+	Option verbose{ "-verbose", 1 };			options.push_back(verbose);
 	Option nowerror{ "-nowerror", 0 };			options.push_back(nowerror);
 	Option dprintf{ "-dprintf", 0 };			options.push_back(dprintf);
 
@@ -110,18 +111,22 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 		return 0;
 	}
 
-	consumeRes = consumeOptions(curDev, options, appArgs, sink);
-	if (consumeRes < 0)
+	if (consumeOptions(curDev, options, appArgs, sink) > 0)
 	{
-		std::cout << "ERROR: Missing \"" << curDev.name << "\" (physical device index) option param" << std::endl;
-		return 2;
-	}
-	else if (consumeRes > 0)
-	{
-		VulkanContext::deviceIndex = fromText(sink.back(), 0u, status);
+		globalAppFlags.physicalDeviceIndex = fromText(sink.back(), 0u, status);
 		if (!status)
 		{
 			std::cout << "ERROR: Unable to parse physical device index" << std::endl;
+			return 1;
+		}
+	}
+
+	if (consumeOptions(verbose, options, appArgs, sink) > 0)
+	{
+		globalAppFlags.verbose = fromText(sink.back(), 0u, status);
+		if (!status)
+		{
+			std::cout << "ERROR: Unable to parse verbose level" << std::endl;
 			return 1;
 		}
 	}
@@ -154,6 +159,40 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 			globalAppFlags.apiVer.update(version);
 			apiVer = version;
 		}
+	}
+
+	if (consumeOptions(extList, options, appArgs, sink) > 0)
+	{
+		const uint32_t deviceIndex = fromText(sink.back(), 0u, status);
+		if (!status)
+		{
+			std::cout << "ERROR: Unable to parse physical device index" << std::endl;
+			return 1;
+		}
+
+		consumeOptions(layer, options, appArgs, globalAppFlags.layers);
+
+		ZInstance			instance = createInstance(THIS_EXECUTABLE_NAME
+													  , getAllocationCallbacks()
+													  , globalAppFlags.layers	// const strings&	desiredLayers
+													  , {}						// const strings&	desiredExtension
+													  , nullptr					// pMessenger
+													  , nullptr					// pMessengerUserData
+													  , nullptr					// pReport
+													  , nullptr					// pReportUserData
+													  , apiVer					// apiVersion
+													  , false					// enableDebugPrintf
+													  );
+		ZPhysicalDevice		phys = selectPhysicalDevice(deviceIndex, instance, {/* required extensions */});
+		add_cref<strings>	exts	= phys.getParamRef<strings>();
+		uint32_t			entry	= 0;
+		for (add_cref<strings::value_type> ext : exts)
+		{
+			if (entry) std::cout << '\n';
+			std::cout << std::setw(3) << (entry++) << std::setw(0) << ": " << ext;
+		}
+		std::cout << std::endl;
+		return 0;
 	}
 
 	uint32_t	vulkanVer = Version::make(1, 0);
@@ -232,9 +271,9 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 			std::begin(globalAppFlags.tmpDir));
 	}
 
+	globalAppFlags.assetsPath.assign(ASSETS_PATH);
 	globalAppFlags.debugPrintfEnabled = consumeOptions(dprintf, options, appArgs, sink) > 0;
 	globalAppFlags.spirvValidate = consumeOptions(dprintf, options, appArgs, sink) > 0;
-	globalAppFlags.verbose = (consumeOptions(verbose, options, appArgs, sink) > 0);
 	globalAppFlags.nowerror = (consumeOptions(nowerror, options, appArgs, sink) > 0);
 	globalAppFlags.noWarning_VUID_Undefined = (consumeOptions(optLayNoVuid, options, appArgs, sink) > 0);
 	consumeOptions(layer, options, appArgs, globalAppFlags.layers);
@@ -254,8 +293,7 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 		std::cout << "ERROR: One or more unrecognized command line options: \"" << appArgs[0] << "\"" << std::endl;
 		return 1;
 	}
-#define UUU ""
-	testRecord.deviceIndex = VulkanContext::deviceIndex;
+
 	testRecord.assets = assets.length()
 		? (fs::path(fs::path(assets)  / "").generic_u8string().c_str())
 		: (fs::path(fs::path(ASSETS_PATH) / *testNamePos / "").generic_u8string().c_str());
@@ -277,7 +315,7 @@ int main (int argc, char* argv[])
 
 	try
 	{
-		parseParams(argc, argv, testRecord, testArgs, performTest);
+		result = parseParams(argc, argv, testRecord, testArgs, performTest);
 		if (performTest) result = (*testRecord.call)(testRecord, testArgs);
 	}
 	catch (std::runtime_error& e)
@@ -301,14 +339,16 @@ void printUsage(std::ostream& str)
 	str << "  -t:                       prints available test names" << std::endl;
 	str << "  -c:                       builds auto-complete command" << std::endl;
 	str << "  -dl:                      prints available device list" <<std::endl;
-	str << "  -d <id>: (mandatory)      picks device by id" <<std::endl;
+	str << "  -d <id>:                  picks device by id, default is 0" <<std::endl;
+	str << "  -de <id>                  prints extension for device of id, default is 0" << std::endl;
+	str << "                            honors options -api and -l if present" << std::endl;
 	str << "  -ll:                      prints available instance layer names" << std::endl;
 	str << "  -l <layer> [-l <layer>]:  enable layer(s)" << std::endl;
 	str << "  -l-no-vuid-undefined:     suppress layers(s) VUID_Undefined warning" << std::endl;
-	str << "  -api <version>:           Vulkan API version to apply, (major * 10 + minor), default is 1.0" << std::endl;
+	str << "  -api <version>:           Vulkan API version to apply, (major * 10 + minor), default is 1.1" << std::endl;
 	str << "  -assets <assets_dir>      change assets directory, default is ${REPO}/assets/<test_name>" << std::endl;
 	str << "  -tmp <temp_dir>           change temp directory, default is system's temp directory" << std::endl;
-	str << "  -verbose:                 enable application diagnostic messages" << std::endl;
+	str << "  -verbose <level>          enable application diagnostic messages, default is 0 that means disabled" << std::endl;
 	str << "  -dprintf:                 enable Debug Printf feature" << std::endl;
 	str << "  -bt:                      enable backtrace" << std::endl;
 	str << "Compiler options:" << std::endl;
@@ -325,7 +365,7 @@ void printUsage(std::ostream& str)
 	str << "  -spvvalid:                enable SPIR-V assembly validation" << std::endl;
 
 	str << "  -nowerror:                allows warnig(s) from external compilators" << std::endl;
-	str << "Available tests are:" << std::endl;
+	str << "Available test(s):" << std::endl;
 	printAvailableTests(str, AllTestRecords, "\t", true);
 }
 

@@ -669,7 +669,7 @@ std::optional<ZShaderModule> ProgramCollection::getShader (VkShaderStageFlagBits
 	auto search = m_stageToBinary.find(stage);
 	if (m_stageToBinary.end() != search)
 	{
-		module = createShaderModule(m_context.device, search->second);
+		module = createShaderModule(m_context.device, stage, search->second);
 	}
 	else if (verbose)
 	{

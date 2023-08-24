@@ -113,14 +113,24 @@ bool containsString (const std::string& s, const vtf::strings& list)
 	return p != list.end();
 }
 
-bool containsAllString (const vtf::strings& all, const vtf::strings& range)
+bool containsAllStrings (const vtf::strings& range, const vtf::strings& all)
 {
 	bool contains = true;
 	for (auto i = all.begin(); contains && i != all.end(); ++i)
 	{
-		contains = containsString(*i, range);
+		contains &= containsString(*i, range);
 	}
 	return contains;
+}
+
+bool containsAnyString (const vtf::strings& range, const vtf::strings& include)
+{
+	for (auto i = include.begin(); i != include.end(); ++i)
+	{
+		if (containsString(*i, range))
+			return true;
+	}
+	return false;
 }
 
 uint32_t removeStrings (const vtf::strings& strs, vtf::strings& list)

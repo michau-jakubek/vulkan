@@ -10,36 +10,45 @@ namespace vtf
 
 ZCommandPool createCommandPool (ZDevice device, ZQueue queue, VkCommandPoolCreateFlags flags)
 {
+	ASSERTMSG(queue.has_handle(), "Queue must have handle");
 	VkCommandPoolCreateInfo poolInfo{};
 	poolInfo.sType				= VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	poolInfo.queueFamilyIndex	= queue.getParam<uint32_t>();
+	poolInfo.queueFamilyIndex	= queueGetFamilyIndex(queue);
 	poolInfo.flags				= flags;
 
-	VkCommandPool				pool = VK_NULL_HANDLE;
 	VkAllocationCallbacksPtr	callbacks = device.getParam<VkAllocationCallbacksPtr>();
+	ZCommandPool				commandPool(VK_NULL_HANDLE, device, callbacks, queue);
 
-	if (vkCreateCommandPool(*device, &poolInfo, callbacks, &pool) != VK_SUCCESS)
-	{
-		throw std::runtime_error("failed to create command pool!");
-	}
+	VKASSERT2(vkCreateCommandPool(*device, &poolInfo, callbacks, commandPool.setter()));
 
-	return ZCommandPool::create(pool, device, callbacks, queue);
+	return commandPool;
 }
 
-ZCommandBuffer createCommandBuffer (ZCommandPool commandPool)
+ZCommandBuffer allocateCommandBuffer (ZCommandPool commandPool, bool primary, const void* pNext)
+{
+	return createCommandBuffer(commandPool, primary, pNext);
+}
+
+ZCommandBuffer createCommandBuffer (ZCommandPool commandPool, bool primary, const void* pNext)
 {
 	VkCommandBuffer	commandBuffer	= VK_NULL_HANDLE;
 	auto			device			= commandPool.getParam<ZDevice>();
 
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType					= VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.pNext					= pNext;
 	allocInfo.commandPool			= *commandPool;
-	allocInfo.level					= VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.level					= primary ? VK_COMMAND_BUFFER_LEVEL_PRIMARY : VK_COMMAND_BUFFER_LEVEL_SECONDARY;
 	allocInfo.commandBufferCount	= 1;
 
 	VKASSERT2(vkAllocateCommandBuffers(*device, &allocInfo, &commandBuffer));
 
-	return ZCommandBuffer::create(commandBuffer, device, commandPool);
+	return ZCommandBuffer::create(commandBuffer, device, commandPool, primary);
+}
+
+ZCommandPool commandBufferGetCommandPool (ZCommandBuffer commandBuffer)
+{
+	return commandBuffer.getParam<ZCommandPool>();
 }
 
 void commandBufferEnd (ZCommandBuffer commandBuffer)
@@ -49,79 +58,51 @@ void commandBufferEnd (ZCommandBuffer commandBuffer)
 
 void commandBufferBegin (ZCommandBuffer commandBuffer)
 {
-	VkCommandBufferBeginInfo beginInfo{};
+	VkCommandBufferInheritanceInfo	inheritInfo{};
+	inheritInfo.sType					= VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+	inheritInfo.pNext					= nullptr;
+	inheritInfo.renderPass				= VK_NULL_HANDLE;
+	inheritInfo.subpass					= 0;
+	inheritInfo.framebuffer				= VK_NULL_HANDLE;
+	inheritInfo.occlusionQueryEnable	= VK_FALSE;
+	inheritInfo.queryFlags				= 0;
+	inheritInfo.pipelineStatistics		= 0;
+
+	VkCommandBufferBeginInfo	beginInfo{};
 	beginInfo.sType				= VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.pNext				= nullptr;
 	beginInfo.flags				= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; //VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
-	beginInfo.pInheritanceInfo	= nullptr;
+	beginInfo.pInheritanceInfo	= commandBuffer.getParam<bool>() ? nullptr : &inheritInfo;
 
 	VKASSERT2(vkBeginCommandBuffer(*commandBuffer, &beginInfo));
 }
 
-void commandBufferSubmitAndWait (ZCommandBuffer commandBuffer)
+void commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFence, uint64_t timeout)
 {
-	commandBufferSubmitAndWait( { commandBuffer } );
-}
+	ZDevice			device		= commandBuffer.getParam<ZDevice>();
+	ZQueue			queue		= commandBuffer.getParam<ZCommandPool>().getParam<ZQueue>();
+	ZFence			fence		= hintFence.has_handle() ? hintFence : createFence(device);
+	VkSubmitInfo	submitInfo	{};
 
-void commandBufferSubmitAndWait (std::initializer_list<ZCommandBuffer> commandBuffers)
-{
-	const uint32_t commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
-	ASSERTION(commandBufferCount);
+	submitInfo.sType				= VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount	= 1u;
+	submitInfo.pCommandBuffers		= commandBuffer.ptr();
 
-	auto	ii		= commandBuffers.begin();
-	ZDevice	device	= ii->getParam<ZDevice>();
-
-	std::vector<VkSubmitInfo>	submits(commandBufferCount);
-	std::vector<VkFence>		fences(commandBufferCount);
-	std::vector<ZFence>			zfences;
-
-	for (auto i = ii; i != commandBuffers.end(); ++i)
-	{
-		ASSERTION(	device== i->getParam<ZDevice>()	);
-		auto at = make_unsigned(std::distance(ii, i));
-
-		submits[at].sType				= VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submits[at].pNext				= nullptr;
-
-		submits[at].commandBufferCount	= 1;
-		submits[at].pCommandBuffers		= i->ptr();
-
-		submits[at].waitSemaphoreCount	= 0;
-		submits[at].pWaitSemaphores		= nullptr;
-		submits[at].pWaitDstStageMask	= nullptr;
-
-		submits[at].signalSemaphoreCount	= 0;
-		submits[at].pSignalSemaphores	= nullptr;
-
-		zfences.emplace_back(createFence(device));
-		fences[at] = *zfences.back();
-	}
-
-	for (auto i = ii; i != commandBuffers.end(); ++i)
-	{
-		auto at = make_unsigned(std::distance(ii, i));
-		ZQueue queue = i->getParam<ZCommandPool>().getParam<ZQueue>();
-		if (vkQueueSubmit(*queue, 1, &submits[at], fences[at]) != VK_SUCCESS)
-		{
-			throw std::runtime_error("failed to submit command buffer!");
-		}
-	}
-
-	if (vkWaitForFences(*device, commandBufferCount, fences.data(), VK_TRUE, INVALID_UINT64) != VK_SUCCESS)
-	{
-		throw std::runtime_error("failed to wait for command buffer!");
-	}
+	VKASSERT2(vkQueueSubmit(*queue, 1u, &submitInfo, *fence));
+	VKASSERT2(vkWaitForFences(*device, 1u, fence.ptr(), VK_TRUE, timeout));
+	resetFence(fence);
 }
 
 void commandBufferBindPipeline (ZCommandBuffer cmd, ZPipeline pipeline)
 {
 	auto bindingPoint		= pipeline.getParam<VkPipelineBindPoint>();
 	auto pipelineLayout		= pipeline.getParam<ZPipelineLayout>();
-	auto& descriptorLayouts	= pipelineLayout.getParamRef<std::vector<ZDescriptorSetLayout>>();
+	add_ref<std::vector<ZDescriptorSetLayout>> descriptorLayouts
+			= pipelineLayout.getParamRef<std::vector<ZDescriptorSetLayout>>();
 
-	std::vector<VkDescriptorSet> sets;
-	std::transform(descriptorLayouts.begin(), descriptorLayouts.end(), std::back_inserter(sets),
-				   [](const ZDescriptorSetLayout& dsl) { return **dsl.getParam<std::optional<ZDescriptorSet>>(); });
+	std::vector<VkDescriptorSet> sets(descriptorLayouts.size());
+	std::transform(descriptorLayouts.begin(), descriptorLayouts.end(), sets.begin(),
+				   [](const ZDescriptorSetLayout& dsl) { return *dsl.getParam<ZDescriptorSet>(); });
 
 	vkCmdBindPipeline(*cmd, bindingPoint, *pipeline);
 
@@ -131,8 +112,8 @@ void commandBufferBindPipeline (ZCommandBuffer cmd, ZPipeline pipeline)
 								bindingPoint,
 								*pipelineLayout,
 								0,				//firstSet
-								static_cast<uint32_t>(sets.size()),
-								sets.data(),
+								data_count(sets),
+								data_or_null(sets),
 								0,				//dynamicOffsetCount
 								nullptr);		//pDynamicOffsets
 	}
@@ -155,8 +136,17 @@ void commandBufferBindVertexBuffers (ZCommandBuffer cmd, const VertexInput& inpu
 	vkCmdBindVertexBuffers(*cmd, 0, static_cast<uint32_t>(count), vertexBuffers.data(), vertexOffsets.data());
 }
 
-void commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkIndexType indexType, VkDeviceSize offset)
+void commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkDeviceSize offset)
 {
+	ASSERTMSG((buffer.getParamRef<VkBufferCreateInfo>().usage & VK_BUFFER_USAGE_INDEX_BUFFER_BIT),
+			  "Buffer must be created with VK_BUFFER_USAGE_INDEX_BUFFER_BIT");
+	const type_index_with_default type = buffer.getParam<type_index_with_default>();
+	VkIndexType indexType = VK_INDEX_TYPE_MAX_ENUM;
+	if (type == type_index_with_default::make<uint32_t>())
+		indexType = VK_INDEX_TYPE_UINT32;
+	else if (type == type_index_with_default::make<uint16_t>())
+		indexType = VK_INDEX_TYPE_UINT16;
+	else { ASSERTMSG(false, "Unknown index type"); }
 	vkCmdBindIndexBuffer(*cmd, *buffer, offset, indexType);
 }
 
@@ -170,14 +160,67 @@ void commandBufferDispatch (ZCommandBuffer cmd, const UVec3& workGroupCount)
 	ZDevice								device	= cmd.getParam<ZDevice>();
 	ZPhysicalDevice						phys	= device.getParam<ZPhysicalDevice>();
 	add_ref<VkPhysicalDeviceProperties>	props	= phys.getParamRef<VkPhysicalDeviceProperties>();
-	ASSERTION( (workGroupCount.x() <= props.limits.maxComputeWorkGroupCount[0])
+	ASSERTMSG( (workGroupCount.x() <= props.limits.maxComputeWorkGroupCount[0])
 			&& (workGroupCount.y() <= props.limits.maxComputeWorkGroupCount[1])
-			&& (workGroupCount.z() <= props.limits.maxComputeWorkGroupCount[2]) );
+			&& (workGroupCount.z() <= props.limits.maxComputeWorkGroupCount[2]),
+			"Too much worgroup count passed to dispatch function");
 	vkCmdDispatch(*cmd, workGroupCount.x(), workGroupCount.y(), workGroupCount.z());
 }
 
-void commandBufferSetPolygonModeEXT(ZCommandBuffer commandBuffer, VkPolygonMode polygonMode)
+ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZRenderPass renderPass, ZFramebuffer framebuffer, uint32_t subpass)
 {
+	const uint32_t	countOfAttachments	= renderPass.getParam<ZDistType<AttachmentCount, uint32_t>>();
+	const uint32_t	subpassCount		= renderPass.getParam<ZDistType<SubpassCount, uint32_t>>();
+	const bool differs = framebuffer.getParamRef<std::vector<ZImageView>>().size() != countOfAttachments;
+	ASSERTMSG(!differs, "Attachment count from renderPas and framebuffer differs");
+	ASSERTMSG(subpass < subpassCount, "Subpass index exceeds renderPass subpasses amount");
+	ZRenderPassBeginInfo	renderPassBegin(cmd, renderPass, framebuffer, subpass);
+	VkRenderPassBeginInfo	info = renderPassBegin();
+	vkCmdBeginRenderPass(*cmd, &info, VK_SUBPASS_CONTENTS_INLINE);	
+	for (uint32_t i = 0; i < subpass; ++i)
+	{
+		vkCmdNextSubpass(*cmd, VK_SUBPASS_CONTENTS_INLINE);
+	}
+	return renderPassBegin;
+}
+
+ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZFramebuffer framebuffer, uint32_t subpass)
+{
+	return commandBufferBeginRenderPass(cmd, framebuffer.getParam<ZRenderPass>(), framebuffer, subpass);
+}
+
+bool commandBufferNextSubpass (add_ref<ZRenderPassBeginInfo> beginInfo)
+{
+	const uint32_t subpassCount = beginInfo.getRenderPass().getParam<ZDistType<SubpassCount, uint32_t>>();
+	if (beginInfo.getSubpass() < subpassCount)
+	{
+		vkCmdNextSubpass(*beginInfo.getCommandBuffer(), VK_SUBPASS_CONTENTS_INLINE);
+		beginInfo.consumeSubpass();
+		return true;
+	}
+	return false;
+}
+
+void commandBufferEndRenderPass (add_cref<ZRenderPassBeginInfo> beginInfo)
+{
+	ZCommandBuffer cmdBuffer = beginInfo.getCommandBuffer();
+	const uint32_t subpassCount = beginInfo.getRenderPass().getParam<ZDistType<SubpassCount, uint32_t>>();
+	for (uint32_t i = (beginInfo.getSubpass() + 1u); i < subpassCount; ++i)
+	{
+		vkCmdNextSubpass(*cmdBuffer, VK_SUBPASS_CONTENTS_INLINE);
+	}
+	vkCmdEndRenderPass(*cmdBuffer);
+	const VkImageLayout finalLayout = beginInfo.getRenderPass().getParam<VkImageLayout>();
+	add_cref<std::vector<ZImageView>> views = beginInfo.getFramebuffer().getParamRef<std::vector<ZImageView>>();
+	for (add_cref<ZImageView> view : views)
+	{
+		imageResetLayout(view.getParam<ZImage>(), finalLayout);
+	}
+}
+
+void commandBufferSetPolygonModeEXT (ZCommandBuffer commandBuffer, VkPolygonMode polygonMode)
+{
+	// TODO: body
 	UNREF(commandBuffer);
 	UNREF(polygonMode);
 //	static PFN_vkCmdSetPolygonModeEXT cmdSetPolygonModeEXT;
@@ -189,87 +232,59 @@ void commandBufferSetPolygonModeEXT(ZCommandBuffer commandBuffer, VkPolygonMode 
 //	(*cmdSetPolygonModeEXT)(*commandBuffer, polygonMode);
 }
 
-void commandBufferClearColorImage (ZCommandBuffer cmd, VkImage image, const VkClearColorValue& clearValue,
-								   VkImageLayout srclayout, VkImageLayout dstlayout,
-								   VkAccessFlags	srcAccessMask, VkAccessFlags	dstAccessMask,
-								   VkPipelineStageFlags	srcStage, VkPipelineStageFlags	dstStage,
-								   const VkImageSubresourceRange& range)
+void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image, add_cref<VkClearColorValue> clearValue)
 {
-	//VkImageSubresourceRange		range{};
-	//range.aspectMask			= VK_IMAGE_ASPECT_COLOR_BIT;
-	//range.baseMipLevel			= 0u;
-	//range.levelCount			= 1u;
-	//range.baseArrayLayer		= 0u;
-	//range.layerCount			= 1u;
-
-	VkImageMemoryBarrier		before{};
-	before.sType				= VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	before.pNext				= nullptr;
-	before.oldLayout			= srclayout;
-	before.newLayout			= VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	before.srcAccessMask		= srcAccessMask;
-	before.dstAccessMask		= VK_ACCESS_TRANSFER_WRITE_BIT;
-	before.srcQueueFamilyIndex	= VK_QUEUE_FAMILY_IGNORED;
-	before.dstQueueFamilyIndex	= VK_QUEUE_FAMILY_IGNORED;
-	before.image				= image;
-	before.subresourceRange		= range;
-
-	VkImageMemoryBarrier		after{};
-	after.sType					= VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	after.pNext					= nullptr;
-	after.oldLayout				= VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	after.newLayout				= dstlayout;
-	after.srcAccessMask			= VK_ACCESS_TRANSFER_WRITE_BIT;
-	after.dstAccessMask			= dstAccessMask;
-	after.srcQueueFamilyIndex	= VK_QUEUE_FAMILY_IGNORED;
-	after.dstQueueFamilyIndex	= VK_QUEUE_FAMILY_IGNORED;
-	after.image					= image;
-	after.subresourceRange		= range;
-
-	vkCmdPipelineBarrier(*cmd, srcStage, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, //VK_DEPENDENCY_BY_REGION_BIT,
-						 0, (const VkMemoryBarrier*)nullptr,
-						 0, (const VkBufferMemoryBarrier*)nullptr,
-						 1, &before);
-	vkCmdClearColorImage(*cmd, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1u, &range);
-
-	vkCmdPipelineBarrier(*cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, dstStage, 0, //VK_DEPENDENCY_BY_REGION_BIT,
-						 0, (const VkMemoryBarrier*)nullptr,
-						 0, (const VkBufferMemoryBarrier*)nullptr,
-						 1, &after);
+	commandBufferClearColorImage(cmd, image, clearValue, imageMakeSubresourceRange(image));
 }
 
 void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image,
-								   const VkClearColorValue&	clearValue,
-								   VkImageLayout			dstlayout,
-								   VkAccessFlags			srcAccessMask,
-								   VkAccessFlags			dstAccessMask,
-								   VkPipelineStageFlags		srcStage,
-								   VkPipelineStageFlags		dstStage)
+								   add_cref<VkClearColorValue> clearValue,
+								   add_cref<VkImageSubresourceRange> range)
 {
-	add_cref<VkImageCreateInfo>		info	= image.getParamRef<VkImageCreateInfo>();
-	const VkImageSubresourceRange	range	= makeImageSubresourceRange(image);
-	commandBufferClearColorImage(cmd, *image, clearValue, info.initialLayout, dstlayout, srcAccessMask, dstAccessMask, srcStage, dstStage, range);
-	changeImageLayout(image, dstlayout);
+	const VkImageLayout layout = imageGetLayout(image);
+	const VkImageLayout finalLayout = (layout == VK_IMAGE_LAYOUT_GENERAL
+									   || layout == VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR
+									   || layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+										? layout : VK_IMAGE_LAYOUT_GENERAL;
+	ZImageMemoryBarrier prepare(image, VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
+								VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, range);
+	ZImageMemoryBarrier verify(image, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_NONE,
+								finalLayout, range);
+	commandBufferPipelineBarriers(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, prepare);
+	vkCmdClearColorImage(*cmd, *image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1u, &range);
+	commandBufferPipelineBarriers(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, verify);
 }
 
-template<> void commandBufferPipelineBarrier<VkBufferMemoryBarrier>	(ZCommandBuffer cmd,
-																	 const VkBufferMemoryBarrier& barrier,
-																	 VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask)
+void commandBufferBlitImage (ZCommandBuffer cmd, ZImage srcImage, ZImage dstImage, VkFilter filter)
 {
-	vkCmdPipelineBarrier(*cmd, srcStageMask, dstStageMask, VK_DEPENDENCY_BY_REGION_BIT,
-						 0u, nullptr,	// memory
-						 1u, &barrier,
-						 0u, nullptr);	// image
+	VkImageBlit				blitRegion{};
+	add_cref<VkExtent3D>	srcImageExtent = srcImage.getParamRef<VkImageCreateInfo>().extent;
+	add_cref<VkExtent3D>	dstImageExtent = dstImage.getParamRef<VkImageCreateInfo>().extent;
+
+	blitRegion.srcSubresource.aspectMask = blitRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	blitRegion.srcSubresource.layerCount = blitRegion.dstSubresource.layerCount = 1;
+	// blitRegion.srcSubresource.mipLevel = blitRegion.dstSubresource.mipLevel zero initialized
+	// blitRegion.srcSubresource.baseArrayLayer	= blitRegion.dstSubresource.baseArrayLayer zeronitialized
+	// blitRegion.srcOffsets[0] = blitRegion.dstOffsets[0] = 0 default zero initialized
+	blitRegion.srcOffsets[1].z = blitRegion.dstOffsets[1].z = 1;
+	blitRegion.srcOffsets[1].x = srcImageExtent.width;
+	blitRegion.srcOffsets[1].y = srcImageExtent.height;
+	blitRegion.dstOffsets[1].x = dstImageExtent.width;
+	blitRegion.dstOffsets[1].y = dstImageExtent.height;
+
+	vkCmdBlitImage(*cmd,
+				   *srcImage, imageGetLayout(srcImage),
+				   *dstImage, imageGetLayout(dstImage),
+				   1, &blitRegion,
+				   filter);
 }
 
-template<> void commandBufferPipelineBarrier<VkImageMemoryBarrier>	(ZCommandBuffer cmd,
-																	 const VkImageMemoryBarrier& barrier,
-																	 VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask)
+void commandBufferMakeImagePresentationReady (ZCommandBuffer cmdBuffer, ZImage image,
+											  VkAccessFlags srcAccess, VkAccessFlags dstAccess,
+											  VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask)
 {
-	vkCmdPipelineBarrier(*cmd, srcStageMask, dstStageMask, VK_DEPENDENCY_BY_REGION_BIT,
-						 0u, nullptr,	// memory
-						 0u, nullptr,	// buffer
-						 1u, &barrier);	// image
+	ZImageMemoryBarrier			preparePresent	(image, srcAccess, dstAccess, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	commandBufferPipelineBarriers(cmdBuffer, srcStageMask, dstStageMask, preparePresent);
 }
 
 OneShotCommandBuffer::OneShotCommandBuffer (ZCommandPool pool)

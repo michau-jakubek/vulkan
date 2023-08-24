@@ -13,7 +13,6 @@ struct TestRecord
 	const char*		name;			// test name (mandatory)
 	const char*		desc;			// test description (mandatory)
 	std::string		assets;			// given by caller
-	uint32_t		deviceIndex;	// given by caller or default INVALID_UINT32
 	int (*call)(const TestRecord& record, const vtf::strings& args);
 	TestRecord ();
 	void valid () const;
@@ -40,7 +39,10 @@ std::vector<const char*> getTestNames (const std::vector<TestRecord>& records);
 enum TestIdentifier
 {
 	ALL_TESTS_BEGIN,
+
 	TRIANGLE,
+	VIEWER,
+	LINE_WIDTH,
 	FRACTALS,
 
 	ALL_TESTS_END = FRACTALS

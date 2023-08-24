@@ -31,7 +31,7 @@ else ()
     if (${SYSTEM_OS_LINUX} EQUAL 0)
         set(ADDITIONAL_LIBS "-pthread")
     else ()
-        set(ADDITIONAL_LIBS "-pthread -ldl -lstdc++fs")
+        set(ADDITIONAL_LIBS "-pthread -ldl -lm -lstdc++fs")
     endif ()
 endif()
 
@@ -86,7 +86,7 @@ endif()
 include_directories(${VULKAN_INCLUDE_PATH})
 include_directories(${GLFW3_INCLUDE_PATH})
 
-set(COMMON_LIBS ${VULKAN_LIB_PATH} ${GLFW3_LIB_PATH} ${ADDITIONAL_LIBS})
+set(COMMON_LIBS ${ADDITIONAL_LIBS} ${VULKAN_LIB_PATH} ${GLFW3_LIB_PATH})
 
 add_subdirectory(framework)
 include_directories(framework)

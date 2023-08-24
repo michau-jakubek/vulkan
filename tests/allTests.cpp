@@ -8,7 +8,6 @@ TestRecord::TestRecord ()
 	: name				()
 	, desc				()
 	, assets			()
-	, deviceIndex		(vtf::INVALID_UINT32)
 	, call			()
 {
 }

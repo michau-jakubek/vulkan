@@ -1,5 +1,6 @@
 #include "vtfPipelineLayout.hpp"
 #include "vtfZUtils.hpp"
+#include "vtfZImage.hpp"
 #include "vtfZBuffer.hpp"
 #include "vtfCUtils.hpp"
 
@@ -29,34 +30,20 @@ static bool isBufferDescriptorType (const VkDescriptorType type)
 			 || type == VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER);
 }
 
-static std::unique_ptr<VkPhysicalDeviceProperties> getPhysDevProperties(ZDevice device)
-{
-	auto props = std::make_unique<VkPhysicalDeviceProperties>();
-	vkGetPhysicalDeviceProperties(*device.getParam<ZPhysicalDevice>(), props.get());
-	return props;
-}
-
 #define UNIQUE_IBINDING std::numeric_limits<int>::min()
 
 namespace vtf
 {
 
-PipelineLayout::PipelineLayout (VulkanContext& context)
-	: m_context							(context)
-	, m_device							(context.device)
-	, m_extbindings						()
-	, m_views							()
-	, m_samplers						()
-	, m_viewsAndSamplers				()
-	//, m_texelBuffers					()
-	, m_buffers							()
-	, m_properties						(getPhysDevProperties(context.device))
-	, m_minUniformBufferOffsetAlignment	((uint32_t)m_properties->limits.minUniformBufferOffsetAlignment)
-	, m_minStorageBufferOffsetAlignment	((uint32_t)m_properties->limits.minStorageBufferOffsetAlignment)
-	, m_maxUniformBufferRange			(m_properties->limits.maxUniformBufferRange)
-	, m_maxStorageBufferRange			(m_properties->limits.maxStorageBufferRange)
+PipelineLayout::PipelineLayout (ZDevice device)
+	: m_device				(device)
+	, m_extbindings			()
+	, m_views				()
+	, m_samplers			()
+	, m_viewsAndSamplers	()
+	//, m_texelBuffers		()
+	, m_buffers				()
 {
-	m_properties.reset();
 }
 uint32_t PipelineLayout::joinBindings_ (std::type_index index, VkDeviceSize size, bool isVector,
 										VkDescriptorType type, VkShaderStageFlags stages, uint32_t count)
@@ -101,31 +88,70 @@ uint32_t PipelineLayout::addBinding_ (std::type_index index, VkDeviceSize size, 
 	m_extbindings.emplace_back(b);
 	return binding;
 }
-uint32_t PipelineLayout::addBinding (std::optional<ZImageView> view, std::optional<ZSampler> sampler,
-									 bool forceStorageImageIfStorageUsageIsSet, VkShaderStageFlags stages)
+uint32_t PipelineLayout::addBinding (ZImageView view, ZSampler sampler,
+									 VkDescriptorType type, VkShaderStageFlags stages)
 {
-	ASSERTION(view.has_value() || sampler.has_value());
-
-	bool isSampled = false;
-	bool isStorage = false;
-	if (view.has_value())
+	VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_MAX_ENUM;
+	if (VK_DESCRIPTOR_TYPE_MAX_ENUM == type)
 	{
-		const VkImageUsageFlags imageUsage = (*view).getParam<ZImage>().getParam<VkImageCreateInfo>().usage;
-		isStorage = (imageUsage & VK_IMAGE_USAGE_STORAGE_BIT) == VK_IMAGE_USAGE_STORAGE_BIT;
-		if (isStorage && forceStorageImageIfStorageUsageIsSet)
-			isSampled = false;
-		else isSampled = (imageUsage & VK_IMAGE_USAGE_SAMPLED_BIT) == VK_IMAGE_USAGE_SAMPLED_BIT;
+		if (sampler.has_handle())
+		{
+			if (view.has_handle())
+				descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			else descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+		}
+		else if (view.has_handle())
+			descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		else
+		{
+			ASSERTMSG(false, "At least of view and sampler must have a handle");
+		}
+	}
+	else
+	{
+		switch (type)
+		{
+		case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+			ASSERTION(view.has_handle() && sampler.has_handle());
+			break;
+		case VK_DESCRIPTOR_TYPE_SAMPLER:
+			ASSERTION(sampler.has_handle());
+			break;
+		case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+		case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+			ASSERTION(view.has_handle());
+			break;
+		default:
+			ASSERTION(0);
+			break;
+		}
+		descriptorType = type;
 	}
 
-	auto assertStorage = [&]() -> VkDescriptorType { ASSERTION(isStorage); return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; };
+	const uint32_t binding = addBinding(descriptorType, stages);
 
-	const VkDescriptorType	type =	sampler.has_value()
-									? view.has_value()
-									  ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER : VK_DESCRIPTOR_TYPE_SAMPLER
-									: isSampled
-										? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
-										: assertStorage();
+	switch (descriptorType)
+	{
+	case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+		m_viewsAndSamplers[m_extbindings[binding].offset].first = view;
+		m_viewsAndSamplers[m_extbindings[binding].offset].second = sampler;
+		break;
+	case VK_DESCRIPTOR_TYPE_SAMPLER:
+		m_samplers[m_extbindings[binding].offset] = sampler;
+		break;
+	case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+	case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+		m_views[m_extbindings[binding].offset] = view;
+		break;
+	default:
+		ASSERTION(0);
+		break;
+	}
 
+	return binding;
+}
+uint32_t PipelineLayout::addBinding (VkDescriptorType type, VkShaderStageFlags stages)
+{
 	VkDescriptorSetLayoutBindingAndType b;
 	const uint32_t binding = static_cast<uint32_t>(m_extbindings.size());
 	b.binding				= binding;
@@ -140,17 +166,17 @@ uint32_t PipelineLayout::addBinding (std::optional<ZImageView> view, std::option
 	case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
 		b.index				= std::type_index(typeid(typename add_extent<ZImageView>::type));
 		b.offset			= m_views.size();
-		m_views.push_back(*view);
+		m_views.push_back(ZImageView());
 		break;
 	case VK_DESCRIPTOR_TYPE_SAMPLER:
 		b.index				= std::type_index(typeid(typename add_extent<ZSampler>::type));
 		b.offset			= m_samplers.size();
-		m_samplers.push_back(*sampler);
+		m_samplers.push_back(ZSampler());
 		break;
 	case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
 		b.index				= std::type_index(typeid(typename add_extent<std::pair<ZImageView,ZSampler>>::type));
 		b.offset			= m_viewsAndSamplers.size();
-		m_viewsAndSamplers.push_back({ *view, *sampler });
+		m_viewsAndSamplers.push_back({ ZImageView(), ZSampler() });
 		break;
 	default:	ASSERTION(false);
 	}
@@ -161,11 +187,17 @@ uint32_t PipelineLayout::addBinding (std::optional<ZImageView> view, std::option
 
 	return binding;
 }
-ZDescriptorSetLayout PipelineLayout::createDescriptorSetLayout ()
+ZDescriptorSetLayout PipelineLayout::getDescriptorSetLayout (ZPipelineLayout layout, uint32_t index)
 {
-	VkAllocationCallbacksPtr					callbacks			= m_context.callbacks;
-	ZDescriptorPool								descriptorPool		(m_device, callbacks);
-	ZDescriptorSetLayout						descriptorSetLayout	(m_device, callbacks, std::optional<ZDescriptorSet>());
+	add_ref<std::vector<ZDescriptorSetLayout>> dsLayouts
+			= layout.getParamRef<std::vector<ZDescriptorSetLayout>>();
+	return dsLayouts[index];
+}
+ZDescriptorSetLayout PipelineLayout::createDescriptorSetLayout (bool performUpdateDescriptorSets)
+{
+	VkAllocationCallbacksPtr					callbacks			= m_device.getParam<VkAllocationCallbacksPtr>();
+	ZDescriptorPool								descriptorPool		(VK_NULL_HANDLE, m_device, callbacks);
+	ZDescriptorSetLayout						descriptorSetLayout	(VK_NULL_HANDLE, m_device, callbacks, ZDescriptorSet());
 	std::vector<VkDescriptorSetLayoutBinding>	bindings			(m_extbindings.size());
 
 	// build descriptor pool
@@ -188,8 +220,8 @@ ZDescriptorSetLayout PipelineLayout::createDescriptorSetLayout ()
 		poolCreateInfo.pNext			= nullptr;
 		poolCreateInfo.flags			= VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 		poolCreateInfo.maxSets			= 1;
-		poolCreateInfo.poolSizeCount	= static_cast<uint32_t>(poolSizes.size());
-		poolCreateInfo.pPoolSizes		= poolSizes.size() ? poolSizes.data() : nullptr;
+		poolCreateInfo.poolSizeCount	= data_count(poolSizes);
+		poolCreateInfo.pPoolSizes		= data_or_null(poolSizes);
 		VKASSERT(vkCreateDescriptorPool(*m_device, &poolCreateInfo, callbacks,
 										descriptorPool.setter()), "Unable to create descriptor pool");
 	}
@@ -198,15 +230,15 @@ ZDescriptorSetLayout PipelineLayout::createDescriptorSetLayout ()
 	setLayoutCreateInfo.sType			= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	setLayoutCreateInfo.pNext			= nullptr;
 	setLayoutCreateInfo.flags			= 0;
-	setLayoutCreateInfo.bindingCount	= static_cast<uint32_t>(bindings.size());
-	setLayoutCreateInfo.pBindings		= bindings.size() ? bindings.data() : nullptr;
+	setLayoutCreateInfo.bindingCount	= data_count(bindings);
+	setLayoutCreateInfo.pBindings		= data_or_null(bindings);
 	VKASSERT(vkCreateDescriptorSetLayout(*m_device, &setLayoutCreateInfo, callbacks,
 										 descriptorSetLayout.setter()), "Failed to create descriptor set layout");
 
 	updateBuffersOffsets();
 	recreateUpdateBuffers(m_buffers);
 
-	ZDescriptorSet					descriptorSet(m_device, descriptorPool);
+	ZDescriptorSet					descriptorSet(VK_NULL_HANDLE, m_device, descriptorPool);
 	VkDescriptorSetAllocateInfo		allocInfo{};
 	allocInfo.sType					= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.pNext					= nullptr;
@@ -216,26 +248,32 @@ ZDescriptorSetLayout PipelineLayout::createDescriptorSetLayout ()
 	VKASSERT(vkAllocateDescriptorSets(*m_device, &allocInfo,
 									  descriptorSet.setter()), "Failed to allocate descriptor set");
 
-	updateDescriptorSet(descriptorSet, m_buffers);
+	if (performUpdateDescriptorSets)
+	{
+		updateDescriptorSet_(descriptorSet, m_buffers);
+	}
 
-	descriptorSetLayout.getParamRef<std::optional<ZDescriptorSet>>().emplace(descriptorSet);
+	descriptorSetLayout.setParam<ZDescriptorSet>(descriptorSet);
 
 	return descriptorSetLayout;
 }
-uint32_t PipelineLayout::getDescriptorAlignment (const VkDescriptorType type) const
+VkDeviceSize PipelineLayout::getDescriptorAlignment (const VkDescriptorType type) const
 {
-	uint32_t alignment = 0;
+	VkDeviceSize alignment = 16u;
 	switch (type)
 	{
 		case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-			alignment = m_minUniformBufferOffsetAlignment;
+			alignment = m_device.getParam<ZPhysicalDevice>()
+					.getParamRef<VkPhysicalDeviceProperties>().limits.minUniformBufferOffsetAlignment;
 			break;
 
 		case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-			alignment = m_minStorageBufferOffsetAlignment;
+			alignment = m_device.getParam<ZPhysicalDevice>()
+					.getParamRef<VkPhysicalDeviceProperties>().limits.minStorageBufferOffsetAlignment;
 			break;
 
-		default: alignment = 4;
+		default:
+			alignment = 16u;
 	}
 	return alignment;
 }
@@ -284,13 +322,70 @@ void PipelineLayout::recreateUpdateBuffers (std::map<std::pair<VkDescriptorType,
 		const ZBufferUsageFlags		usage	(usagePtr->second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 		const ZMemoryPropertyFlags	flags	(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-		ZBuffer buffer = createBuffer(m_device, makeExplicitWrapper(size.second), usage, flags);
+		ZBuffer buffer = createBuffer(m_device, size.second, usage, flags);
 
 		buffers.emplace(size.first, buffer);
 	}
 }
-void PipelineLayout::updateDescriptorSet	(ZDescriptorSet	descriptorSet,
-											 std::map<std::pair<VkDescriptorType, int>, ZBuffer>&	buffers) const
+void PipelineLayout::updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZImageView view)
+{
+	ASSERTMSG(view.has_handle(), "ImageView must have a handle");
+	auto ptr = std::find_if(m_extbindings.begin(), m_extbindings.end(), [&](const auto& b){ return b.binding == binding; });
+	ASSERTMSG(ptr != m_extbindings.end(), "Cannot find desired binding");
+	if (ptr->index == std::type_index(typeid(typename add_extent<std::pair<ZImageView,ZSampler>>::type)))
+		m_viewsAndSamplers[ptr->offset].first = view;
+	else if (ptr->index == std::type_index(typeid(typename add_extent<ZImageView>::type)))
+		m_views[ptr->offset] = view;
+	else
+	{
+		ASSERTMSG(false, "Mismatch type binding");
+	}
+	if (ds.has_handle())
+	{
+		updateDescriptorSet_(ds, m_buffers);
+	}
+}
+void PipelineLayout::updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZSampler sampler)
+{
+	ASSERTMSG(sampler.has_handle(), "Sampler must have a handle");
+	auto ptr = std::find_if(m_extbindings.begin(), m_extbindings.end(), [&](const auto& b){ return b.binding == binding; });
+	ASSERTMSG(ptr != m_extbindings.end(), "Cannot find desired binding");
+	if (ptr->index == std::type_index(typeid(typename add_extent<std::pair<ZImageView,ZSampler>>::type)))
+		m_viewsAndSamplers[ptr->offset].second = sampler;
+	else if (ptr->index == std::type_index(typeid(typename add_extent<ZSampler>::type)))
+		m_samplers[ptr->offset] = sampler;
+	else
+	{
+		ASSERTMSG(false, "Mismatch type binding");
+	}
+	if (ds.has_handle())
+	{
+		updateDescriptorSet_(ds, m_buffers);
+	}
+}
+void PipelineLayout::updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZImageView view, ZSampler sampler)
+{
+	const bool viewHasHandle = view.has_handle();
+	const bool samplerHasHandle = sampler.has_handle();
+	ASSERTMSG(viewHasHandle && samplerHasHandle, "ImageView and Sampler must have a handle");
+	auto ptr = std::find_if(m_extbindings.begin(), m_extbindings.end(), [&](const auto& b){ return b.binding == binding; });
+	ASSERTMSG(ptr != m_extbindings.end(), "Cannot find desired binding");
+	if (ptr->index == std::type_index(typeid(typename add_extent<std::pair<ZImageView,ZSampler>>::type)))
+	{
+		m_viewsAndSamplers[ptr->offset].first	= view;
+		m_viewsAndSamplers[ptr->offset].second	= sampler;
+	}
+	else
+	{
+		ASSERTMSG(false, "Mismatch type binding");
+	}
+	if (ds.has_handle())
+	{
+		updateDescriptorSet_(ds, m_buffers);
+	}
+}
+void PipelineLayout::updateDescriptorSet_	(ZDescriptorSet	descriptorSet,
+											 std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers) const
 {
 	for (add_cref<VkDescriptorSetLayoutBindingAndType> b : m_extbindings)
 	{
@@ -319,7 +414,8 @@ void PipelineLayout::updateDescriptorSet	(ZDescriptorSet	descriptorSet,
 			case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
 				{
 					ZImageView	view		= m_views[b.offset];
-					ZImage		img			= view.getParam<ZImage>();
+					// TODO:
+					//ZImage		img			= view.getParam<ZImage>();
 					imageInfo.imageView		= *view;
 					imageInfo.imageLayout	= VK_IMAGE_LAYOUT_GENERAL; // ??? img.getParamRef<VkImageCreateInfo>().initialLayout;
 				}
@@ -377,32 +473,32 @@ void assertPushConstantSizeMax (ZPhysicalDevice dev, const uint32_t size)
 }
 ZPipelineLayout PipelineLayout::createPipelineLayout ()
 {
-	return createPipelineLayout_({}, nullptr, std::type_index(typeid(void)));
+	return createPipelineLayout_({}, nullptr, type_index_with_default());
 }
 ZPipelineLayout PipelineLayout::createPipelineLayout (ZDescriptorSetLayout dsLayout)
 {
-	return createPipelineLayout_({dsLayout}, nullptr, std::type_index(typeid(void)));
+	return createPipelineLayout_({dsLayout}, nullptr, type_index_with_default());
 }
 ZPipelineLayout PipelineLayout::createPipelineLayout_ (std::initializer_list<ZDescriptorSetLayout> descriptorSetLayouts,
-													   const VkPushConstantRange* pPushConstantRanges, std::type_index typeOfPushConstant)
+													   const VkPushConstantRange* pPushConstantRanges, type_index_with_default typeOfPushConstant)
 {
 	VkPushConstantRange			emptyRange		{};
-	VkAllocationCallbacksPtr	callbacks		= m_context.callbacks;
-	ZPipelineLayout				pipelineLayout	(m_device, callbacks, {},
+	VkAllocationCallbacksPtr	callbacks		= m_device.getParam<VkAllocationCallbacksPtr>();
+	ZPipelineLayout				pipelineLayout	(VK_NULL_HANDLE, m_device, callbacks, {},
 												 (pPushConstantRanges ? *pPushConstantRanges : emptyRange), typeOfPushConstant);
 
-	std::vector<ZDescriptorSetLayout>&	zLayouts = pipelineLayout.getParamRef<std::vector<ZDescriptorSetLayout>>();
-	std::vector<VkDescriptorSetLayout>	vkLayouts;
+	add_ref<std::vector<ZDescriptorSetLayout>>	zLayouts	= pipelineLayout.getParamRef<std::vector<ZDescriptorSetLayout>>();
+	std::vector<VkDescriptorSetLayout>			vkLayouts	(descriptorSetLayouts.size());
 
 	for (auto i = descriptorSetLayouts.begin(); i != descriptorSetLayouts.end(); ++i)
 	{
 		zLayouts.emplace_back(*i);
-		vkLayouts.emplace_back(**i);
+		vkLayouts[std::distance(descriptorSetLayouts.begin(), i)] = **i;
 	}
 
 	if (pPushConstantRanges)
 	{
-		assertPushConstantSizeMax(context().physicalDevice,
+		assertPushConstantSizeMax(m_device.getParam<ZPhysicalDevice>(),
 			pPushConstantRanges[0].offset + pPushConstantRanges[0].size);
 	}
 
@@ -410,20 +506,21 @@ ZPipelineLayout PipelineLayout::createPipelineLayout_ (std::initializer_list<ZDe
 	pipelineLayoutInfo.sType					= VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.pNext					= nullptr;
 	pipelineLayoutInfo.flags					= 0;
-	pipelineLayoutInfo.setLayoutCount			= static_cast<uint32_t>(descriptorSetLayouts.size());
-	pipelineLayoutInfo.pSetLayouts				= descriptorSetLayouts.size() ? vkLayouts.data() : nullptr;
+	pipelineLayoutInfo.setLayoutCount			= data_count(vkLayouts);
+	pipelineLayoutInfo.pSetLayouts				= data_or_null(vkLayouts);
 	pipelineLayoutInfo.pushConstantRangeCount	= pPushConstantRanges ? 1 : 0;
 	pipelineLayoutInfo.pPushConstantRanges		= pPushConstantRanges;
 
-	VKASSERT(vkCreatePipelineLayout(*m_device, &pipelineLayoutInfo, callbacks, pipelineLayout.setter()), "failed to create pipeline layout!");
+	VKASSERT(vkCreatePipelineLayout(*m_device, &pipelineLayoutInfo, callbacks, pipelineLayout.setter()),
+										"failed to create pipeline layout!");
 
 	return pipelineLayout;
 }
 ZDescriptorSet PipelineLayout::getDescriptorSet (ZDescriptorSetLayout layout)
 {
-	std::optional<ZDescriptorSet>& set = layout.getParamRef<std::optional<ZDescriptorSet>>();
-	ASSERTION(set.has_value());
-	return *set;
+	ZDescriptorSet ds = layout.getParam<ZDescriptorSet>();
+	ASSERTION(ds.has_handle());
+	return ds;
 }
 VarDescriptorInfo PipelineLayout::getDescriptorInfo (uint32_t binding)
 {
@@ -437,30 +534,36 @@ VarDescriptorInfo PipelineLayout::getDescriptorInfo (uint32_t binding)
 	}
 	else if (isImageDescriptorType(b.descriptorType))
 	{
+		ZImageView		view;
+		ZImage			image;
+		ZSampler		sampler;
 		switch (b.descriptorType)
 		{
+		case VK_DESCRIPTOR_TYPE_SAMPLER:
+			sampler = m_samplers[b.offset];
+			break;
 		case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
 		case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+			view = m_views[b.offset];
+			image = view.getParam<ZImage>();
+			break;
 		case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
-			{
-				ZImageView				view	= m_views[b.offset];
-				ZImage					image	= view.getParam<ZImage>();
-				auto					layout	= image.getParamRef<VkImageCreateInfo>().initialLayout;
-				std::optional<ZSampler>	sampler;
-				var.emplace<DescriptorImageInfo>(sampler, view, image, layout);
-			}
+			sampler = m_viewsAndSamplers[b.offset].second;
+			view = m_viewsAndSamplers[b.offset].first;
+			image = view.getParam<ZImage>();
 			break;
 		default:
 			ASSERT_NOT_IMPLEMENTED();
 			break;
 		}
+		var.emplace<DescriptorImageInfo>(sampler, view, image, imageGetLayout(image));
 	}
 	return var;
 }
 const PipelineLayout::ExtBinding& PipelineLayout::verifyGetExtBinding (uint32_t binding) const
 {
 	auto ptr = std::find_if(m_extbindings.begin(), m_extbindings.end(), [&](const auto& b){ return b.binding == binding; });
-	ASSERTMSG(ptr != m_extbindings.end(), "");
+	ASSERTMSG(ptr != m_extbindings.end(), "Mismatch type binding");
 	return *ptr;
 }
 const PipelineLayout::ExtBinding& PipelineLayout::verifyGetExtBinding (std::type_index index, uint32_t binding) const
@@ -486,7 +589,7 @@ void PipelineLayout::zeroBinding (uint32_t binding)
 			b.offset + i * ARRAY_LENGTH(data),
 			ARRAY_LENGTH(data)
 		};
-		writeBufferData(buffer, data, writeInfo, false);
+		bufferWriteData(buffer, data, writeInfo, false);
 	}
 	if (orphanSize)
 	{
@@ -496,23 +599,23 @@ void PipelineLayout::zeroBinding (uint32_t binding)
 			b.offset + chunkCount * ARRAY_LENGTH(data),
 			orphanSize,
 		};
-		writeBufferData(buffer, data, writeInfo, false);
+		bufferWriteData(buffer, data, writeInfo, false);
 	}
-	flushBuffer(buffer);
+	bufferFlush(buffer);
 }
 void PipelineLayout::writeBinding_ (std::type_index index, uint32_t binding, const uint8_t* data, VkDeviceSize bytes)
 {
 	const ExtBinding& b = verifyGetExtBinding(index, binding);
 	const VkBufferCopy writeInfo { 0, b.offset, std::min((b.size * b.elementCount), bytes) };
 	auto buffer = m_buffers.at({b.descriptorType, (b.shared ? UNIQUE_IBINDING : static_cast<int>(binding))});
-	writeBufferData(buffer, data, writeInfo);
+	bufferWriteData(buffer, data, writeInfo);
 }
 void PipelineLayout::readBinding_ (std::type_index index, uint32_t binding, uint8_t* data, VkDeviceSize bytes) const
 {
 	const ExtBinding& b = verifyGetExtBinding(index, binding);
 	const VkBufferCopy readInfo { b.offset, 0, std::min((b.size * b.elementCount), bytes) };
 	auto buffer = m_buffers.at({b.descriptorType, (b.shared ? UNIQUE_IBINDING : static_cast<int>(binding))});
-	readBufferData(buffer, data, readInfo);
+	bufferReadData(buffer, data, readInfo);
 }
 void PipelineLayout::getBinding_ (uint32_t binding, std::optional<ZImageView>& result) const
 {

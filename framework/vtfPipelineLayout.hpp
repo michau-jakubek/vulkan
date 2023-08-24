@@ -28,14 +28,14 @@ namespace vtf
 
 struct DescriptorImageInfo
 {
-	std::optional<ZSampler>	sampler;
-	ZImageView				view;
-	ZImage					image;
-	VkImageLayout			layout;
-	DescriptorImageInfo (std::optional<ZSampler>	sampler_,
-						 ZImageView					view_,
-						 ZImage						image_,
-						 VkImageLayout				layout_)
+	ZSampler		sampler;
+	ZImageView		view;
+	ZImage			image;
+	VkImageLayout	layout;
+	DescriptorImageInfo (ZSampler		sampler_,
+						 ZImageView		view_,
+						 ZImage			image_,
+						 VkImageLayout	layout_)
 		: sampler	(sampler_)
 		, view		(view_)
 		, image		(image_)
@@ -55,11 +55,31 @@ struct DescriptorBufferInfo
 };
 typedef std::variant<std::monostate, DescriptorBufferInfo, DescriptorImageInfo>	VarDescriptorInfo;
 
+/**
+ * @brief The PipelineLayout class that simplifies pipeline layout creation.
+ *
+ * Casual scenario:
+ * ================
+ * extern ZDevice		device;
+ * ZBuffer				buffer				= createBuffer(..., ZBufferUsageFlags(VK_BUFFER_USAGE_STORAGE_BIT));
+ * ZImage				image				= createImage(..., ZImageUsageFlags(VK_IMAGE_USAGE_STORAGE_BIT));
+ * ZImageView			view				= createImageView(image);
+ * PipelineLayout		layout				(device);
+ * struct				SSBO				{ uint32_t a,b,c; } ssbo;
+ * uint32_t				bufferBinding		= layout.addBinding<SSBO>();
+ * uint32_t				textureBinding		= layout.addBinding(view, ZSampler());
+ * ZDescriptorSetLayout	descriptorSetLayout	= layout.createDescriptorSetLayout();
+ * struct PushConstant						{ Vec4 data; };
+ * ZPipelineLayout		pipelineLayout		= layout.createPipelineLayout<PushContant>(descriptorSetLayout);
+ * ZPipeline			pipeline			= create(Compute|Graphics)Pipeline(...);
+ * //
+ * // Access to the SSBO buffer
+ * ZBuffer				testBuffer			= std::get<DescriptorBufferInfo>(layout.getDescriptorInfo(bufferBinding)).buffer;
+ */
 class PipelineLayout
 {
 public:
-											PipelineLayout				(VulkanContext& context);
-	VulkanContext&							context						() const { return m_context; }
+											PipelineLayout				(ZDevice device);
 	/**
 	 * Creates single buffer and concatenates all chunks into it
 	 * that have the same descriptor type and buffer usage.
@@ -67,31 +87,63 @@ public:
 	template<class X> uint32_t				joinBindings				(VkDescriptorType type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 																		 VkShaderStageFlags stages = VK_SHADER_STAGE_ALL, uint32_t count = 1);
 	/**
-	 * Creates a separate binding, usefull for vectors SSBO.
+	 * Creates separate binding, usefull for vectors SSBO.
 	 * In the case where X is a std::vector<Y> an elementCount is the element count of that vector.
 	 * In the case that X is standalone type (e.q. user structure) the elementCount param is ignored.
 	 */
 	template<class VecOrElemT> uint32_t		addBinding					(uint32_t elementCount = 1, VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
 	/**
-	 * Basically does the same things like addBinding().
+	 * Basically does the same things like above addBinding().
 	 * The one difference is that it automatically treat Y as std::vector<Y>
 	 */
 	template<class ElemType> uint32_t		addBindingAsVector			(uint32_t elementCount = 1, VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
 	template<class ElemType> uint32_t		addBindingAsVector			(const std::vector<ElemType>& vector, VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
-	uint32_t								addBinding					(std::optional<ZImageView> view, std::optional<ZSampler> sampler = {},
-																		 bool forceStorageImageIfStorageUsageIsSet = false,
+	/**
+	 * Creates a descriptor set bind depending on parameters.
+	 * If both view and sampler have handles then descriptor be VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER.
+	 * If view has a handle and sampler don't then descriptor be VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE.
+	 * If view has no handle but sampler has then descriptor be VK_DESCRIPTOR_TYPE_SAMPLER.
+	 * Anyway you can specify descriptor type exactly by type parameter.
+	 */
+	uint32_t								addBinding					(ZImageView view, ZSampler sampler,
+																		 VkDescriptorType type = VK_DESCRIPTOR_TYPE_MAX_ENUM,
+																		 VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
+	/**
+	 * Creates separate 'empty' binding for storage image, sampled image and sampled image with sampler.
+	 * Remember to update this binding with updateDescriptorSet(...) with proper view and/or sampler.
+	 */
+	uint32_t								addBinding					(VkDescriptorType type,
 																		 VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
 	template<class X> std::optional<X>		getBinding					(uint32_t binding) const;
 	template<class Data__> void				writeBinding				(uint32_t binding, const Data__& data);
 	void									zeroBinding					(uint32_t binding);
 	template<class Data__> void				readBinding					(uint32_t binding, Data__& data) const;
 	VarDescriptorInfo						getDescriptorInfo			(uint32_t binding);
-	ZDescriptorSetLayout					createDescriptorSetLayout	();
+	/**
+	 * Creates descriptor set layout object based on bindings collected
+	 * via addBinding*(...) methods. Automatically creates descriptor set
+	 * object and bind it to newly created descriptor set layout.
+	 * Additionaly performs an update on newly created descriptor set.
+	 * Any time you can this descriptor with getDescriptorSet(...) and
+	 * update it manually.
+	 */
+	ZDescriptorSetLayout					createDescriptorSetLayout	(bool performUpdateDescriptorSets = true);
+	ZDescriptorSetLayout					getDescriptorSetLayout		(ZPipelineLayout layout, uint32_t index = 0u);
 	ZDescriptorSet							getDescriptorSet			(ZDescriptorSetLayout dsLayout);
+	/**
+	 * Updates descriptor set bindings. Descriptor set must match a descriptor
+	 * set achieved from this class along with the bindings being updated. Or
+	 * it might be null-handle descriptor, then only internal data is updated.
+	 * If the binding is view+sampler type only one of them is updated in the
+	 * case single view/sampler parameter, otherwise both if given.
+	 */
+	void									updateDescriptorSet			(ZDescriptorSet ds, uint32_t binding, ZImageView view);
+	void									updateDescriptorSet			(ZDescriptorSet ds, uint32_t binding, ZSampler sampler);
+	void									updateDescriptorSet			(ZDescriptorSet ds, uint32_t binding, ZImageView view, ZSampler sampler);
 	ZPipelineLayout							createPipelineLayout		();
 	ZPipelineLayout							createPipelineLayout		(ZDescriptorSetLayout dsLayout);
 	template<class PC__> ZPipelineLayout	createPipelineLayout		(VkShaderStageFlags pcStageFlags = VK_SHADER_STAGE_ALL);
-	template<class PC__> ZPipelineLayout	createPipelineLayout		(ZDescriptorSetLayout dsLayout, VkShaderStageFlags pcStageFlags = VK_SHADER_STAGE_ALL);
+	template<class PC__> ZPipelineLayout	createPipelineLayout		(ZDescriptorSetLayout dsLayout, VkShaderStageFlags pcStageFlags = VK_SHADER_STAGE_ALL);	
 
 private:	
 	typedef struct VkDescriptorSetLayoutBindingAndType : VkDescriptorSetLayoutBinding
@@ -123,16 +175,15 @@ private:
 	void									getBinding_					(uint32_t binding, std::optional<ZImageView>&) const;
 	void									getBinding_					(uint32_t binding, std::optional<ZSampler>&) const;
 	void									getBinding_					(uint32_t binding, std::optional<std::pair<ZImageView,ZSampler>>&) const;
-	uint32_t								getDescriptorAlignment		(const VkDescriptorType type) const;
+	VkDeviceSize							getDescriptorAlignment		(const VkDescriptorType type) const;
 	void									updateBuffersOffsets		();
 	void									recreateUpdateBuffers		(std::map<std::pair<VkDescriptorType, int>, ZBuffer>&	buffers);
-	void									updateDescriptorSet			(ZDescriptorSet	descriptorSet,
+	void									updateDescriptorSet_		(ZDescriptorSet	descriptorSet,
 																		 std::map<std::pair<VkDescriptorType, int>, ZBuffer>&	buffers) const;
 	ZPipelineLayout							createPipelineLayout_		(std::initializer_list<ZDescriptorSetLayout> descriptorSetLayouts,
-																		 const VkPushConstantRange* pPushConstantRanges, std::type_index typeOfPushConstant);
+																		 const VkPushConstantRange* pPushConstantRanges, type_index_with_default typeOfPushConstant);
 
 private:
-	VulkanContext&												m_context;
 	ZDevice														m_device;
 	ExtBindings													m_extbindings;
 	std::vector<ZImageView>										m_views;
@@ -140,11 +191,6 @@ private:
 	std::vector<std::pair<ZImageView,ZSampler>>					m_viewsAndSamplers;
 	//std::vector<ZBuffer>										m_texelBuffers;
 	std::map<std::pair<VkDescriptorType, int>, ZBuffer>			m_buffers;
-	std::unique_ptr<VkPhysicalDeviceProperties>					m_properties;
-	const uint32_t												m_minUniformBufferOffsetAlignment;
-	const uint32_t												m_minStorageBufferOffsetAlignment;
-	const uint32_t												m_maxUniformBufferRange;
-	const uint32_t												m_maxStorageBufferRange;
 };
 namespace hidden
 {
@@ -210,7 +256,7 @@ template<class PC__> ZPipelineLayout PipelineLayout::createPipelineLayout (VkSha
 		0,				// offset
 		sizeof(PC__)	// size
 	};
-	return createPipelineLayout_({}, &pcr, std::type_index(typeid(PC__)));
+	return createPipelineLayout_({}, &pcr, type_index_with_default(typeid(PC__)));
 }
 template<class PC__> ZPipelineLayout PipelineLayout::createPipelineLayout (ZDescriptorSetLayout dsLayout, VkShaderStageFlags pcStageFlags)
 {
@@ -220,7 +266,7 @@ template<class PC__> ZPipelineLayout PipelineLayout::createPipelineLayout (ZDesc
 		0,				// offset
 		sizeof(PC__)	// size
 	};
-	return createPipelineLayout_({dsLayout}, &pcr, std::type_index(typeid(PC__)));
+	return createPipelineLayout_({dsLayout}, &pcr, type_index_with_default(typeid(PC__)));
 }
 
 } // namespace vtf

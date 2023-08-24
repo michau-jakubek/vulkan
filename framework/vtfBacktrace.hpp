@@ -32,9 +32,11 @@ struct GlobalAppFlags
 	vtf::Version	vulkanVer;
 	vtf::Version	spirvVer;
 	vtf::strings	layers;
-	char            tmpDir[_MAX_PATH];
+	uint32_t		physicalDeviceIndex;
+	uint32_t		verbose;
+	char			tmpDir[_MAX_PATH];
+	std::string		assetsPath;
 	bool			spirvValidate;
-	bool			verbose;
 	bool			nowerror;
 	bool			debugPrintfEnabled;
 	bool			noWarning_VUID_Undefined;

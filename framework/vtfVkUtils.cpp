@@ -8,6 +8,7 @@
 namespace vtf
 {
 
+
 const char* vkResultToString (VkResult res)
 {
 	struct { VkResult v; const char* s; }
@@ -67,14 +68,50 @@ const char* vkResultToString (VkResult res)
 	return "<VkResult UNDEFINED ERROR>";
 }
 
-template<class X, class... Y> X emplace (Y&&... y)
+static const char* queueFlagBitsToString (VkQueueFlagBits bits)
 {
-	return x(std::forward<Y>(y)...);
+	struct { VkQueueFlagBits b; const char* s; }
+	const results[] {
+		MKP(VK_QUEUE_GRAPHICS_BIT),
+		MKP(VK_QUEUE_COMPUTE_BIT),
+		MKP(VK_QUEUE_TRANSFER_BIT),
+		MKP(VK_QUEUE_SPARSE_BINDING_BIT),
+		MKP(VK_QUEUE_PROTECTED_BIT)
+	};
+	for (auto& r : results)
+	{
+		if (r.b == bits) return r.s;
+	}
+	return "<VkQueueFlagBits UNKNOWN>";
 }
 
-template<class X, class Y, class Z> X construct(Z Y::* z)
+std::ostream& operator<<(std::ostream& str, add_cref<ZDistType<QueueFlags, VkQueueFlags>> flags)
 {
-	return std::bind(emplace<X,Z>, std::mem_fn(z), std::placeholders::_1);
+	const VkQueueFlagBits bits[] {
+		(VK_QUEUE_GRAPHICS_BIT),
+		(VK_QUEUE_COMPUTE_BIT),
+		(VK_QUEUE_TRANSFER_BIT),
+		(VK_QUEUE_SPARSE_BINDING_BIT),
+		(VK_QUEUE_PROTECTED_BIT)
+	};
+	for (uint32_t i = 0, j = 0; i < ARRAY_LENGTH(bits); ++i)
+	{
+		if ((bits[i] & flags) == make_unsigned(bits[i]))
+		{
+			if (j++) str << " | ";
+			str << queueFlagBitsToString(bits[i]);
+		}
+	}
+	return str;
+}
+
+std::ostream& operator<<(std::ostream& str, add_cref<VkDeviceQueueCreateInfoEx> props)
+{
+	str << "VkQueueFamilyProperties[" << props.queueFamilyIndex << "] {\n"
+		<< "\tqueueFlags:     " << ZDistType<QueueFlags, VkQueueFlags>(props.queueFlags) << '\n'
+		<< "\tqueueCount:     " << props.queueCount << '\n'
+		<< "\tsurfaceSupport: " << std::boolalpha << props.surfaceSupport << std::endl;
+	return str;
 }
 
 uint32_t findQueueFamilyIndex (VkPhysicalDevice phDevice, VkQueueFlagBits bit)
@@ -105,6 +142,23 @@ uint32_t findSurfaceSupportedQueueFamilyIndex (VkPhysicalDevice physDevice, VkSu
 		if (presentSupport) return index;
 	}
 	return INVALID_UINT32;
+}
+
+std::vector<uint32_t> findSurfaceSupportedQueueFamilyIndices (VkPhysicalDevice physDevice, ZSurfaceKHR surface)
+{
+	std::vector<uint32_t> indices;
+	if (surface.has_handle())
+	{
+		uint32_t queueFamilyCount = 0;
+		vkGetPhysicalDeviceQueueFamilyProperties(physDevice, &queueFamilyCount, nullptr);
+		for (uint32_t index = 0; index < queueFamilyCount; ++index)
+		{
+			VkBool32 presentSupport = false;
+			VKASSERT2(vkGetPhysicalDeviceSurfaceSupportKHR(physDevice, index, *surface, &presentSupport));
+			if (presentSupport) indices.emplace_back(index);
+		}
+	}
+	return indices;
 }
 
 bool hasFormatsAndModes (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR)
@@ -239,15 +293,58 @@ std::ostream& printPhysicalDevices (VkInstance instance, std::ostream& str)
 	return str;
 }
 
-uint32_t computePixelByteWidth (VkFormat format)
+uint32_t computeMipLevelCount (uint32_t width, uint32_t height)
 {
-	const ZFormatInfo info = getFormatInfo(format);
+	if (width == 0u || height == 0) return 0u;
+	return static_cast<uint32_t>(std::min(std::floor(std::log2(width)), std::floor(std::log2(height)))) + 1;
+}
+
+std::pair<uint32_t,uint32_t> computeMipLevelWidthAndHeight (uint32_t width, uint32_t height, uint32_t level)
+{
+	uint32_t nextLevel = 0;
+	while (width >= 1 && height >= 1 && nextLevel++ < level)
+	{
+		nextLevel += 1;
+		height /= 2;
+		width /= 2;
+	}
+	return { width, height };
+}
+
+VkDeviceSize computeMipLevelsPixelCount (uint32_t width, uint32_t height, uint32_t levelCount)
+{
+	ASSERTION(width >= 1 && height >= 1);
+	VkDeviceSize count = 0;
+	auto iLevelCount = make_signed(levelCount);
+	while (width >= 1 && height >= 1 && --iLevelCount >= 0)
+	{
+		count += width * height;
+		height /= 2;
+		width /= 2;
+	}
+	return count;
+}
+
+std::pair<VkDeviceSize, VkDeviceSize>
+computeMipLevelsOffsetAndSize (VkFormat format, uint32_t level0Width, uint32_t level0Height,
+							   uint32_t baseMipLevel, uint32_t mipLevelCount)
+{
+	const uint32_t		pixelWidth	= formatGetInfo(format).pixelByteSize;
+	const VkDeviceSize	offset		= computeMipLevelsPixelCount(level0Width, level0Height, baseMipLevel) * pixelWidth;
+	std::tie(level0Width,level0Height) = computeMipLevelWidthAndHeight(level0Width, level0Height, baseMipLevel);
+	const VkDeviceSize	size		= computeMipLevelsPixelCount(level0Width, level0Height, mipLevelCount) * pixelWidth;
+	return { offset, size };
+}
+
+uint32_t computePixelByteSize (VkFormat format)
+{
+	const ZFormatInfo info = formatGetInfo(format);
 	return info.pixelByteSize;
 }
 
 uint32_t computePixelChannelCount (VkFormat format)
 {
-	const ZFormatInfo info = getFormatInfo(format);
+	const ZFormatInfo info = formatGetInfo(format);
 	return info.componentCount;
 }
 
@@ -278,23 +375,96 @@ uint32_t sampleFlagsToSampleCount (VkSampleCountFlags flags)
 	return count;
 }
 
-uint32_t computeMipLevelCount (uint32_t width, uint32_t height)
+VkExtent2D makeExtent2D (uint32_t width, uint32_t height)
 {
-	if (width == 0u || height == 0) return 0u;
-	return static_cast<uint32_t>(std::min(std::floor(std::log2(width)), std::floor(std::log2(height)))) + 1;
+	return { width, height };
 }
 
-VkImageSubresourceRange makeImageSubresourceRange (VkImageAspectFlagBits aspect,
-													uint32_t baseMipLevel, uint32_t levelCount,
-													uint32_t baseArrayLayer, uint32_t layerCount)
+VkRect2D makeRect2D (uint32_t width, uint32_t height, int32_t Xoffset, int32_t Yoffset)
 {
-	VkImageSubresourceRange r;
-	r.aspectMask		= aspect;
-	r.baseMipLevel		= baseMipLevel;
-	r.levelCount		= levelCount;
-	r.baseArrayLayer	= baseArrayLayer;
-	r.layerCount		= layerCount;
-	return r;
+	VkRect2D rect;
+	rect.extent = { width, height };
+	rect.offset = { Xoffset, Yoffset };
+	return rect;
+}
+
+VkExtent3D makeExtent3D (uint32_t width, uint32_t height, uint32_t depth)
+{
+	VkExtent3D extent{};
+	extent.width	= width;
+	extent.height	= height;
+	extent.depth	= depth;
+	return extent;
+}
+
+VkOffset3D makeOffset3D (uint32_t x, uint32_t y, uint32_t z)
+{
+	VkOffset3D offset{};
+	offset.x = x;
+	offset.y = y;
+	offset.z = z;
+	return offset;
+}
+
+VkViewport makeViewport (uint32_t width, uint32_t height, uint32_t x, uint32_t y, float minDepth, float maxDepth)
+{
+	VkViewport port;
+	port.width		= static_cast<float>(width);
+	port.height		= static_cast<float>(height);
+	port.x			= static_cast<float>(x);
+	port.y			= static_cast<float>(y);
+	port.minDepth	= minDepth;
+	port.maxDepth	= maxDepth;
+	return port;
+}
+
+VkRect2D clampScissorToViewport (add_cref<VkViewport> viewport, add_ref<VkRect2D> inOutScissor)
+//(VkViewport viewport, VkRect2D inOutScissor)
+{
+	if (static_cast<decltype(viewport.x)>(inOutScissor.offset.x) < viewport.x)
+		inOutScissor.offset.x = static_cast<decltype(inOutScissor.offset.x)>(viewport.x);
+
+	if (static_cast<decltype(viewport.y)>(inOutScissor.offset.y) < viewport.y)
+		inOutScissor.offset.y = static_cast<decltype(inOutScissor.offset.y)>(viewport.y);
+
+//	if ((inOutScissor.offset.x + make_signed(inOutScissor.extent.width)) > viewport.width)
+//		inOutScissor.extent.width = viewport.width - inOutScissor.extent.width;
+//	if ((inOutScissor.offset.y + make_signed(inOutScissor.extent.height)) > viewport.height)
+//		inOutScissor.extent.height = viewport.height - inOutScissor.extent.height;
+	return inOutScissor;
+}
+
+// TODO add from table
+// https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#synchronization-access-types
+
+template<> VkClearColorValue makeClearColorValue<uint32_t> (add_cref<UVec4> color)
+{
+	VkClearColorValue c;
+	c.uint32[0] = color[0];
+	c.uint32[1] = color[1];
+	c.uint32[2] = color[2];
+	c.uint32[3] = color[3];
+	return c;
+}
+
+template<> VkClearColorValue makeClearColorValue<int32_t> (add_cref<IVec4> color)
+{
+	VkClearColorValue c;
+	c.int32[0] = color[0];
+	c.int32[1] = color[1];
+	c.int32[2] = color[2];
+	c.int32[3] = color[3];
+	return c;
+}
+
+template<> VkClearColorValue makeClearColorValue<float> (add_cref<Vec4> color)
+{
+	VkClearColorValue c;
+	c.float32[0] = color[0];
+	c.float32[1] = color[1];
+	c.float32[2] = color[2];
+	c.float32[3] = color[3];
+	return c;
 }
 
 } // namespace vtf

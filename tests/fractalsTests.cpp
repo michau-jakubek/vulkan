@@ -7,6 +7,7 @@
 #include "vtfPipelineLayout.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfBacktrace.hpp"
+#include "vtfZPipeline.hpp"
 
 #include <variant>
 
@@ -24,28 +25,45 @@ bool userEnforcesFloat32 (const strings& params)
 	return consumeOptions(enforceFloate32, options, args, sink) > 0;
 }
 
-int performTest (Canvas& canvas, const std::string&	assets, bool enableFloat64, const GlobalAppFlags& flags);
+uint32_t userAnimationTicks (const strings& params)
+{
+	strings				sink;
+	strings				args(params);
+	Option				animationTicks	{ "-a", 1 };
+	std::vector<Option>	options { animationTicks };
+	if (consumeOptions(animationTicks, options, args, sink) > 0)
+	{
+		bool status = false;
+		return fromText(sink.back(), 0u, status);
+	}
+	return 0;
+}
+
+int performTest (Canvas& canvas, const std::string&	assets, bool enableFloat64, uint32_t animationTicks, const GlobalAppFlags& flags);
 
 int prepareTest (const TestRecord& record, const strings& params)
 {
 	UNREF(params);
 
-	std::cout << "Arguments"														<< std::endl;
-	std::cout << "  [-float32] Enforce using Float32 in shader"							<< std::endl;
-	std::cout << "  Otherwise Float64 will be used if available"					<< std::endl;
-	std::cout																		<< std::endl;
-	std::cout << "Navigation keys combination"										<< std::endl;
-	std::cout << "  Scroll Left|Right|Up|Down: Move the picture slowly"				<< std::endl;
-	std::cout << "  Ctrl or|and Mice Button pressed:"								<< std::endl;
-	std::cout << "   * cursor move:            Move the picture fast"				<< std::endl;
-	std::cout << "   * scroll dowm:            Zoom in"								<< std::endl;
-	std::cout << "   * scroll dowm:            Zoom out"							<< std::endl;
-	std::cout << "   (Mice's buttons might not work correctly on some platforms)"	<< std::endl;
-	std::cout << "  R:                         Restore to start settings"			<< std::endl;
-	std::cout << "  S:                         Print diagnostic information"		<< std::endl;
-	std::cout << "  Gray(+)                    Increment iteration count"			<< std::endl;
-	std::cout << "  Gray(-)                    Decrement iteration count"			<< std::endl;
-	std::cout << "  Esc:                       Quit"								<< std::endl;
+	std::cout << "Parameters"															<< std::endl;
+	std::cout << "  [-float32]   Enforce using Float32 in shader"						<< std::endl;
+	std::cout << "     Otherwise Float64 will be used if available"						<< std::endl;
+	std::cout << "  [-a <msecs>] Run in animation mode, refresh every milliseconds"		<< std::endl;
+	std::cout << "     Hold pressed left mouse button or Ctrl key to zoom in"			<< std::endl;
+	std::cout << "     Hold pressed right mouse button or Ctrl key to zoom out"			<< std::endl;
+	std::cout																			<< std::endl;
+	std::cout << "Navigation keys combination"											<< std::endl;
+	std::cout << "  Scroll Left|Right|Up|Down: Move the picture slowly"					<< std::endl;
+	std::cout << "  Ctrl or|and Mice Button pressed:"									<< std::endl;
+	std::cout << "   * cursor move:            Move the picture fast"					<< std::endl;
+	std::cout << "   * scroll dowm:            Zoom in"									<< std::endl;
+	std::cout << "   * scroll dowm:            Zoom out"								<< std::endl;
+	std::cout << "   (Mice's buttons might not work the same way on some platforms)"	<< std::endl;
+	std::cout << "  R:                         Restore to start settings"				<< std::endl;
+	std::cout << "  S:                         Print diagnostic information"			<< std::endl;
+	std::cout << "  Gray(+)                    Increment iteration count"				<< std::endl;
+	std::cout << "  Gray(-)                    Decrement iteration count"				<< std::endl;
+	std::cout << "  Esc:                       Quit Fractals"							<< std::endl;
 
 	bool	enableFloat64 = false;
 	auto onGetEnabledFeatures = [&](ZPhysicalDevice physDevice, add_ref<strings> /*deviceExtensions*/) -> VkPhysicalDeviceFeatures2
@@ -54,18 +72,22 @@ int prepareTest (const TestRecord& record, const strings& params)
 		vkGetPhysicalDeviceFeatures(*physDevice, &features);
 
 		VkPhysicalDeviceFeatures2 result{};
-		result.features.shaderFloat64 = features.shaderFloat64;
-		enableFloat64 = !userEnforcesFloat32(params) && (features.shaderFloat64 != VK_FALSE);
-
-		return result;;
+		if (!userEnforcesFloat32(params))
+		{
+			enableFloat64 = (features.shaderFloat64 != VK_FALSE);
+			result.features.shaderFloat64 = features.shaderFloat64;
+		}
+		return result;
 	};
 
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	Canvas	cs(record.name, gf.layers, {}, {}, Canvas::DefaultStyle, onGetEnabledFeatures, false, gf.apiVer);
 
+	const uint32_t animationTicks = userAnimationTicks(params);
 	std::cout << "Current shader mode Float" << (enableFloat64 ? "64" : "32") << std::endl;
+	std::cout << "Animation " << (animationTicks ? "enabled" : "disabled") << std::endl;
 
-	return performTest(cs, record.assets, enableFloat64, gf);
+	return performTest(cs, record.assets, enableFloat64, animationTicks, gf);
 }
 
 template<class Float>
@@ -79,36 +101,48 @@ struct PushConstant
 	Float yMax;
 	int   iterCount;
 };
-
+typedef Canvas::Swapchain Swapchain;
 struct UserInput_
 {
 	int					drawTrigger;
 	double				xCursor;
 	double				yCursor;
 	bool				ctrlPressed;
+	bool				leftCtrlPressed;
+	bool				rightCtrlPressed;
 	bool				micePressed;
+	bool				leftMicePressed;
+	bool				rightMicePressed;
 	double				miceKeyXcursor;
 	double				miceKeyYcursor;
 	const int			iterationCount;
 	const int			iterationStep;
 	const bool			adaptiveIteration;
 	int					iterationTick;
+	bool				animationEnabled;
+	uint64_t			animationTicks;
 	UserInput_ ()
 		: drawTrigger		(1)
 		, xCursor			()
 		, yCursor			()
 		, ctrlPressed		()
+		, leftCtrlPressed	()
+		, rightCtrlPressed	()
 		, micePressed		()
+		, leftMicePressed	()
+		, rightMicePressed	()
 		, miceKeyXcursor	()
 		, miceKeyYcursor	()
 		, iterationCount	(50)
 		, iterationStep		(20)
 		, adaptiveIteration	(true)
 		, iterationTick		(1)
+		, animationEnabled	(false)
+		, animationTicks	(0)
 	{
 	}
-	virtual void reset (Canvas& cs) = 0;
-	virtual void updateDim (Canvas& cs) = 0;
+	virtual void reset (add_cref<Swapchain>) = 0;
+	virtual void updateDim (add_cref<Swapchain>) = 0;
 };
 
 template<class Float>
@@ -116,22 +150,22 @@ struct UserInput : UserInput_
 {
 	PushConstant<Float>	pc;
 	UserInput() : pc() {}
-	void reset (Canvas& cs) override
+	void reset (add_cref<Swapchain> swapchain) override
 	{
 		pc.iterCount = iterationCount;
-		updateDim(cs);
+		updateDim(swapchain);
 		pc.xMin = -2.5f;
 		pc.xMax = +1.5f;
 		pc.yMin = -2.0f;
 		pc.yMax = +2.0f;
-		ctrlPressed = false;
-		micePressed	= false;
-		glfwGetCursorPos(*cs.window, &xCursor, &yCursor);
+		ctrlPressed = leftCtrlPressed = rightCtrlPressed = false;
+		micePressed	= leftMicePressed = rightMicePressed = false;
+		glfwGetCursorPos(*swapchain.canvas.window, &xCursor, &yCursor);
 	}
-	void updateDim (Canvas& cs) override
+	void updateDim (add_cref<Canvas::Swapchain> swapchain) override
 	{
-		pc.width = Float(cs.swapchain.extent.width);
-		pc.height = Float(cs.swapchain.extent.height);
+		pc.width	= Float(swapchain.extent.width);
+		pc.height	= Float(swapchain.extent.height);
 	}
 	void incIterationCount (int step = 0, uint32_t tick = 1)
 	{
@@ -206,11 +240,14 @@ void onKey (Canvas& cs, void* userData, int key, int scancode, int action, int m
 	UNREF(mods);
 	UserInput<Float>* ui = reinterpret_cast<UserInput<Float>*>(userData);
 	++ui->drawTrigger;
-	if (key == GLFW_KEY_LEFT_CONTROL)
+	if (key == GLFW_KEY_LEFT_CONTROL || key == GLFW_KEY_RIGHT_CONTROL)
 	{
 		ui->miceKeyXcursor = ui->xCursor;
 		ui->miceKeyYcursor = ui->yCursor;
 		ui->ctrlPressed = (GLFW_PRESS == action || GLFW_REPEAT == action);
+		if (key == GLFW_KEY_LEFT_CONTROL)
+			ui->leftCtrlPressed = ui->ctrlPressed;
+		else ui->rightCtrlPressed = ui->ctrlPressed;
 	}
 	else if (action == GLFW_PRESS)
 	{
@@ -228,6 +265,12 @@ void onKey (Canvas& cs, void* userData, int key, int scancode, int action, int m
 				std::cout << "xMin:" << ui->pc.xMin << ", xMax:" << ui->pc.xMax << std::endl;
 				std::cout << "yMin:" << ui->pc.yMin << ", yMax:" << ui->pc.yMax << std::endl;
 				std::cout << "iter:" << ui->pc.iterCount << std::endl;
+				if (ui->animationEnabled) {
+					std::cout << "Anime ticks: " << ui->animationTicks << std::endl;
+					if (ui->animationTicks) {
+						std::cout << "Pseudo FPS: " << (1.0e3 / double(ui->animationTicks)) << std::endl;
+					}
+				}
 				break;
 
 			case GLFW_KEY_KP_ADD:
@@ -251,7 +294,10 @@ void onMouseBtn (Canvas&, void* userData, int button, int action, int mods)
 		++ui->drawTrigger;
 		ui->miceKeyXcursor = ui->xCursor;
 		ui->miceKeyYcursor = ui->yCursor;
-		ui->micePressed = action == GLFW_PRESS;
+		ui->micePressed = (action == GLFW_PRESS);
+		if (button == GLFW_MOUSE_BUTTON_LEFT)
+			ui->leftMicePressed = ui->micePressed;
+		else ui->rightMicePressed = ui->micePressed;
 	}
 }
 
@@ -356,7 +402,7 @@ void initEvents (Canvas& cs, VarUserInput& vui, bool enableFloat64)
 }
 
 using namespace std::placeholders;
-void commandBufferPushConstants (ZCommandBuffer cmdBuffer, ZPipelineLayout pipelineLayout,
+UNUSED void commandBufferPushConstants (ZCommandBuffer cmdBuffer, ZPipelineLayout pipelineLayout,
 								 const VarUserInput& vui, bool enableFloat64)
 {
 	if (enableFloat64)
@@ -364,7 +410,7 @@ void commandBufferPushConstants (ZCommandBuffer cmdBuffer, ZPipelineLayout pipel
 	else ::vtf::commandBufferPushConstants(cmdBuffer, pipelineLayout, std::get<UserInput<float>>(vui).pc);
 }
 
-int performTest (Canvas& cs, const std::string&	assets, bool enableFloat64, const GlobalAppFlags& flags)
+int performTest (Canvas& cs, const std::string&	assets, bool enableFloat64, uint32_t animationTicks, const GlobalAppFlags& flags)
 {
 	ProgramCollection		programs(cs);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, (assets + "shader.vert"));
@@ -373,6 +419,7 @@ int performTest (Canvas& cs, const std::string&	assets, bool enableFloat64, cons
 
 	ZShaderModule			vertShaderModule	= *programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
 	ZShaderModule			fragShaderModule	= *programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);
+	VertexInput				vertexInput			(cs.device);
 
 	// Scope destruction of a vector
 	{
@@ -385,47 +432,68 @@ int performTest (Canvas& cs, const std::string&	assets, bool enableFloat64, cons
 		vertices.emplace_back(+1, -1);
 		vertices.emplace_back(+1, +1);
 
-		cs.vertexInput.binding(0).addAttributes(vertices);
+		vertexInput.binding(0).addAttributes(vertices);
 	}
 
-	PipelineLayout			pm					(cs);
+	PipelineLayout			pm					(cs.device);
 	const VkClearValue		clearColor			= {{{0.5f, 0.5f, 0.5, 0.5f}}};
-	ZRenderPass				renderPass			= cs.createRenderPass({cs.format.format}, clearColor);
+	const VkFormat			format				= cs.surfaceFormat;
+	ZRenderPass				renderPass			= createColorRenderPass(cs.device, {format}, {{clearColor}});
 	ZPipelineLayout			pipelineLayout		= enableFloat64
 													? pm.createPipelineLayout<PushConstant<double>>()
 													: pm.createPipelineLayout<PushConstant<float>>();
-	ZPipeline				pipeline			= cs.createGraphicsPipeline(pipelineLayout, renderPass, {},
-																			vertShaderModule, fragShaderModule);
+	ZPipeline				pipeline			= createGraphicsPipeline(pipelineLayout, renderPass,
+																		 vertexInput, vertShaderModule, fragShaderModule,
+																		 VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
 	VarUserInput			vui					= selectUserInputVariant(enableFloat64);
 	add_ref<UserInput_>		ui					= enableFloat64
 													? static_cast<add_ref<UserInput_>>(std::get<UserInput<double>>(vui))
 													: static_cast<add_ref<UserInput_>>(std::get<UserInput<float>>(vui));
 	ui.reset(cs);
+	ui.animationEnabled = animationTicks != 0;
 
 	initEvents(cs, vui, enableFloat64);
 
-	auto onCommandRecording = [&](Canvas&, ZCommandBuffer cmdBuffer, uint32_t swapImageIndex)
-	{
-		ui.updateDim(cs);
+	std::chrono::time_point<std::chrono::steady_clock>
+			start = std::chrono::steady_clock::now(); // in nanoseconds
 
-		const VkRenderPassBeginInfo rpbi = cs.makeRenderPassBeginInfo(renderPass, swapImageIndex);
+	auto onIdle = [&](add_ref<Canvas> canvas, add_ref<int>)
+	{
+		const auto now = std::chrono::steady_clock::now();
+		const auto tickCount = make_unsigned(std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count());
+
+		if (tickCount > animationTicks)
+		{
+			start = now;
+			ui.animationTicks = tickCount;
+			if (ui.ctrlPressed || ui.micePressed)
+			{
+				if (enableFloat64)
+					onScroll<double>(canvas, &ui, 0.0, ((ui.leftCtrlPressed || ui.leftMicePressed) ? +1.0 : -1.0));
+				else
+					onScroll<float>(canvas, &ui, 0.0, ((ui.leftCtrlPressed || ui.leftMicePressed) ? +1.0 : -1.0));
+			}
+		}
+	};
+
+	auto onCommandRecording = [&](add_ref<Canvas>, add_cref<Canvas::Swapchain> swapchain, ZCommandBuffer cmdBuffer, ZFramebuffer framebuffer)
+	{
+		ui.updateDim(swapchain);
 
 		commandBufferBegin(cmdBuffer);
 			commandBufferBindPipeline(cmdBuffer, pipeline);
-			commandBufferBindVertexBuffers(cmdBuffer, cs.vertexInput);
+			commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
 			commandBufferPushConstants(cmdBuffer, pipelineLayout, vui, enableFloat64);
-			vkCmdSetViewport(*cmdBuffer, 0, 1, &cs.swapchain.viewport);
-			vkCmdSetScissor(*cmdBuffer, 0, 1, &cs.swapchain.scissor);
-			vkCmdBeginRenderPass(*cmdBuffer, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
-				vkCmdDraw(*cmdBuffer, cs.vertexInput.getAttributeCount(0), 1, 0, 0);
-			vkCmdEndRenderPass(*cmdBuffer);
-			cs.transitionImageForPresent(cmdBuffer, swapImageIndex);
+			vkCmdSetViewport(*cmdBuffer, 0, 1, &swapchain.viewport);
+			vkCmdSetScissor(*cmdBuffer, 0, 1, &swapchain.scissor);
+			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer, 0);
+				vkCmdDraw(*cmdBuffer, vertexInput.getAttributeCount(0), 1, 0, 0);
+			commandBufferEndRenderPass(rpbi);
+			commandBufferMakeImagePresentationReady(cmdBuffer, framebufferGetImage(framebuffer));
 		commandBufferEnd(cmdBuffer);
-
-		return true;
 	};
 
-	return cs.run(renderPass, onCommandRecording, std::ref(ui.drawTrigger));
+	return cs.run(onCommandRecording, renderPass, std::ref(ui.drawTrigger), (animationTicks ? onIdle : Canvas::OnIdle()));
 }
 
 } // unnamed namespace

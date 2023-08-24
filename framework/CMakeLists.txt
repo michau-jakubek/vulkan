@@ -2,25 +2,35 @@ set(framework_files
         demangle.hpp
         stb_image.h
         stb_image_resize.h
+        stb_image.cpp
+        stb_image.hpp
         vtfFilesystem.hpp
         vtfZDeletable.cpp
         vtfZDeletable.hpp
         vtfBacktrace.cpp
         vtfBacktrace.hpp
-        vtfZUtils.cpp
-        vtfZUtils.hpp
         vtfCUtils.cpp
         vtfCUtils.hpp
         vtfVkUtils.hpp
         vtfVkUtils.cpp
+        vtfZUtils.cpp
+        vtfZUtils.hpp
+        vtfCopyUtils.hpp
         vtfFormatUtils.cpp
         vtfFormatUtils.hpp
         vtfTermColor.cpp
         vtfTermColor.hpp
         vtfVector.hpp
+        vtfThreadSafeLogger.cpp
+        vtfThreadSafeLogger.hpp
+        vtfZBarriers.cpp
+        vtfZBarriers.hpp
+        vtfZBuffer.cpp
         vtfZBuffer.hpp
         vtfZImage.cpp
         vtfZImage.hpp
+        vtfTextImage.cpp
+        vtfTextImage.hpp
         vtfZCommandBuffer.cpp
         vtfZCommandBuffer.hpp
         vtfZDeviceMemory.hpp
@@ -30,6 +40,8 @@ set(framework_files
         vtfDebugMessenger.hpp
         vtfPipelineLayout.cpp
         vtfPipelineLayout.hpp
+        vtfZPipeline.cpp
+        vtfZPipeline.hpp
         vtfVertexInput.cpp
         vtfVertexInput.hpp
         vtfObjectLoader.cpp

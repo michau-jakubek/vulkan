@@ -12,6 +12,19 @@ namespace vtf
 {
 
 template<class T, size_t N>
+class VecX;
+
+template<class> struct vecx_info;
+template<class T, size_t N>
+struct vecx_info<VecX<T,N>>
+{
+	typedef T type;
+	enum { count = N };
+};
+template<class V> using vecx_type = typename vecx_info<V>::type;
+template<class V> constexpr size_t vecx_count = vecx_info<V>::count;
+
+template<class T, size_t N>
 class VecX
 {
     struct tag {
@@ -63,6 +76,7 @@ public:
     template<class X, class... Y>
     VecX(const X& x, const Y&... y) : VecX(tag(0), x, y...)
     {
+		/* delegate work to the protected constructor */
     }
 
 	template<class U>
@@ -261,21 +275,28 @@ public:
 		return z;
 	}
 
-	template<class U>
-	VecX<U,N> cast () const
-	{
-		VecX<U,N> v;
-		for (size_t i = 0; i < N; ++i)
-			v[i] = static_cast<U>(operator[](i));
-		return v;
-	}
-
-	template<class U, size_t M>
-	VecX<U,M> cast () const
+	template<class V, class U = vecx_type<V>, size_t M = vecx_count<V>>
+	auto cast () const -> VecX<U,M>
 	{
 		VecX<U,M> v;
 		for (size_t i = 0; i < N && i < M; ++i)
 			v[i] = static_cast<U>(operator[](i));
+		return v;
+	}
+
+	template<class V, class U = vecx_type<V>, size_t M = vecx_count<V>>
+	auto bitcast () const -> VecX<U,M>
+	{
+		union {
+			U u;
+			T t;
+		} x;
+		VecX<U,M> v;
+		for (size_t i = 0; i < N && i < M; ++i) {
+			x = {};
+			x.t = operator[](i);
+			v[i] = x.u;
+		}
 		return v;
 	}
 
@@ -306,31 +327,21 @@ public:
 	const T& y() const  { verifyIndex(1); return (*this)[1]; }
 	const T& z() const  { verifyIndex(2); return (*this)[2]; }
 	const T& w() const  { verifyIndex(3); return (*this)[3]; }
-	const T& r() const  { return x(); }
-	const T& g() const  { return y(); }
-	const T& b() const  { return z(); }
-	const T& a() const  { return w(); }
+	const T& r() const  { verifyIndex(0); return (*this)[0]; }
+	const T& g() const  { verifyIndex(0); return (*this)[1]; }
+	const T& b() const  { verifyIndex(0); return (*this)[2]; }
+	const T& a() const  { verifyIndex(0); return (*this)[3]; }
 
 	VecX& x(const T& v)    { verifyIndex(0); (*this)[0] = v; return *this; }
 	VecX& y(const T& v)    { verifyIndex(1); (*this)[1] = v; return *this; }
 	VecX& z(const T& v)    { verifyIndex(2); (*this)[2] = v; return *this; }
 	VecX& w(const T& v)    { verifyIndex(3); (*this)[3] = v; return *this; }
-	VecX& a(const T& v)    { x(v); }
-	VecX& b(const T& v)    { y(v); }
-	VecX& c(const T& v)    { z(v); }
-	VecX& d(const T& v)    { w(v); }
+	VecX& r(const T& v)    { verifyIndex(0); (*this)[0] = v; return *this; }
+	VecX& g(const T& v)    { verifyIndex(1); (*this)[1] = v; return *this; }
+	VecX& b(const T& v)    { verifyIndex(2); (*this)[2] = v; return *this; }
+	VecX& a(const T& v)    { verifyIndex(3); (*this)[3] = v; return *this; }
 
 };
-
-template<class> struct vecx_info;
-template<class T, size_t N>
-struct vecx_info<VecX<T,N>>
-{
-	typedef T type;
-	static const size_t count = N;
-};
-template<class V> using vecx_type = typename vecx_info<V>::type;
-template<class V> constexpr size_t vecx_count = vecx_info<V>::count;
 
 typedef VecX<float,1> Vec1;
 typedef VecX<float,2> Vec2;
@@ -381,7 +392,7 @@ template<class U, size_t M>
 inline bool VecX<T,N>::operator==(const VecX<U,M>& p) const
 {
 	bool ok = false;
-	if (N == M)
+	if constexpr (N == M)
 	{
 		ok = true;
 		for (size_t i = 0; ok && i < N; ++i)

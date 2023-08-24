@@ -4,66 +4,94 @@
 #include "vtfZDeletable.hpp"
 #include "vtfVkUtils.hpp"
 #include "vtfZDeviceMemory.hpp"
+#include "vtfZBarriers.hpp"
 
 namespace vtf
 {
 
-
-uint32_t		computeBufferPixelCount (ZImage image);
-uint32_t		computeBufferPixelCount (ZImageView image);
-VkDeviceSize	computeBufferSize		(ZImage image);
-VkDeviceSize	computeBufferSize		(ZImageView view);
-VkDeviceSize	computeBufferSize		(VkFormat format, uint32_t imageWidth, uint32_t imageHeight,
-										 uint32_t baseLevel = 0u, uint32_t levels = 1u, uint32_t layers = 1u);
-auto			makeBufferMemoryBarrier	(ZBuffer buffer, VkAccessFlags srcAccess, VkAccessFlags dstAccess, VkDeviceSize size = INVALID_UINT64) -> VkBufferMemoryBarrier;
-//void			copyBufferToImage (ZCommandPool commandPool, ZBuffer buffer, ZImage image,
-//								   uint32_t baseLevel = 0, uint32_t levels = INVALID_UINT32,
-//								   VkImageLayout newLayout = VK_IMAGE_LAYOUT_GENERAL);
-//void			copyBufferToImage (ZCommandPool commandPool, ZBuffer buffer, ZImageView view, VkImageLayout newLayout = VK_IMAGE_LAYOUT_GENERAL);
-void			copyBufferToBuffer (ZCommandBuffer cmd, ZBuffer src, ZBuffer dst, const VkBufferCopy& region);
-
-ZBuffer			createBuffer	(ZDevice device, const ExplicitWrapper<VkDeviceSize>& size, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties);
+/**
+ * @brief Create a underlying VkBuffer object and bind it to memory
+ * @param device		is the logical device that creates the buffer object
+ * @param usage			is a bitmask of VkBufferUsageFlagBits specifying allowed usages of the buffer
+ * @param size			is the size in bytes of the buffer to be created
+ * @param properties	is a bitmask of VkMemoryPropertyFlagBits specifying memory of the buffer
+ * @return				ZBuffer instance with Vulkan handle
+ */
+ZBuffer			createBuffer	(ZDevice device, VkDeviceSize size, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties = ZMemoryPropertyHostFlags);
+/**
+ * @brief Create a underlying VkBuffer object and bind it to memory
+ * @param device		is the logical device that creates the buffer object
+ * @param format		describes the format of the hypothetical texel blocks that will be contained in the buffer
+ * @param elements		is a number of the hypothetical texel blocks that will be contained in the buffer
+ * @param usage			is a bitmask of VkBufferUsageFlagBits specifying allowed usages of the buffer
+ * @param properties	is a bitmask of VkMemoryPropertyFlagBits specifying memory of the buffer
+ * @return
+ */
 ZBuffer			createBuffer	(ZDevice device, VkFormat format, uint32_t elements, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties);
+
+VkDeviceSize	computeBufferSize (VkFormat format, uint32_t imageWidth, uint32_t imageHeight,
+								   uint32_t baseMipLevel = 0u, uint32_t mipLevelCount = 1u, uint32_t layerCount = 1u);
+/**
+ * @brief Create a underlying VkBuffer object and bind it to memory
+ * @param image			describes format, size, layers, mip levels, etc. on which the buffer will be created
+ * @param usage			is a bitmask of VkBufferUsageFlagBits specifying allowed usages of the buffer
+ * @param properties	is a bitmask of VkMemoryPropertyFlagBits specifying memory of the buffer
+ * @return
+ */
 ZBuffer			createBuffer	(ZImage image, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties);
 
-void			flushBuffer		(ZBuffer buffer);
-uint32_t		writeBufferData	(ZBuffer buffer, const uint8_t* src, const VkBufferCopy& copy, bool flush = true);
-uint32_t		readBufferData	(ZBuffer buffer, uint8_t* dst, const VkBufferCopy& copy);
-uint32_t		writeBufferData	(ZBuffer buffer, const uint8_t* src, VkDeviceSize size = VK_WHOLE_SIZE);
-uint32_t		readBufferData	(ZBuffer buffer, uint8_t* dst, VkDeviceSize size = VK_WHOLE_SIZE);
+/**
+ * @brief   Create index buffer
+ * @param   device		is the logical device that creates the buffer object
+ * @param   indexCount	defines how many indices the buffer will have
+ * @param   indexType	defines the type of indices element
+ * @details Specialized implementation you can find in vtfVertexInput.cpp
+ * @return
+ */
+ZBuffer			createIndexBuffer (ZDevice device, uint32_t indexCount, VkIndexType indexType);
+
+ZBuffer			createBufferAndLoadFromImageFile (ZDevice device, add_cref<std::string> imageFileName,
+												  ZBufferUsageFlags usage = {}, bool forceFourComponentFormat = true);
+ZBuffer			bufferDuplicate (ZBuffer buffer);
+VkDeviceSize	bufferWriteData	(ZBuffer buffer, const uint8_t* src, const VkBufferCopy& copy, bool flush = true);
+VkDeviceSize	bufferWriteData	(ZBuffer buffer, const uint8_t* src, VkDeviceSize size = VK_WHOLE_SIZE);
+void			bufferFlush		(ZBuffer buffer);
+
+VkDeviceSize	bufferReadData	(ZBuffer buffer, uint8_t* dst, const VkBufferCopy& copy);
+VkDeviceSize	bufferReadData	(ZBuffer buffer, uint8_t* dst, VkDeviceSize size = VK_WHOLE_SIZE);
+
+VkDeviceSize	bufferGetSize		(ZBuffer buffer);
+VkDeviceSize	bufferGetMemorySize	(ZBuffer buffer);
 
 template<template<class, class...> class C, class T, class... V>
-uint32_t writeBuffer (ZBuffer buffer, const C<T, V...>& c, uint32_t count = INVALID_UINT32)
+VkDeviceSize	bufferWrite (ZBuffer buffer, const C<T, V...>& c, uint32_t count = INVALID_UINT32)
 {
 	if (count == INVALID_UINT32 || count > c.size()) count = static_cast<uint32_t>(c.size());
 	const VkDeviceSize	dataSize	= count * sizeof(T);
 	const VkDeviceSize	bufferSize	= buffer.getParam<VkDeviceSize>();
-	return writeBufferData(buffer, reinterpret_cast<const uint8_t*>(c.data()), std::min(dataSize, bufferSize));
+	return bufferWriteData(buffer, reinterpret_cast<const uint8_t*>(c.data()), std::min(dataSize, bufferSize));
 }
 
 template<class T, uint32_t N>
-uint32_t writeBuffer (ZBuffer buffer, T const (&table)[N])
+VkDeviceSize	bufferWrite (ZBuffer buffer, T const (&table)[N])
 {
 	const VkDeviceSize	dataSize	= N * sizeof(T);
 	const VkDeviceSize	bufferSize	= buffer.getParam<VkDeviceSize>();
 	return writeBufferData(buffer, table, std::min(dataSize, bufferSize));
 }
 
-template<class T, class C = std::vector<T>>
-C readBuffer (ZBuffer buffer, uint32_t count = INVALID_UINT32)
+template<class T, uint32_t N>
+void bufferRead (ZBuffer buffer, T (&table)[N])
 {
-	const VkDeviceSize	bufferSize		= buffer.getParam<VkDeviceSize>();
-	const uint32_t		availableCount	= bufferSize / sizeof(T);
-	if (count == INVALID_UINT32 || count > availableCount)
-		count = availableCount;
+	const VkDeviceSize	bufferSize	= buffer.getParam<VkDeviceSize>();
+	const uint32_t		count		= bufferSize / sizeof(T);
+	ASSERTMSG(count <= N, "Array size must accomodate all buffer data");
 	const VkDeviceSize	readSize		= count * sizeof(T);
-	C container(count);
-	readBufferData(buffer, reinterpret_cast<uint8_t*>(container.data()), readSize);
-	return container;
+	bufferReadData(buffer, reinterpret_cast<uint8_t*>(&table[0]), readSize);
 }
 
 template<class T>
-uint32_t readBuffer (ZBuffer buffer, std::vector<T>& container, uint32_t vectorElementCount = INVALID_UINT32)
+VkDeviceSize	bufferRead (ZBuffer buffer, std::vector<T>& container, uint32_t vectorElementCount = INVALID_UINT32)
 {
 	const VkDeviceSize	bufferSize		= buffer.getParam<VkDeviceSize>();
 	const uint32_t		availableCount	= static_cast<uint32_t>(bufferSize / sizeof(T));
@@ -71,8 +99,41 @@ uint32_t readBuffer (ZBuffer buffer, std::vector<T>& container, uint32_t vectorE
 		vectorElementCount = availableCount;
 	const VkDeviceSize	readSize		= vectorElementCount * sizeof(T);
 	container.resize(vectorElementCount);
-	return readBufferData(buffer, reinterpret_cast<uint8_t*>(container.data()), readSize);
+	return bufferReadData(buffer, reinterpret_cast<uint8_t*>(container.data()), readSize);
 }
+
+namespace namespace_hidden
+{
+struct PixelBufferAccess_
+{
+protected:
+	PixelBufferAccess_ (ZBuffer buffer, uint32_t elementSize, uint32_t width, uint32_t height, uint32_t depth = 1u);
+	~PixelBufferAccess_ ();
+	add_ptr<void>	at (uint32_t x, uint32_t y, uint32_t z = 0);
+	add_cptr<void>	at (uint32_t x, uint32_t y, uint32_t z = 0) const;
+
+	ZBuffer				m_buffer;
+	const uint32_t		m_elementSize;
+	const VkDeviceSize	m_bufferSize;
+	const UVec3			m_size;
+	add_ptr<uint8_t>	m_data;
+};
+} // namespace_hidden
+
+template<class ElementType>
+struct PixelBufferAccess : namespace_hidden::PixelBufferAccess_
+{
+	PixelBufferAccess (ZBuffer buffer, uint32_t width, uint32_t height, uint32_t depth = 1u)
+		: PixelBufferAccess_ (buffer, static_cast<uint32_t>(sizeof(ElementType)), width, height, depth) {}
+	add_ref<ElementType>	at (uint32_t x, uint32_t y, uint32_t z = 0)
+	{
+		return *static_cast<add_ptr<ElementType>>(PixelBufferAccess_::at(x, y, z));
+	}
+	add_cref<ElementType>	at (uint32_t x, uint32_t y, uint32_t z = 0) const
+	{
+		return *static_cast<add_cptr<ElementType>>(PixelBufferAccess_::at(x, y, z));
+	}
+};
 
 } // namespace vtf
 

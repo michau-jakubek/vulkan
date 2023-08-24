@@ -15,7 +15,7 @@ VkAllocationCallbacks* getAllocationCallbacks()
 	return nullptr;
 }
 
-void assertion (bool cond, const char* func, const char* file, int line, const std::string msg)
+void assertion (bool cond, const char* func, const char* file, int line, add_cref<std::string> msg)
 {
 	if (!cond)
 	{
@@ -26,6 +26,7 @@ void assertion (bool cond, const char* func, const char* file, int line, const s
 #if SYSTEM_OS_LINUX == 1
 		if (backtraceEnabled__) printBacktrace<20>(ss, 2);
 #endif
+		ss.flush();
 		throw std::runtime_error(ss.str());
 	}
 }

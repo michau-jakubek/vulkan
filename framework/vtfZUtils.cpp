@@ -1,3 +1,4 @@
+#include "vtfVkUtils.hpp"
 #include "vtfCUtils.hpp"
 #include "vtfZUtils.hpp"
 #include "vtfVertexInput.hpp"
@@ -8,14 +9,10 @@
 #include "vtfZCommandBuffer.hpp"
 #include "vtfDebugMessenger.hpp"
 #include "vtfBacktrace.hpp"
+#include "vtfThreadSafeLogger.hpp"
 
 namespace vtf
 {
-
-VkClearValue makeClearColor (const Vec4& color)
-{
-	return {{{ color[0], color[1], color[2], color[3] }}};
-}
 
 std::ostream& operator<<(std::ostream& str, const Version& v)
 {
@@ -23,7 +20,7 @@ std::ostream& operator<<(std::ostream& str, const Version& v)
 	return str;
 }
 
-ZShaderModule createShaderModule(ZDevice device, const std::string& code)
+ZShaderModule createShaderModule(ZDevice device, VkShaderStageFlagBits stage, const std::string& code)
 {
 	VkShaderModuleCreateInfo createInfo{};
 	createInfo.sType	= VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -38,10 +35,10 @@ ZShaderModule createShaderModule(ZDevice device, const std::string& code)
 		throw std::runtime_error("failed to create shader module!");
 	}
 
-	return ZShaderModule::create(shaderModule, device, callbacks);
+	return ZShaderModule::create(shaderModule, device, callbacks, stage);
 }
 
-ZShaderModule createShaderModule(ZDevice device, const std::vector<unsigned char>& code)
+ZShaderModule createShaderModule(ZDevice device, VkShaderStageFlagBits stage, const std::vector<unsigned char>& code)
 {
 	auto readMagicNumber = [](const std::vector<unsigned char>& s) -> uint32_t
 	{
@@ -63,16 +60,195 @@ ZShaderModule createShaderModule(ZDevice device, const std::vector<unsigned char
 	std::vector<unsigned char> code2;
 	if (readMagicNumber(code) == 0)
 	{
-		std::cout << "Magic number was: 0x" << std::hex << readMagicNumber(code) << std::dec << std::endl;
+		add_ref<Logger> logger = device.getParam<ZPhysicalDevice>().getParam<ZInstance>().getParamRef<Logger>();
+		if (getGlobalAppFlags().verbose)
+		{
+			logger << "Magic number was: 0x" << std::hex << readMagicNumber(code) << std::dec << std::endl;
+		}
 		code2 = code;
 		changeMagicNumber(0x07230203, code2);
 		createInfo.pCode	= reinterpret_cast<const uint32_t*>(code2.data());
-		std::cout << "Magic number is: 0x" << std::hex << readMagicNumber(code2) << std::dec << std::endl;
+		if (getGlobalAppFlags().verbose)
+		{
+			logger << "Magic number is: 0x" << std::hex << readMagicNumber(code2) << std::dec << std::endl;
+		}
 	}
 
 	VKASSERT2(vkCreateShaderModule(*device, &createInfo, callbacks, &shaderModule));
 
-	return ZShaderModule::create(shaderModule, device, callbacks);
+	return ZShaderModule::create(shaderModule, device, callbacks, stage);
+}
+
+ZFramebuffer createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t height, const std::vector<ZImageView>& attachments)
+{
+	const uint32_t	renderAttachmentCount	= renderPass.getParam<ZDistType<AttachmentCount, uint32_t>>();
+	const uint32_t	attachmentCount			= static_cast<uint32_t>(attachments.size());
+	const ZDevice	device					= renderPass.getParam<ZDevice>();
+	const auto		allocationCallbacks		= device.getParam<VkAllocationCallbacksPtr>();
+
+	ASSERTION(attachmentCount > 0);
+	ASSERTION(attachmentCount >= renderAttachmentCount);
+	add_cref<VkPhysicalDeviceProperties> props =
+			device.getParam<ZPhysicalDevice>().getParamRef<VkPhysicalDeviceProperties>();
+	ASSERTION(attachmentCount <= props.limits.maxFragmentOutputAttachments && attachmentCount <= props.limits.maxColorAttachments);
+
+	VkFramebuffer	framebuffer = VK_NULL_HANDLE;
+
+	std::vector<VkImageView>	views(attachmentCount);
+	for (uint32_t i = 0; i < attachmentCount; ++i)
+	{
+		views[i] = *attachments[i];
+	}
+
+	VkFramebufferCreateInfo framebufferInfo{};
+	framebufferInfo.sType			= VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	framebufferInfo.renderPass		= *renderPass;
+	framebufferInfo.attachmentCount	= attachmentCount;
+	framebufferInfo.pAttachments	= views.data();
+	framebufferInfo.width			= width;
+	framebufferInfo.height			= height;
+	framebufferInfo.layers			= 1;
+
+	VKASSERT2(vkCreateFramebuffer(*device, &framebufferInfo, allocationCallbacks, &framebuffer));
+
+	return ZFramebuffer::create(framebuffer, device, allocationCallbacks, width, height, renderPass, attachments);
+}
+
+ZRenderPassBeginInfo::ZRenderPassBeginInfo (ZCommandBuffer cmd, ZFramebuffer framebuffer, uint32_t subpass)
+	: m_cmdBuffer			(cmd)
+	, m_framebuffer			(framebuffer)
+	, m_renderPass			(framebuffer.getParam<ZRenderPass>())
+	, m_subpass				(subpass)
+{
+}
+ZRenderPassBeginInfo::ZRenderPassBeginInfo (ZCommandBuffer cmd, ZRenderPass renderPass, ZFramebuffer framebuffer, uint32_t subpass)
+	: m_cmdBuffer			(cmd)
+	, m_framebuffer			(framebuffer)
+	, m_renderPass			(renderPass)
+	, m_subpass				(subpass)
+{
+}
+const VkRenderPassBeginInfo ZRenderPassBeginInfo::operator ()() const
+{
+	const uint32_t width = m_framebuffer.getParam<ZDistType<Width, uint32_t>>();
+	const uint32_t height = m_framebuffer.getParam<ZDistType<Height, uint32_t>>();
+	add_cref<std::vector<VkClearValue>> clearValues = m_renderPass.getParamRef<std::vector<VkClearValue>>();
+
+	VkRenderPassBeginInfo	info{};
+	info.sType			= VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	info.pNext			= nullptr;
+	info.renderPass		= *m_renderPass;
+	info.framebuffer	= *m_framebuffer;
+	info.renderArea.offset.x	= 0u;
+	info.renderArea.offset.y	= 0u;
+	info.renderArea.extent.width	= width;
+	info.renderArea.extent.height	= height;
+	info.clearValueCount	= uint32_t(clearValues.size());
+	info.pClearValues		= clearValues.size() ? clearValues.data() : nullptr;
+
+	return info;
+}
+
+ZRenderPass	createColorRenderPass (ZDevice device, add_cref<std::vector<VkFormat>> colorFormats,
+								   std::optional<std::vector<VkClearValue>> clearColors,
+								   VkImageLayout initialColorLayout, VkImageLayout finalColorLayout,
+								   std::initializer_list<ZSubpassDependency> deps)
+{
+	const uint32_t attachmentCount = static_cast<uint32_t>(colorFormats.size());
+	ASSERTMSG(colorFormats.size(), "pColorAttachments must contain at leat one element");
+	ASSERTMSG(device.getParam<ZPhysicalDevice>().getParamRef<VkPhysicalDeviceProperties>()
+			  .limits.maxColorAttachments > attachmentCount, "Attachments you want exceed maxAttachmens");
+
+
+	add_ptr<std::vector<VkClearValue>> pClearColors = clearColors.has_value() ? &clearColors.value() : nullptr;
+	const uint32_t clearColorCount = pClearColors ? uint32_t(clearColors->size()) : 0u;
+
+	VkAttachmentDescription attachmentTemplate{};
+	attachmentTemplate.flags			= VkAttachmentDescriptionFlags(0);
+	attachmentTemplate.format			= VK_FORMAT_UNDEFINED;
+	attachmentTemplate.samples			= VK_SAMPLE_COUNT_1_BIT;
+	attachmentTemplate.loadOp			= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachmentTemplate.storeOp			= VK_ATTACHMENT_STORE_OP_STORE;
+	attachmentTemplate.stencilLoadOp	= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachmentTemplate.stencilStoreOp	= VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachmentTemplate.initialLayout	= initialColorLayout;
+	attachmentTemplate.finalLayout		= finalColorLayout;
+
+	VkAttachmentReference	referenceTemplate{};
+	referenceTemplate.attachment	= 0u;
+	referenceTemplate.layout		= finalColorLayout;
+
+	std::vector<VkAttachmentDescription>	descriptions(attachmentCount, attachmentTemplate);
+	std::vector<VkAttachmentReference>		references(attachmentCount, referenceTemplate);
+
+	for (uint32_t attachment = 0; attachment < attachmentCount; ++attachment)
+	{
+		ASSERTMSG(colorFormats[attachment] != VK_FORMAT_UNDEFINED, "Format must not be VK_FORMAT_UNDEFINED");
+		add_ref<VkAttachmentDescription> desc = descriptions.at(attachment);
+		desc.format	= colorFormats.at(attachment);
+		if (attachment < clearColorCount)
+			desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		else if (initialColorLayout != VK_IMAGE_LAYOUT_UNDEFINED)
+			desc.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+		desc.initialLayout = initialColorLayout;
+		desc.finalLayout = finalColorLayout;
+		references.at(attachment).attachment = attachment;
+	}
+
+	VkSubpassDescription subpassTemplate;
+	subpassTemplate.flags					= VkSubpassDescriptionFlags(0);
+	subpassTemplate.pipelineBindPoint		= VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpassTemplate.colorAttachmentCount	= attachmentCount;
+	subpassTemplate.pColorAttachments		= references.data();
+	subpassTemplate.pDepthStencilAttachment	= nullptr;
+	subpassTemplate.inputAttachmentCount	= 0;
+	subpassTemplate.pInputAttachments		= nullptr;
+	subpassTemplate.preserveAttachmentCount	= 0;
+	subpassTemplate.pPreserveAttachments	= nullptr;
+	subpassTemplate.pResolveAttachments		= nullptr;
+
+	std::vector<VkSubpassDescription> subpasses((deps.size() + 1u), subpassTemplate);
+
+	uint32_t subpass = 0u;
+	std::vector<VkSubpassDependency> subpassDeps;
+	for (auto dep : deps)
+	{
+		VkSubpassDependency sd = dep();
+		sd.srcSubpass = subpass;
+		sd.dstSubpass = subpass + 1u;
+		subpassDeps.emplace_back(sd);
+
+		subpass = subpass + 1u;
+	}
+
+	VkRenderPassCreateInfo renderPassInfo{};
+	renderPassInfo.sType			= VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassInfo.attachmentCount	= attachmentCount;
+	renderPassInfo.pAttachments		= descriptions.data();
+	renderPassInfo.subpassCount		= static_cast<uint32_t>(subpasses.size());
+	renderPassInfo.pSubpasses		= subpasses.size() ? subpasses.data() : nullptr;
+	renderPassInfo.dependencyCount	= static_cast<uint32_t>(subpassDeps.size());
+	renderPassInfo.pDependencies	= subpassDeps.size() ? subpassDeps.data() : nullptr;
+
+
+	const VkAllocationCallbacksPtr	callbacks	= device.getParam<VkAllocationCallbacksPtr>();
+	ZRenderPass	renderPass = ZRenderPass::create(VK_NULL_HANDLE, device, callbacks,
+												 attachmentCount, renderPassInfo.subpassCount,
+												 {/*clearValues*/}, false, finalColorLayout);
+	VKASSERT2(vkCreateRenderPass(*device, &renderPassInfo, callbacks, renderPass.setter()));
+
+	if (pClearColors)
+	{
+		add_ref<std::vector<VkClearValue>> clearValues = renderPass.getParamRef<std::vector<VkClearValue>>();
+		clearValues.insert(clearValues.end(), pClearColors->begin(), pClearColors->end());
+	}
+
+	return renderPass;
+}
+
+ZRenderPass framebufferGetRenderPass (ZFramebuffer framebuffer)
+{
+	return framebuffer.getParam<ZRenderPass>();
 }
 
 Version getVulkanImplVersion (std::optional<ZInstance> instance)
@@ -101,7 +277,8 @@ ZInstance		createInstance (const char*							appName,
 								uint32_t							apiVersion,
 								bool								enableDebugPrintf)
 {
-	ZInstance			instance			(callbacks, apiVersion, {}, {});
+	Logger				logger				{};
+	ZInstance			instance			(VK_NULL_HANDLE, callbacks, apiVersion, {}, {}, logger);
 	add_ref<strings>	requiredLayers		= instance.getParamRef<ZDistType<RequiredLayers, strings>>().data;
 	add_ref<strings>	availableExtensions	= instance.getParamRef<ZDistType<AvailableLayerExtensions, strings>>().data;
 
@@ -113,13 +290,14 @@ ZInstance		createInstance (const char*							appName,
 	if (requiredLayers.size())
 	{
 		availableLayers = enumerateInstanceLayers();
-		if (!containsAllString(requiredLayers, availableLayers))
+		if (!containsAllStrings(availableLayers, requiredLayers))
 			ASSERTMSG(false, "All required layer(s) must match to available instance layer(s)!!!");
 	}
 
 	availableExtensions	= enumerateInstanceExtensions(requiredLayers);
 
-	ASSERTMSG(containsAllString(desiredExtensions, availableExtensions), "All required extension(s) must match available instance extension(s)");
+	ASSERTMSG(containsAllStrings(availableExtensions, desiredExtensions),
+			  "All required extension(s) must match available instance extension(s)");
 
 	VkValidationFeatureEnableEXT						enabledValidationFeature = VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT;
 	VkValidationFeaturesEXT								validationFeatures{};
@@ -138,28 +316,30 @@ ZInstance		createInstance (const char*							appName,
 										&& containsString(debugUtilsExtName, availableExtensions));
 	const bool debugReportEnabled		= enabledValidationFeature
 										&& ((containsString(debugReportExtName, desiredExtensions) || pReport != nullptr)
-										&& containsString(debugReportExtName, availableExtensions));
+										&& containsString(debugReportExtName, availableExtensions)) && !debugMessengerEnabled;
+	UNREF(pMessengerUserData);
+	UNREF(pReportUserData);
 
 	void* pNext = nullptr, **p2pNext = &pNext;
 
 	if (debugMessengerEnabled)
 	{
-		getDebugCreateInfo(debugMessengerInfo, pMessengerUserData, nullptr, enableDebugPrintf);
+		getDebugCreateInfo(debugMessengerInfo, &instance.getParamRef<Logger>(), nullptr, enableDebugPrintf);
 	}
 	else
 	{
-		removeStrings({ debugUtilsExtName }, availableExtensions);
+		//removeStrings({ debugUtilsExtName }, availableExtensions);
 	}
 
 	if (debugReportEnabled)
 	{
-		getDebugCreateInfo(debugReportInfo, pReportUserData, nullptr, enableDebugPrintf);
+		getDebugCreateInfo(debugReportInfo, &instance.getParamRef<Logger>(), nullptr, enableDebugPrintf);
 		*p2pNext = &validationFeatures;
 		p2pNext = (void**)&validationFeatures.pNext;
 	}
 	else
 	{
-		removeStrings({ debugReportExtName }, availableExtensions);
+		//removeStrings({ debugReportExtName }, availableExtensions);
 	}
 
 	VkApplicationInfo appInfo{};
@@ -183,7 +363,7 @@ ZInstance		createInstance (const char*							appName,
 	createInfo.enabledLayerCount		= static_cast<uint32_t>(v_layerNames.size());
 	createInfo.ppEnabledLayerNames		= v_layerNames.size() ? v_layerNames.data() : nullptr;
 
-	VKASSERT(vkCreateInstance(&createInfo, callbacks, instance.setter()), "Failed to create instance!");
+	VKASSERT3(vkCreateInstance(&createInfo, callbacks, instance.setter()), "Failed to create instance!");
 
 	if (debugMessengerEnabled) createDebugMessenger(instance, callbacks, debugMessengerInfo, *pMessenger);
 	if (debugReportEnabled) createDebugReport(instance, callbacks, debugReportInfo, *pReport);
@@ -193,9 +373,9 @@ ZInstance		createInstance (const char*							appName,
 		Version nullApiVersion = getVulkanImplVersion();
 		Version clientApiVersion = Version::fromUint(apiVersion);
 		Version vulkanApiVersion = getVulkanImplVersion(instance);
-		std::cout << "[APP] Trying to create versioned instance: " << clientApiVersion << std::endl;
-		std::cout << "[APP] Vulkan Null Instance Version:        " << nullApiVersion << std::endl;
-		std::cout << "[APP] Vulkan Implementation Version:       " << vulkanApiVersion << std::endl;
+		logger << "[APP] Trying to create versioned instance: " << clientApiVersion << std::endl;
+		logger << "[APP] Vulkan Null Instance Version:        " << nullApiVersion << std::endl;
+		logger << "[APP] Vulkan Implementation Version:       " << vulkanApiVersion << std::endl;
 	}
 
 	return instance;
@@ -214,140 +394,140 @@ ZPhysicalDevice	getPhysicalDeviceByIndex (ZInstance instance, uint32_t physicalD
 	return ZPhysicalDevice::create(physDevice, instance.getParam<VkAllocationCallbacksPtr>(), instance, physicalDeviceIndex, extensions, deviceProps);
 }
 
-ZPhysicalDevice selectPhysicalDevice(const uint32_t							proposedDeviceIndex,
+ZPhysicalDevice selectPhysicalDevice(const int								proposedDeviceIndex,
 									 ZInstance								instance,
-									 const strings&							requiredExtensions,
-									 std::map<VkQueueFlagBits, uint32_t>&	queuesToIndices,
-									 std::optional<ZSurfaceKHR>				surface,
-									 add_ptr<uint32_t>						pPresentQueueFamilyIndex)
+									 add_cref<strings>						requiredExtensions,
+									 ZSurfaceKHR							surface)
 {
 	std::vector<VkPhysicalDevice> devices;
 	const uint32_t deviceCount = enumeratePhysicalDevices(*instance, devices);
-	ASSERTMSG(deviceCount != 0, "Failed to find GPUs that suppors Vulkant!");
+	ASSERTMSG(deviceCount != 0, "Failed to find GPUs that suppors Vulkan!");
 
-	uint32_t							presentQueueIndex	= INVALID_UINT32;
-	uint32_t							physicalDeviceIndex	= INVALID_UINT32;
-	add_cref<strings>					layers				= instance.getParamRef<ZDistType<RequiredLayers, strings>>().data;
-	ZPhysicalDevice						physicalDevice		(instance.getParam<VkAllocationCallbacksPtr>(), instance, physicalDeviceIndex,
-																{/*availableExtensions*/}, {/*physicalDeviceProperties*/});
-	add_ref<strings>					availableExtensions	= physicalDevice.getParamRef<strings>();
-	add_ref<VkPhysicalDeviceProperties>	deviceProperties	= physicalDevice.getParamRef<VkPhysicalDeviceProperties>();
-	const strings						extensionToVerify	{ VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME };
-	const strings						extensionToRemove	{ VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME };
+	uint32_t					physicalDeviceIndex	= INVALID_UINT32;
+	add_cref<strings>			layers				= instance.getParamRef<ZDistType<RequiredLayers, strings>>().data;
+	const strings				extensionToRemove	{ VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME };
+	strings						availableExtensions;
+	VkPhysicalDeviceProperties	deviceProperties;
 
-	ASSERTION(queuesToIndices.size());
-	ASSERTION(!(surface.has_value() ^ (nullptr != pPresentQueueFamilyIndex)));
-	auto updateQueues = [&](VkPhysicalDevice dev) -> bool
+	auto isDeviceSuitable = [&](VkPhysicalDevice device)
 	{
-		for (const auto& queueType2Index : queuesToIndices)
+		availableExtensions = enumerateDeviceExtensions(device, layers);
+		if (containsString(VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, availableExtensions)
+			&& containsString(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, availableExtensions))
 		{
-			const uint32_t familyIndex = findQueueFamilyIndex(dev, queueType2Index.first);
-			if (familyIndex == INVALID_UINT32) return false;
-			queuesToIndices[queueType2Index.first] = familyIndex;
+			removeStrings(extensionToRemove, availableExtensions);
 		}
-
-		bool result = true;
-
-		if (surface.has_value())
-		{
-			VkSurfaceKHR	surfaceHandle = **surface;
-			presentQueueIndex = findSurfaceSupportedQueueFamilyIndex(dev, surfaceHandle);
-			result = (INVALID_UINT32 != presentQueueIndex) && hasFormatsAndModes(dev, surfaceHandle);
-		}
-
-		return result;
+		std::vector<uint32_t> surfaceSupportQueueIndices = findSurfaceSupportedQueueFamilyIndices(device, surface);
+		const bool effectiveSurfaceSupport = surface.has_handle() ? (surfaceSupportQueueIndices.size() != 0) : true;
+		return (containsAllStrings(availableExtensions, requiredExtensions) && effectiveSurfaceSupport);
 	};
 
 	VkPhysicalDevice result = VK_NULL_HANDLE;
-	if (INVALID_UINT32 == proposedDeviceIndex)
+	if (proposedDeviceIndex < 0)
 	{
-		for (uint32_t i = 0; i < deviceCount; ++i)
+		uint32_t i = 0;
+		for ( ; i < deviceCount; ++i)
 		{
-			const VkPhysicalDevice device = devices.at(i);
-			availableExtensions = enumerateDeviceExtensions(device, layers);
-			if (containsAllString(availableExtensions, extensionToVerify))
-			{
-				removeStrings(extensionToRemove, availableExtensions);
-			}
-			if (containsAllString(requiredExtensions, availableExtensions) && updateQueues(device))
+			if (VkPhysicalDevice device = devices.at(i); isDeviceSuitable(device))
 			{
 				physicalDeviceIndex = i;
 				result = device;
 				break;
 			}
 		}
+		ASSERTMSG((i < deviceCount), "No GPU found that supports required extension or queues");
 	}
-	else if (proposedDeviceIndex < deviceCount)
+	else if (make_unsigned(proposedDeviceIndex) < deviceCount)
 	{
 		VkPhysicalDevice device = devices[proposedDeviceIndex];
-		availableExtensions = enumerateDeviceExtensions(device, layers);
-		if (containsAllString(availableExtensions, extensionToVerify))
-		{
-			removeStrings(extensionToRemove, availableExtensions);
-		}
-		removeStrings(extensionToRemove, availableExtensions);
-		if (containsAllString(requiredExtensions, availableExtensions) && updateQueues(device))
+		if (isDeviceSuitable(device))
 		{
 			physicalDeviceIndex = proposedDeviceIndex;
 			result = device;
 		}
+		else
+		{
+			std::ostringstream oss;
+			oss << "Selected GPU " << proposedDeviceIndex << " does not support desired queues!";
+			oss.flush();
+			ASSERTMSG(false, oss.str());
+		}
 	}
-
-	ASSERTMSG(result != VK_NULL_HANDLE, "Failed to find a suitable GPU with desired queues!");
-
-	if (nullptr != pPresentQueueFamilyIndex)
+	else
 	{
-		*pPresentQueueFamilyIndex = presentQueueIndex;
+		std::ostringstream oss;
+		oss << "Selected device index " << proposedDeviceIndex
+			<< " exceeds available physical device count " << deviceCount;
+		oss.flush();
+		ASSERTMSG(false, oss.str());
 	}
 
 	vkGetPhysicalDeviceProperties(result, &deviceProperties);
-	physicalDevice.setParam<uint32_t>(physicalDeviceIndex);
-	physicalDevice.replace(result);
 
-	return physicalDevice;
+	return ZPhysicalDevice(result,
+						   instance.getParam<VkAllocationCallbacksPtr>(), instance,
+						   physicalDeviceIndex, availableExtensions, deviceProperties);
 }
 
-ZDevice createLogicalDevice	(ZPhysicalDevice							physDevice,
-							 const std::map<VkQueueFlagBits, uint32_t>&	queuesToIndices,
-							 GetEnabledFeaturesCB						onGetEnabledFeatures,
-							 const uint32_t								presentQueueFamilyIndex)
+ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
+							 OnEnablingFeatures		onEnablingFeatures,
+							 ZSurfaceKHR			surface)
 {
-	ASSERTMSG(queuesToIndices.size(), "Queue list must not be empty");
+	uint32_t								queueFamilyPropCount = 0;
+	std::vector<float>						queuePriorities;
+	std::vector<VkQueueFamilyProperties>	queueFamilyProps;
+	std::vector<VkDeviceQueueCreateInfo>	queueCreateInfos;
+	std::vector<VkDeviceQueueCreateInfoEx>	queueCreateExInfos;
 
-	std::vector<float>					queuePriorities(20, 1.0f);
+	add_ref<Logger>	logger = physDevice.getParam<ZInstance>().getParamRef<Logger>();
 
-	auto makeQueueCreateInfo = [&](uint32_t familyIndex) -> VkDeviceQueueCreateInfo
+	vkGetPhysicalDeviceQueueFamilyProperties(*physDevice, &queueFamilyPropCount, nullptr);
+	ASSERTMSG(queueFamilyPropCount, "Unable to get VkQueueFamilyProperties");
+	queueFamilyProps.resize(queueFamilyPropCount);
+	queueCreateInfos.resize(queueFamilyPropCount);
+	queueCreateExInfos.resize(queueFamilyPropCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(*physDevice, &queueFamilyPropCount, queueFamilyProps.data());
+
+	auto makeQueueCreateInfo = [&](uint32_t familyIndex, uint32_t queueCount) -> VkDeviceQueueCreateInfo
 	{
+		if (queuePriorities.size() < queueCount)
+		{
+			queuePriorities.resize(queuePriorities.size() + queueCount, 1.0f);
+		}
+
 		VkDeviceQueueCreateInfo qci;
 		qci.sType				= VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 		qci.pNext				= nullptr;
 		qci.flags				= VkDeviceQueueCreateFlags(0);
 		qci.queueFamilyIndex	= familyIndex;
-		qci.queueCount			= 1;
+		qci.queueCount			= queueCount;
 		qci.pQueuePriorities	= queuePriorities.data();
 		return qci;
 	};
 
-	std::vector<VkDeviceQueueCreateInfo>	queueCreateInfos;
-
-	auto distinctPush = [&](uint32_t familyIndex)
+	if (getGlobalAppFlags().verbose)
 	{
-		for (const auto& qci : queueCreateInfos)
-		{
-			if (qci.queueFamilyIndex == familyIndex)
-				return;
-		}
-		queueCreateInfos.push_back(makeQueueCreateInfo(familyIndex));
-	};
-
-	for (const auto& queueToIndex : queuesToIndices)
-	{
-		ASSERTMSG(queueToIndex.second != INVALID_UINT32, "Invalid queue family index");
-		distinctPush(queueToIndex.second);
+		logger << "[INFO} Create device with " << queueFamilyPropCount << " queue family indices" << std::endl;
 	}
-	if (presentQueueFamilyIndex != INVALID_UINT32)
+
+	const std::vector<uint32_t> surfaceSupportedIndices = findSurfaceSupportedQueueFamilyIndices(*physDevice, surface);
+	for (uint32_t queueFamilyIndex = 0; queueFamilyIndex < queueFamilyPropCount; ++queueFamilyIndex)
 	{
-		distinctPush(presentQueueFamilyIndex);
+		add_ref<VkDeviceQueueCreateInfo>	queueCreateInfo		= queueCreateInfos[queueFamilyIndex];
+		add_ref<VkDeviceQueueCreateInfoEx>	queueCreateExInfo	= queueCreateExInfos[queueFamilyIndex];
+		add_cref<VkQueueFamilyProperties>	queueProperties		= queueFamilyProps[queueFamilyIndex];
+
+		const VkDeviceQueueCreateInfo infoTemplate = makeQueueCreateInfo(queueFamilyIndex, queueProperties.queueCount);
+		queueCreateInfo	= infoTemplate;
+		static_cast<add_ref<VkDeviceQueueCreateInfo>>(queueCreateExInfo) = infoTemplate;
+		queueCreateExInfo.queueFlags = queueProperties.queueFlags;
+		queueCreateExInfo.surfaceSupport = surfaceSupportedIndices.end() !=
+				std::find(surfaceSupportedIndices.begin(), surfaceSupportedIndices.end(), queueFamilyIndex);
+
+		if (getGlobalAppFlags().verbose)
+		{
+			logger << queueCreateExInfo << std::endl;
+		}
 	}
 
 	VkPhysicalDeviceFeatures2	features	{};
@@ -356,7 +536,7 @@ ZDevice createLogicalDevice	(ZPhysicalDevice							physDevice,
 	std::vector<const char*>	layers		(to_cstrings(instance.getParamRef<ZDistType<RequiredLayers,strings>>().data));
 
 	strings	availableDeviceExtensions(physDevice.getParamRef<strings>());
-	if (onGetEnabledFeatures)	features	= onGetEnabledFeatures(physDevice, availableDeviceExtensions);
+	if (onEnablingFeatures)	features	= onEnablingFeatures(physDevice, availableDeviceExtensions);
 	std::vector<const char*>	extensions	(to_cstrings(availableDeviceExtensions));
 
 	VkDeviceCreateInfo createInfo{};
@@ -365,50 +545,78 @@ ZDevice createLogicalDevice	(ZPhysicalDevice							physDevice,
 	createInfo.queueCreateInfoCount		= static_cast<uint32_t>(queueCreateInfos.size());
 	createInfo.pQueueCreateInfos		= queueCreateInfos.data();
 
-	createInfo.pNext					= onGetEnabledFeatures ? features.pNext : nullptr;
-	createInfo.pEnabledFeatures			= onGetEnabledFeatures ? &features.features : nullptr;
+	createInfo.pNext					= onEnablingFeatures ? features.pNext : nullptr;
+	createInfo.pEnabledFeatures			= onEnablingFeatures ? &features.features : nullptr;
 
 	createInfo.enabledExtensionCount	= static_cast<uint32_t>(extensions.size());
 	createInfo.ppEnabledExtensionNames	= extensions.size() ? extensions.data() : nullptr;
 	createInfo.enabledLayerCount		= static_cast<uint32_t>(layers.size());
 	createInfo.ppEnabledLayerNames		= layers.size() ? layers.data() : nullptr;
 
-	ZDevice logicalDevice(callbacks, physDevice, {});
+	ZDevice logicalDevice(VK_NULL_HANDLE, callbacks, physDevice, std::move(queueCreateExInfos), {/*std::vector<ZQueue>*/});
 	VKASSERT2(vkCreateDevice(*physDevice, &createInfo, callbacks, logicalDevice.setter()));
 
-	add_ref<ZQueueInfos> queueInfos = logicalDevice.getParamRef<ZQueueInfos>();
-	for (const auto& queueToIndex : queuesToIndices)
-	{
-		VkQueue			handle		= VK_NULL_HANDLE;
-		const uint32_t	familyIndex	= queueToIndex.second;
-		vkGetDeviceQueue(*logicalDevice, familyIndex, 0, &handle);
-		ZQueue queue = ZQueue::create(handle, familyIndex);
-
-		if (queueToIndex.first & VK_QUEUE_GRAPHICS_BIT)
-		{
-			queueInfos[ZQueueType::Graphics] = queue;
-		}
-		else if (queueToIndex.first & VK_QUEUE_COMPUTE_BIT)
-		{
-			queueInfos[ZQueueType::Compute] = queue;
-		}
-		else if (queueToIndex.first & VK_QUEUE_TRANSFER_BIT)
-		{
-			queueInfos[ZQueueType::Transfer] = queue;
-		}
-		else
-		{
-			ASSERTMSG(0, "Unknown queue type");
-		}
-	}
-	if (presentQueueFamilyIndex != INVALID_UINT32)
-	{
-		VkQueue handle	= VK_NULL_HANDLE;
-		vkGetDeviceQueue(*logicalDevice, presentQueueFamilyIndex, 0, &handle);
-		queueInfos[ZQueueType::Present] = ZQueue::create(handle, presentQueueFamilyIndex);
-	}
-
 	return logicalDevice;
+}
+
+ZPhysicalDevice	deviceGetPhysicalDevice (ZDevice device)
+{
+	return device.getParam<ZPhysicalDevice>();
+}
+
+ZQueue deviceGetNextQueue (ZDevice device, VkQueueFlags queueFlags, bool mustSupportSurface)
+{
+	add_ref<std::vector<VkDeviceQueueCreateInfoEx>> infos =
+		device.getParamRef<ZDistType<QueueCreateInfoList, std::vector<VkDeviceQueueCreateInfoEx>>>();
+	add_ref<std::vector<ZQueue>> queues = device.getParamRef<ZDistType<QueueList, std::vector<ZQueue>>>();
+	for (add_ref<VkDeviceQueueCreateInfoEx> info : infos)
+	{
+		const bool allowSupportSurface = mustSupportSurface ? info.surfaceSupport : true;
+		if (((queueFlags & info.queueFlags) != 0) && allowSupportSurface)
+		{
+			if (info.queueCount > 0)
+			{
+				VkQueue handle = VK_NULL_HANDLE;
+				info.queueCount = info.queueCount - 1;
+				vkGetDeviceQueue(*device, info.queueFamilyIndex, info.queueCount, &handle);
+				queues.emplace_back(ZQueue::create(handle, info.queueFamilyIndex, info.queueCount, info.queueFlags, info.surfaceSupport));
+				return queues.back();
+			}
+		}
+	}
+	return ZQueue();
+}
+
+add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (ZDevice device)
+{
+	ASSERTMSG(device.has_handle(), "Device must have handle");
+	return device.getParam<ZPhysicalDevice>().getParamRef<VkPhysicalDeviceProperties>();
+}
+
+add_cref<VkPhysicalDeviceLimits> deviceGetPhysicalLimits (ZDevice device)
+{
+	ASSERTMSG(device.has_handle(), "Device must have handle");
+	return device.getParam<ZPhysicalDevice>().getParamRef<VkPhysicalDeviceProperties>().limits;
+}
+
+uint32_t queueGetFamilyIndex (ZQueue queue)
+{
+	return queue.has_handle() ? queue.getParamRef<ZDistType<QueueFamilyIndex, uint32_t>>().data : INVALID_UINT32;
+}
+
+uint32_t queueGetIndex (ZQueue queue)
+{
+	return queue.has_handle() ? queue.getParamRef<ZDistType<QueueIndex, uint32_t>>().data : INVALID_UINT32;
+}
+
+VkQueueFlags queueGetFlags (ZQueue queue)
+{
+	return queue.has_handle() ? queue.getParamRef<ZDistType<QueueFlags, VkQueueFlags>>().data : 0;
+}
+
+bool queueSupportSwapchain (ZQueue queue)
+{
+	return queue.has_handle() ? queue.getParamRef<bool>() : false;
 }
 
 ZFence createFence (ZDevice device, bool signaled)
@@ -501,6 +709,14 @@ void resetFences (std::vector<ZFence> fences)
 	}
 }
 
+bool fenceStatus (ZFence fence)
+{
+	const VkResult res = vkGetFenceStatus(*fence.getParamRef<ZDevice>(), *fence);
+	const bool status = res == VK_SUCCESS;
+	ASSERTION(res != VK_ERROR_DEVICE_LOST);
+	return status;
+}
+
 ZSemaphore createSemaphore (ZDevice device)
 {
 	VkSemaphore handle = VK_NULL_HANDLE;
@@ -559,17 +775,12 @@ uint8_t* mapMemory (ZDeviceMemory memory)
 	const VkMemoryPropertyFlags	props	= memory.getParam<VkMemoryPropertyFlags>();
 	ASSERTION(props & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-	uint32_t		counter	= memory.counter().fetch_add(1);
-
-	if (0u == counter)
+	ZDevice			device	= memory.getParam<ZDevice>();
+	VkDeviceSize	size	= memory.getParam<VkDeviceSize>();
+	uint8_t**		pointer	= &memory.getParamRef<uint8_t*>();
+	if (vkMapMemory(*device, *memory, 0, size, (VkMemoryMapFlags)0, reinterpret_cast<void**>(pointer)) != VK_SUCCESS)
 	{
-		ZDevice			device	= memory.getParam<ZDevice>();
-		VkDeviceSize	size	= memory.getParam<VkDeviceSize>();
-		uint8_t**		pointer	= &memory.getParamRef<uint8_t*>();
-		if (vkMapMemory(*device, *memory, 0, size, (VkMemoryMapFlags)0, reinterpret_cast<void**>(pointer)) != VK_SUCCESS)
-		{
-			throw std::runtime_error("failed to map memory");
-		}
+		throw std::runtime_error("failed to map memory");
 	}
 
 	return memory.getParam<uint8_t*>();
@@ -577,23 +788,9 @@ uint8_t* mapMemory (ZDeviceMemory memory)
 
 void unmapMemory (ZDeviceMemory memory)
 {
-	uint32_t		counter	= memory.counter();
-
-	if (0u == counter)
-	{
-		ASSERTION(false);
-	}
-	else
-	{
-		if (1u == counter)
-		{
-			ZDevice	device	= memory.getParam<ZDevice>();
-			vkUnmapMemory(*device, *memory);
-			memory.getParamRef<uint8_t*>() = nullptr;
-		}
-
-		memory.counter().fetch_sub(1);
-	}
+	ZDevice	device	= memory.getParam<ZDevice>();
+	vkUnmapMemory(*device, *memory);
+	memory.getParamRef<uint8_t*>() = nullptr;
 }
 
 void flushMemory (ZDeviceMemory memory)
@@ -624,216 +821,46 @@ void invalidateMemory (ZDeviceMemory memory)
 	vkInvalidateMappedMemoryRanges(*device, 1, &range);
 }
 
-ZBuffer	createBuffer (ZDevice device, const ExplicitWrapper<VkDeviceSize>& size, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties)
+
+ZImageView framebufferGetView (ZFramebuffer framebuffer, uint32_t index)
 {
-	VkBuffer								buffer		= VK_NULL_HANDLE;
-	VkAllocationCallbacksPtr				callbacks	= device.getParam<VkAllocationCallbacksPtr>();
-	ZPhysicalDevice							phys		= device.getParam<ZPhysicalDevice>();
-	add_cref<VkPhysicalDeviceProperties>	pdp			= phys.getParamRef<VkPhysicalDeviceProperties>();
-
-	if (VkBufferUsageFlags(usage) & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)
-	{
-		ASSERTMSG(size <= pdp.limits.maxStorageBufferRange, "Requested buffer size exceeds maxStorageBufferRange device limits");
-	}
-
-	if (VkBufferUsageFlags(usage) & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT)
-	{
-		ASSERTMSG(size <= pdp.limits.maxUniformBufferRange, "Requested buffer size exceeds maxUniformBufferRange device limits");
-	}
-
-	VkBufferCreateInfo bufferInfo{};
-	bufferInfo.sType		= VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size			= size;
-	bufferInfo.usage		= VkBufferUsageFlags(usage) | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-	bufferInfo.sharingMode	= VK_SHARING_MODE_EXCLUSIVE;
-
-	VKASSERT(vkCreateBuffer(*device, &bufferInfo, callbacks, &buffer), "failed to create buffer!");
-
-	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(*device, buffer, &memRequirements);
-
-	ZDeviceMemory	bufferMemory = createMemory(device, memRequirements, VkMemoryPropertyFlags(properties));
-
-	VKASSERT2(vkBindBufferMemory(*device, buffer, *bufferMemory, 0));
-
-	return ZBuffer::create(buffer, device, callbacks, bufferInfo, bufferMemory, size);
+	return framebuffer.getParamRef<std::vector<ZImageView>>().at(index);
 }
 
-ZBuffer createBuffer (ZDevice device, VkFormat format, uint32_t elements, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties)
+ZImage framebufferGetImage (ZFramebuffer framebuffer, uint32_t index)
 {
-	const VkDeviceSize bufferSize = make_unsigned(computePixelByteWidth(format)) * elements;
-	return createBuffer(device, makeExplicitWrapper(bufferSize), usage, properties);
+	return framebufferGetView(framebuffer, index).getParam<ZImage>();
 }
 
-ZBuffer createBuffer (ZImage image, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties)
+VkFormat selectBestDepthStencilFormat (ZPhysicalDevice					device,
+									   std::initializer_list<VkFormat>	formats,
+									   VkImageTiling					imageTiling,
+									   VkFormatFeatureFlags				featuresFlags)
 {
-	const VkDeviceSize bufferSize = computeBufferSize(image);
-	return createBuffer(image.getParam<ZDevice>(), makeExplicitWrapper(bufferSize), usage, properties);
-}
-
-uint32_t writeBufferData (ZBuffer buffer, const uint8_t* src, VkDeviceSize size)
-{
-	const VkDeviceSize		bufferSize	= buffer.getParam<VkDeviceSize>();
-
-	if (VK_WHOLE_SIZE == size || bufferSize < size)
-		size = bufferSize;
-
-	VkBufferCopy copy{};
-	copy.srcOffset	= 0;
-	copy.dstOffset	= 0;
-	copy.size		= size;
-
-	return writeBufferData(buffer, src, copy);
-}
-
-void flushBuffer (ZBuffer buffer)
-{
-	ZDevice					device		= buffer.getParam<ZDevice>();
-	ZDeviceMemory			memory		= buffer.getParam<ZDeviceMemory>();
-	VkMemoryPropertyFlags	props		= memory.getParam<VkMemoryPropertyFlags>();
-	if (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT & props)
+	VkFormatProperties	props;
+	for (auto i = formats.begin(); i != formats.end(); ++i)
 	{
-		const VkDeviceSize	bufferSize	= buffer.getParam<VkDeviceSize>();
+		vkGetPhysicalDeviceFormatProperties(*device, *i, &props);
 
-		VkMappedMemoryRange	range{};
-		range.sType		= VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-		range.memory	= *memory;
-		range.offset	= 0;
-		range.size		= VK_WHOLE_SIZE;
+		VkFormatFeatureFlags features = 0;
+		switch (imageTiling)
+		{
+			case VK_IMAGE_TILING_LINEAR:
+				features = props.linearTilingFeatures;
+				break;
+			case VK_IMAGE_TILING_OPTIMAL:
+				features = props.optimalTilingFeatures;
+				break;
+			default: ASSERTION(0);
+		}
 
-		void* dst = nullptr;
-		VKASSERT2(vkMapMemory(*device, *memory, 0, bufferSize, (VkMemoryMapFlags)0, &dst));
-		ASSERTION(dst != nullptr);
-
-		VKASSERT(vkFlushMappedMemoryRanges(*device, 1, &range), "");
-
-		vkUnmapMemory(*device, *memory);
+		if ((features & featuresFlags) == featuresFlags)
+			return *i;
 	}
+	ASSERTION(0);
+	return VK_FORMAT_UNDEFINED;
 }
 
-uint32_t writeBufferData (ZBuffer buffer, const uint8_t* src, const VkBufferCopy& copy, bool flush)
-{
-	ZDeviceMemory			memory		= buffer.getParam<ZDeviceMemory>();
-	VkMemoryPropertyFlags	props		= memory.getParam<VkMemoryPropertyFlags>();
-	if ((props & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
-	{
-		return 0;
-	}
-	ZDevice					device = buffer.getParam<ZDevice>();
-	const VkDeviceSize		bufferSize	= buffer.getParam<VkDeviceSize>();
-
-	ASSERTION(0 < copy.size);
-	ASSERTION(bufferSize > copy.dstOffset);
-	ASSERTION(bufferSize >= (copy.dstOffset + copy.size));
-
-	uint8_t* dst = nullptr;
-	VKASSERT2(vkMapMemory(*device, *memory, copy.dstOffset, copy.size, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&dst)));
-	ASSERTION(dst != nullptr);
-
-	std::copy(src, std::next(src, make_signed(copy.size)), dst);
-
-	if (flush && ((props & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
-	{
-		VkMappedMemoryRange	range{};
-		range.sType		= VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-		range.memory	= *memory;
-		range.offset	= copy.dstOffset;
-		range.size		= copy.size;
-		VKASSERT2(vkFlushMappedMemoryRanges(*device, 1, &range));
-	}
-
-	vkUnmapMemory(*device, *memory);
-
-	return static_cast<uint32_t>(copy.size);
-}
-
-uint32_t readBufferData (ZBuffer buffer, uint8_t* dst, VkDeviceSize size)
-{
-	const VkDeviceSize		bufferSize	= buffer.getParam<VkDeviceSize>();
-
-	if (VK_WHOLE_SIZE == size || bufferSize < size)
-		size = bufferSize;
-
-	VkBufferCopy copy{};
-	copy.srcOffset	= 0;
-	copy.dstOffset	= 0;
-	copy.size		= size;
-
-	return readBufferData(buffer, dst, copy);
-}
-
-uint32_t readBufferData (ZBuffer buffer, uint8_t* dst, const VkBufferCopy& copy)
-{
-	ZDeviceMemory			memory		= buffer.getParam<ZDeviceMemory>();
-	VkMemoryPropertyFlags	props		= memory.getParam<VkMemoryPropertyFlags>();
-	if ((props & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
-	{
-		return 0;
-	}
-	ZDevice					device = buffer.getParam<ZDevice>();
-	const VkDeviceSize		bufferSize	= buffer.getParam<VkDeviceSize>();
-
-	ASSERTION(0 < copy.size);
-	ASSERTION(bufferSize > copy.srcOffset);
-	ASSERTION(bufferSize >= (copy.srcOffset + copy.size));
-
-	uint8_t* src = nullptr;
-	VKASSERT2(vkMapMemory(*device, *memory, copy.srcOffset, copy.size, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&src)));
-
-	if ((props & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
-	{
-		VkMappedMemoryRange	range{};
-		range.sType		= VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-		range.memory	= *memory;
-		range.offset	= copy.srcOffset;
-		range.size		= copy.size;
-		VKASSERT2(vkInvalidateMappedMemoryRanges(*device, 1, &range));
-	}
-
-	std::copy(src, std::next(src, make_signed(copy.size)), dst);
-	vkUnmapMemory(*device, *memory);
-
-	return static_cast<uint32_t>(copy.size);
-}
-
-void copyBufferToBuffer(ZCommandBuffer cmd, ZBuffer src, ZBuffer dst, const VkBufferCopy& region)
-{
-	auto pool		= cmd.getParam<ZCommandPool>();
-	auto queue		= pool.getParam<ZQueue>();
-	auto familyIdx	= queue.getParam<uint32_t>();
-	auto src_mem	= src.getParam<ZDeviceMemory>();
-	auto dst_mem	= dst.getParam<ZDeviceMemory>();
-	const bool enableBarriers = src_mem.getParam<VkMemoryPropertyFlags>() & dst_mem.getParam<VkMemoryPropertyFlags>() & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-
-	if (enableBarriers)
-	{
-	}
-
-	vkCmdCopyBuffer(*cmd, *src, *dst, 1, &region);
-
-	if (enableBarriers)
-	{
-		familyIdx = VK_QUEUE_FAMILY_IGNORED;
-
-		VkBufferMemoryBarrier bm;
-		bm.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-		bm.pNext = nullptr;
-		bm.srcQueueFamilyIndex = familyIdx;
-		bm.dstQueueFamilyIndex = familyIdx;
-		bm.srcAccessMask = 0;
-		bm.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		bm.buffer = *dst;
-		bm.offset = region.dstOffset;
-		bm.size = region.size;
-
-		vkCmdPipelineBarrier(*cmd,
-							 VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
-							 (VkDependencyFlagBits)0,
-							 0, nullptr,	// memory
-							 1, &bm,
-							 0, nullptr);	// image
-	}
-}
 
 // TODO: Why below are commented?
 //void copyBufferToImage (ZCommandPool commandPool, ZBuffer buffer, ZImageView view, VkImageLayout newLayout)
@@ -887,117 +914,6 @@ void copyBufferToBuffer(ZCommandBuffer cmd, ZBuffer src, ZBuffer dst, const VkBu
 //	createInfo.initialLayout = newLayout;
 //	image.setParam<VkImageCreateInfo>(createInfo);
 //}
-
-static uint32_t computeBufferPixelCount (const ExplicitWrapper<uint32_t>& zeroLevelWidth,
-										 const ExplicitWrapper<uint32_t>& zeroLevelHeight,
-										 uint32_t startLevel, uint32_t levelCount, uint32_t layerCount)
-{
-	ASSERTION(zeroLevelWidth > 0 && zeroLevelHeight > 0 && levelCount > 0 && layerCount > 0);
-
-	uint32_t tmpWidth = zeroLevelWidth >> startLevel;
-	uint32_t tmpHeight = zeroLevelHeight >> startLevel;
-	ASSERTION(tmpWidth > 0 && tmpHeight > 0);
-
-	const uint32_t effectiveLevelCount = std::min(levelCount, computeMipLevelCount(tmpWidth, tmpHeight));
-
-	uint32_t pixelCount = 0;
-	for (uint32_t level = 0; level < effectiveLevelCount; ++level)
-	{
-		ASSERTION(tmpWidth > 0 && tmpHeight > 0);
-		pixelCount += (tmpWidth * tmpHeight);
-		tmpWidth /= 2;
-		tmpHeight /= 2;
-	}
-
-	const uint32_t count = (pixelCount * layerCount);
-	ASSERTION(count != 0);
-
-	return count;
-}
-
-uint32_t computeBufferPixelCount (ZImage image)
-{
-	add_cref<VkImageCreateInfo> ici = image.getParamRef<VkImageCreateInfo>();
-	return computeBufferPixelCount(makeExplicitWrapper(ici.extent.width),
-								   makeExplicitWrapper(ici.extent.height),
-								   0, ici.mipLevels, ici.arrayLayers);
-}
-
-VkDeviceSize computeBufferSize (ZImage image)
-{
-	add_cref<VkImageCreateInfo> ici = image.getParamRef<VkImageCreateInfo>();
-	const uint32_t pixelWidth = computePixelByteWidth(ici.format);
-	return computeBufferPixelCount(image) * pixelWidth;
-}
-
-uint32_t computeBufferPixelCount (ZImageView view)
-{
-//	ZImage							image		= view.getParam<ZImage>();
-//	const VkImageCreateInfo&		imageInfo	= image.getParamRef<VkImageCreateInfo>();
-//	const VkImageViewCreateInfo&	viewInfo	= view.getParamRef<VkImageViewCreateInfo>();
-//	const VkImageSubresourceRange&	range		= viewInfo.subresourceRange;
-
-//	return computeBufferPixelCount(	(imageInfo.extent.width << range.baseMipLevel),
-//									(imageInfo.extent.height << range.baseMipLevel),
-//									range.levelCount, 1/*layers*/, imageInfo.samples);
-	UNREF(view);
-	ASSERTION(false);
-	return 0;
-}
-
-VkDeviceSize computeBufferSize (ZImageView view)
-{
-	ZImage								image		= view.getParam<ZImage>();
-	add_cref<VkImageCreateInfo>			imageInfo	= image.getParamRef<VkImageCreateInfo>();
-	add_cref<VkImageViewCreateInfo>		viewInfo	= view.getParamRef<VkImageViewCreateInfo>();
-	add_cref<VkImageSubresourceRange>	range		= viewInfo.subresourceRange;
-
-	const VkDeviceSize				bufferSize	= computeBufferSize(viewInfo.format,
-																	imageInfo.extent.width, imageInfo.extent.height,
-																	range.baseMipLevel, range.levelCount,
-																	(range.layerCount - range.baseArrayLayer));
-	return bufferSize;
-}
-
-
-VkDeviceSize computeBufferSize (VkFormat format,
-								uint32_t imageWidth, uint32_t imageHeight,
-								uint32_t baseLevel, uint32_t levels,
-								uint32_t layers)
-{
-	ASSERTION(imageWidth > 0 && imageHeight > 0 && levels > 0 && layers > 0);
-	const uint32_t pixelCount = computeBufferPixelCount(
-				makeExplicitWrapper(imageWidth), makeExplicitWrapper(imageHeight),
-				baseLevel, levels, layers);
-	const uint32_t pixelWidth = computePixelByteWidth(format);
-	return (pixelCount * pixelWidth);
-}
-
-VkBufferMemoryBarrier makeBufferMemoryBarrier	(ZBuffer buffer,
-												 VkAccessFlags srcAccess, VkAccessFlags dstAccess,
-												 VkDeviceSize size)
-{
-	const VkDeviceSize	availableSize	= buffer.getParam<VkDeviceSize>();
-	if (size == INVALID_UINT64)
-		size = availableSize;
-	else
-	{
-		ASSERTION(size <= availableSize);
-	}
-
-	VkBufferMemoryBarrier b{};
-	b.sType					= VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-	b.pNext					= nullptr;
-	b.srcAccessMask			= srcAccess;
-	b.dstAccessMask			= dstAccess;
-	b.srcQueueFamilyIndex	= VK_QUEUE_FAMILY_IGNORED;
-	b.dstQueueFamilyIndex	= VK_QUEUE_FAMILY_IGNORED;
-	b.buffer				= *buffer;
-	b.offset				= 0;
-	b.size					= size;
-
-	return b;
-}
 
 void computeBufferRange (ZImage image, uint32_t level, uint32_t& bufferSize, uint32_t pixelCount)
 {

@@ -1,6 +1,7 @@
 #include "vtfVkUtils.hpp"
 #include "vtfDebugMessenger.hpp"
 #include "vtfBacktrace.hpp"
+#include "vtfThreadSafeLogger.hpp"
 
 namespace vtf
 {
@@ -110,7 +111,14 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugMessengerCallback(
 	
 	if (!(getGlobalAppFlags().noWarning_VUID_Undefined && (std::strcmp(pCallbackData->pMessageIdName, VUID_Undefined) == 0)))
 	{
-		std::cout << "[VL]: " << pCallbackData->pMessage << std::endl;
+		/*
+	if (pUserData)
+	{
+		add_ref<Logger> log = static_cast<add_ref<Logger>>(*static_cast<add_ptr<Logger>>(pUserData));
+		log << "[VL]: " << pCallbackData->pMessage << std::endl;
+	}
+	else*/
+		std::cout << "[VL]: " << pCallbackData->pMessage <<  std::endl;
 	}
 	return VK_FALSE;
 }
@@ -148,7 +156,14 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallback(
 	else if (flags & VK_DEBUG_REPORT_DEBUG_BIT_EXT)
 		prefix = "[DEBUG]";
 
-	std::cout << prefix << " " << pLayerPrefix << ": " << pMessage << std::endl;
+
+	/*if (pUserData)
+	{
+		add_ref<Logger> log = static_cast<add_ref<Logger>>(*static_cast<add_ptr<Logger>>(pUserData));
+		log << prefix << " " << pLayerPrefix << ": " << pMessage << std::endl;
+	}
+	else*/
+		std::cout << prefix << " " << pLayerPrefix << ": " << pMessage << std::endl;
 
 	return VK_FALSE;
 }

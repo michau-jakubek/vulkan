@@ -1,6 +1,7 @@
 #include "vtfFormatUtils.hpp"
 #include "vtfVkUtils.hpp"
 #include "vtfZDeletable.hpp"
+#include "vtfCUtils.hpp"
 
 namespace
 {
@@ -14,6 +15,15 @@ struct FormatAndName
 }
 const formatAndNames[]
 {
+	/*
+		VK_FORMAT_D16_UNORM = 124,,
+		VK_FORMAT_X8_D24_UNORM_PACK32 = 125,
+		VK_FORMAT_D32_SFLOAT = 126,
+		VK_FORMAT_S8_UINT = 127,
+		VK_FORMAT_D16_UNORM_S8_UINT = 128,
+		VK_FORMAT_D24_UNORM_S8_UINT = 129,
+		VK_FORMAT_D32_SFLOAT_S8_UINT = 130,
+	*/
 	MKFN(VK_FORMAT_R4G4_UNORM_PACK8),
 	MKFN(VK_FORMAT_R4G4B4A4_UNORM_PACK16),
 	MKFN(VK_FORMAT_B4G4R4A4_UNORM_PACK16),
@@ -148,20 +158,13 @@ enum ParseStates
 
 void computePixelByteSize (ZFormatInfo& info)
 {
-	//if (info.integral || info.floating)
-	//{
-	//	info.pixelByteSize = info.componentCount * 4;
-	//}
-	//else
-	//{
-		uint32_t bitsSize = 0;
-		for (int i = 0; i < 4; ++i)
-		{
-			bitsSize += info.componentSizes[i];
-		}
-		bitsSize = ROUNDUP(bitsSize, 8);
-		info.pixelByteSize = bitsSize / 8;
-	//}
+	uint32_t bitsSize = 0;
+	for (int i = 0; i < 4; ++i)
+	{
+		bitsSize += info.componentSizes[i];
+	}
+	bitsSize = ROUNDUP(bitsSize, 8);
+	info.pixelByteSize = bitsSize / 8;
 }
 
 void parseType (const char* const name, int& pos, ZFormatInfo& info)
@@ -174,7 +177,7 @@ void parseType (const char* const name, int& pos, ZFormatInfo& info)
 			info.normalized	= true;
 			info.scaled		= false;
 			info.sized		= false;
-			info.floating	= false;
+			info.floating	= true;
 			info.integral	= false;
 		CASE_STR(p, "UNORM")
 			skip = std::strlen(q);
@@ -182,7 +185,7 @@ void parseType (const char* const name, int& pos, ZFormatInfo& info)
 			info.normalized	= true;
 			info.scaled		= false;
 			info.sized		= false;
-			info.floating	= false;
+			info.floating	= true;
 			info.integral	= false;
 		CASE_STR(p, "SSCALED")
 			skip = std::strlen(q);
@@ -246,7 +249,7 @@ void parseType (const char* const name, int& pos, ZFormatInfo& info)
 	pos += concise_convert(skip, pos);
 }
 
-uint8_t parseNumber (const char* const name, int& pos)
+static uint8_t parseNumber (const char* const name, int& pos)
 {
 	int num[2];
 	int mag= 0;
@@ -264,31 +267,39 @@ uint8_t parseNumber (const char* const name, int& pos)
 	return res;
 }
 
-bool parseComponents (const char* const name, int& pos, int& index, int& comp, ZFormatInfo& info)
+static bool parseComponents (const char* const name, int& pos, int& index, int& comp, ZFormatInfo& info)
 {
-	uint8_t width = 0;
-
 	switch (name[pos])
 	{
-	case '\0':									return false;
-	case '_':	pos += 1;						return false;
-	case 'R':	pos += 1;	comp = 0;			break;
-	case 'G':	pos += 1;	comp = 1;			break;
-	case 'B':	pos += 1;	comp = 2;			break;
-	case 'A':	pos += 1;	comp = 3;			break;
-	default:	width = parseNumber(name, pos);	break;
+	case '\0':											return false;
+	// TODO: consider VK_FORMAT_X8_D24_UNORM_PACK32 or VK_FORMAT_G8_B8_R8_3PLANE_444_UNORM
+	case '_':	pos += 1;								return false;
+	case 'R':	pos += 1;	info.color	= true;	comp = 0;					break;
+	case 'G':	pos += 1;	info.color	= true; comp = 1;					break;
+	case 'B':	pos += 1;	info.color	= true; comp = 2;					break;
+	case 'A':	pos += 1;	info.color	= true; comp = 3;					break;
 	}
 
-	if (width)
+	if (std::isdigit(name[pos]))
 	{
+		const uint8_t width = parseNumber(name, pos);
 		info.swizzling[index++] = int8_t(comp);
 		info.componentSizes[comp] = width;
+	}
+	else if (std::isdigit(name[pos+1]))
+	{
+		switch (name[pos])
+		{
+		case 'D':	pos += 1;	info.color	= false;	comp = 0; break;
+		case 'S':	pos += 1;	info.stencil = true;	comp = 1; break;
+		case 'X':	pos += 1;	info.stencil = true;	comp = 1; break;
+		}
 	}
 
 	return true;
 }
 
-void parseComponents (const char* const name, int& pos, ZFormatInfo& info)
+static void parseComponents (const char* const name, int& pos, ZFormatInfo& info)
 {
 	info.swizzling[0]
 	= info.swizzling[1]
@@ -324,9 +335,9 @@ void parseComponents (const char* const name, int& pos, ZFormatInfo& info)
 	}
 }
 
-ZFormatInfo makeFormatInfo (const FormatAndName* const pFan)
+static ZFormatInfo makeFormatInfo (const FormatAndName* const pFan)
 {
-	ZFormatInfo	res;
+	ZFormatInfo	res{};
 	res.format	= pFan->format;
 	res.name	= pFan->name;
 
@@ -338,7 +349,7 @@ ZFormatInfo makeFormatInfo (const FormatAndName* const pFan)
 	return res;
 }
 
-const FormatAndName* findFormatAndName (VkFormat format)
+static const FormatAndName* findFormatAndName (VkFormat format)
 {
 	const FormatAndName* pFan = nullptr;
 	for (const FormatAndName& fan : formatAndNames) {
@@ -355,13 +366,31 @@ const FormatAndName* findFormatAndName (VkFormat format)
 namespace vtf
 {
 
-const char* getFormatString(VkFormat format)
+ZFormatInfo::ZFormatInfo ()
+	: name(nullptr)
+	, format(VK_FORMAT_UNDEFINED)
+	, swizzling{}		// [3210] -> ABGR
+	, componentSizes{}	// in RGBA order
+	, componentCount{}
+	, pixelByteSize{}
+	, isSigned{}
+	, normalized{}
+	, floating{}
+	, integral{}
+	, scaled{}
+	, sized{}
+	, color{}
+	, stencil{}
+{
+}
+
+const char* formatGetString (VkFormat format)
 {
 	const FormatAndName* pFan = findFormatAndName(format);
 	return pFan ? pFan->name : nullptr;
 }
 
-ZFormatInfo	getFormatInfo (VkFormat format)
+ZFormatInfo	formatGetInfo (VkFormat format)
 {
 	const FormatAndName* pFan = findFormatAndName(format);
 	ASSERTMSG(pFan, "Format not implemented");
@@ -371,6 +400,18 @@ ZFormatInfo	getFormatInfo (VkFormat format)
 		return res;
 	}
 	return makeFormatInfo(pFan);
+}
+
+VkImageAspectFlags formatGetAspectMask (VkFormat format)
+{
+	const ZFormatInfo info = formatGetInfo(format);
+	VkImageAspectFlags flags = 0;
+	if (VK_FORMAT_UNDEFINED != format)
+	{
+		flags |= info.color ? VK_IMAGE_ASPECT_COLOR_BIT : VK_IMAGE_ASPECT_DEPTH_BIT;
+		if (info.stencil) flags |= VK_IMAGE_ASPECT_STENCIL_BIT;
+	}
+	return flags;
 }
 
 VkComponentMapping makeComponentMapping (const ZFormatInfo& info)
@@ -388,6 +429,24 @@ VkComponentMapping makeComponentMapping (const ZFormatInfo& info)
 	res.b	= info.swizzling[2] >= 0 ? swizzling[info.swizzling[2]] : VK_COMPONENT_SWIZZLE_ZERO;
 	res.a	= info.swizzling[3] >= 0 ? swizzling[info.swizzling[3]] : VK_COMPONENT_SWIZZLE_ZERO;
 	return res;
+}
+
+VkFormatProperties	formatGetProperties	(ZPhysicalDevice device, VkFormat format)
+{
+	VkFormatProperties	p{};
+	vkGetPhysicalDeviceFormatProperties(*device, format, &p);
+	return p;
+}
+
+bool formatSupportsLinearFilter (ZPhysicalDevice device, VkFormat format)
+{
+	return formatSupportsLinearFlags(device, format, VK_FORMAT_FEATURE_2_SAMPLED_IMAGE_FILTER_LINEAR_BIT);
+}
+
+bool formatSupportsLinearFlags (ZPhysicalDevice device, VkFormat format, VkFormatFeatureFlags flags)
+{
+	VkFormatProperties p = formatGetProperties(device, format);
+	return (p.linearTilingFeatures & flags) == flags;
 }
 
 } // vtf
