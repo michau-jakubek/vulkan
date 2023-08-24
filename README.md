@@ -1,8 +1,3 @@
-<head>
-<title>Vulkan Trivial Framework (VTF)</title>
-<meta name="google-site-verification" content="31Kau8LdpTSmz_mYWQlfo7qkrC99OjSBQoySYlc8LDg" />
-</head>
-
 <h1>Vulkan Trivial Framework (VTF)</h1>
 
 <h3>About:</h3>
