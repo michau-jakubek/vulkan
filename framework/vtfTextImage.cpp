@@ -51,8 +51,8 @@ static void replaceColors (const VkFormat inFormat, ZBuffer inBuffer, ZBuffer ou
 	const uint32_t pixelCount8 = static_cast<uint32_t>(bufferGetSize(inBuffer) / 4u);
 	const UBVec4 bg8 = (background * 255.0f ).cast<UBVec4>();
 	const UBVec4 fg8 = (foreground * 255.0f ).cast<UBVec4>();
-	PixelBufferAccess<UBVec4> srcC8(inBuffer, pixelCount8, 1u, 1u);
-	PixelBufferAccess<UBVec4> dstC8(outBuffer, pixelCount8, 1u, 1u);
+	BufferTexelAccess<UBVec4> srcC8(inBuffer, pixelCount8, 1u, 1u);
+	BufferTexelAccess<UBVec4> dstC8(outBuffer, pixelCount8, 1u, 1u);
 	for (uint32_t x = 0u; x < pixelCount8; ++x)
 	{
 		add_cref<UBVec4> sColor = srcC8.at(x, 0u, 0u);
@@ -77,11 +77,11 @@ ZImage createTextImage (ZCommandPool cmdPool, ZBuffer fontBuffer, add_cref<std::
 						add_cref<Vec4> background, add_cref<Vec4> foreground,
 						ZImageUsageFlags imageUsage, VkFormat fontBufferFormat)
 {
-	const uint32_t		srcCharWidth	= 20u;
-	const uint32_t		srcCharHeight	= 39u;
+	const int32_t		srcCharWidth	= 20;
+	const int32_t		srcCharHeight	= 39;
 	const VkOffset3D	textOrigin		= makeOffset3D(4,4);
-	const uint32_t		charHeight		= std::min(imageRect.height - textOrigin.y, charRect.height);
-	const uint32_t		charCount		= std::min((imageRect.width - textOrigin.x) / charRect.width, static_cast<uint32_t>(text.length()));
+	const int32_t		charHeight		= std::min(make_signed(imageRect.height) - textOrigin.y, make_signed(charRect.height));
+	const uint32_t		charCount		= std::min((imageRect.width - make_unsigned(textOrigin.x)) / charRect.width, static_cast<uint32_t>(text.length()));
 	for (uint32_t i = 0u; i < charCount; ++i)
 	{
 		ASSERTMSG(text[i] >= 32 && make_unsigned(text[i]) < 128u,
@@ -111,12 +111,12 @@ ZImage createTextImage (ZCommandPool cmdPool, ZBuffer fontBuffer, add_cref<std::
 
 		blit.srcOffsets[0].x	= (c % 16) * srcCharWidth;
 		blit.srcOffsets[0].y	= (c / 16) * srcCharHeight;
-		blit.srcOffsets[1].x	= blit.srcOffsets[0].x + srcCharWidth - 1u;
-		blit.srcOffsets[1].y	= blit.srcOffsets[0].y + srcCharHeight - 1u;
+		blit.srcOffsets[1].x	= blit.srcOffsets[0].x + srcCharWidth - 1;
+		blit.srcOffsets[1].y	= blit.srcOffsets[0].y + srcCharHeight - 1;
 
 		blit.dstOffsets[0].x	= dstOffset.x;
 		blit.dstOffsets[0].y	= dstOffset.y;
-		blit.dstOffsets[1].x	= dstOffset.x + charRect.width;
+		blit.dstOffsets[1].x	= dstOffset.x + make_signed(charRect.width);
 		blit.dstOffsets[1].y	= dstOffset.y + charHeight;
 
 		dstOffset.x += charRect.width;

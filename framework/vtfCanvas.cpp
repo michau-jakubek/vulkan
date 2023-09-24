@@ -57,8 +57,8 @@ CanvasContext::CanvasContext (add_cptr<char>		appName,
 										&cc_debugMessenger, this, &cc_debugReport, this, apiVersion, enableDebugPrintf))
 	, cc_window			(createWindow(style, appName, canvas))
 	, cc_surface		(createSurface(cc_instance, cc_callbacks, cc_window))
-	, cc_physicalDevice	(selectPhysicalDevice(getGlobalAppFlags().physicalDeviceIndex, cc_instance, deviceExtensions, cc_surface))
-	, cc_device			(createLogicalDevice(cc_physicalDevice, onEnablingFeatures, cc_surface))
+	, cc_physicalDevice	(selectPhysicalDevice(make_signed(getGlobalAppFlags().physicalDeviceIndex), cc_instance, deviceExtensions, cc_surface))
+	, cc_device			(createLogicalDevice(cc_physicalDevice, onEnablingFeatures, cc_surface, enableDebugPrintf))
 {
 }
 

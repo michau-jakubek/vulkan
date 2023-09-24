@@ -56,7 +56,7 @@ struct DescriptorBufferInfo
 typedef std::variant<std::monostate, DescriptorBufferInfo, DescriptorImageInfo>	VarDescriptorInfo;
 
 /**
- * @brief The PipelineLayout class that simplifies pipeline layout creation.
+ * @brief The LayoutManager class that simplifies pipeline layout creation.
  *
  * Casual scenario:
  * ================
@@ -64,22 +64,22 @@ typedef std::variant<std::monostate, DescriptorBufferInfo, DescriptorImageInfo>	
  * ZBuffer				buffer				= createBuffer(..., ZBufferUsageFlags(VK_BUFFER_USAGE_STORAGE_BIT));
  * ZImage				image				= createImage(..., ZImageUsageFlags(VK_IMAGE_USAGE_STORAGE_BIT));
  * ZImageView			view				= createImageView(image);
- * PipelineLayout		layout				(device);
+ * LayoutManager		lm					(device);
  * struct				SSBO				{ uint32_t a,b,c; } ssbo;
- * uint32_t				bufferBinding		= layout.addBinding<SSBO>();
- * uint32_t				textureBinding		= layout.addBinding(view, ZSampler());
- * ZDescriptorSetLayout	descriptorSetLayout	= layout.createDescriptorSetLayout();
+ * uint32_t				bufferBinding		= lm.addBinding<SSBO>();
+ * uint32_t				textureBinding		= lm.addBinding(view, ZSampler());
+ * ZDescriptorSetLayout	descriptorSetLayout	= lm.createDescriptorSetLayout();
  * struct PushConstant						{ Vec4 data; };
- * ZPipelineLayout		pipelineLayout		= layout.createPipelineLayout<PushContant>(descriptorSetLayout);
+ * ZPipelineLayout		pipelineLayout		= lm.createPipelineLayout<PushContant>(descriptorSetLayout);
  * ZPipeline			pipeline			= create(Compute|Graphics)Pipeline(...);
  * //
  * // Access to the SSBO buffer
- * ZBuffer				testBuffer			= std::get<DescriptorBufferInfo>(layout.getDescriptorInfo(bufferBinding)).buffer;
+ * ZBuffer				testBuffer			= std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(bufferBinding)).buffer;
  */
-class PipelineLayout
+class LayoutManager
 {
 public:
-											PipelineLayout				(ZDevice device);
+											LayoutManager				(ZDevice device);
 	/**
 	 * Creates single buffer and concatenates all chunks into it
 	 * that have the same descriptor type and buffer usage.
@@ -89,9 +89,9 @@ public:
 	/**
 	 * Creates separate binding, usefull for vectors SSBO.
 	 * In the case where X is a std::vector<Y> an elementCount is the element count of that vector.
-	 * In the case that X is standalone type (e.q. user structure) the elementCount param is ignored.
+	 * In the case that X is standalone type (e.g. user structure) the elementCount param is ignored.
 	 */
-	template<class VecOrElemT> uint32_t		addBinding					(uint32_t elementCount = 1, VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
+	template<class VecOrElemT> uint32_t		addBinding					(VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, uint32_t elementCount = 1, VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
 	/**
 	 * Basically does the same things like above addBinding().
 	 * The one difference is that it automatically treat Y as std::vector<Y>
@@ -115,8 +115,19 @@ public:
 	uint32_t								addBinding					(VkDescriptorType type,
 																		 VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
 	template<class X> std::optional<X>		getBinding					(uint32_t binding) const;
+	/**
+	 * Allows to write data directly to an associated data buffer.
+	 * A type of Data_ is veryfied before read, if doesn't match then throws an exception.
+	 * This method is available after createDescriptorSetLayout() is called.
+	 */
 	template<class Data__> void				writeBinding				(uint32_t binding, const Data__& data);
-	void									zeroBinding					(uint32_t binding);
+	void									fillBinding					(uint32_t binding, uint32_t value = 0u);
+	/**
+	 * Allows to direct read from associated buffer. A type of Data_ is veryfied before read.
+	 * If data is a vector then it must be resized to desired size but only declared elements
+	 * will be read, remaining part of the vector will contain undefined values.
+	 * This method is available after createDescriptorSetLayout() is called.
+	 */
 	template<class Data__> void				readBinding					(uint32_t binding, Data__& data) const;
 	VarDescriptorInfo						getDescriptorInfo			(uint32_t binding);
 	/**
@@ -211,44 +222,44 @@ template<class X> struct BoundType<std::vector<X>>
 	static const uint8_t* data (const std::vector<X>& x) { return reinterpret_cast<const uint8_t*>(x.data()); }
 };
 } // hidden
-template<class X> uint32_t PipelineLayout::joinBindings (VkDescriptorType type, VkShaderStageFlags stages, uint32_t count)
+template<class X> uint32_t LayoutManager::joinBindings (VkDescriptorType type, VkShaderStageFlags stages, uint32_t count)
 {
 	auto index = std::type_index(typeid(typename add_extent<X>::type));
 	return joinBindings_(index, hidden::BoundType<X>::size(), hidden::BoundType<X>::isVector(), type, stages, std::max(count, 1u));
 }
-template<class X> uint32_t PipelineLayout::addBinding (uint32_t elementCount, VkDescriptorType type, VkShaderStageFlags stages)
+template<class VecOrElemT> uint32_t LayoutManager::addBinding (VkDescriptorType type, uint32_t elementCount, VkShaderStageFlags stages)
 {
-	auto index = std::type_index(typeid(typename add_extent<X>::type));
-	return addBinding_(index, hidden::BoundType<X>::size(), hidden::BoundType<X>::isVector(), type, stages,
-					   std::max((hidden::BoundType<X>::isVector() ? elementCount : 1u), 1u));
+	auto index = std::type_index(typeid(typename add_extent<VecOrElemT>::type));
+	return addBinding_(index, hidden::BoundType<VecOrElemT>::size(), hidden::BoundType<VecOrElemT>::isVector(),
+					   type, stages, std::max((hidden::BoundType<VecOrElemT>::isVector() ? elementCount : 1u), 1u));
 }
-template<class Y> uint32_t PipelineLayout::addBindingAsVector (uint32_t elementCount, VkDescriptorType type, VkShaderStageFlags stages)
+template<class Y> uint32_t LayoutManager::addBindingAsVector (uint32_t elementCount, VkDescriptorType type, VkShaderStageFlags stages)
 {
 	auto index = std::type_index(typeid(typename add_extent<std::vector<Y>>::type));
 	return addBinding_(index, hidden::BoundType<Y>::size(), true, type, stages, std::max(elementCount, 1u));
 }
-template<class X> uint32_t PipelineLayout::addBindingAsVector (const std::vector<X>& vector, VkDescriptorType type, VkShaderStageFlags stages)
+template<class X> uint32_t LayoutManager::addBindingAsVector (const std::vector<X>& vector, VkDescriptorType type, VkShaderStageFlags stages)
 {
 	auto index = std::type_index(typeid(typename add_extent<std::vector<X>>::type));
 	return addBinding_(index, sizeof(X), true, type, stages, std::max(static_cast<uint32_t>(vector.size()), 1u));
 }
-template<class Data__> void PipelineLayout::writeBinding (uint32_t binding, const Data__& data)
+template<class Data__> void LayoutManager::writeBinding (uint32_t binding, const Data__& data)
 {
 	auto index = std::type_index(typeid(typename add_extent<Data__>::type));
 	writeBinding_(index, binding, hidden::BoundType<Data__>::data(data), hidden::BoundType<Data__>::length(data));
 }
-template<class Data__> void PipelineLayout::readBinding (uint32_t binding, Data__& data) const
+template<class Data__> void LayoutManager::readBinding (uint32_t binding, Data__& data) const
 {
 	auto index = std::type_index(typeid(typename add_extent<Data__>::type));
 	readBinding_(index, binding, hidden::BoundType<Data__>::data(data), hidden::BoundType<Data__>::length(data));
 }
-template<class X> std::optional<X> PipelineLayout::getBinding (uint32_t binding) const
+template<class X> std::optional<X> LayoutManager::getBinding (uint32_t binding) const
 {
 	std::optional<X> result;
 	getBinding_(binding, result);
 	return result;
 }
-template<class PC__> ZPipelineLayout PipelineLayout::createPipelineLayout (VkShaderStageFlags pcStageFlags)
+template<class PC__> ZPipelineLayout LayoutManager::createPipelineLayout (VkShaderStageFlags pcStageFlags)
 {
 	const VkPushConstantRange pcr
 	{
@@ -258,7 +269,7 @@ template<class PC__> ZPipelineLayout PipelineLayout::createPipelineLayout (VkSha
 	};
 	return createPipelineLayout_({}, &pcr, type_index_with_default(typeid(PC__)));
 }
-template<class PC__> ZPipelineLayout PipelineLayout::createPipelineLayout (ZDescriptorSetLayout dsLayout, VkShaderStageFlags pcStageFlags)
+template<class PC__> ZPipelineLayout LayoutManager::createPipelineLayout (ZDescriptorSetLayout dsLayout, VkShaderStageFlags pcStageFlags)
 {
 	const VkPushConstantRange pcr
 	{

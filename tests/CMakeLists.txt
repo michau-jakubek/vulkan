@@ -13,9 +13,16 @@ set(tests_files
     viewerTests.hpp
     lineWidthTests.cpp
     lineWidthTests.hpp
+    multiViewTests.cpp
+    multiViewTests.hpp
+    intMatrixTests.cpp
+    intMatrixTests.hpp
+    topologyTests.cpp
+    topologyTests.hpp
     )
 
 add_library(tests STATIC ${tests_files})
+target_include_directories(tests BEFORE PRIVATE ${GLFW3_INCLUDE_PATH})
 target_include_directories(tests
                            BEFORE PRIVATE ${VULKAN_INCLUDE_PATH}
                            AFTER PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}

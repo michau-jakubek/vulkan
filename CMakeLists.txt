@@ -86,7 +86,10 @@ endif()
 include_directories(${VULKAN_INCLUDE_PATH})
 include_directories(${GLFW3_INCLUDE_PATH})
 
-set(COMMON_LIBS ${ADDITIONAL_LIBS} ${VULKAN_LIB_PATH} ${GLFW3_LIB_PATH})
+get_filename_component(ABS_VULKAN_LIB_PATH ${VULKAN_LIB_PATH} REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
+get_filename_component(ABS_GLFW3_LIB_PATH ${GLFW3_LIB_PATH} REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
+set(COMMON_LIBS ${ADDITIONAL_LIBS} ${ABS_VULKAN_LIB_PATH} ${ABS_GLFW3_LIB_PATH})
+message(INFO "USE" ${COMMON_LIBS})
 
 add_subdirectory(framework)
 include_directories(framework)

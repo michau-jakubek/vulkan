@@ -231,15 +231,19 @@ enum ZDistName
 	QueueFamilyIndex, QueueIndex, QueueFlags, QueueCreateInfoList, QueueList,
 	CullModeFlags, DepthTestEnable, DepthWriteEnable, StencilTestEnable,
 	LineWidth, AttachmentCount, SubpassCount, ViewportCount, ScissorCount,
+	MultiviewIndex,
 };
 template<ZDistName, class CType_>
 struct ZDistType
 {
-	CType_ data;
 	ZDistType () : data() {}
 	ZDistType (const CType_& v) : data(v) {}
 	operator add_ref<CType_> () { return data; }
 	operator add_cref<CType_> () const { return data; }
+	add_cref<CType_> get () const { return data; }
+	add_ref<CType_> get () { return data; }
+private:
+	CType_ data;
 };
 
 typedef add_ptr<VkAllocationCallbacks> VkAllocationCallbacksPtr;

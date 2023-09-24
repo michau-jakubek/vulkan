@@ -3,6 +3,7 @@
 #include "vtfVertexInput.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfZImage.hpp"
+#include "vtfStructUtils.hpp"
 #include <memory>
 
 namespace vtf
@@ -218,6 +219,62 @@ void commandBufferEndRenderPass (add_cref<ZRenderPassBeginInfo> beginInfo)
 	}
 }
 
+void commandBufferBeginRendering (ZCommandBuffer cmd, std::initializer_list<ZImageView> attachments,
+								  std::optional<std::vector<VkClearValue>> clearColors, ZRenderingFlags renderingFlags)
+{
+	ASSERTMSG(attachments.size(), "There must be at least one attachment to perform rendering");
+	const uint32_t			clearColorCount = clearColors.has_value() ? data_count(*clearColors) : 0u;
+	add_cptr<VkClearValue>	clearColorsPtr	= clearColorCount ? data_or_null(*clearColors) : nullptr;
+
+	std::vector<VkRenderingAttachmentInfo> attInfos(attachments.size());
+	for (auto begin = attachments.begin(), i = begin; i != attachments.end(); ++i)
+	{
+		decltype(attInfos)::size_type k = make_unsigned(std::distance(begin, i));
+		add_ref<VkRenderingAttachmentInfo> a = attInfos.at(k);
+		a = makeVkStruct();
+
+		a.imageView					= **i;
+		a.imageLayout				= imageGetLayout(imageViewGetImage(*i));
+		a.resolveMode				= VK_RESOLVE_MODE_NONE;
+		a.resolveImageView			= VK_NULL_HANDLE;
+		a.resolveImageLayout		= VK_IMAGE_LAYOUT_UNDEFINED;
+		a.loadOp					= clearColorCount
+										? (k < clearColorCount)
+										  ?	VK_ATTACHMENT_LOAD_OP_CLEAR
+										  : VK_ATTACHMENT_LOAD_OP_LOAD
+										: VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		a.storeOp					= VK_ATTACHMENT_STORE_OP_STORE;
+		if (k < clearColorCount)	a.clearValue = clearColorsPtr[k];
+	}
+
+	VkRenderingInfo rInfo = makeVkStruct();
+	rInfo.flags					= renderingFlags();
+	rInfo.renderArea			= makeRect2D(makeExtent2D(imageGetExtent(imageViewGetImage(*attachments.begin()))));
+	rInfo.layerCount			= 1u;
+	rInfo.viewMask				= 0b0;
+	rInfo.colorAttachmentCount	= data_count(attInfos);
+	rInfo.pColorAttachments		= data_or_null(attInfos);
+	rInfo.pDepthAttachment		= nullptr;
+	rInfo.pStencilAttachment	= nullptr;
+
+	vkCmdBeginRendering(*cmd, &rInfo);
+}
+
+void commandBufferEndRendering (ZCommandBuffer cmd)
+{
+	vkCmdEndRendering(*cmd);
+}
+
+void commandBufferSetViewport (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain)
+{
+	vkCmdSetViewport(*cmd, 0u, 1u, &swapchain.viewport);
+}
+
+void commandBufferSetScissor (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain)
+{
+	vkCmdSetScissor(*cmd, 0u, 1u, &swapchain.scissor);
+}
+
 void commandBufferSetPolygonModeEXT (ZCommandBuffer commandBuffer, VkPolygonMode polygonMode)
 {
 	// TODO: body
@@ -257,20 +314,26 @@ void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image,
 
 void commandBufferBlitImage (ZCommandBuffer cmd, ZImage srcImage, ZImage dstImage, VkFilter filter)
 {
+	commandBufferBlitImage(cmd, srcImage, dstImage,
+						   imageMakeSubresourceLayers(srcImage), imageMakeSubresourceLayers(dstImage),
+						   filter);
+}
+
+void commandBufferBlitImage (ZCommandBuffer cmd, ZImage srcImage, ZImage dstImage,
+							 VkImageSubresourceLayers srcSubresource, VkImageSubresourceLayers dstSubresource, VkFilter filter)
+{
 	VkImageBlit				blitRegion{};
 	add_cref<VkExtent3D>	srcImageExtent = srcImage.getParamRef<VkImageCreateInfo>().extent;
 	add_cref<VkExtent3D>	dstImageExtent = dstImage.getParamRef<VkImageCreateInfo>().extent;
 
-	blitRegion.srcSubresource.aspectMask = blitRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	blitRegion.srcSubresource.layerCount = blitRegion.dstSubresource.layerCount = 1;
-	// blitRegion.srcSubresource.mipLevel = blitRegion.dstSubresource.mipLevel zero initialized
-	// blitRegion.srcSubresource.baseArrayLayer	= blitRegion.dstSubresource.baseArrayLayer zeronitialized
+	blitRegion.srcSubresource	= srcSubresource;
+	blitRegion.dstSubresource	= dstSubresource;
 	// blitRegion.srcOffsets[0] = blitRegion.dstOffsets[0] = 0 default zero initialized
 	blitRegion.srcOffsets[1].z = blitRegion.dstOffsets[1].z = 1;
-	blitRegion.srcOffsets[1].x = srcImageExtent.width;
-	blitRegion.srcOffsets[1].y = srcImageExtent.height;
-	blitRegion.dstOffsets[1].x = dstImageExtent.width;
-	blitRegion.dstOffsets[1].y = dstImageExtent.height;
+	blitRegion.srcOffsets[1].x = make_signed(srcImageExtent.width);
+	blitRegion.srcOffsets[1].y = make_signed(srcImageExtent.height);
+	blitRegion.dstOffsets[1].x = make_signed(dstImageExtent.width);
+	blitRegion.dstOffsets[1].y = make_signed(dstImageExtent.height);
 
 	vkCmdBlitImage(*cmd,
 				   *srcImage, imageGetLayout(srcImage),

@@ -63,8 +63,8 @@ VulkanContext::VulkanContext (add_cptr<char>		appName,
 	, m_instance					(createInstance(appName, m_callbacks, instanceLayers, instanceExtensions,
 													&m_debugMessenger, this, &m_debugReport, this,
 													apiVersion, enableDebugPrintf))
-	, m_physicalDevice				(selectPhysicalDevice(getGlobalAppFlags().physicalDeviceIndex, m_instance, deviceExtensions))
-	, m_device						(createLogicalDevice(m_physicalDevice, onEnablingFeatures))
+	, m_physicalDevice				(selectPhysicalDevice(make_signed(getGlobalAppFlags().physicalDeviceIndex), m_instance, deviceExtensions))
+	, m_device						(createLogicalDevice(m_physicalDevice, onEnablingFeatures, ZSurfaceKHR(), enableDebugPrintf))
 	, m_graphicsQueue				(deviceGetNextQueue(m_device, VK_QUEUE_GRAPHICS_BIT, false))
 	, m_computeQueue				((queueGetFlags(m_graphicsQueue) & VK_QUEUE_COMPUTE_BIT)
 										? m_graphicsQueue
@@ -91,7 +91,7 @@ uint32_t VulkanContext::getComputeQueueFamilyIndex () const
 
 const strings& VulkanContext::getAvailableInstanceExtensions() const
 {
-	return  instance.getParamRef<ZDistType<AvailableLayerExtensions, strings>>().data;
+	return  instance.getParamRef<ZDistType<AvailableLayerExtensions, strings>>();
 }
 
 const strings& VulkanContext::getAvailablePhysicalDeviceExtensions() const

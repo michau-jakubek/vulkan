@@ -18,9 +18,13 @@ set(framework_files
         vtfCopyUtils.hpp
         vtfFormatUtils.cpp
         vtfFormatUtils.hpp
+        vtfStructUtils.cpp
+        vtfStructUtils.hpp
         vtfTermColor.cpp
         vtfTermColor.hpp
         vtfVector.hpp
+        vtfMatrix.cpp
+        vtfMatrix.hpp
         vtfThreadSafeLogger.cpp
         vtfThreadSafeLogger.hpp
         vtfZBarriers.cpp
@@ -38,8 +42,8 @@ set(framework_files
         vtfProgramCollection.hpp
         vtfDebugMessenger.cpp
         vtfDebugMessenger.hpp
-        vtfPipelineLayout.cpp
-        vtfPipelineLayout.hpp
+        vtfLayoutManager.cpp
+        vtfLayoutManager.hpp
         vtfZPipeline.cpp
         vtfZPipeline.hpp
         vtfVertexInput.cpp
@@ -55,6 +59,7 @@ set(framework_files
 )
 
 add_library(framework STATIC ${framework_files})
+target_include_directories(framework BEFORE PRIVATE ${GLFW3_INCLUDE_PATH})
 target_include_directories(framework BEFORE PRIVATE ${VULKAN_INCLUDE_PATH})
 target_link_libraries(framework ${COMMON_LIBS})
 

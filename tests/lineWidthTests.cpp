@@ -2,7 +2,7 @@
 #include "vtfCanvas.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfFilesystem.hpp"
-#include "vtfPipelineLayout.hpp"
+#include "vtfLayoutManager.hpp"
 #include "vtfZPipeline.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfZCommandBuffer.hpp"
@@ -152,7 +152,7 @@ int verifyImage (ZCommandPool commandPool, ZImage image, add_cref<TestParams> pa
 	const uint32_t imageWidth = imageGetExtent(image).width;
 	const uint32_t imageHeight = imageGetExtent(image).height;
 
-	const PixelBufferAccess<Vec4> pba(buffer, imageWidth, imageHeight);
+	const BufferTexelAccess<Vec4> pba(buffer, imageWidth, imageHeight);
 
 	uint32_t verticalWidth = 0u;
 	for (uint32_t x = 0; x < imageWidth; ++x)
@@ -183,7 +183,7 @@ int runTestSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets, add_c
 			  && params.horizontalWidth <= uint32_t(limits.lineWidthRange[1]),
 			  "Horizontal line width doesn't meet device limits");
 
-	ProgramCollection			programs(cs, assets);
+	ProgramCollection			programs(cs.device, assets);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
 	add_cref<GlobalAppFlags>	flags(getGlobalAppFlags());
@@ -208,14 +208,14 @@ int runTestSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets, add_c
 	uint32_t		srcHeight		= 100;
 	ZImage			srcImage		= cs.createColorImage2D(srcFormat, srcWidth, srcHeight);
 	ZImageView		srcView			= createImageView(srcImage);
-	ZSubpassDependency	dependency	(VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_MEMORY_WRITE_BIT,
-									 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-									 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+	ZSubpassDependency	dependency	(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+									 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+									 ZSubpassDependency::Between);
 	ZRenderPass		srcRenderPass	= createColorRenderPass(cs.device, {srcFormat}, {},
 											VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 											{ dependency });
 	ZFramebuffer	srcFramebuffer	= createFramebuffer(srcRenderPass, srcWidth, srcHeight, {srcView});
-	ZPipelineLayout	pipelineLayout	= PipelineLayout(cs.device).createPipelineLayout();
+	ZPipelineLayout	pipelineLayout	= LayoutManager(cs.device).createPipelineLayout();
 	ZPipeline		vertPipeline	= createGraphicsPipeline(pipelineLayout, srcRenderPass,
 											vertexInput.binding(0), vertShaderModule, fragShaderModule,
 											VK_PRIMITIVE_TOPOLOGY_LINE_LIST, gpp::SubpassIndex(0),

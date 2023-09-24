@@ -2,6 +2,7 @@
 #include "vtfZBuffer.hpp"
 #include "vtfContext.hpp"
 #include "vtfCUtils.hpp"
+#include "vtfStructUtils.hpp"
 #include <sstream>
 
 namespace vtf
@@ -14,7 +15,7 @@ void assertVertexBinding (add_cref<ZDevice> device, uint32_t binding)
 	ASSERTMSG(binding < p.limits.maxVertexInputBindings, "Binding exceeds maxVertexInput limit");
 }
 
-VertexBinding::VertexBinding (const VertexInput& vertexInput)
+VertexBinding::VertexBinding (add_cref<VertexInput> vertexInput)
 	: vertexInput		(vertexInput)
 	, bufferType		(m_bufferType)
 	, m_bufferType		(BufferType::Undefined)
@@ -308,14 +309,12 @@ ZPipelineVertexInputStateCreateInfo::ZPipelineVertexInputStateCreateInfo (add_cr
 
 VkPipelineVertexInputStateCreateInfo ZPipelineVertexInputStateCreateInfo::operator ()() const
 {
-	VkPipelineVertexInputStateCreateInfo	pisc{};
-	pisc.sType								= VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	pisc.pNext								= nullptr;
-	pisc.flags								= 0;
-	pisc.vertexBindingDescriptionCount		= static_cast<uint32_t>(m_pipeBindings.size());
-	pisc.pVertexBindingDescriptions			= m_pipeBindings.data();
-	pisc.vertexAttributeDescriptionCount	= static_cast<uint32_t>(m_pipeDescriptions.size());
-	pisc.pVertexAttributeDescriptions		= m_pipeDescriptions.data();
+	VkPipelineVertexInputStateCreateInfo	pisc = makeVkStruct();
+	pisc.flags								= VkPipelineVertexInputStateCreateFlags(0);
+	pisc.vertexBindingDescriptionCount		= data_count(m_pipeBindings);
+	pisc.pVertexBindingDescriptions			= data_or_null(m_pipeBindings);
+	pisc.vertexAttributeDescriptionCount	= data_count(m_pipeDescriptions);
+	pisc.pVertexAttributeDescriptions		= data_or_null(m_pipeDescriptions);
 	return pisc;
 }
 
@@ -360,7 +359,7 @@ std::vector<VkBuffer> VertexInput::getVertexBuffers (std::initializer_list<ZBuff
 	ASSERTMSG(externalBufferCount >= (maxBinding + 1u - internalBindingCount),
 			  "externalBuffers.size() must be greater or equal unbound bindings count");
 
-	std::vector<VkBuffer> buffers(maxBinding + 1);
+	std::vector<VkBuffer> buffers(maxBinding + 1u, VK_NULL_HANDLE);
 	auto itExternalBuffers = externalBuffers.begin();
 
 	for (uint32_t i = 0; i <= maxBinding; ++i)
@@ -406,7 +405,7 @@ ZBuffer createIndexBuffer (ZDevice device, const std::vector<IndexType>& indices
 {
 	ASSERTMSG(repeatCount, "RepeatCount must be positive number");
 	ZBuffer buffer = createIndexBuffer(device, (data_count(indices) * repeatCount), index_type_to_vk_index_type<IndexType>);
-	PixelBufferAccess<IndexType>	access(buffer, data_count(indices), repeatCount);
+	BufferTexelAccess<IndexType>	access(buffer, data_count(indices), repeatCount);
 	for (uint32_t r = 0u; r < repeatCount; ++r)
 	for (uint32_t i = 0u; i < data_count(indices); ++i)
 	{

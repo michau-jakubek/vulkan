@@ -24,6 +24,16 @@ struct vecx_info<VecX<T,N>>
 template<class V> using vecx_type = typename vecx_info<V>::type;
 template<class V> constexpr size_t vecx_count = vecx_info<V>::count;
 
+template<class T>
+T ftrunc (T v, uint32_t digits)
+{
+	T raise = std::pow(T(10), T(digits));
+	T vint, rint, vfrac = std::modf(v, &vint);
+	std::modf(vfrac * raise, &rint);
+	T result = vint + rint / raise;
+	return result;
+}
+
 template<class T, size_t N>
 class VecX
 {
@@ -50,12 +60,32 @@ protected:
 	{
 		z[k] = operator[](i);
 	}
-
 	template<class VecZ, class I, class... J>
 	void swizzle_impl (VecZ& z, size_t k, I i, J... j) const
 	{
 		z[k] = operator[](i);
 		swizzle_impl<VecZ, J...>(z, k+1, j...);
+	}
+
+	template<class VecZ>
+	void cast_complete_impl (VecZ&, size_t) const
+	{
+	}
+	template<class VecZ, class Complete>
+	void cast_complete_impl (VecZ& z, size_t i, Complete const& value) const
+	{
+		if (i < z.count()) z[i] = static_cast<vecx_type<VecZ>>(value);
+	}
+	template<class VecZ, class Complete0, class... Completes>
+	void cast_complete_impl (VecZ& z, size_t i, Complete0 const& value, Completes const&... completeValues) const
+	{
+		if (i < z.count()) z[i] = static_cast<vecx_type<VecZ>>(value);
+		cast_complete_impl(z, i+1, completeValues...);
+	}
+	template<class VecZ, class... Completes>
+	void cast_complete (VecZ& z, size_t i, Completes const&... completeValues) const
+	{
+		cast_complete_impl(z, i, completeValues...);
 	}
 
 public:
@@ -66,14 +96,15 @@ public:
 			data[i] = T{};
 	}
 
-	template<class X>
-	VecX(const X& x)
+	template<class X, typename std::enable_if<std::is_arithmetic<X>::value, int>::type = 1>
+	VecX(const X& initValueForAllElements)
 	{
 		for (size_t i = 0; i < N; ++i)
-			data[i] = static_cast<T>(x);
+			data[i] = static_cast<T>(initValueForAllElements);
 	}
 
-    template<class X, class... Y>
+	template<class X, class... Y,
+			 typename std::enable_if<std::is_arithmetic<X>::value, int>::type = 3>
     VecX(const X& x, const Y&... y) : VecX(tag(0), x, y...)
     {
 		/* delegate work to the protected constructor */
@@ -206,7 +237,6 @@ public:
 		return *this;
 	}
 
-
 	/**
 	 * @brief Compute a Magnitude of a vector
 	 *         -->
@@ -255,6 +285,12 @@ public:
 		return std::acos(theta);
 	}
 
+	void round (uint32_t digits)
+	{
+		for (int i = 0; i < N; ++i)
+			data[i] = fround(data[i], digits);
+	}
+
 	template<size_t M, typename std::enable_if<(M==3 && N==M), bool>::type = true>
 	VecX<T,3> cross (const VecX<T,M>& other) const
 	{
@@ -275,12 +311,12 @@ public:
 		return z;
 	}
 
-	template<class V, class U = vecx_type<V>, size_t M = vecx_count<V>>
-	auto cast () const -> VecX<U,M>
+	template<class V, class U = vecx_type<V>, size_t M = vecx_count<V>, class... Completes>
+	auto cast (Completes const&... completeValues) const -> VecX<U,M>
 	{
 		VecX<U,M> v;
-		for (size_t i = 0; i < N && i < M; ++i)
-			v[i] = static_cast<U>(operator[](i));
+		v.assign(*this);
+		cast_complete<VecX<U,M>, Completes...>(v, N, completeValues...);
 		return v;
 	}
 
@@ -313,15 +349,13 @@ public:
 	typedef T type;
 	static constexpr size_t count () { return N; }
 	static constexpr size_t size () { return N * sizeof(T); }
-	template<class U> VecX<T,N>& operator=(const VecX<U,N>&);
+	template<class U> VecX<T,N>& operator= (const VecX<U,N>&);
 
-	template<class U, size_t M> bool operator==(const VecX<U,M>&) const;
-	template<class U, size_t M> bool operator!=(const VecX<U,M>& other) const {
-		return ! this->operator==(other);
+	template<class U, size_t M> bool operator== (const VecX<U,M>&) const;
+	template<class U, size_t M> bool operator!= (const VecX<U,M>& other) const {
+		return ! this->template operator==(other);
 	}
-
-	template<class U, size_t M, class V, size_t Q>
-		bool equalToll(const VecX<U,M>&, const VecX<V,Q>&) const;
+	template<class U, size_t M> bool comparePartially (const VecX<U,M>&, T tol) const;
 
 	const T& x() const  { verifyIndex(0); return (*this)[0]; }
 	const T& y() const  { verifyIndex(1); return (*this)[1]; }
@@ -380,7 +414,7 @@ typedef VecX<uint32_t,4> UVec4;
 
 template<class T, size_t N>
 template<class U>
-inline VecX<T,N>& VecX<T,N>::operator=(const VecX<U,N>& s)
+inline VecX<T,N>& VecX<T,N>::operator= (const VecX<U,N>& s)
 {
 	for (size_t i = 0; i < N; ++i)
 		data[i] = static_cast<T>(s.data[i]);
@@ -389,28 +423,29 @@ inline VecX<T,N>& VecX<T,N>::operator=(const VecX<U,N>& s)
 
 template<class T, size_t N>
 template<class U, size_t M>
-inline bool VecX<T,N>::operator==(const VecX<U,M>& p) const
+bool VecX<T,N>::operator== (const VecX<U,M>& p) const
 {
-	bool ok = false;
-	if constexpr (N == M)
+	for (size_t k = 0, i = 0; k < N && i < M; ++k, ++i)
 	{
-		ok = true;
-		for (size_t i = 0; ok && i < N; ++i)
-			ok = data[i] == p.data[i];
+		if (data[i] != p[i])
+			return false;
 	}
-	return ok;
+	return true;
 }
-
 template<class T, size_t N>
-template<class U, size_t M, class V, size_t Q>
-inline bool VecX<T,N>::equalToll(const VecX<U,M>&, const VecX<V,Q>&) const
+template<class U, size_t M>
+bool VecX<T,N>::comparePartially (const VecX<U,M>& p, T tol) const
 {
-	// not implemented yet 2022-02-14, 3.35 AM CET
-	return false;
+	for (size_t i = 0; i < N && i < M; ++i)
+	{
+		if (!(T(p[i]) >= data[i] - tol && T(p[i]) <= data[i] + tol))
+			return false;
+	}
+	return true;
 }
 
 template<class T, size_t N>
-inline std::ostream& operator<<(std::ostream& s, const VecX<T,N>& p)
+inline std::ostream& operator<< (std::ostream& s, const VecX<T,N>& p)
 {
     s << '[';
     for (size_t i = 0; i < N; ++i) {
@@ -423,33 +458,6 @@ inline std::ostream& operator<<(std::ostream& s, const VecX<T,N>& p)
     }
     s << ']';
     return s;
-}
-
-template<class T, class... Others>
-struct VectorAccess2D
-{
-	typedef std::vector<T, Others...> vector_type;
-	vector_type&	vector;
-	const uint32_t	colCount;
-	VectorAccess2D (vector_type& v, uint32_t width) : vector(v), colCount(width) {}
-	uint32_t makeFlatIndex (uint32_t col, uint32_t row) {
-		const uint32_t flatIndex = row * colCount + col;
-		return flatIndex;
-	}
-	T& operator ()(uint32_t col, uint32_t row) {
-		const uint32_t flatIndex = makeFlatIndex(col, row);
-		return vector.at(flatIndex);
-	}
-	const T& operator ()(uint32_t col, uint32_t row) const {
-		const uint32_t flatIndex = makeFlatIndex(col, row);
-		return vector.at(flatIndex);
-	}
-};
-
-template<class T, class... Others>
-VectorAccess2D<T,Others...> makeVectorAccess2D (std::vector<T, Others...>& vec, uint32_t width)
-{
-	return VectorAccess2D<T, Others...>(vec, width);
 }
 
 } // namespace vtf

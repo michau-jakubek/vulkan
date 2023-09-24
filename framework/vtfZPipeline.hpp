@@ -3,7 +3,7 @@
 
 #include "vtfZDeletable.hpp"
 #include "vtfZUtils.hpp"
-#include "vtfPipelineLayout.hpp"
+#include "vtfLayoutManager.hpp"
 #include "vtfVertexInput.hpp"
 #include <memory>
 
@@ -23,12 +23,15 @@ namespace gpp // Graphics Pipeline Param
 	using ViewportCount			= ZDistType<ViewportCount, uint32_t>;
 	using ScissorCount			= ZDistType<ScissorCount, uint32_t>;
 	using LineWidth				= ZDistType<LineWidth, float>;
+	using MultiviewIndex		= ZDistType<MultiviewIndex, uint32_t>;
+	using AttachmentCount		= ZDistType<AttachmentCount, uint32_t>;
 
 	// VkExtent2D	sets both viewport and scissor
 	// VkViewport	sets viewport only
-	// VkRect2D		sets scissor onlu
+	// VkRect2D		sets scissor only
 } // gpp
 
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, ZPipelineCreateFlags				createFlags);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, ZShaderModule						shaderModule);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<VertexBinding>				vertexBinding);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<VertexInput>				vertexInput);
@@ -49,6 +52,9 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::DepthT
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::DepthWriteEnable>		enableDepthMask);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::StencilTestEnable>	enableStencilTest);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::SubpassIndex>			subpassIndex);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::MultiviewIndex>		multiviewIndex);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, ZRenderPass							renderPass);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::AttachmentCount>		attachmentCount);
 
 // end of template recursion
 void updateSettings (add_ref<GraphicPipelineSettings>);
@@ -60,14 +66,14 @@ void updateSettings (add_ref<GraphicPipelineSettings> settings, Y&& param, X&&..
 	updateSettings(settings, std::forward<X>(params)...);
 }
 
-std::shared_ptr<GraphicPipelineSettings> makeGraphicsPipelineSettings (ZPipelineLayout layout, ZRenderPass renderPass);
+std::shared_ptr<GraphicPipelineSettings> makeGraphicsPipelineSettings (ZPipelineLayout layout);
 
 ZPipeline createGraphicsPipeline (add_ref<GraphicPipelineSettings> settings);
 
 template<class... X>
-ZPipeline createGraphicsPipeline (ZPipelineLayout layout, ZRenderPass renderPass, X&&... params)
+ZPipeline createGraphicsPipeline (ZPipelineLayout layout, X&&... params)
 {
-	std::shared_ptr<GraphicPipelineSettings> settings = makeGraphicsPipelineSettings(layout, renderPass);
+	std::shared_ptr<GraphicPipelineSettings> settings = makeGraphicsPipelineSettings(layout);
 	updateSettings(*settings, std::forward<X>(params)...);
 	return createGraphicsPipeline(*settings);
 }

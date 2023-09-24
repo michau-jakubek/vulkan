@@ -143,6 +143,8 @@ template<> inline constexpr VkFormat type_to_vk_format<Fmt_<WVec2,FmtMask::Norma
 template<> inline constexpr VkFormat type_to_vk_format<Fmt_<WVec3,FmtMask::Normalized>>		=    VK_FORMAT_R16G16B16_SNORM;
 template<> inline constexpr VkFormat type_to_vk_format<Fmt_<WVec4,FmtMask::Normalized>>		= VK_FORMAT_R16G16B16A16_SNORM;
 
+template<> inline constexpr VkFormat type_to_vk_format<Fmt_<float>>		=          VK_FORMAT_R32_SFLOAT;
+
 template<> inline constexpr VkFormat type_to_vk_format<Fmt_<Vec1>>		=          VK_FORMAT_R32_SFLOAT;
 template<> inline constexpr VkFormat type_to_vk_format<Fmt_<Vec2>>		=       VK_FORMAT_R32G32_SFLOAT;
 template<> inline constexpr VkFormat type_to_vk_format<Fmt_<Vec3>>		=    VK_FORMAT_R32G32B32_SFLOAT;

@@ -5,9 +5,10 @@
 namespace vtf
 {
 
-ZSubpassDependency::ZSubpassDependency (VkAccessFlags srcAccess, VkAccessFlags dstAccess,
-										VkPipelineStageFlags srcStage, VkPipelineStageFlags	dstStage,
-										VkDependencyFlags dependencyFlags)
+ZSubpassDependency::ZSubpassDependency	(VkAccessFlags srcAccess, VkAccessFlags dstAccess,
+										 VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage,
+										 DependencyType type, VkDependencyFlags dependencyFlags, uint32_t multiViewMask)
+	: m_multiViewMask(multiViewMask), m_type(type)
 {
 	add_ref<VkSubpassDependency> dep(*this);
 	dep.srcSubpass		= 0u;
@@ -18,8 +19,7 @@ ZSubpassDependency::ZSubpassDependency (VkAccessFlags srcAccess, VkAccessFlags d
 	dep.dstAccessMask	= dstAccess;
 	dep.dependencyFlags	= dependencyFlags;
 }
-
-VkSubpassDependency ZSubpassDependency::operator ()()
+VkSubpassDependency ZSubpassDependency::operator ()() const
 {
 	return static_cast<VkSubpassDependency>(*this);
 }

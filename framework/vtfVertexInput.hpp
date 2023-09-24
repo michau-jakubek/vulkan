@@ -94,13 +94,12 @@ typedef VertexBinding::AttrFwd AttrFwd;
 class VertexInput
 {
 public:
-	VertexInput (add_cref<ZDevice> dev)
-		: device(dev) {}
+	VertexInput (ZDevice dev) : device(dev) {}
 	VertexInput (add_cref<VertexInput>) = delete;
 	VertexInput (VertexInput&&) = delete;
 	friend struct ZPipelineVertexInputStateCreateInfo;
 
-	add_cref<ZDevice>			device;
+	ZDevice						device;
 
 	add_ref<VertexBinding>		binding				(uint32_t binding, uint32_t stride = 0,
 													VkVertexInputRate rate = VK_VERTEX_INPUT_RATE_VERTEX);

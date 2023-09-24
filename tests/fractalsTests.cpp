@@ -4,7 +4,7 @@
 #include "vtfGlfwEvents.hpp"
 #include "vtfZUtils.hpp"
 #include "vtfProgramCollection.hpp"
-#include "vtfPipelineLayout.hpp"
+#include "vtfLayoutManager.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfZPipeline.hpp"
@@ -412,7 +412,7 @@ UNUSED void commandBufferPushConstants (ZCommandBuffer cmdBuffer, ZPipelineLayou
 
 int performTest (Canvas& cs, const std::string&	assets, bool enableFloat64, uint32_t animationTicks, const GlobalAppFlags& flags)
 {
-	ProgramCollection		programs(cs);
+	ProgramCollection		programs(cs.device);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, (assets + "shader.vert"));
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, (assets + (enableFloat64 ? "dshader.frag" : "fshader.frag")));
 	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
@@ -435,7 +435,7 @@ int performTest (Canvas& cs, const std::string&	assets, bool enableFloat64, uint
 		vertexInput.binding(0).addAttributes(vertices);
 	}
 
-	PipelineLayout			pm					(cs.device);
+	LayoutManager			pm					(cs.device);
 	const VkClearValue		clearColor			= {{{0.5f, 0.5f, 0.5, 0.5f}}};
 	const VkFormat			format				= cs.surfaceFormat;
 	ZRenderPass				renderPass			= createColorRenderPass(cs.device, {format}, {{clearColor}});

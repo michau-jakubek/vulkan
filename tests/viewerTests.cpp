@@ -3,7 +3,7 @@
 #include "vtfCanvas.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfFilesystem.hpp"
-#include "vtfPipelineLayout.hpp"
+#include "vtfLayoutManager.hpp"
 #include "vtfZPipeline.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfZCommandBuffer.hpp"
@@ -48,7 +48,7 @@ struct ImageFileInfo
 };
 
 std::vector<ImageFileInfo> userReadImageFiles (add_cref<strings> params, add_cref<std::string> assets,
-											   add_ref<std::ostream> log, add_ref<uint32_t> regularCount, add_ref<uint32_t> panoramaCount)
+											   add_ref<std::ostream> log, add_ref<int32_t> regularCount, add_ref<int32_t> panoramaCount)
 {
 	UNREF(assets);
 	strings				sink;
@@ -67,7 +67,7 @@ std::vector<ImageFileInfo> userReadImageFiles (add_cref<strings> params, add_cre
 
 	bool isPanoramaFile = false;
 	auto insert = [&](add_ref<std::string> s) { return ImageFileInfo(std::move(s), isPanoramaFile); };
-	std::vector<ImageFileInfo> imageFiles(regularCount + panoramaCount);
+	std::vector<ImageFileInfo> imageFiles(make_unsigned(regularCount + panoramaCount));
 
 	isPanoramaFile = false;
 	std::transform(sink.begin(), std::next(sink.begin(), regularCount),
@@ -100,7 +100,7 @@ std::vector<ImageFileInfo> userReadImageFiles (add_cref<strings> params, add_cre
 
 int runViewerSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets,
 						   add_cref<std::vector<ImageFileInfo>> files,
-						   const uint32_t regularCount, const uint32_t panoramaCount);
+						   const int32_t regularCount, const int32_t panoramaCount);
 
 int prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
 {
@@ -113,8 +113,8 @@ int prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
 	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, nullptr, false, gf.vulkanVer);
 
 	int result = (1);
-	uint32_t regularCount	= 0u;
-	uint32_t panoramaCount	= 0u;
+	int32_t regularCount	= 0;
+	int32_t panoramaCount	= 0;
 	std::vector<ImageFileInfo> files = userReadImageFiles(cmdLineParams, record.assets, std::cout, regularCount, panoramaCount);
 	if (regularCount + panoramaCount)
 	{
@@ -372,7 +372,7 @@ protected:
 	const ZShaderModule		faceModule;
 	uint32_t				counter;
 	Subroutines				subroutines;
-	PipelineLayout			layout;
+	LayoutManager			layout;
 	const ZImageUsageFlags	usage;
 	ZBuffer					fontBuffer;
 	ZBuffer					fileBuffer;
@@ -617,7 +617,7 @@ void populateVertexInput (add_ref<VertexInput> input)
 }
 
 int runViewerSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets,
-						   add_cref<std::vector<ImageFileInfo> > files, const uint32_t regularCount, const uint32_t panoramaCount)
+						   add_cref<std::vector<ImageFileInfo> > files, const int32_t regularCount, const int32_t panoramaCount)
 {
 	UserData		userData	(static_cast<uint32_t>(files.size()));
 	ZRenderPass		renderPass	= createColorRenderPass(cs.device, {cs.surfaceFormat}, {});
@@ -625,7 +625,7 @@ int runViewerSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets,
 	ZShaderModule	faceShader	{};
 	ZShaderModule	vertShader	{};
 	ZShaderModule	fragShader	{};
-	PipelineLayout	layoutMgr	(cs.device);
+	LayoutManager	layoutMgr	(cs.device);
 	ZSampler		sampler		{};
 	VertexInput		vertexInput	(cs.device);
 	ZPipeline		panPipeline	{};
@@ -633,7 +633,7 @@ int runViewerSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets,
 	if (panoramaCount)
 	{
 		const strings				includes{ "." };
-		ProgramCollection			programs(cs, assets);
+		ProgramCollection			programs(cs.device, assets);
 		programs.addFromFile(VK_SHADER_STAGE_COMPUTE_BIT,  "face.comp", includes);
 		programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT,   "pan.vert", includes);
 		programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "pan.frag", includes);

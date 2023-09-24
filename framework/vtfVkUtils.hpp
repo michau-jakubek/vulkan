@@ -25,7 +25,7 @@ constexpr uint64_t INVALID_UINT64 = (~(static_cast<uint64_t>(0u)));
 #define UNREF(x) static_cast<void>(x)
 
 #ifdef _MSC_VER
-	#define UNUSED
+	#define UNUSED [[maybe_unused]]
 #else
 	#define UNUSED __attribute__((unused))
 #endif
@@ -119,9 +119,11 @@ protected:
 		: Flags(sink, std::forward<const OtherBits>(others)...) { m_flags |= bit; }
 	Flags(std::nullptr_t, const Bits& bit) { m_flags = bit; }
 };
-typedef Flags<VkBufferUsageFlags, VkBufferUsageFlagBits>		ZBufferUsageFlags;
-typedef Flags<VkImageUsageFlags, VkImageUsageFlagBits>			ZImageUsageFlags;
-typedef Flags<VkMemoryPropertyFlags, VkMemoryPropertyFlagBits>	ZMemoryPropertyFlags;
+typedef Flags<VkBufferUsageFlags, VkBufferUsageFlagBits>			ZBufferUsageFlags;
+typedef Flags<VkImageUsageFlags, VkImageUsageFlagBits>				ZImageUsageFlags;
+typedef Flags<VkMemoryPropertyFlags, VkMemoryPropertyFlagBits>		ZMemoryPropertyFlags;
+typedef Flags<VkPipelineCreateFlags, VkPipelineCreateFlagBits>		ZPipelineCreateFlags;
+typedef Flags<VkRenderingFlags, VkRenderingFlagBits>				ZRenderingFlags;
 static const ZMemoryPropertyFlags ZMemoryPropertyDeviceFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 static const ZMemoryPropertyFlags ZMemoryPropertyHostFlags(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
@@ -132,6 +134,7 @@ bool			hasFormatsAndModes (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR)
 const char*		vkResultToString (VkResult res);
 std::ostream&	operator<<(std::ostream& str, add_cref<ZDistType<QueueFlags, VkQueueFlags>> flags);
 std::ostream&	operator<<(std::ostream& str, add_cref<VkDeviceQueueCreateInfoEx> props);
+std::ostream&	operator<<(std::ostream& str, add_cref<VkPrimitiveTopology> topo);
 strings			enumerateInstanceLayers ();
 strings			enumerateInstanceExtensions (const strings& layerNames = {});
 strings			enumerateDeviceExtensions (VkPhysicalDevice device, const strings& layerNames = {});
@@ -165,9 +168,12 @@ auto			computeMipLevelsOffsetAndSize (VkFormat format, uint32_t level0Width, uin
 
 uint32_t		sampleFlagsToSampleCount (VkSampleCountFlags flags);
 VkExtent2D		makeExtent2D (uint32_t width, uint32_t height);
+VkExtent2D		makeExtent2D (add_cref<VkExtent3D> extent3D);
 VkRect2D		makeRect2D (uint32_t width, uint32_t height, int32_t Xoffset = 0u, int32_t Yoffset = 0u);
+VkRect2D		makeRect2D (add_cref<VkExtent2D> extent2D, add_cref<VkOffset2D> offset2D = {});
 VkExtent3D		makeExtent3D (uint32_t width = 0u, uint32_t height = 0u, uint32_t depth = 0u);
-VkOffset3D		makeOffset3D (uint32_t x = 0u, uint32_t y = 0u, uint32_t z = 0u);
+VkOffset2D		makeOffset2D (int32_t x = 0, int32_t y = 0);
+VkOffset3D		makeOffset3D (int32_t x = 0, int32_t y = 0, int32_t z = 0);
 VkViewport		makeViewport (uint32_t width, uint32_t height, uint32_t x = 0, uint32_t y = 0, float minDepth = 0.0f, float maxDepth = +1.0);
 VkRect2D		clampScissorToViewport (add_cref<VkViewport> viewport, add_ref<VkRect2D> inOutScissor);
 template<class CompType> // int32_t: IVec4, uint32_t: UVec4, float: Vec4

@@ -4,9 +4,9 @@
 #include <string>
 #include <optional>
 
-#include "vulkan/vulkan.h"
 #include "vtfZDeletable.hpp"
-#include "vtfContext.hpp"
+#include "vtfVkUtils.hpp"
+#include "vtfCUtils.hpp"
 
 namespace vtf
 {
@@ -22,19 +22,20 @@ bool verifyShaderCodeGL (const VerifyShaderCodeInfo* infos, uint32_t infoCount, 
 
 class ProgramCollection
 {
-	VulkanContext&		m_context;
+	ZDevice				m_device;
 	const std::string	m_basePath;
 	const std::string	m_tempDir;
-	std::map<VkShaderStageFlagBits, strings> m_stageToCode; // [0]: glsl code, [1]: entry name, [2...]: include path(s)
-	std::map<VkShaderStageFlagBits, std::vector<unsigned char>> m_stageToBinary;
+	std::map<VkShaderStageFlagBits, uint32_t> m_stageToCount;
+	std::map<std::pair<VkShaderStageFlagBits, uint32_t>, strings> m_stageToCode; // [0]: glsl code, [1]: entry name, [2...]: include path(s)
+	std::map<std::pair<VkShaderStageFlagBits, uint32_t>, std::vector<unsigned char>> m_stageToBinary;
 public:
-	ProgramCollection (VulkanContext& vc, const std::string& basePath = std::string());
-	void add (VkShaderStageFlagBits type, const std::string& code, const strings& includePaths = {}, const std::string& entryName = "main");
-	bool addFromFile(VkShaderStageFlagBits type,
+	ProgramCollection (ZDevice device, const std::string& basePath = std::string());
+	void addFromText (VkShaderStageFlagBits type, const std::string& code, const strings& includePaths = {}, const std::string& entryName = "main");
+	bool addFromFile (VkShaderStageFlagBits type,
 					 const std::string& fileName, const strings& includePaths = {},
 					 const std::string& entryName = "main", bool verbose = true);
 	void buildAndVerify (const Version& vulkanVer = Version(1,0), const Version& spirvVer = Version(1,0), bool enableValidation = false, bool buildAlways = false);
-	std::optional<ZShaderModule>	getShader (VkShaderStageFlagBits stage, bool verbose = false) const;
+	std::optional<ZShaderModule>	getShader (VkShaderStageFlagBits stage, uint32_t index = 0u, bool verbose = false) const;
 };
 
 void addProgram (ProgramCollection& programCollection,	const std::string& programName,		VkShaderStageFlagBits programType,

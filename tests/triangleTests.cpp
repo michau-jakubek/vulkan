@@ -1,7 +1,7 @@
 #include "triangleTests.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZImage.hpp"
-#include "vtfPipelineLayout.hpp"
+#include "vtfLayoutManager.hpp"
 #include "vtfProgramCollection.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfZCommandBuffer.hpp"
@@ -110,11 +110,11 @@ void onKey (Canvas& cs, void* userData, const int key, int scancode, int action,
 
 int runTriangeSingleThread (Canvas& cs, const std::string& assets, bool infinityRepeat)
 {
-	PipelineLayout				pl(cs.device);
-	ProgramCollection			programs(cs, assets);
+	LayoutManager				pl			(cs.device);
+	ProgramCollection			programs	(cs.device, assets);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
-	const GlobalAppFlags		flags(getGlobalAppFlags());
+	const GlobalAppFlags		flags		(getGlobalAppFlags());
 	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
 
 	ZShaderModule				vertShaderModule	= *programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
@@ -170,7 +170,7 @@ int runTriangleMultipleThreads (Canvas& cs, const std::string& assets, const uin
 		return (1);
 	}
 
-	ProgramCollection			programs(cs, assets);
+	ProgramCollection			programs(cs.device, assets);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
 	const GlobalAppFlags		flags(getGlobalAppFlags());
@@ -188,7 +188,7 @@ int runTriangleMultipleThreads (Canvas& cs, const std::string& assets, const uin
 
 	const VkFormat				format				= cs.surfaceFormat;
 	const VkClearValue			clearColor			{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
-	ZPipelineLayout				pipelineLayout		= PipelineLayout(cs.device).createPipelineLayout();
+	ZPipelineLayout				pipelineLayout		= LayoutManager(cs.device).createPipelineLayout();
 
 	cs.events().cbKey.set(onKey, nullptr);
 	cs.events().cbWindowSize.set(onResize, nullptr);

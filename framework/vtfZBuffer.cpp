@@ -401,7 +401,7 @@ void	bufferCopyToImage	(ZCommandBuffer cmdBuffer, ZBuffer buffer, ZImage image,
 
 namespace namespace_hidden
 {
-PixelBufferAccess_::PixelBufferAccess_ (ZBuffer buffer, uint32_t elementSize, uint32_t width, uint32_t height, uint32_t depth)
+BufferTexelAccess_::BufferTexelAccess_ (ZBuffer buffer, uint32_t elementSize, uint32_t width, uint32_t height, uint32_t depth)
 	: m_buffer		(buffer)
 	, m_elementSize	(elementSize)
 	, m_bufferSize	(bufferGetSize(buffer))
@@ -416,19 +416,20 @@ PixelBufferAccess_::PixelBufferAccess_ (ZBuffer buffer, uint32_t elementSize, ui
 	VKASSERT2(vkMapMemory(*buffer.getParam<ZDevice>(), *buffer.getParam<ZDeviceMemory>(),
 						  0u, bufferGetMemorySize(buffer), (VkMemoryMapFlags)0, reinterpret_cast<void**>(&m_data)));
 }
-PixelBufferAccess_::~PixelBufferAccess_ () { vkUnmapMemory(*m_buffer.getParam<ZDevice>(), *m_buffer.getParam<ZDeviceMemory>()); }
-add_ptr<void> PixelBufferAccess_::at (uint32_t x, uint32_t y, uint32_t z)
+BufferTexelAccess_::~BufferTexelAccess_ () { vkUnmapMemory(*m_buffer.getParam<ZDevice>(), *m_buffer.getParam<ZDeviceMemory>()); }
+add_ptr<void> BufferTexelAccess_::at (uint32_t x, uint32_t y, uint32_t z)
 {
 	const std::size_t address = static_cast<std::size_t>(m_elementSize * ((z * m_size.x() * m_size.y()) + (y * m_size.x()) + x));
 	ASSERTION(address < m_bufferSize);
 	return &m_data[address];
 }
-add_cptr<void> PixelBufferAccess_::at (uint32_t x, uint32_t y, uint32_t z) const
+add_cptr<void> BufferTexelAccess_::at (uint32_t x, uint32_t y, uint32_t z) const
 {
 	const std::size_t address = static_cast<std::size_t>(m_elementSize * ((z * m_size.x() * m_size.y()) + (y * m_size.x()) + x));
 	ASSERTION(address < m_bufferSize);
 	return &m_data[address];
 }
+
 } // namespace_hidden
 
 } // namespace vtf

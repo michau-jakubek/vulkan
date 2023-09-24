@@ -183,7 +183,7 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 													  , apiVer					// apiVersion
 													  , false					// enableDebugPrintf
 													  );
-		ZPhysicalDevice		phys = selectPhysicalDevice(deviceIndex, instance, {/* required extensions */});
+		ZPhysicalDevice		phys = selectPhysicalDevice(make_signed(deviceIndex), instance, {/* required extensions */});
 		add_cref<strings>	exts	= phys.getParamRef<strings>();
 		uint32_t			entry	= 0;
 		for (add_cref<strings::value_type> ext : exts)
@@ -350,6 +350,7 @@ void printUsage(std::ostream& str)
 	str << "  -tmp <temp_dir>           change temp directory, default is system's temp directory" << std::endl;
 	str << "  -verbose <level>          enable application diagnostic messages, default is 0 that means disabled" << std::endl;
 	str << "  -dprintf:                 enable Debug Printf feature" << std::endl;
+	str << "                            #extension GL_EXT_debug_printf : enable and debugPrintfEXT(...)" << std::endl;
 	str << "  -bt:                      enable backtrace" << std::endl;
 	str << "Compiler options:" << std::endl;
 	str << "  -vulkan <version>:        (major * 10 + minor), default is 10 aka vulkan1.0" << std::endl;

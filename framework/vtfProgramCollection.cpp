@@ -22,9 +22,7 @@
 #include <regex>
 
 #include "vtfBacktrace.hpp"
-#include "vtfVkUtils.hpp"
-#include "vtfZDeletable.hpp"
-#include "vtfCUtils.hpp"
+#include "vtfZUtils.hpp"
 #include "vtfProgramCollection.hpp"
 #include "vtfFilesystem.hpp"
 #include "vtfBacktrace.hpp"
@@ -609,18 +607,18 @@ static	bool verifyShaderCode (VkShaderStageFlagBits stage,
 	return status;
 }
 
-ProgramCollection::ProgramCollection (VulkanContext& vc, const std::string& basePath)
-		: m_context(vc), m_basePath(basePath)
+ProgramCollection::ProgramCollection (ZDevice device, const std::string& basePath)
+		: m_device(device), m_basePath(basePath)
 {
 }
 
-void ProgramCollection::add (VkShaderStageFlagBits type, const std::string& code, const strings& includePaths, const std::string& entryName)
+void ProgramCollection::addFromText (VkShaderStageFlagBits type, const std::string& code, const strings& includePaths, const std::string& entryName)
 {
-	m_stageToCode[type].clear();
-	m_stageToCode[type].push_back(code);
-	m_stageToCode[type].push_back(entryName);
+	const auto key = std::make_pair(type, m_stageToCount[type]++);
+	m_stageToCode[key].push_back(code);
+	m_stageToCode[key].push_back(entryName);
 	for (size_t p = 0; p < includePaths.size(); ++p)
-		m_stageToCode[type].push_back(m_basePath + includePaths[p]);
+		m_stageToCode[key].push_back(m_basePath + includePaths[p]);
 }
 
 bool ProgramCollection::addFromFile(VkShaderStageFlagBits type,
@@ -633,11 +631,12 @@ bool ProgramCollection::addFromFile(VkShaderStageFlagBits type,
 	if (glsl_handle.is_open())
 	{
 		std::string glsl_content = std::string((std::istreambuf_iterator<char>(glsl_handle)), std::istreambuf_iterator<char>());
-		m_stageToCode[type].clear();
-		m_stageToCode[type].push_back(glsl_content);
-		m_stageToCode[type].push_back(entryName);
+		glsl_handle.close();
+		const auto key = std::make_pair(type, m_stageToCount[type]++);
+		m_stageToCode[key].push_back(glsl_content);
+		m_stageToCode[key].push_back(entryName);
 		for (size_t p = 0; p < includePaths.size(); ++p)
-			m_stageToCode[type].push_back(m_basePath + includePaths[p]);
+			m_stageToCode[key].push_back(m_basePath + includePaths[p]);
 		result = true;
 	}
 	else if (verbose)
@@ -653,23 +652,27 @@ void ProgramCollection::buildAndVerify (const Version& vulkanVer, const Version&
 	std::string error;
 	for (auto stage : availableShaderStages)
 	{
-		if (mapHasKey(stage, m_stageToCode))
+		if (mapHasKey(stage, m_stageToCount))
 		{
-			std::vector<unsigned char> binary;
-			if (verifyShaderCode(stage, vulkanVer, spirvVer, enableValidation, buildAlways, m_stageToCode[stage], binary, error))
-				m_stageToBinary[stage] = binary;
-			else ASSERTMSG(false, error);
+			for (uint32_t k = 0; k < add_const_ref(m_stageToCount).at(stage); ++k)
+			{
+				const auto key = std::make_pair(stage, k);
+				std::vector<unsigned char> binary;
+				if (verifyShaderCode(stage, vulkanVer, spirvVer, enableValidation, buildAlways, m_stageToCode[key], binary, error))
+					m_stageToBinary[key] = binary;
+				else ASSERTMSG(false, error);
+			}
 		}
 	}
 }
 
-std::optional<ZShaderModule> ProgramCollection::getShader (VkShaderStageFlagBits stage, bool verbose) const
+std::optional<ZShaderModule> ProgramCollection::getShader (VkShaderStageFlagBits stage, uint32_t index, bool verbose) const
 {
 	std::optional<ZShaderModule> module;
-	auto search = m_stageToBinary.find(stage);
+	auto search = m_stageToBinary.find(std::make_pair(stage, index));
 	if (m_stageToBinary.end() != search)
 	{
-		module = createShaderModule(m_context.device, stage, search->second);
+		module = createShaderModule(m_device, stage, search->second);
 	}
 	else if (verbose)
 	{

@@ -84,7 +84,7 @@ add_ptr<T> data_or_null (Ctr<T, Aux...>& ctr)
 }
 
 template<template<class, class...> class Ctr, class T, class... Aux>
-add_ptr<T> data_or_null (const Ctr<T, Aux...>& ctr)
+add_cptr<T> data_or_null (const Ctr<T, Aux...>& ctr)
 {
 	return ctr.size() ? ctr.data() : nullptr;
 }
@@ -116,27 +116,37 @@ concise_convert (const convFrom_&, const convTo_& to)
 }
 
 template<class X, class SX = typename std::make_signed<X>::type>
-const SX make_signed (X& x)
+constexpr const SX make_signed (X& x)
 {
 	return static_cast<SX>(x);
 }
 
 template<class X, class SX = typename std::make_signed<X>::type>
-SX make_signed (const X& x)
+constexpr SX make_signed (const X& x)
 {
 	return static_cast<SX>(x);
 }
 
 template<class X, class UX = typename std::make_unsigned<X>::type>
-UX make_unsigned (const X& x)
+constexpr UX make_unsigned (const X& x)
 {
 	return static_cast<UX>(x);
 }
 
 template<class X, class NCX = add_ref<typename std::remove_const<X>::type>>
-NCX remove_const (X& x)
+constexpr NCX remove_const_ref (X& x)
 {
 	return const_cast<NCX>(x);
+}
+
+template<class X> constexpr add_cref<X> add_const_ref (X& x)
+{
+	return add_cref<X>(x);
+}
+
+template<class X> constexpr add_cref<X> add_const_ref (const X& x)
+{
+	return add_cref<X>(x);
 }
 
 template<class T, class P = T(*)[1], class R = decltype(std::begin(*std::declval<P>()))>

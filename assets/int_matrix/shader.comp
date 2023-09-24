@@ -1,0 +1,23 @@
+#version 450
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) buffer inOut
+{
+	vec4	inVec;
+	mat4	inMat4;
+	mat2x4	inMat2x4;
+	uint	align;
+	mat3x2	inMat3x2;
+	bool	bTest;		// overriden by true
+	vec4	outVec;		// mat4 * inVec
+	mat3x4	outMat3x4;	// mat2x4 * mat3x2
+};
+
+void main()
+{
+	outVec = inMat4 * inVec;
+	outMat3x4 = inMat2x4 * inMat3x2;
+	bTest = true;
+}
+

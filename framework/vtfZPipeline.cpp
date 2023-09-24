@@ -1,4 +1,5 @@
 #include "vtfZPipeline.hpp"
+#include "vtfStructUtils.hpp"
 #include <array>
 
 namespace vtf
@@ -6,8 +7,7 @@ namespace vtf
 
 VkPipelineInputAssemblyStateCreateInfo  makeInputAssemblyStateCreateInfo ()
 {
-	VkPipelineInputAssemblyStateCreateInfo assemblyState{};
-	assemblyState.sType		= VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	VkPipelineInputAssemblyStateCreateInfo assemblyState = makeVkStruct();
 	assemblyState.topology	= VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	assemblyState.primitiveRestartEnable = VK_FALSE;
 	return assemblyState;
@@ -15,16 +15,13 @@ VkPipelineInputAssemblyStateCreateInfo  makeInputAssemblyStateCreateInfo ()
 
 VkPipelineVertexInputStateCreateInfo makeVertexInputStateCreateInfo ()
 {
-	VkPipelineVertexInputStateCreateInfo vertexInputState{};
-	vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	VkPipelineVertexInputStateCreateInfo vertexInputState = makeVkStruct();
 	return vertexInputState;
 }
 
 VkPipelineTessellationStateCreateInfo makeTessellationStateCreateInfo ()
 {
-	VkPipelineTessellationStateCreateInfo tessellationState{};
-	tessellationState.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
-	tessellationState.pNext = nullptr;
+	VkPipelineTessellationStateCreateInfo tessellationState = makeVkStruct();
 	tessellationState.flags = 0;
 	tessellationState.patchControlPoints = 0;
 	return tessellationState;
@@ -32,8 +29,7 @@ VkPipelineTessellationStateCreateInfo makeTessellationStateCreateInfo ()
 
 VkPipelineViewportStateCreateInfo makeViewportStateCreateInfo ()
 {
-	VkPipelineViewportStateCreateInfo	viewportState{};
-	viewportState.sType			= VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	VkPipelineViewportStateCreateInfo	viewportState = makeVkStruct();
 	viewportState.viewportCount	= 1u;
 	viewportState.scissorCount	= 1u;
 	return viewportState;
@@ -41,8 +37,7 @@ VkPipelineViewportStateCreateInfo makeViewportStateCreateInfo ()
 
 VkPipelineRasterizationStateCreateInfo makeRasterizationCreateInfo ()
 {
-	VkPipelineRasterizationStateCreateInfo rasterizationState{};
-	rasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	VkPipelineRasterizationStateCreateInfo rasterizationState = makeVkStruct();
 	rasterizationState.depthClampEnable			= VK_FALSE;
 	rasterizationState.rasterizerDiscardEnable	= VK_FALSE;
 	rasterizationState.polygonMode				= VK_POLYGON_MODE_FILL;
@@ -56,8 +51,7 @@ VkPipelineRasterizationStateCreateInfo makeRasterizationCreateInfo ()
 
 VkPipelineMultisampleStateCreateInfo makeMultisampleStateCreateInfo ()
 {
-	VkPipelineMultisampleStateCreateInfo multisampleState{};
-	multisampleState.sType					= VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	VkPipelineMultisampleStateCreateInfo multisampleState = makeVkStruct();
 	multisampleState.sampleShadingEnable	= VK_FALSE;
 	multisampleState.rasterizationSamples	= VK_SAMPLE_COUNT_1_BIT;
 	return multisampleState;
@@ -65,9 +59,7 @@ VkPipelineMultisampleStateCreateInfo makeMultisampleStateCreateInfo ()
 
 VkPipelineDepthStencilStateCreateInfo makeDepthStencilStateCreateInfo ()
 {
-	VkPipelineDepthStencilStateCreateInfo	depthStencilState{};
-	depthStencilState.sType					= VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-	depthStencilState.pNext					= nullptr;
+	VkPipelineDepthStencilStateCreateInfo	depthStencilState = makeVkStruct();
 	depthStencilState.depthTestEnable		= VK_TRUE;
 	depthStencilState.depthWriteEnable		= VK_TRUE;
 	depthStencilState.depthCompareOp		= VK_COMPARE_OP_LESS_OR_EQUAL;
@@ -91,8 +83,7 @@ VkPipelineColorBlendAttachmentState makeBlendAttachmentState ()
 
 VkPipelineColorBlendStateCreateInfo makeBlendStateCreateInfo ()
 {
-	VkPipelineColorBlendStateCreateInfo colorBlending{};
-	colorBlending.sType				= VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	VkPipelineColorBlendStateCreateInfo colorBlending = makeVkStruct();
 	colorBlending.logicOpEnable		= VK_FALSE;
 	colorBlending.logicOp			= VK_LOGIC_OP_COPY;
 	colorBlending.attachmentCount	= 0u;
@@ -106,29 +97,103 @@ VkPipelineColorBlendStateCreateInfo makeBlendStateCreateInfo ()
 
 VkPipelineDynamicStateCreateInfo makeDynamicStateCreateInfo ()
 {
-	VkPipelineDynamicStateCreateInfo dynamicState{};
-	dynamicState.sType				= VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-	return dynamicState;
+	return makeVkStructT<VkPipelineDynamicStateCreateInfo>();
 }
 
 VkGraphicsPipelineCreateInfo makePipelineCreateInfo ()
 {
-	VkGraphicsPipelineCreateInfo pipelineInfo{};
-	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	return pipelineInfo;
+	return makeVkStructT<VkGraphicsPipelineCreateInfo>();
 }
+
+struct SpecializationInfoWithEntries : VkSpecializationInfo
+{
+	VkSpecializationMapEntry	entries[4];
+	uint8_t						data[ARRAY_LENGTH(entries) * sizeof(VkDeviceSize)];
+	SpecializationInfoWithEntries ();
+	SpecializationInfoWithEntries (const SpecializationInfoWithEntries& other);
+	template<class T> void addEntry (uint32_t constantID, T value);
+	bool hasEntry (uint32_t constantID) const;
+	void print () const;
+};
+SpecializationInfoWithEntries::SpecializationInfoWithEntries ()
+	: entries	()
+	, data		()
+{
+	add_ref<VkSpecializationInfo>(*this) = {};
+}
+SpecializationInfoWithEntries::SpecializationInfoWithEntries (const SpecializationInfoWithEntries& other)
+	: entries	()
+	, data		()
+{
+	std::copy(std::begin(other.entries), std::end(other.entries), std::begin(this->entries));
+	std::copy(std::begin(other.data), std::end(other.data), std::begin(this->data));
+	add_ref<VkSpecializationInfo>(*this) = other;
+	if (mapEntryCount)
+	{
+		pMapEntries = entries;
+		pData = data;
+	}
+}
+bool SpecializationInfoWithEntries::hasEntry (uint32_t constantID) const
+{
+	for (uint32_t e = 0u; e < mapEntryCount; ++e)
+	{
+		if (entries[e].constantID == constantID)
+			return true;
+	}
+	return false;
+}
+template<class T> void SpecializationInfoWithEntries::addEntry (uint32_t constantID, T value)
+{
+	if (hasEntry(constantID)) {}
+	ASSERTION(sizeof(T) <= sizeof(VkDeviceSize));
+	ASSERTION(mapEntryCount < ARRAY_LENGTH(entries));
+	uint32_t offset = 0u;
+	for (uint32_t e = 0u; e < mapEntryCount; ++e)
+	{
+		offset += static_cast<uint32_t>(entries[e].size);
+	}
+	uint32_t valueSize = uint32_t(sizeof(T));
+	entries[mapEntryCount++] = { 0, offset, valueSize };
+	*reinterpret_cast<T*>(&data[dataSize]) = value;
+	pMapEntries = entries;
+	dataSize = dataSize + valueSize;
+	pData = data;
+}
+void SpecializationInfoWithEntries::print () const
+{
+	std::cout << "mapEntryCount: " << mapEntryCount << std::endl;
+	std::cout << "pMapEntries:   " << static_cast<const void*>(pMapEntries) << std::endl;
+	std::cout << "dataSize:      " << dataSize << std::endl;
+	std::cout << "pData:         " << static_cast<const void*>(pData) << std::endl;
+	for (uint32_t i = 0; pMapEntries && i < mapEntryCount; ++i)
+	{
+		std::cout << "Entry[" << i << "].contantID: " << entries[i].constantID << std::endl;
+		std::cout << "Entry[" << i << "].offset:    " << entries[i].offset << std::endl;
+		std::cout << "Entry[" << i << "].size:      " << entries[i].size << std::endl;
+	}
+	if (pData)
+	{
+		std::cout << "Data as float: " << *((float*)pData) << std::endl;
+		std::cout << "Data as uint:  " << *((uint32_t*)pData) << std::endl;
+	}
+}
+typedef std::map<VkShaderStageFlagBits, SpecializationInfoWithEntries> SpecializationInfoWithEntriesMap;
 
 struct GraphicPipelineSettings
 {
 	ZPipelineLayout		m_layout;
 	ZRenderPass			m_renderPass;
+	uint32_t			m_attachmentCount;
 
+	SpecializationInfoWithEntriesMap					m_shaderPerStageSpecs;
 	std::vector<VkPipelineShaderStageCreateInfo>		m_shaderStages;
 	VkPipelineInputAssemblyStateCreateInfo				m_assemblyState;
 	ZPipelineVertexInputStateCreateInfo					m_zVertexInputState;
 	VkPipelineVertexInputStateCreateInfo				m_vertexInputState;
 	VkPipelineTessellationStateCreateInfo				m_tessellationState;
 
+	uint32_t											m_multiviewIndex;
 	VkViewport											m_viewport;
 	VkRect2D											m_scissor;
 	VkPipelineViewportStateCreateInfo					m_viewportState;
@@ -145,26 +210,29 @@ struct GraphicPipelineSettings
 
 	VkGraphicsPipelineCreateInfo						m_createInfo;
 
-	GraphicPipelineSettings (ZPipelineLayout layout, ZRenderPass renderPass);
+	GraphicPipelineSettings (ZPipelineLayout layout);
 	auto findShader (VkShaderStageFlagBits stage) -> std::vector<VkPipelineShaderStageCreateInfo>::iterator;
 	uint32_t containsDynamicState (VkDynamicState dynamicState) const;
+	void updateMultiviewIndex ();
 };
 
-GraphicPipelineSettings::GraphicPipelineSettings (ZPipelineLayout layout, ZRenderPass renderPass)
+GraphicPipelineSettings::GraphicPipelineSettings (ZPipelineLayout layout)
 	: m_layout				(layout)
-	, m_renderPass			(renderPass)
+	, m_renderPass			()
+	, m_attachmentCount		(0)
 	, m_shaderStages		()
 	, m_assemblyState		(makeInputAssemblyStateCreateInfo())
 	, m_zVertexInputState	()
 	, m_vertexInputState	(makeVertexInputStateCreateInfo())
 	, m_tessellationState	(makeTessellationStateCreateInfo())
+	, m_multiviewIndex		(INVALID_UINT32)
 	, m_viewport			(makeViewport(0, 0))
 	, m_scissor				(makeRect2D(0, 0))
 	, m_viewportState		(makeViewportStateCreateInfo())
 	, m_rasterizationState	(makeRasterizationCreateInfo())
 	, m_multisampleState	(makeMultisampleStateCreateInfo())
 	, m_depthStencilState	(makeDepthStencilStateCreateInfo())
-	, m_blendAttachments	(renderPass.getParam<ZDistType<AttachmentCount, uint32_t>>(), makeBlendAttachmentState())
+	, m_blendAttachments	()
 	, m_blendState			(makeBlendStateCreateInfo())
 	, m_dynamicStates		()
 	, m_dynamicState		(makeDynamicStateCreateInfo())
@@ -190,9 +258,21 @@ uint32_t GraphicPipelineSettings::containsDynamicState (VkDynamicState dynamicSt
 			: INVALID_UINT32;
 }
 
-std::shared_ptr<GraphicPipelineSettings> makeGraphicsPipelineSettings (ZPipelineLayout layout, ZRenderPass renderPass)
+void GraphicPipelineSettings::updateMultiviewIndex ()
 {
-	return std::make_shared<GraphicPipelineSettings>(layout, renderPass);
+	if (m_multiviewIndex != INVALID_UINT32)
+	{
+		for (add_ref<VkPipelineShaderStageCreateInfo> stage : m_shaderStages)
+		{
+			add_ref<SpecializationInfoWithEntries> entry = m_shaderPerStageSpecs[stage.stage];
+			entry.addEntry(ZDistName::MultiviewIndex, m_multiviewIndex);
+			stage.pSpecializationInfo = &entry;
+		}
+	}
+}
+std::shared_ptr<GraphicPipelineSettings> makeGraphicsPipelineSettings (ZPipelineLayout layout)
+{
+	return std::make_shared<GraphicPipelineSettings>(layout);
 }
 
 ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
@@ -201,8 +281,20 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 
 	settings.m_vertexInputState	= settings.m_zVertexInputState();
 
+	settings.updateMultiviewIndex();
 	info.stageCount				= static_cast<uint32_t>(settings.m_shaderStages.size());
 	info.pStages				= settings.m_shaderStages.data();
+
+	/*
+	for (add_ref<VkPipelineShaderStageCreateInfo> stage : settings.m_shaderStages)
+	{
+		if (stage.pSpecializationInfo)
+		{
+			((SpecializationInfoWithEntries*)stage.pSpecializationInfo)->print();
+		}
+	}
+	*/
+
 	info.pVertexInputState		= &settings.m_vertexInputState;
 	info.pInputAssemblyState	= &settings.m_assemblyState;
 
@@ -227,8 +319,11 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 	info.pMultisampleState		= &settings.m_multisampleState;
 	info.pDepthStencilState		= &settings.m_depthStencilState;
 
-	const uint32_t attachmentCount = settings.m_renderPass.getParam<ZDistType<AttachmentCount, uint32_t>>();
-	ASSERTION(settings.m_blendAttachments.size() <= attachmentCount);
+	const uint32_t attachmentCount = settings.m_renderPass.has_handle()
+									? settings.m_renderPass.getParam<ZDistType<AttachmentCount, uint32_t>>().get()
+									: settings.m_attachmentCount;
+	ASSERTMSG(attachmentCount != 0u, "Ther must be at least one attachment");
+	settings.m_blendAttachments.resize(attachmentCount, makeBlendAttachmentState());
 	settings.m_blendState.attachmentCount	= attachmentCount;
 	settings.m_blendState.pAttachments		= settings.m_blendAttachments.data();
 	info.pColorBlendState					= &settings.m_blendState;
@@ -240,7 +335,7 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 	}
 
 	info.layout				= *settings.m_layout;
-	info.renderPass			= *settings.m_renderPass;
+	info.renderPass			= settings.m_renderPass.has_handle() ? *settings.m_renderPass : VK_NULL_HANDLE;
 	info.basePipelineHandle	= VK_NULL_HANDLE;
 	info.basePipelineIndex	= 0u;
 
@@ -260,6 +355,11 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 
 void updateSettings (add_ref<GraphicPipelineSettings>) { /* end of template recursion */ }
 
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZPipelineCreateFlags createFlags)
+{
+	settings.m_createInfo.flags = createFlags();
+}
+
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZShaderModule shaderModule)
 {
 	const VkShaderStageFlagBits stage = shaderModule.getParam<VkShaderStageFlagBits>();
@@ -277,6 +377,16 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZShaderModu
 		shaderStageInfo.pName	= "main";
 		settings.m_shaderStages.emplace_back(shaderStageInfo);
 	}
+}
+
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZRenderPass renderPass)
+{
+	settings.m_renderPass = renderPass;
+}
+
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::AttachmentCount> attachmentCount)
+{
+	settings.m_attachmentCount = attachmentCount;
 }
 
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<VertexBinding> vertexBinding)
@@ -376,6 +486,11 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gp
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::SubpassIndex> subpassIndex)
 {
 	settings.m_createInfo.subpass = subpassIndex;
+}
+
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::MultiviewIndex> multiviewIndex)
+{
+	settings.m_multiviewIndex = multiviewIndex;
 }
 
 ZPipeline createComputePipeline (ZPipelineLayout layout, ZShaderModule computeShaderModule,

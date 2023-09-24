@@ -72,12 +72,22 @@ VkDeviceSize	bufferWrite (ZBuffer buffer, const C<T, V...>& c, uint32_t count = 
 	return bufferWriteData(buffer, reinterpret_cast<const uint8_t*>(c.data()), std::min(dataSize, bufferSize));
 }
 
+template<class T>
+VkDeviceSize	bufferWrite (ZBuffer buffer, const T& data)
+{
+	const VkDeviceSize	dataSize	= sizeof(T);
+	const VkDeviceSize	bufferSize	= buffer.getParam<VkDeviceSize>();
+	return bufferWriteData(buffer,
+						   static_cast<add_cptr<uint8_t>>(static_cast<add_cptr<void>>(&data)),
+						   std::min(dataSize, bufferSize));
+}
+
 template<class T, uint32_t N>
 VkDeviceSize	bufferWrite (ZBuffer buffer, T const (&table)[N])
 {
 	const VkDeviceSize	dataSize	= N * sizeof(T);
 	const VkDeviceSize	bufferSize	= buffer.getParam<VkDeviceSize>();
-	return writeBufferData(buffer, table, std::min(dataSize, bufferSize));
+	return bufferWriteData(buffer, table, std::min(dataSize, bufferSize));
 }
 
 template<class T, uint32_t N>
@@ -104,11 +114,11 @@ VkDeviceSize	bufferRead (ZBuffer buffer, std::vector<T>& container, uint32_t vec
 
 namespace namespace_hidden
 {
-struct PixelBufferAccess_
+struct BufferTexelAccess_
 {
 protected:
-	PixelBufferAccess_ (ZBuffer buffer, uint32_t elementSize, uint32_t width, uint32_t height, uint32_t depth = 1u);
-	~PixelBufferAccess_ ();
+	BufferTexelAccess_ (ZBuffer buffer, uint32_t elementSize, uint32_t width, uint32_t height, uint32_t depth = 1u);
+	~BufferTexelAccess_ ();
 	add_ptr<void>	at (uint32_t x, uint32_t y, uint32_t z = 0);
 	add_cptr<void>	at (uint32_t x, uint32_t y, uint32_t z = 0) const;
 
@@ -121,17 +131,17 @@ protected:
 } // namespace_hidden
 
 template<class ElementType>
-struct PixelBufferAccess : namespace_hidden::PixelBufferAccess_
+struct BufferTexelAccess : namespace_hidden::BufferTexelAccess_
 {
-	PixelBufferAccess (ZBuffer buffer, uint32_t width, uint32_t height, uint32_t depth = 1u)
-		: PixelBufferAccess_ (buffer, static_cast<uint32_t>(sizeof(ElementType)), width, height, depth) {}
+	BufferTexelAccess (ZBuffer buffer, uint32_t width, uint32_t height, uint32_t depth = 1u)
+		: BufferTexelAccess_ (buffer, static_cast<uint32_t>(sizeof(ElementType)), width, height, depth) {}
 	add_ref<ElementType>	at (uint32_t x, uint32_t y, uint32_t z = 0)
 	{
-		return *static_cast<add_ptr<ElementType>>(PixelBufferAccess_::at(x, y, z));
+		return *static_cast<add_ptr<ElementType>>(BufferTexelAccess_::at(x, y, z));
 	}
 	add_cref<ElementType>	at (uint32_t x, uint32_t y, uint32_t z = 0) const
 	{
-		return *static_cast<add_cptr<ElementType>>(PixelBufferAccess_::at(x, y, z));
+		return *static_cast<add_cptr<ElementType>>(BufferTexelAccess_::at(x, y, z));
 	}
 };
 

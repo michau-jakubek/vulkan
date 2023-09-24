@@ -14,7 +14,7 @@ template<size_t Depth>
 void printBacktrace (std::ostream& ss, std::size_t skip = 0)
 {
 	void* bts[Depth];
-	const int	nbt = backtrace(bts, Depth);
+	const uint32_t	nbt = static_cast<uint32_t>(backtrace(bts, Depth));
 	printBts(ss, bts, nbt, skip);
 }
 

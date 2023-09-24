@@ -5,6 +5,7 @@
 #include "vtfZUtils.hpp"
 #include "vtfZBuffer.hpp"
 #include "vtfZImage.hpp"
+#include "vtfCanvas.hpp"
 
 namespace vtf
 {
@@ -36,6 +37,11 @@ ZCommandPool	commandBufferGetCommandPool (ZCommandBuffer commandBuffer);
 void			commandBufferEnd (ZCommandBuffer commandBuffer);
 void			commandBufferBegin (ZCommandBuffer commandBuffer);
 void			commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFence = ZFence(), uint64_t timeout = INVALID_UINT64);
+/**
+ * Binds a pipeline to a command buffer.
+ * Implicitly binds any descritor sets if these
+ * have been created when pipeline layout was created.
+ */
 void			commandBufferBindPipeline(ZCommandBuffer cmd, ZPipeline pipeline);
 void			commandBufferBindVertexBuffers (ZCommandBuffer cmd, const VertexInput& input,
 												std::initializer_list<ZBuffer> externalBuffers = {},
@@ -48,6 +54,12 @@ ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZFramebuf
 ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZRenderPass renderPass, ZFramebuffer framebuffer, uint32_t subpass);
 bool				 commandBufferNextSubpass (add_ref<ZRenderPassBeginInfo> beginInfo);
 void				 commandBufferEndRenderPass (add_cref<ZRenderPassBeginInfo> beginInfo);
+void				 commandBufferBeginRendering (ZCommandBuffer cmd, std::initializer_list<ZImageView> attachments,
+												  std::optional<std::vector<VkClearValue>> clearColors,
+												  ZRenderingFlags renderingFlags = ZRenderingFlags());
+void				 commandBufferEndRendering (ZCommandBuffer cmd);
+void				 commandBufferSetViewport (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain);
+void				 commandBufferSetScissor (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain);
 
 template<class PC__>
 void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout, const PC__& pc)
@@ -64,6 +76,10 @@ void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image, add_cref<Vk
 void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image,
 								   add_cref<VkClearColorValue> clearValue, add_cref<VkImageSubresourceRange> range);
 void commandBufferBlitImage			(ZCommandBuffer cmd, ZImage srcImage, ZImage dstImage, VkFilter = VK_FILTER_LINEAR);
+void commandBufferBlitImage			(ZCommandBuffer cmd, ZImage srcImage, ZImage dstImage,
+									 VkImageSubresourceLayers srcSubresource,
+									 VkImageSubresourceLayers dstSubresource,
+									 VkFilter = VK_FILTER_LINEAR);
 void commandBufferMakeImagePresentationReady (ZCommandBuffer cmdBuffer, ZImage image,
 											  VkAccessFlags srcAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 											  VkAccessFlags dstAccess = VK_ACCESS_MEMORY_READ_BIT,

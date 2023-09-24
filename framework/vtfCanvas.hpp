@@ -141,6 +141,20 @@ public:
 	static const CanvasStyle DefaultStyle; // 800,600,0,1,true,true
 
 public:
+	// By default all device features are disabled so if you want to enable any of them, these must be
+	// known before logical device is created. To express the features you can use OnEnablingFeatures
+	// callback where both physicalDevice and a reference to extension list are given as parameters.
+	// If present then prepare deviceExtensions you want and return your VkPhysicalDeviceFeatures2 struct
+	// with desired features enabled  from onEnablingFeatures callback. This structure will be passed as
+	// VkDeviceCreateInfo::pNext during logical device creation. Do not care about sType field and pNext
+	// field of that struct, these will be populated properly behind the scene. There is only the one
+	// drawback because all fetures have to be declared outside this callback to avoid segmentation fault.
+	// Extension list is a full list of the extensions achieved from physical device so basically you
+	// might need to remove particular extension string instead of add new one.
+	// Typically a signature and a body of that callback would look like this:
+	// auto onEnablingFeatures = [](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
+	// {
+	// };
 	Canvas	(add_cptr<char>			appName,
 			 add_cref<strings>		instanceLayers			= {},
 			 add_cref<strings>		instanceExtensions		= {},

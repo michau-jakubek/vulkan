@@ -3,7 +3,8 @@
 #include "vtfZUtils.hpp"
 #include "vtfFormatUtils.hpp"
 
-#define MKP(enumConstant) { enumConstant, #enumConstant }
+#define MKN(enumConstant) #enumConstant
+#define MKP(enumConstant) { enumConstant, MKN(enumConstant) }
 
 namespace vtf
 {
@@ -71,7 +72,7 @@ const char* vkResultToString (VkResult res)
 static const char* queueFlagBitsToString (VkQueueFlagBits bits)
 {
 	struct { VkQueueFlagBits b; const char* s; }
-	const results[] {
+	static const results[] {
 		MKP(VK_QUEUE_GRAPHICS_BIT),
 		MKP(VK_QUEUE_COMPUTE_BIT),
 		MKP(VK_QUEUE_TRANSFER_BIT),
@@ -87,7 +88,7 @@ static const char* queueFlagBitsToString (VkQueueFlagBits bits)
 
 std::ostream& operator<<(std::ostream& str, add_cref<ZDistType<QueueFlags, VkQueueFlags>> flags)
 {
-	const VkQueueFlagBits bits[] {
+	static const VkQueueFlagBits bits[] {
 		(VK_QUEUE_GRAPHICS_BIT),
 		(VK_QUEUE_COMPUTE_BIT),
 		(VK_QUEUE_TRANSFER_BIT),
@@ -111,6 +112,29 @@ std::ostream& operator<<(std::ostream& str, add_cref<VkDeviceQueueCreateInfoEx> 
 		<< "\tqueueFlags:     " << ZDistType<QueueFlags, VkQueueFlags>(props.queueFlags) << '\n'
 		<< "\tqueueCount:     " << props.queueCount << '\n'
 		<< "\tsurfaceSupport: " << std::boolalpha << props.surfaceSupport << std::endl;
+	return str;
+}
+
+std::ostream& operator<<(std::ostream& str, add_cref<VkPrimitiveTopology> topo)
+{
+	static const char* names[] {
+		MKN(VK_PRIMITIVE_TOPOLOGY_POINT_LIST),
+		MKN(VK_PRIMITIVE_TOPOLOGY_LINE_LIST),
+		MKN(VK_PRIMITIVE_TOPOLOGY_LINE_STRIP),
+		MKN(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST),
+		MKN(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP),
+		MKN(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN),
+		MKN(VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY),
+		MKN(VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY),
+		MKN(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY),
+		MKN(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY),
+		MKN(VK_PRIMITIVE_TOPOLOGY_PATCH_LIST)
+	};
+
+	if (int(topo) >= 0 && uint32_t(topo) < ARRAY_LENGTH(names))
+		str << names[uint32_t(topo)];
+	else str << "VkPrimitiveTopology(" << int(topo) << ')';
+
 	return str;
 }
 
@@ -380,11 +404,24 @@ VkExtent2D makeExtent2D (uint32_t width, uint32_t height)
 	return { width, height };
 }
 
+VkExtent2D makeExtent2D (add_cref<VkExtent3D> extent3D)
+{
+	return { extent3D.width, extent3D.height };
+}
+
 VkRect2D makeRect2D (uint32_t width, uint32_t height, int32_t Xoffset, int32_t Yoffset)
 {
 	VkRect2D rect;
 	rect.extent = { width, height };
 	rect.offset = { Xoffset, Yoffset };
+	return rect;
+}
+
+VkRect2D makeRect2D (add_cref<VkExtent2D> extent2D, add_cref<VkOffset2D> offset2D)
+{
+	VkRect2D rect;
+	rect.extent	= extent2D;
+	rect.offset	= offset2D;
 	return rect;
 }
 
@@ -397,7 +434,15 @@ VkExtent3D makeExtent3D (uint32_t width, uint32_t height, uint32_t depth)
 	return extent;
 }
 
-VkOffset3D makeOffset3D (uint32_t x, uint32_t y, uint32_t z)
+VkOffset2D makeOffset2D (int32_t x, int32_t y)
+{
+	VkOffset2D offset{};
+	offset.x = x;
+	offset.y = y;
+	return offset;
+}
+
+VkOffset3D makeOffset3D (int32_t x, int32_t y, int32_t z)
 {
 	VkOffset3D offset{};
 	offset.x = x;

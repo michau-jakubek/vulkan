@@ -34,11 +34,12 @@ void getDebugCreateInfo (VkDebugUtilsMessengerCreateInfoEXT& result, void* pUser
 	result.flags			= 0;
 
 	result.messageSeverity	= enableDebugPrintf
-								? VkDebugUtilsMessageSeverityFlagsEXT(VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+								? VkDebugUtilsMessageSeverityFlagsEXT(VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
 								: noneDebugPrintfSeverityFlags;
 	result.messageType		= VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
 								| VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
 								| VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+	result.messageType		|= enableDebugPrintf ? VK_DEBUG_REPORT_INFORMATION_BIT_EXT : 0;
 	result.pfnUserCallback	= debugMessengerCallback;
 	result.pUserData		= pUserData;
 }
@@ -112,12 +113,12 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugMessengerCallback(
 	if (!(getGlobalAppFlags().noWarning_VUID_Undefined && (std::strcmp(pCallbackData->pMessageIdName, VUID_Undefined) == 0)))
 	{
 		/*
-	if (pUserData)
-	{
-		add_ref<Logger> log = static_cast<add_ref<Logger>>(*static_cast<add_ptr<Logger>>(pUserData));
-		log << "[VL]: " << pCallbackData->pMessage << std::endl;
-	}
-	else*/
+		if (pUserData)
+		{
+			add_ref<Logger> log = static_cast<add_ref<Logger>>(*static_cast<add_ptr<Logger>>(pUserData));
+			log << "[VL]: " << pCallbackData->pMessage << std::endl;
+		}
+		else*/
 		std::cout << "[VL]: " << pCallbackData->pMessage <<  std::endl;
 	}
 	return VK_FALSE;
@@ -163,7 +164,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallback(
 		log << prefix << " " << pLayerPrefix << ": " << pMessage << std::endl;
 	}
 	else*/
-		std::cout << prefix << " " << pLayerPrefix << ": " << pMessage << std::endl;
+	std::cout << prefix << " " << pLayerPrefix << ": " << pMessage << std::endl;
 
 	return VK_FALSE;
 }
