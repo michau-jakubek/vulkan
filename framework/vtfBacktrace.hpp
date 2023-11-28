@@ -32,6 +32,7 @@ struct GlobalAppFlags
 	vtf::Version	vulkanVer;
 	vtf::Version	spirvVer;
 	vtf::strings	layers;
+	vtf::strings	suppressedVUIDs;
 	uint32_t		physicalDeviceIndex;
 	uint32_t		verbose;
 	char			tmpDir[_MAX_PATH];

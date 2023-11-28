@@ -176,8 +176,8 @@ std::tuple<ZShaderModule, ZShaderModule> buildProgram (ZDevice device, const std
 
 	return
 	{
-		*programs.getShader(VK_SHADER_STAGE_VERTEX_BIT),
-		*programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT)
+		programs.getShader(VK_SHADER_STAGE_VERTEX_BIT),
+		programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT)
 	};
 }
 

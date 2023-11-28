@@ -12,6 +12,14 @@ namespace vtf
 
 class VertexInput;
 
+/**
+ * @brief The OneShotCommandBuffer RAII class
+ * @note  After creation internal command buffer is in recording state
+ *        so do not call vkBeginCommandBuffer once again.
+ *        To finish recording call endRecordingAndSubmit() within the scope,
+ *        otherwise the destructor will perform this task, so do not call
+ *        vkEndCommandBuffer as well.
+ */
 class OneShotCommandBuffer
 {
 	bool			m_submitted;
@@ -24,9 +32,12 @@ public:
 
 	OneShotCommandBuffer	(ZCommandPool pool);
 	OneShotCommandBuffer	(ZDevice device, ZQueue queue);
-	~OneShotCommandBuffer	() { submit(); }
+	OneShotCommandBuffer	(const OneShotCommandBuffer&) = delete;
+	OneShotCommandBuffer	(OneShotCommandBuffer&&) = delete;
+	OneShotCommandBuffer&	operator=(const OneShotCommandBuffer&) = delete;
+	~OneShotCommandBuffer	() { endRecordingAndSubmit(); }
 
-	void submit ();
+	void endRecordingAndSubmit ();
 };
 std::unique_ptr<OneShotCommandBuffer> createOneShotCommandBuffer (ZCommandPool commandPool);
 
@@ -66,8 +77,8 @@ void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout, con
 {
 	std::type_index typePushConstant = layout.getParam<type_index_with_default>();
 	const VkPushConstantRange& range = layout.getParamRef<VkPushConstantRange>();
-	ASSERTION(std::type_index(typeid(PC__)) == typePushConstant);
-	ASSERTION(range.size == sizeof(PC__));
+	ASSERTMSG(std::type_index(typeid(PC__)) == typePushConstant, "Push constant type not declared for pipeline layout");
+	ASSERTMSG(range.size == sizeof(PC__), "Push constant size differs from declared for pipeline layout");
 	extern void commandBufferPushConstants(ZCommandBuffer, ZPipelineLayout, VkShaderStageFlags, uint32_t, uint32_t, const void*);
 	commandBufferPushConstants(cmd, layout, range.stageFlags, range.offset, range.size, &pc);
 }

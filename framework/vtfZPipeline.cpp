@@ -362,6 +362,7 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZPipelineCr
 
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZShaderModule shaderModule)
 {
+	if (false == shaderModule.has_handle()) return;
 	const VkShaderStageFlagBits stage = shaderModule.getParam<VkShaderStageFlagBits>();
 	auto i = settings.findShader(stage);
 	if (i != settings.m_shaderStages.end())

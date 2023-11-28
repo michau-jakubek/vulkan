@@ -64,7 +64,8 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	Option layer{ "-l", 1 };					options.push_back(layer);
 	Option layList{ "-ll", 0 };					options.push_back(layList);
 	Option optLayNoVuid{ "-l-no-vuid-undefined", 0 };	options.push_back(optLayNoVuid);
-	Option optAssets{ "-assets", 1 };				options.push_back(optAssets);
+	Option optSuppressVUID{ "-l-suppress", 1 };	options.push_back(optSuppressVUID);
+	Option optAssets{ "-assets", 1 };			options.push_back(optAssets);
 	Option optTempDir{ "-tmp", 1 };             options.push_back(optTempDir);
 	Option btrace{ "-bt", 0 };					options.push_back(btrace);
 	Option optApi{ "-api", 1 };					options.push_back(optApi);
@@ -276,6 +277,7 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	globalAppFlags.spirvValidate = consumeOptions(dprintf, options, appArgs, sink) > 0;
 	globalAppFlags.nowerror = (consumeOptions(nowerror, options, appArgs, sink) > 0);
 	globalAppFlags.noWarning_VUID_Undefined = (consumeOptions(optLayNoVuid, options, appArgs, sink) > 0);
+	consumeOptions(optSuppressVUID, options, appArgs, globalAppFlags.suppressedVUIDs);
 	consumeOptions(layer, options, appArgs, globalAppFlags.layers);
 
 	setGlobalAppFlags(globalAppFlags);
@@ -345,6 +347,10 @@ void printUsage(std::ostream& str)
 	str << "  -ll:                      prints available instance layer names" << std::endl;
 	str << "  -l <layer> [-l <layer>]:  enable layer(s)" << std::endl;
 	str << "  -l-no-vuid-undefined:     suppress layers(s) VUID_Undefined warning" << std::endl;
+	str << "  -l-suppress <VUID>:       suppress layers(s) specific VUID message: warning, error, etc.," << std::endl;
+	str << "                            that match at least first 5 characters. No wildcard is applied." << std::endl;
+	str << "                            e.g. \"-l-suppress VUID-vkBeginCommandBuffer-commandBuffer\"" << std::endl;
+	str << "                            will match to VUID-vkBeginCommandBuffer-commandBuffer-00049" << std::endl;
 	str << "  -api <version>:           Vulkan API version to apply, (major * 10 + minor), default is 1.1" << std::endl;
 	str << "  -assets <assets_dir>      change assets directory, default is ${REPO}/assets/<test_name>" << std::endl;
 	str << "  -tmp <temp_dir>           change temp directory, default is system's temp directory" << std::endl;

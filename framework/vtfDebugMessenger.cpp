@@ -110,17 +110,16 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugMessengerCallback(
 	UNREF(pCallbackData);
 	UNREF(pUserData);
 	
-	if (!(getGlobalAppFlags().noWarning_VUID_Undefined && (std::strcmp(pCallbackData->pMessageIdName, VUID_Undefined) == 0)))
+	if (getGlobalAppFlags().noWarning_VUID_Undefined && (std::strcmp(pCallbackData->pMessageIdName, VUID_Undefined) == 0))
 	{
-		/*
-		if (pUserData)
-		{
-			add_ref<Logger> log = static_cast<add_ref<Logger>>(*static_cast<add_ptr<Logger>>(pUserData));
-			log << "[VL]: " << pCallbackData->pMessage << std::endl;
-		}
-		else*/
-		std::cout << "[VL]: " << pCallbackData->pMessage <<  std::endl;
+		return VK_FALSE;
 	}
+	for (add_cref<std::string> s : getGlobalAppFlags().suppressedVUIDs)
+	{
+		if (s.length() > 5 && std::strncmp(s.c_str(), pCallbackData->pMessageIdName, s.length()) == 0)
+			return VK_FALSE;
+	}
+	std::cout << "[VL]: " << pCallbackData->pMessage <<  std::endl;
 	return VK_FALSE;
 }
 
@@ -145,6 +144,12 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallback(
 		&& (std::strstr(pMessage, VUID_Undefined) != nullptr))
 	{
 		return VK_FALSE;
+	}
+
+	for (add_cref<std::string> s : getGlobalAppFlags().suppressedVUIDs)
+	{
+		if (s.length() > 5 && std::strstr(s.c_str(), pMessage) != nullptr)
+			return VK_FALSE;
 	}
 
 	std::string prefix = "[WARNING]";

@@ -313,7 +313,7 @@ void UserData::updateLastPointCoordinates (float width, float height)
 	float x = float(windowXXXcursor) / width;
 	float y = float(windowYYYcursor) / height;
 	float X = x * (plusX - minusX) + minusX;
-	float Y = y * (plusX - minusY) + minusY;
+	float Y = y * (plusY - minusY) + minusY;
 	BufferTexelAccess<Vec2> a(vertexBuffer, pointCount, 1u, 1u);
 	a.at(pointCount - 1u, 0u, 0u) = Vec2(X, Y);
 }
@@ -323,7 +323,7 @@ void UserData::addConsecutivePoint (float width, float height)
 	float x = float(windowXXXcursor) / width;
 	float y = float(windowYYYcursor) / height;
 	float X = x * (plusX - minusX) + minusX;
-	float Y = y * (plusX - minusY) + minusY;
+	float Y = y * (plusY - minusY) + minusY;
 	BufferTexelAccess<Vec2> a(vertexBuffer, pointCount, 1u, 1u);
 	a.at(pointCount - 1u, 0u, 0u) = Vec2(X, Y);
 }
@@ -454,9 +454,9 @@ std::array<ZShaderModule, 6> buildProgram (ZDevice device, add_cref<std::string>
 
 	std::array<ZShaderModule, 6> shaders
 	{
-		*programs.getShader(VK_SHADER_STAGE_VERTEX_BIT),
-		*programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT),
-		*programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT),
+		programs.getShader(VK_SHADER_STAGE_VERTEX_BIT),
+		programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT),
+		programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT),
 	};
 
 	return shaders;

@@ -190,9 +190,9 @@ VkDeviceSize bufferWriteData (ZBuffer buffer, const uint8_t* src, const VkBuffer
 	VkMemoryPropertyFlags	props		= memory.getParam<VkMemoryPropertyFlags>();
 	const VkDeviceSize		bufferSize	= buffer.getParam<VkDeviceSize>();
 
-	ASSERTION(0 < copy.size);
-	ASSERTION(bufferSize > copy.dstOffset);
-	ASSERTION(bufferSize >= (copy.dstOffset + copy.size));
+	ASSERTION(copy.size > 0);
+	ASSERTION(copy.dstOffset < bufferSize);
+	ASSERTION((copy.dstOffset + copy.size) <= bufferSize);
 
 	uint8_t* dst = nullptr;
 	VKASSERT2(vkMapMemory(*device, *memory, copy.dstOffset, copy.size, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&dst)));
@@ -232,14 +232,15 @@ VkDeviceSize bufferReadData (ZBuffer buffer, uint8_t* dst, VkDeviceSize size)
 
 VkDeviceSize bufferReadData (ZBuffer buffer, uint8_t* dst, const VkBufferCopy& copy)
 {
+	if (copy.size == 0u) return copy.size;
+
 	ZDeviceMemory			memory		= buffer.getParam<ZDeviceMemory>();
 	VkMemoryPropertyFlags	props		= memory.getParam<VkMemoryPropertyFlags>();
 	ZDevice					device = buffer.getParam<ZDevice>();
 	const VkDeviceSize		bufferSize	= buffer.getParam<VkDeviceSize>();
 
-	ASSERTION(0 < copy.size);
-	ASSERTION(bufferSize > copy.srcOffset);
-	ASSERTION(bufferSize >= (copy.srcOffset + copy.size));
+	ASSERTMSG(copy.srcOffset < bufferSize, "Too long data requested to copy from buffer");
+	ASSERTMSG((copy.srcOffset + copy.size) <= bufferSize, "Too long data requested to copy from buffer");
 
 	uint8_t* src = nullptr;
 	VKASSERT2(vkMapMemory(*device, *memory, copy.srcOffset, copy.size, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&src)));
@@ -265,7 +266,7 @@ void bufferFlush (ZBuffer buffer)
 	ZDevice					device		= buffer.getParam<ZDevice>();
 	ZDeviceMemory			memory		= buffer.getParam<ZDeviceMemory>();
 	VkMemoryPropertyFlags	props		= memory.getParam<VkMemoryPropertyFlags>();
-	if (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT & props)
+	if (!(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT & props))
 	{
 		const VkDeviceSize	bufferSize	= buffer.getParam<VkDeviceSize>();
 

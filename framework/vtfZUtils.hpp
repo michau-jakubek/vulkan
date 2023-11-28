@@ -110,6 +110,12 @@ protected:
 	ZRenderPass		m_renderPass;
 	uint32_t		m_subpass;
 };
+/**
+* @device			A device which render pass is created
+* @colorFormats		Defines a subsequent attachments.
+*                   If colorFormats[attachment].alpha is <> 0 then attachment is OP_CLEAR
+*                   otherwise attachment is considered as OP_LOAD.
+*/
 ZRenderPass		createColorRenderPass (ZDevice device, add_cref<std::vector<VkFormat>> colorFormats,
 									   std::optional<std::vector<VkClearValue>> clearColors = {},
 									   VkImageLayout initialColorLayout = VK_IMAGE_LAYOUT_UNDEFINED,

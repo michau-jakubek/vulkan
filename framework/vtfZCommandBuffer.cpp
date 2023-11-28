@@ -59,9 +59,7 @@ void commandBufferEnd (ZCommandBuffer commandBuffer)
 
 void commandBufferBegin (ZCommandBuffer commandBuffer)
 {
-	VkCommandBufferInheritanceInfo	inheritInfo{};
-	inheritInfo.sType					= VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
-	inheritInfo.pNext					= nullptr;
+	VkCommandBufferInheritanceInfo	inheritInfo = makeVkStruct();
 	inheritInfo.renderPass				= VK_NULL_HANDLE;
 	inheritInfo.subpass					= 0;
 	inheritInfo.framebuffer				= VK_NULL_HANDLE;
@@ -69,9 +67,7 @@ void commandBufferBegin (ZCommandBuffer commandBuffer)
 	inheritInfo.queryFlags				= 0;
 	inheritInfo.pipelineStatistics		= 0;
 
-	VkCommandBufferBeginInfo	beginInfo{};
-	beginInfo.sType				= VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.pNext				= nullptr;
+	VkCommandBufferBeginInfo	beginInfo = makeVkStruct();
 	beginInfo.flags				= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; //VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
 	beginInfo.pInheritanceInfo	= commandBuffer.getParam<bool>() ? nullptr : &inheritInfo;
 
@@ -83,9 +79,8 @@ void commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFence,
 	ZDevice			device		= commandBuffer.getParam<ZDevice>();
 	ZQueue			queue		= commandBuffer.getParam<ZCommandPool>().getParam<ZQueue>();
 	ZFence			fence		= hintFence.has_handle() ? hintFence : createFence(device);
-	VkSubmitInfo	submitInfo	{};
 
-	submitInfo.sType				= VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	VkSubmitInfo	submitInfo	= makeVkStruct();
 	submitInfo.commandBufferCount	= 1u;
 	submitInfo.pCommandBuffers		= commandBuffer.ptr();
 
@@ -151,8 +146,12 @@ void commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkDeviceS
 	vkCmdBindIndexBuffer(*cmd, *buffer, offset, indexType);
 }
 
-void commandBufferPushConstants(ZCommandBuffer cmd , ZPipelineLayout layout, VkShaderStageFlags flags, uint32_t offset, uint32_t size, const void* p)
+void commandBufferPushConstants (ZCommandBuffer cmd , ZPipelineLayout layout, VkShaderStageFlags flags,
+								 uint32_t offset, uint32_t size, const void* p)
 {
+	ZDevice device = cmd.getParam<ZDevice>();
+	ASSERTMSG((offset + size) <= deviceGetPhysicalLimits(device).maxPushConstantsSize,
+			  "Push constant size exceeds device limit");
 	vkCmdPushConstants(*cmd, *layout, flags, offset, size, p);
 }
 
@@ -357,11 +356,7 @@ OneShotCommandBuffer::OneShotCommandBuffer (ZCommandPool pool)
 	, commandBuffer		(m_commandBuffer)
 	, commandPool		(m_commandBuffer.getParamRef<ZCommandPool>())
 {
-	VkCommandBufferBeginInfo beginInfo{};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-	vkBeginCommandBuffer(*commandBuffer, &beginInfo);
+	commandBufferBegin(m_commandBuffer);
 }
 
 OneShotCommandBuffer::OneShotCommandBuffer (ZDevice device, ZQueue queue)
@@ -369,21 +364,12 @@ OneShotCommandBuffer::OneShotCommandBuffer (ZDevice device, ZQueue queue)
 {
 }
 
-void OneShotCommandBuffer::submit ()
+void OneShotCommandBuffer::endRecordingAndSubmit ()
 {
 	if (!m_submitted)
 	{
-		auto queue = commandPool.getParam<ZQueue>();
-
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = m_commandBuffer.ptr();
-
-		vkEndCommandBuffer(*m_commandBuffer);
-		vkQueueSubmit(*queue, 1, &submitInfo, VK_NULL_HANDLE);
-		vkQueueWaitIdle(*queue);
-
+		commandBufferEnd(m_commandBuffer);
+		commandBufferSubmitAndWait(m_commandBuffer);
 		m_submitted = true;
 	}
 }

@@ -138,11 +138,11 @@ template<class Z, class F, F Ptr, class Tr, class... X> struct ZDeletable
 	ZDeletable()	: std::shared_ptr<AnObject>(
 						  new AnObject(Ptr)
 						  , ADeleter())
-					, ZDeletableMark() { /* Intentionally empty */ }
+					, ZDeletableMark(), m_name() { /* Intentionally empty */ }
 	ZDeletable(Z z, add_cref<X>... x)	: std::shared_ptr<AnObject>(
 							  new AnObject(z, Ptr, std::make_tuple(x...))
 							  , ADeleter())
-						, ZDeletableMark() { /* Intentionally empty */ }
+						, ZDeletableMark(), m_name() { /* Intentionally empty */ }
 	virtual ~ZDeletable() = default;
 	static ZDeletable create(Z z, add_cref<X>... x)
 	{
@@ -198,11 +198,22 @@ template<class Z, class F, F Ptr, class Tr, class... X> struct ZDeletable
 	{
 		return (str << static_cast<void*>(super::get()->handle));
 	}
+	add_cref<std::string> name () const { return m_name; }
+	std::string name (add_cref<std::string> newName)
+	{
+		std::string oldName = m_name;
+		m_name = newName;
+		return oldName;
+	}
 	friend std::ostream& operator<<(std::ostream& str, add_cref<ZDeletable> z)
 	{
-		return (str << static_cast<void*>(static_cast<add_cref<super>>(z).get()->handle));
+		if (z.m_name.length() == 0u)
+			return (str << static_cast<void*>(static_cast<add_cref<super>>(z).get()->handle));
+		return (str << static_cast<void*>(static_cast<add_cref<super>>(z).get()->handle)
+					<< " \"" << z.m_name << '\"');
 	}
 private:
+	std::string m_name;
 	void replace(Z z)
 	{
 		add_ptr<AnObject> obj = super::get();

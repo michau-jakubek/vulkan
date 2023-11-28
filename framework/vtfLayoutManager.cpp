@@ -36,7 +36,7 @@ namespace vtf
 {
 
 LayoutManager::LayoutManager (ZDevice device)
-	: m_device				(device)
+	: device				(device)
 	, m_extbindings			()
 	, m_views				()
 	, m_samplers			()
@@ -50,11 +50,11 @@ uint32_t LayoutManager::joinBindings_ (std::type_index index, VkDeviceSize size,
 {
 	ASSERTMSG(0 != count, "Descriptor count must not be zero!");
 	ASSERTMSG(isBufferDescriptorType(type), "Wrong descriptor type");
-	const uint32_t binding = static_cast<uint32_t>(m_extbindings.size());
+	const uint32_t binding = data_count(m_extbindings);
 	VkDescriptorSetLayoutBindingAndType b;
 	for (uint32_t i = 0; i < count; ++i)
 	{
-		b.binding				= static_cast<uint32_t>(m_extbindings.size());
+		b.binding				= data_count(m_extbindings);
 		b.descriptorCount		= 1;
 		b.descriptorType		= type;
 		b.pImmutableSamplers	= nullptr;
@@ -73,7 +73,7 @@ uint32_t LayoutManager::addBinding_ (std::type_index index, VkDeviceSize size, b
 									  VkDescriptorType type, VkShaderStageFlags stages, uint32_t elementCount)
 {
 	VkDescriptorSetLayoutBindingAndType b;
-	const uint32_t binding = static_cast<uint32_t>(m_extbindings.size());
+	const uint32_t binding = data_count(m_extbindings);
 	b.binding				= binding;
 	b.descriptorCount		= 1;
 	b.descriptorType		= type;
@@ -153,7 +153,7 @@ uint32_t LayoutManager::addBinding (ZImageView view, ZSampler sampler,
 uint32_t LayoutManager::addBinding (VkDescriptorType type, VkShaderStageFlags stages)
 {
 	VkDescriptorSetLayoutBindingAndType b;
-	const uint32_t binding = static_cast<uint32_t>(m_extbindings.size());
+	const uint32_t binding = data_count(m_extbindings);
 	b.binding				= binding;
 	b.descriptorCount		= 1;
 	b.descriptorType		= type;
@@ -195,9 +195,9 @@ ZDescriptorSetLayout LayoutManager::getDescriptorSetLayout (ZPipelineLayout layo
 }
 ZDescriptorSetLayout LayoutManager::createDescriptorSetLayout (bool performUpdateDescriptorSets)
 {
-	VkAllocationCallbacksPtr					callbacks			= m_device.getParam<VkAllocationCallbacksPtr>();
-	ZDescriptorPool								descriptorPool		(VK_NULL_HANDLE, m_device, callbacks);
-	ZDescriptorSetLayout						descriptorSetLayout	(VK_NULL_HANDLE, m_device, callbacks, ZDescriptorSet());
+	VkAllocationCallbacksPtr					callbacks			= device.getParam<VkAllocationCallbacksPtr>();
+	ZDescriptorPool								descriptorPool		(VK_NULL_HANDLE, device, callbacks);
+	ZDescriptorSetLayout						descriptorSetLayout	(VK_NULL_HANDLE, device, callbacks, ZDescriptorSet());
 	std::vector<VkDescriptorSetLayoutBinding>	bindings			(m_extbindings.size());
 
 	// build descriptor pool
@@ -222,7 +222,7 @@ ZDescriptorSetLayout LayoutManager::createDescriptorSetLayout (bool performUpdat
 		poolCreateInfo.maxSets			= 1;
 		poolCreateInfo.poolSizeCount	= data_count(poolSizes);
 		poolCreateInfo.pPoolSizes		= data_or_null(poolSizes);
-		VKASSERT(vkCreateDescriptorPool(*m_device, &poolCreateInfo, callbacks,
+		VKASSERT(vkCreateDescriptorPool(*device, &poolCreateInfo, callbacks,
 										descriptorPool.setter()), "Unable to create descriptor pool");
 	}
 
@@ -232,20 +232,20 @@ ZDescriptorSetLayout LayoutManager::createDescriptorSetLayout (bool performUpdat
 	setLayoutCreateInfo.flags			= 0;
 	setLayoutCreateInfo.bindingCount	= data_count(bindings);
 	setLayoutCreateInfo.pBindings		= data_or_null(bindings);
-	VKASSERT(vkCreateDescriptorSetLayout(*m_device, &setLayoutCreateInfo, callbacks,
+	VKASSERT(vkCreateDescriptorSetLayout(*device, &setLayoutCreateInfo, callbacks,
 										 descriptorSetLayout.setter()), "Failed to create descriptor set layout");
 
 	updateBuffersOffsets();
 	recreateUpdateBuffers(m_buffers);
 
-	ZDescriptorSet					descriptorSet(VK_NULL_HANDLE, m_device, descriptorPool);
+	ZDescriptorSet					descriptorSet(VK_NULL_HANDLE, device, descriptorPool);
 	VkDescriptorSetAllocateInfo		allocInfo{};
 	allocInfo.sType					= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.pNext					= nullptr;
 	allocInfo.descriptorPool		= *descriptorPool;
 	allocInfo.descriptorSetCount	= 1;
 	allocInfo.pSetLayouts			= descriptorSetLayout.ptr();
-	VKASSERT(vkAllocateDescriptorSets(*m_device, &allocInfo,
+	VKASSERT(vkAllocateDescriptorSets(*device, &allocInfo,
 									  descriptorSet.setter()), "Failed to allocate descriptor set");
 
 	if (performUpdateDescriptorSets)
@@ -263,13 +263,11 @@ VkDeviceSize LayoutManager::getDescriptorAlignment (const VkDescriptorType type)
 	switch (type)
 	{
 		case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-			alignment = m_device.getParam<ZPhysicalDevice>()
-					.getParamRef<VkPhysicalDeviceProperties>().limits.minUniformBufferOffsetAlignment;
+			alignment = deviceGetPhysicalLimits(device).minUniformBufferOffsetAlignment;
 			break;
 
 		case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-			alignment = m_device.getParam<ZPhysicalDevice>()
-					.getParamRef<VkPhysicalDeviceProperties>().limits.minStorageBufferOffsetAlignment;
+			alignment = deviceGetPhysicalLimits(device).minStorageBufferOffsetAlignment;
 			break;
 
 		default:
@@ -322,10 +320,25 @@ void LayoutManager::recreateUpdateBuffers (std::map<std::pair<VkDescriptorType, 
 		const ZBufferUsageFlags		usage	(usagePtr->second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 		const ZMemoryPropertyFlags	flags	(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-		ZBuffer buffer = createBuffer(m_device, size.second, usage, flags);
+		ZBuffer buffer = createBuffer(device, size.second, usage, flags);
 
 		buffers.emplace(size.first, buffer);
 	}
+}
+void LayoutManager::updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZBuffer buffer)
+{
+	ASSERTMSG(ds.has_handle(), "Descriptor set must have a handle");
+	ASSERTMSG(buffer.has_handle(), "Buffer must have a handle");
+	auto ptr = std::find_if(m_extbindings.begin(), m_extbindings.end(), [&](const auto& b){ return b.binding == binding; });
+	ASSERTMSG(ptr != m_extbindings.end(), "Cannot find desired binding for vector");
+	ASSERTMSG(ptr->isVector, "Cannot find desired binding for vector");
+	ZBuffer meBuffer = m_buffers.at({ptr->descriptorType, (ptr->shared ? UNIQUE_IBINDING : static_cast<int>(binding))});
+	const VkBufferUsageFlags meUsageFlags = meBuffer.getParamRef<VkBufferCreateInfo>().usage;
+	const VkBufferUsageFlags bufferUsageFlags = buffer.getParamRef<VkBufferCreateInfo>().usage;
+	ASSERTMSG((meUsageFlags & bufferUsageFlags), "Buffers usage flags must match");
+	ptr->elementCount = static_cast<uint32_t>(bufferGetSize(buffer) / ptr->size);
+	m_buffers.at({ptr->descriptorType, (ptr->shared ? UNIQUE_IBINDING : static_cast<int>(binding))}) = buffer;
+	updateDescriptorSet_(ds, m_buffers);
 }
 void LayoutManager::updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZImageView view)
 {
@@ -340,13 +353,11 @@ void LayoutManager::updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZI
 	{
 		ASSERTMSG(false, "Mismatch type binding");
 	}
-	if (ds.has_handle())
-	{
-		updateDescriptorSet_(ds, m_buffers);
-	}
+	updateDescriptorSet_(ds, m_buffers);
 }
 void LayoutManager::updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZSampler sampler)
 {
+	ASSERTMSG(ds.has_handle(), "Descriptor set must have a handle");
 	ASSERTMSG(sampler.has_handle(), "Sampler must have a handle");
 	auto ptr = std::find_if(m_extbindings.begin(), m_extbindings.end(), [&](const auto& b){ return b.binding == binding; });
 	ASSERTMSG(ptr != m_extbindings.end(), "Cannot find desired binding");
@@ -358,15 +369,13 @@ void LayoutManager::updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZS
 	{
 		ASSERTMSG(false, "Mismatch type binding");
 	}
-	if (ds.has_handle())
-	{
-		updateDescriptorSet_(ds, m_buffers);
-	}
+	updateDescriptorSet_(ds, m_buffers);
 }
 void LayoutManager::updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZImageView view, ZSampler sampler)
 {
 	const bool viewHasHandle = view.has_handle();
 	const bool samplerHasHandle = sampler.has_handle();
+	ASSERTMSG(ds.has_handle(), "Descriptor set must have a handle");
 	ASSERTMSG(viewHasHandle && samplerHasHandle, "ImageView and Sampler must have a handle");
 	auto ptr = std::find_if(m_extbindings.begin(), m_extbindings.end(), [&](const auto& b){ return b.binding == binding; });
 	ASSERTMSG(ptr != m_extbindings.end(), "Cannot find desired binding");
@@ -379,10 +388,7 @@ void LayoutManager::updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZI
 	{
 		ASSERTMSG(false, "Mismatch type binding");
 	}
-	if (ds.has_handle())
-	{
-		updateDescriptorSet_(ds, m_buffers);
-	}
+	updateDescriptorSet_(ds, m_buffers);
 }
 void LayoutManager::updateDescriptorSet_	(ZDescriptorSet	descriptorSet,
 											 std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers) const
@@ -441,16 +447,20 @@ void LayoutManager::updateDescriptorSet_	(ZDescriptorSet	descriptorSet,
 		}
 		else if (isBufferDescriptorType(b.descriptorType))
 		{
+			VkDeviceSize range = 0u;
 			if (b.shared)
 			{
 				bufferInfo.buffer			= *buffers.at({b.descriptorType, UNIQUE_IBINDING});
+				range = ROUNDUP( (b.size * b.elementCount), getDescriptorAlignment(b.descriptorType) );
 			}
 			else
 			{
 				bufferInfo.buffer			= *buffers.at({b.descriptorType, static_cast<int>(b.binding)});
+				range = b.size * b.elementCount;
 			}
 			bufferInfo.offset				= b.offset;
 			bufferInfo.range				= ROUNDUP( (b.size * b.elementCount), getDescriptorAlignment(b.descriptorType) );
+			bufferInfo.range				= range;
 			writeParams.pBufferInfo			= &bufferInfo;
 		}
 		else
@@ -458,7 +468,7 @@ void LayoutManager::updateDescriptorSet_	(ZDescriptorSet	descriptorSet,
 			ASSERTION(0);
 		}
 
-		vkUpdateDescriptorSets(*m_device,
+		vkUpdateDescriptorSets(*device,
 							   1,				// descriptorWriteCount
 							   &writeParams,	// pDescriptorWrites
 							   0,				// copyCount,
@@ -466,10 +476,10 @@ void LayoutManager::updateDescriptorSet_	(ZDescriptorSet	descriptorSet,
 							   );
 	}
 }
-void assertPushConstantSizeMax (ZPhysicalDevice dev, const uint32_t size)
+void assertPushConstantSizeMax (ZDevice dev, const uint32_t size)
 {
-	const uint32_t maxPushConstantsSize = dev.getParamRef<VkPhysicalDeviceProperties>().limits.maxPushConstantsSize;
-	ASSERTION(size < maxPushConstantsSize);
+	const uint32_t maxPushConstantsSize = deviceGetPhysicalLimits(dev).maxPushConstantsSize;
+	ASSERTMSG(size < maxPushConstantsSize, "Push constant size exceeds device limits");
 }
 ZPipelineLayout LayoutManager::createPipelineLayout ()
 {
@@ -483,8 +493,8 @@ ZPipelineLayout LayoutManager::createPipelineLayout_ (std::initializer_list<ZDes
 													   const VkPushConstantRange* pPushConstantRanges, type_index_with_default typeOfPushConstant)
 {
 	VkPushConstantRange			emptyRange		{};
-	VkAllocationCallbacksPtr	callbacks		= m_device.getParam<VkAllocationCallbacksPtr>();
-	ZPipelineLayout				pipelineLayout	(VK_NULL_HANDLE, m_device, callbacks, {},
+	VkAllocationCallbacksPtr	callbacks		= device.getParam<VkAllocationCallbacksPtr>();
+	ZPipelineLayout				pipelineLayout	(VK_NULL_HANDLE, device, callbacks, {},
 												 (pPushConstantRanges ? *pPushConstantRanges : emptyRange), typeOfPushConstant);
 
 	add_ref<std::vector<ZDescriptorSetLayout>>	zLayouts	= pipelineLayout.getParamRef<std::vector<ZDescriptorSetLayout>>();
@@ -498,8 +508,7 @@ ZPipelineLayout LayoutManager::createPipelineLayout_ (std::initializer_list<ZDes
 
 	if (pPushConstantRanges)
 	{
-		assertPushConstantSizeMax(m_device.getParam<ZPhysicalDevice>(),
-			pPushConstantRanges[0].offset + pPushConstantRanges[0].size);
+		assertPushConstantSizeMax(device, pPushConstantRanges[0].offset + pPushConstantRanges[0].size);
 	}
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -511,7 +520,7 @@ ZPipelineLayout LayoutManager::createPipelineLayout_ (std::initializer_list<ZDes
 	pipelineLayoutInfo.pushConstantRangeCount	= pPushConstantRanges ? 1 : 0;
 	pipelineLayoutInfo.pPushConstantRanges		= pPushConstantRanges;
 
-	VKASSERT(vkCreatePipelineLayout(*m_device, &pipelineLayoutInfo, callbacks, pipelineLayout.setter()),
+	VKASSERT(vkCreatePipelineLayout(*device, &pipelineLayoutInfo, callbacks, pipelineLayout.setter()),
 										"failed to create pipeline layout!");
 
 	return pipelineLayout;
@@ -522,7 +531,7 @@ ZDescriptorSet LayoutManager::getDescriptorSet (ZDescriptorSetLayout layout)
 	ASSERTION(ds.has_handle());
 	return ds;
 }
-VarDescriptorInfo LayoutManager::getDescriptorInfo (uint32_t binding)
+VarDescriptorInfo LayoutManager::getDescriptorInfo (uint32_t binding) const
 {
 	VarDescriptorInfo var;
 	const collection_element_t<decltype(m_extbindings)>& b = verifyGetExtBinding(binding);
@@ -569,15 +578,19 @@ const LayoutManager::ExtBinding& LayoutManager::verifyGetExtBinding (uint32_t bi
 const LayoutManager::ExtBinding& LayoutManager::verifyGetExtBinding (std::type_index index, uint32_t binding) const
 {
 	const collection_element_t<decltype(m_extbindings)>& b = verifyGetExtBinding(binding);
-	ASSERTMSG(b.index == index, "");
+	ASSERTMSG(b.index == index, "Mismatch type binding");
 	return b;
+}
+uint32_t LayoutManager::getBindingElementCount (uint32_t binding) const
+{
+	add_cref<ExtBinding> b = verifyGetExtBinding(binding);
+	return b.elementCount;
 }
 void LayoutManager::fillBinding (uint32_t binding, uint32_t value)
 {
-	uint8_t data[256];
+	uint32_t data[256];
+	std::fill(std::begin(data), std::end(data), value);
 	add_cref<ExtBinding> b = verifyGetExtBinding(binding);
-	for (size_t i = 0; i < ARRAY_LENGTH(data) / sizeof(value); i += sizeof(value))
-		*(uint32_t*)&data[i] = value;
 	const VkDeviceSize fullSize = b.size * b.elementCount;
 	const VkDeviceSize chunkCount = fullSize / ARRAY_LENGTH(data);
 	const VkDeviceSize orphanSize = fullSize % ARRAY_LENGTH(data);
@@ -590,7 +603,7 @@ void LayoutManager::fillBinding (uint32_t binding, uint32_t value)
 			b.offset + i * ARRAY_LENGTH(data),
 			ARRAY_LENGTH(data)
 		};
-		bufferWriteData(buffer, data, writeInfo, false);
+		bufferWriteData(buffer, reinterpret_cast<add_cptr<uint8_t>>(data), writeInfo, false);
 	}
 	if (orphanSize)
 	{
@@ -600,7 +613,7 @@ void LayoutManager::fillBinding (uint32_t binding, uint32_t value)
 			b.offset + chunkCount * ARRAY_LENGTH(data),
 			orphanSize,
 		};
-		bufferWriteData(buffer, data, writeInfo, false);
+		bufferWriteData(buffer, reinterpret_cast<add_cptr<uint8_t>>(data), writeInfo, false);
 	}
 	bufferFlush(buffer);
 }

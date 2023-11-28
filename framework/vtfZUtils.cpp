@@ -86,7 +86,7 @@ ZFramebuffer createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t
 	const auto		allocationCallbacks		= device.getParam<VkAllocationCallbacksPtr>();
 
 	ASSERTMSG(attachmentCount > 0, "Attachment count must be greater than zero");
-	ASSERTION(attachmentCount >= renderAttachmentCount);
+	ASSERTMSG((renderAttachmentCount <= attachmentCount), "RenderPass attachments must not exceed framebuffer's attachment count being created");
 	add_cref<VkPhysicalDeviceLimits> limits = deviceGetPhysicalLimits(device);
 	ASSERTION(attachmentCount <= limits.maxFragmentOutputAttachments && attachmentCount <= limits.maxColorAttachments);
 
@@ -182,11 +182,24 @@ ZRenderPass	createRenderPassImpl (ZDevice device, void* pNext,
 		add_ref<VkAttachmentDescription> desc = descriptions.at(attachment);
 		desc.format	= colorFormats.at(attachment);
 		if (attachment < clearColorCount)
-			desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		{
+			if (0u != *((uint32_t*)&pClearColors->at(attachment).color.float32[3]))
+			{
+				desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+				desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+				desc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			}
+			else
+			{
+				desc.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+				desc.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+				desc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			}
+		}
 		else if (initialColorLayout != VK_IMAGE_LAYOUT_UNDEFINED)
+		{
 			desc.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-		desc.initialLayout = initialColorLayout;
-		desc.finalLayout = finalColorLayout;
+		}
 		references.at(attachment).attachment = attachment;
 	}
 

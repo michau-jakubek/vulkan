@@ -76,7 +76,7 @@ int runIntMatrixSingleThread (VulkanContext& ctx, const std::string& assets)
 	programs.addFromFile(VK_SHADER_STAGE_COMPUTE_BIT, "shader.comp");
 	const GlobalAppFlags	flags(getGlobalAppFlags());
 	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
-	ZShaderModule			compShaderModule	= *programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT);
+	ZShaderModule			compShaderModule	= programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT);
 
 	const uint32_t			align = 8u;
 	typedef uint8_t			aligntype[align];

@@ -117,8 +117,8 @@ int runTriangeSingleThread (Canvas& cs, const std::string& assets, bool infinity
 	const GlobalAppFlags		flags		(getGlobalAppFlags());
 	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
 
-	ZShaderModule				vertShaderModule	= *programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
-	ZShaderModule				fragShaderModule	= *programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);
+	ZShaderModule				vertShaderModule	= programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
+	ZShaderModule				fragShaderModule	= programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);
 
 	VertexInput					vertexInput			(cs.device);
 	{
@@ -176,8 +176,8 @@ int runTriangleMultipleThreads (Canvas& cs, const std::string& assets, const uin
 	const GlobalAppFlags		flags(getGlobalAppFlags());
 	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
 
-	ZShaderModule				vertShaderModule	= *programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
-	ZShaderModule				fragShaderModule	= *programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);
+	ZShaderModule				vertShaderModule	= programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
+	ZShaderModule				fragShaderModule	= programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);
 
 	VertexInput					vertexInput			(cs.device);
 	{

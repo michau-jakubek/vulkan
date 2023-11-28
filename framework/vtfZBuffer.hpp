@@ -6,6 +6,8 @@
 #include "vtfZDeviceMemory.hpp"
 #include "vtfZBarriers.hpp"
 
+#include <algorithm>
+
 namespace vtf
 {
 
@@ -63,6 +65,11 @@ VkDeviceSize	bufferReadData	(ZBuffer buffer, uint8_t* dst, VkDeviceSize size = V
 VkDeviceSize	bufferGetSize		(ZBuffer buffer);
 VkDeviceSize	bufferGetMemorySize	(ZBuffer buffer);
 
+template<class X, class Cast = uint32_t> Cast bufferGetElementCount (ZBuffer buffer)
+{
+	return static_cast<Cast>(bufferGetSize(buffer) / sizeof(X));
+}
+
 template<template<class, class...> class C, class T, class... V>
 VkDeviceSize	bufferWrite (ZBuffer buffer, const C<T, V...>& c, uint32_t count = INVALID_UINT32)
 {
@@ -101,14 +108,17 @@ void bufferRead (ZBuffer buffer, T (&table)[N])
 }
 
 template<class T>
-VkDeviceSize	bufferRead (ZBuffer buffer, std::vector<T>& container, uint32_t vectorElementCount = INVALID_UINT32)
+VkDeviceSize	bufferRead (ZBuffer buffer, std::vector<T>& container, uint32_t resizeElementCount = std::numeric_limits<uint32_t>::max())
 {
 	const VkDeviceSize	bufferSize		= buffer.getParam<VkDeviceSize>();
 	const uint32_t		availableCount	= static_cast<uint32_t>(bufferSize / sizeof(T));
-	if (vectorElementCount == INVALID_UINT32 || vectorElementCount > availableCount)
-		vectorElementCount = availableCount;
-	const VkDeviceSize	readSize		= vectorElementCount * sizeof(T);
-	container.resize(vectorElementCount);
+	if (container.size() == 0u)
+	{
+		resizeElementCount = std::clamp(resizeElementCount, 0u, availableCount);
+		container.resize(resizeElementCount);
+	}
+	uint32_t readCount = std::clamp((uint32_t)container.size(), 0u, availableCount);
+	const VkDeviceSize readSize = readCount * sizeof(T);
 	return bufferReadData(buffer, reinterpret_cast<uint8_t*>(container.data()), readSize);
 }
 
@@ -118,7 +128,7 @@ struct BufferTexelAccess_
 {
 protected:
 	BufferTexelAccess_ (ZBuffer buffer, uint32_t elementSize, uint32_t width, uint32_t height, uint32_t depth = 1u);
-	~BufferTexelAccess_ ();
+	virtual ~BufferTexelAccess_ ();
 	add_ptr<void>	at (uint32_t x, uint32_t y, uint32_t z = 0);
 	add_cptr<void>	at (uint32_t x, uint32_t y, uint32_t z = 0) const;
 
@@ -143,6 +153,7 @@ struct BufferTexelAccess : namespace_hidden::BufferTexelAccess_
 	{
 		return *static_cast<add_cptr<ElementType>>(BufferTexelAccess_::at(x, y, z));
 	}
+	auto stdBeginEnd () { return makeStdBeginEnd<ElementType>(m_data, (m_size.x() * m_size.y() * m_size.z())); }
 };
 
 } // namespace vtf

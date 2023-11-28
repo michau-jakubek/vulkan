@@ -483,6 +483,25 @@ static auto makeValidateCommand (const Version& vulkanVer, const Version& spirvV
 	return cmd.str();
 }
 
+static std::string makeCompilerSignature (bool glslangValidator)
+{
+	bool status = false;
+	// As far I know glslangValidator is an alias to glslang utility
+	const char* exe = glslangValidator ? "glslangValidator" : "glslang";
+	const std::string locCmd(
+#if SYSTEM_OS_LINUX == 1
+							std::string("type ") + exe
+#else
+							std::string("where ") + exe
+#endif
+							);
+	const std::string locRes = captureSystemCommandResult(locCmd.c_str(), status, '\n');
+	const std::string verCmd(exe + std::string(" --version"));
+	const std::string verRes = captureSystemCommandResult(verCmd.c_str(), status, '\n');
+	return	"[APP] Compiler path:\n[APP] " + locRes
+			+ "[APP] Compiler version:\n" + verRes;
+}
+
 static	bool verifyShaderCode (VkShaderStageFlagBits stage,
 							   const Version& vulkanVer, const Version& spirvVer, bool enableValidation, bool buildAlways,
 							   const strings& codeAndEntryAndIncludes, std::vector<unsigned char>& binary, std::string& error)
@@ -501,6 +520,10 @@ static	bool verifyShaderCode (VkShaderStageFlagBits stage,
 		std::ofstream textFile(textPath.c_str());
 		ASSERTION(textFile.is_open());
 		textFile << codeAndEntryAndIncludes[0];
+	}
+	if (getGlobalAppFlags().verbose)
+	{
+		std::cout << makeCompilerSignature(true);
 	}
 	if (!buildAlways && fs::exists(binPath))
 	{
@@ -666,9 +689,9 @@ void ProgramCollection::buildAndVerify (const Version& vulkanVer, const Version&
 	}
 }
 
-std::optional<ZShaderModule> ProgramCollection::getShader (VkShaderStageFlagBits stage, uint32_t index, bool verbose) const
+ZShaderModule ProgramCollection::getShader (VkShaderStageFlagBits stage, uint32_t index, bool verbose) const
 {
-	std::optional<ZShaderModule> module;
+	ZShaderModule module;
 	auto search = m_stageToBinary.find(std::make_pair(stage, index));
 	if (m_stageToBinary.end() != search)
 	{

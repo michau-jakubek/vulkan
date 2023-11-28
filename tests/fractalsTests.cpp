@@ -417,8 +417,8 @@ int performTest (Canvas& cs, const std::string&	assets, bool enableFloat64, uint
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, (assets + (enableFloat64 ? "dshader.frag" : "fshader.frag")));
 	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
 
-	ZShaderModule			vertShaderModule	= *programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
-	ZShaderModule			fragShaderModule	= *programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);
+	ZShaderModule			vertShaderModule	= programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
+	ZShaderModule			fragShaderModule	= programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);
 	VertexInput				vertexInput			(cs.device);
 
 	// Scope destruction of a vector

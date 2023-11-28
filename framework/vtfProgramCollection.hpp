@@ -35,7 +35,7 @@ public:
 					 const std::string& fileName, const strings& includePaths = {},
 					 const std::string& entryName = "main", bool verbose = true);
 	void buildAndVerify (const Version& vulkanVer = Version(1,0), const Version& spirvVer = Version(1,0), bool enableValidation = false, bool buildAlways = false);
-	std::optional<ZShaderModule>	getShader (VkShaderStageFlagBits stage, uint32_t index = 0u, bool verbose = false) const;
+	auto getShader (VkShaderStageFlagBits stage, uint32_t index = 0u, bool verbose = false) const -> ZShaderModule;
 };
 
 void addProgram (ProgramCollection& programCollection,	const std::string& programName,		VkShaderStageFlagBits programType,

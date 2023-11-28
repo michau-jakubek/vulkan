@@ -357,14 +357,23 @@ public:
 	}
 	template<class U, size_t M> bool comparePartially (const VecX<U,M>&, T tol) const;
 
+	T& x()	{ verifyIndex(0); return (*this)[0]; }
+	T& y()	{ verifyIndex(1); return (*this)[1]; }
+	T& z()	{ verifyIndex(2); return (*this)[2]; }
+	T& w()	{ verifyIndex(3); return (*this)[3]; }
+	T& r()	{ verifyIndex(0); return (*this)[0]; }
+	T& g()	{ verifyIndex(1); return (*this)[1]; }
+	T& b()	{ verifyIndex(2); return (*this)[2]; }
+	T& a()	{ verifyIndex(3); return (*this)[3]; }
+
 	const T& x() const  { verifyIndex(0); return (*this)[0]; }
 	const T& y() const  { verifyIndex(1); return (*this)[1]; }
 	const T& z() const  { verifyIndex(2); return (*this)[2]; }
 	const T& w() const  { verifyIndex(3); return (*this)[3]; }
 	const T& r() const  { verifyIndex(0); return (*this)[0]; }
-	const T& g() const  { verifyIndex(0); return (*this)[1]; }
-	const T& b() const  { verifyIndex(0); return (*this)[2]; }
-	const T& a() const  { verifyIndex(0); return (*this)[3]; }
+	const T& g() const  { verifyIndex(1); return (*this)[1]; }
+	const T& b() const  { verifyIndex(2); return (*this)[2]; }
+	const T& a() const  { verifyIndex(3); return (*this)[3]; }
 
 	VecX& x(const T& v)    { verifyIndex(0); (*this)[0] = v; return *this; }
 	VecX& y(const T& v)    { verifyIndex(1); (*this)[1] = v; return *this; }

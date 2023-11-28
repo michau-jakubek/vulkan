@@ -5,6 +5,7 @@
 
 #define MKN(enumConstant) #enumConstant
 #define MKP(enumConstant) { enumConstant, MKN(enumConstant) }
+#define MK_CASE_RETURN_STRING(enumConstant) case enumConstant: return MKN(enumConstant)
 
 namespace vtf
 {
@@ -106,7 +107,7 @@ std::ostream& operator<<(std::ostream& str, add_cref<ZDistType<QueueFlags, VkQue
 	return str;
 }
 
-std::ostream& operator<<(std::ostream& str, add_cref<VkDeviceQueueCreateInfoEx> props)
+std::ostream& operator<< (std::ostream& str, add_cref<VkDeviceQueueCreateInfoEx> props)
 {
 	str << "VkQueueFamilyProperties[" << props.queueFamilyIndex << "] {\n"
 		<< "\tqueueFlags:     " << ZDistType<QueueFlags, VkQueueFlags>(props.queueFlags) << '\n'
@@ -115,7 +116,7 @@ std::ostream& operator<<(std::ostream& str, add_cref<VkDeviceQueueCreateInfoEx> 
 	return str;
 }
 
-std::ostream& operator<<(std::ostream& str, add_cref<VkPrimitiveTopology> topo)
+std::ostream& operator<< (std::ostream& str, add_cref<VkPrimitiveTopology> topo)
 {
 	static const char* names[] {
 		MKN(VK_PRIMITIVE_TOPOLOGY_POINT_LIST),
@@ -133,8 +134,41 @@ std::ostream& operator<<(std::ostream& str, add_cref<VkPrimitiveTopology> topo)
 
 	if (int(topo) >= 0 && uint32_t(topo) < ARRAY_LENGTH(names))
 		str << names[uint32_t(topo)];
-	else str << "VkPrimitiveTopology(" << int(topo) << ')';
+	else str << "Unknown VkPrimitiveTopology(" << uint32_t(topo) << ')';
 
+	return str;
+}
+
+std::ostream& operator<< (std::ostream& str, add_cref<VkShaderStageFlagBits> stage)
+{
+	static auto getVkShaderStageFlagBitsString = [](VkShaderStageFlagBits shader) -> add_cptr<char>
+	{
+		switch (shader)
+		{
+		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_VERTEX_BIT);
+		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT);
+		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT);
+		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_GEOMETRY_BIT);
+		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_FRAGMENT_BIT);
+		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_COMPUTE_BIT);
+		// VK_SHADER_STAGE_ALL_GRAPHICS = 0x0000001F,
+		// VK_SHADER_STAGE_ALL = 0x7FFFFFFF,
+		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_RAYGEN_BIT_KHR);
+		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_ANY_HIT_BIT_KHR);
+		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
+		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_MISS_BIT_KHR);
+		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_INTERSECTION_BIT_KHR);
+		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_CALLABLE_BIT_KHR);
+		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_TASK_BIT_NV);
+		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_MESH_BIT_NV);
+		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_SUBPASS_SHADING_BIT_HUAWEI);
+		default: break;
+		}
+		return nullptr;
+	};
+	if (add_cptr<char> name = getVkShaderStageFlagBitsString(stage); name != nullptr)
+		str << name;
+	else str << "Unknown VkShaderStageFlagBits(" << uint32_t(stage) << ')';
 	return str;
 }
 

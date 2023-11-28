@@ -109,6 +109,12 @@ inline bool mapHasKey (const key__& key, const std::map<key__, val__>& mp)
 	return mp.find(key) != mp.end();
 }
 
+template<class Key_, class Val_, class... X_>
+inline bool mapHasKey (const std::map<Key_, Val_, X_...> map, const Key_& key)
+{
+	return map.end() != map.find(key);
+}
+
 template<class convFrom_, class convTo_> convTo_
 concise_convert (const convFrom_&, const convTo_& to)
 {
@@ -194,12 +200,6 @@ auto iterator_from_index (const Container_<X_...>& c, uint32_t index)
 	auto i = std::next(c.begin(), index);
 	if (index >= c.size()) i = c.end();
 	return i;
-}
-
-template<class Key_, class Val_, class... X_>
-bool mapHasKey (const std::map<Key_, Val_, X_...> map, const Key_& key)
-{
-	return map.end() != map.find(key);
 }
 
 // externals are defined for types: int, float, std::string, bool (true, false, 0 && !0 logic)

@@ -79,6 +79,7 @@ typedef std::variant<std::monostate, DescriptorBufferInfo, DescriptorImageInfo>	
 class LayoutManager
 {
 public:
+											ZDevice						device;
 											LayoutManager				(ZDevice device);
 	/**
 	 * Creates single buffer and concatenates all chunks into it
@@ -96,7 +97,7 @@ public:
 	 * Basically does the same things like above addBinding().
 	 * The one difference is that it automatically treat Y as std::vector<Y>
 	 */
-	template<class ElemType> uint32_t		addBindingAsVector			(uint32_t elementCount = 1, VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
+	template<class ElemType> uint32_t		addBindingAsVector			(VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, uint32_t elementCount = 1, VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
 	template<class ElemType> uint32_t		addBindingAsVector			(const std::vector<ElemType>& vector, VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
 	/**
 	 * Creates a descriptor set bind depending on parameters.
@@ -119,8 +120,10 @@ public:
 	 * Allows to write data directly to an associated data buffer.
 	 * A type of Data_ is veryfied before read, if doesn't match then throws an exception.
 	 * This method is available after createDescriptorSetLayout() is called.
+	 * :( This interface should be more flexible :(
 	 */
 	template<class Data__> void				writeBinding				(uint32_t binding, const Data__& data);
+	template<class VecElem__> void			writeBinding				(uint32_t binding, const VecElem__& data, uint32_t index);
 	void									fillBinding					(uint32_t binding, uint32_t value = 0u);
 	/**
 	 * Allows to direct read from associated buffer. A type of Data_ is veryfied before read.
@@ -129,7 +132,8 @@ public:
 	 * This method is available after createDescriptorSetLayout() is called.
 	 */
 	template<class Data__> void				readBinding					(uint32_t binding, Data__& data) const;
-	VarDescriptorInfo						getDescriptorInfo			(uint32_t binding);
+	uint32_t								getBindingElementCount		(uint32_t binding) const;
+	VarDescriptorInfo						getDescriptorInfo			(uint32_t binding) const;
 	/**
 	 * Creates descriptor set layout object based on bindings collected
 	 * via addBinding*(...) methods. Automatically creates descriptor set
@@ -151,6 +155,7 @@ public:
 	void									updateDescriptorSet			(ZDescriptorSet ds, uint32_t binding, ZImageView view);
 	void									updateDescriptorSet			(ZDescriptorSet ds, uint32_t binding, ZSampler sampler);
 	void									updateDescriptorSet			(ZDescriptorSet ds, uint32_t binding, ZImageView view, ZSampler sampler);
+	void									updateDescriptorSet			(ZDescriptorSet ds, uint32_t binding, ZBuffer buffer);
 	ZPipelineLayout							createPipelineLayout		();
 	ZPipelineLayout							createPipelineLayout		(ZDescriptorSetLayout dsLayout);
 	template<class PC__> ZPipelineLayout	createPipelineLayout		(VkShaderStageFlags pcStageFlags = VK_SHADER_STAGE_ALL);
@@ -195,7 +200,6 @@ private:
 																		 const VkPushConstantRange* pPushConstantRanges, type_index_with_default typeOfPushConstant);
 
 private:
-	ZDevice														m_device;
 	ExtBindings													m_extbindings;
 	std::vector<ZImageView>										m_views;
 	std::vector<ZSampler>										m_samplers;
@@ -233,7 +237,7 @@ template<class VecOrElemT> uint32_t LayoutManager::addBinding (VkDescriptorType 
 	return addBinding_(index, hidden::BoundType<VecOrElemT>::size(), hidden::BoundType<VecOrElemT>::isVector(),
 					   type, stages, std::max((hidden::BoundType<VecOrElemT>::isVector() ? elementCount : 1u), 1u));
 }
-template<class Y> uint32_t LayoutManager::addBindingAsVector (uint32_t elementCount, VkDescriptorType type, VkShaderStageFlags stages)
+template<class Y> uint32_t LayoutManager::addBindingAsVector (VkDescriptorType type, uint32_t elementCount, VkShaderStageFlags stages)
 {
 	auto index = std::type_index(typeid(typename add_extent<std::vector<Y>>::type));
 	return addBinding_(index, hidden::BoundType<Y>::size(), true, type, stages, std::max(elementCount, 1u));
@@ -247,6 +251,14 @@ template<class Data__> void LayoutManager::writeBinding (uint32_t binding, const
 {
 	auto index = std::type_index(typeid(typename add_extent<Data__>::type));
 	writeBinding_(index, binding, hidden::BoundType<Data__>::data(data), hidden::BoundType<Data__>::length(data));
+}
+template<class VecElem__> void LayoutManager::writeBinding (uint32_t binding, const VecElem__& data, uint32_t index)
+{
+	UNREF(binding);
+	UNREF(data);
+	UNREF(index);
+	auto tindex = std::type_index(typeid(typename add_extent<std::vector<VecElem__>>::type));
+	UNREF(tindex);
 }
 template<class Data__> void LayoutManager::readBinding (uint32_t binding, Data__& data) const
 {

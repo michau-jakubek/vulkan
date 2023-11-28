@@ -189,8 +189,8 @@ int runTestSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets, add_c
 	add_cref<GlobalAppFlags>	flags(getGlobalAppFlags());
 	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
 
-	ZShaderModule				vertShaderModule	= *programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
-	ZShaderModule				fragShaderModule	= *programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);
+	ZShaderModule				vertShaderModule	= programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
+	ZShaderModule				fragShaderModule	= programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);
 
 	VertexInput					vertexInput			(cs.device);
 	{

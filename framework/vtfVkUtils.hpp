@@ -132,9 +132,6 @@ uint32_t		findSurfaceSupportedQueueFamilyIndex (VkPhysicalDevice physDevice, VkS
 std::vector<uint32_t> findSurfaceSupportedQueueFamilyIndices (VkPhysicalDevice physDevice, ZSurfaceKHR surface);
 bool			hasFormatsAndModes (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR);
 const char*		vkResultToString (VkResult res);
-std::ostream&	operator<<(std::ostream& str, add_cref<ZDistType<QueueFlags, VkQueueFlags>> flags);
-std::ostream&	operator<<(std::ostream& str, add_cref<VkDeviceQueueCreateInfoEx> props);
-std::ostream&	operator<<(std::ostream& str, add_cref<VkPrimitiveTopology> topo);
 strings			enumerateInstanceLayers ();
 strings			enumerateInstanceExtensions (const strings& layerNames = {});
 strings			enumerateDeviceExtensions (VkPhysicalDevice device, const strings& layerNames = {});
@@ -178,6 +175,11 @@ VkViewport		makeViewport (uint32_t width, uint32_t height, uint32_t x = 0, uint3
 VkRect2D		clampScissorToViewport (add_cref<VkViewport> viewport, add_ref<VkRect2D> inOutScissor);
 template<class CompType> // int32_t: IVec4, uint32_t: UVec4, float: Vec4
 VkClearColorValue makeClearColorValue (const VecX<CompType,4>& color);
+
+std::ostream&	operator<<(std::ostream& str, add_cref<ZDistType<QueueFlags, VkQueueFlags>> flags);
+std::ostream&	operator<<(std::ostream& str, add_cref<VkDeviceQueueCreateInfoEx> props);
+std::ostream&	operator<<(std::ostream& str, add_cref<VkPrimitiveTopology> topo);
+std::ostream&	operator<<(std::ostream& str, add_cref<VkShaderStageFlagBits> stage);
 
 } // namespace vtf
 
