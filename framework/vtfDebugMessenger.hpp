@@ -5,8 +5,8 @@
 
 namespace vtf
 {
-void			getDebugCreateInfo		(VkDebugUtilsMessengerCreateInfoEXT& result, void* pUserData, void* pNext = nullptr, bool enableDebugPrintf = false);
-void			getDebugCreateInfo		(VkDebugReportCallbackCreateInfoEXT& result, void* pUserData, void* pNext = nullptr, bool enableDebugPrintf = false);
+void			makeDebugCreateInfo		(VkDebugUtilsMessengerCreateInfoEXT& result, void* pUserData, void* pNext = nullptr, bool enableDebugPrintf = false);
+void			makeDebugCreateInfo		(VkDebugReportCallbackCreateInfoEXT& result, void* pUserData, void* pNext = nullptr, bool enableDebugPrintf = false);
 void			createDebugMessenger	(ZInstance, VkAllocationCallbacksPtr, const VkDebugUtilsMessengerCreateInfoEXT&, VkDebugUtilsMessengerEXT&);
 void			destroyDebugMessenger	(ZInstance, VkAllocationCallbacksPtr, VkDebugUtilsMessengerEXT&);
 void			createDebugReport		(ZInstance, VkAllocationCallbacksPtr, const VkDebugReportCallbackCreateInfoEXT&, VkDebugReportCallbackEXT&);

@@ -81,6 +81,8 @@ class LayoutManager
 public:
 											ZDevice						device;
 											LayoutManager				(ZDevice device);
+											LayoutManager				(add_cref<LayoutManager>) = delete;
+											LayoutManager				(add_rref<LayoutManager>) = delete;
 	/**
 	 * Creates single buffer and concatenates all chunks into it
 	 * that have the same descriptor type and buffer usage.

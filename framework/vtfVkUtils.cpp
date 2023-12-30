@@ -107,7 +107,7 @@ std::ostream& operator<<(std::ostream& str, add_cref<ZDistType<QueueFlags, VkQue
 	return str;
 }
 
-std::ostream& operator<< (std::ostream& str, add_cref<VkDeviceQueueCreateInfoEx> props)
+std::ostream& operator<< (std::ostream& str, add_cref<ZDeviceQueueCreateInfo> props)
 {
 	str << "VkQueueFamilyProperties[" << props.queueFamilyIndex << "] {\n"
 		<< "\tqueueFlags:     " << ZDistType<QueueFlags, VkQueueFlags>(props.queueFlags) << '\n'

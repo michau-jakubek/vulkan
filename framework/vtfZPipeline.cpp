@@ -582,6 +582,11 @@ ZPipeline createComputePipeline (ZPipelineLayout layout, ZShaderModule computeSh
 	 * must be less than or equal to VkPhysicalDeviceLimits::maxComputeWorkGroupInvocations
 	 * (https://vulkan.lunarg.com/doc/view/1.3.243.0/linux/1.3-extensions/vkspec.html#VUID-RuntimeSpirv-x-06432)
 	 */
+	/*
+	 * uint32_t maxComputeWorkGroupCount[3];	is the maximum number of local workgroups that can be dispatched by a single dispatching command
+	 * uint32_t maxComputeWorkGroupInvocations;	is the maximum total number of compute shader invocations in a single local workgroup. The product of the X, Y, and Z sizes.
+	 * uint32_t maxComputeWorkGroupSize[3];		is the maximum size of a local compute workgroup, per dimension.
+	 */
 	if (product >  maxComputeWorkGroupInvocations)
 	{
 		std::stringstream ss;

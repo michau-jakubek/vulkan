@@ -81,7 +81,7 @@ ZShaderModule createShaderModule(ZDevice device, VkShaderStageFlagBits stage, co
 ZFramebuffer createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t height, const std::vector<ZImageView>& attachments)
 {
 	const uint32_t	renderAttachmentCount	= renderPass.getParam<ZDistType<AttachmentCount, uint32_t>>();
-	const uint32_t	attachmentCount			= static_cast<uint32_t>(attachments.size());
+	const uint32_t	attachmentCount			= data_count(attachments);
 	const ZDevice	device					= renderPass.getParam<ZDevice>();
 	const auto		allocationCallbacks		= device.getParam<VkAllocationCallbacksPtr>();
 
@@ -138,8 +138,8 @@ const VkRenderPassBeginInfo ZRenderPassBeginInfo::operator ()() const
 	info.renderArea.offset.y	= 0u;
 	info.renderArea.extent.width	= width;
 	info.renderArea.extent.height	= height;
-	info.clearValueCount	= uint32_t(clearValues.size());
-	info.pClearValues		= clearValues.size() ? clearValues.data() : nullptr;
+	info.clearValueCount	= data_count(clearValues);
+	info.pClearValues		= data_or_null(clearValues);
 
 	return info;
 }
@@ -150,7 +150,7 @@ ZRenderPass	createRenderPassImpl (ZDevice device, void* pNext,
 								  VkImageLayout initialColorLayout, VkImageLayout finalColorLayout,
 								  add_cref<std::vector<ZSubpassDependency>> deps)
 {
-	const uint32_t attachmentCount = static_cast<uint32_t>(colorFormats.size());
+	const uint32_t attachmentCount = data_count(colorFormats);
 	ASSERTMSG(colorFormats.size(), "pColorAttachments must contain at least one element");
 	ASSERTMSG(deviceGetPhysicalLimits(device).maxColorAttachments > attachmentCount,
 			  "Attachments you want exceed maxAttachmens");
@@ -339,7 +339,7 @@ ZRenderPass	createMultiViewRenderPass (ZDevice device, add_cref<std::vector<VkFo
 	VkRenderPassMultiviewCreateInfo info = makeVkStruct();
 	info.subpassCount			= subpassCount;
 	info.pViewMasks				= viewMasks.data();
-	info.dependencyCount		= static_cast<uint32_t>(dependencies.size());
+	info.dependencyCount		= data_count(dependencies);
 	info.pViewOffsets			= offsets.data();
 	info.correlationMaskCount	= 0u;
 	info.pCorrelationMasks		= nullptr;
@@ -411,11 +411,10 @@ ZInstance		createInstance (const char*							appName,
 	VkDebugReportCallbackCreateInfoEXT debugReportInfo{};
 	const std::string debugUtilsExtName(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);		// "VK_EXT_debug_utils"
 	const std::string debugReportExtName(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);	// "VK_EXT_debug_report"
+	const bool debugReportEnabled		= ((containsString(debugReportExtName, desiredExtensions) || pReport != nullptr)
+										&& containsString(debugReportExtName, availableExtensions));
 	const bool debugMessengerEnabled	= ((containsString(debugUtilsExtName, desiredExtensions) || pMessenger != nullptr)
-										&& containsString(debugUtilsExtName, availableExtensions));
-	const bool debugReportEnabled		= enabledValidationFeature
-										&& ((containsString(debugReportExtName, desiredExtensions) || pReport != nullptr)
-										&& containsString(debugReportExtName, availableExtensions)) && !debugMessengerEnabled;
+										&& containsString(debugUtilsExtName, availableExtensions)) && (!debugReportEnabled);
 	UNREF(pMessengerUserData);
 	UNREF(pReportUserData);
 
@@ -423,22 +422,18 @@ ZInstance		createInstance (const char*							appName,
 
 	if (debugMessengerEnabled)
 	{
-		getDebugCreateInfo(debugMessengerInfo, &instance.getParamRef<Logger>(), nullptr, enableDebugPrintf);
-	}
-	else
-	{
-		//removeStrings({ debugUtilsExtName }, availableExtensions);
+		makeDebugCreateInfo(debugMessengerInfo, &instance.getParamRef<Logger>(), nullptr, enableDebugPrintf);
 	}
 
 	if (debugReportEnabled)
 	{
-		getDebugCreateInfo(debugReportInfo, &instance.getParamRef<Logger>(), nullptr, enableDebugPrintf);
+		makeDebugCreateInfo(debugReportInfo, &instance.getParamRef<Logger>(), nullptr, enableDebugPrintf);
+	}
+
+	if (debugMessengerEnabled || debugReportEnabled)
+	{
 		*p2pNext = &validationFeatures;
 		p2pNext = (void**)&validationFeatures.pNext;
-	}
-	else
-	{
-		//removeStrings({ debugReportExtName }, availableExtensions);
 	}
 
 	VkApplicationInfo	appInfo			= makeVkStruct();
@@ -453,10 +448,10 @@ ZInstance		createInstance (const char*							appName,
 
 	VkInstanceCreateInfo createInfo		= makeVkStruct();
 	createInfo.pApplicationInfo			= &appInfo;
-	createInfo.enabledExtensionCount	= static_cast<uint32_t>(v_extensions.size());
-	createInfo.ppEnabledExtensionNames	= v_extensions.size() ? v_extensions.data() : nullptr;
-	createInfo.enabledLayerCount		= static_cast<uint32_t>(v_layerNames.size());
-	createInfo.ppEnabledLayerNames		= v_layerNames.size() ? v_layerNames.data() : nullptr;
+	createInfo.enabledExtensionCount	= data_count(v_extensions);
+	createInfo.ppEnabledExtensionNames	= data_or_null(v_extensions);
+	createInfo.enabledLayerCount		= data_count(v_layerNames);
+	createInfo.ppEnabledLayerNames		= data_or_null(v_layerNames);
 
 	VKASSERT3(vkCreateInstance(&createInfo, callbacks, instance.setter()), "Failed to create instance!");
 
@@ -573,7 +568,7 @@ ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
 	std::vector<float>						queuePriorities;
 	std::vector<VkQueueFamilyProperties>	queueFamilyProps;
 	std::vector<VkDeviceQueueCreateInfo>	queueCreateInfos;
-	std::vector<VkDeviceQueueCreateInfoEx>	queueCreateExInfos;
+	std::vector<ZDeviceQueueCreateInfo>		queueCreateExInfos;
 
 	add_ref<Logger>	logger = physDevice.getParam<ZInstance>().getParamRef<Logger>();
 
@@ -608,7 +603,7 @@ ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
 	for (uint32_t queueFamilyIndex = 0; queueFamilyIndex < queueFamilyPropCount; ++queueFamilyIndex)
 	{
 		add_ref<VkDeviceQueueCreateInfo>	queueCreateInfo		= queueCreateInfos[queueFamilyIndex];
-		add_ref<VkDeviceQueueCreateInfoEx>	queueCreateExInfo	= queueCreateExInfos[queueFamilyIndex];
+		add_ref<ZDeviceQueueCreateInfo>		queueCreateExInfo	= queueCreateExInfos[queueFamilyIndex];
 		add_cref<VkQueueFamilyProperties>	queueProperties		= queueFamilyProps[queueFamilyIndex];
 
 		const VkDeviceQueueCreateInfo infoTemplate = makeQueueCreateInfo(queueFamilyIndex, queueProperties.queueCount);
@@ -620,7 +615,8 @@ ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
 
 		if (getGlobalAppFlags().verbose)
 		{
-			//logger << queueCreateExInfo << std::endl;
+			//::vtf::operator<<(logger, queueCreateExInfo) << std::endl;
+			// TODO logger << queueCreateExInfo << std::endl;
 		}
 	}
 
@@ -632,8 +628,12 @@ ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
 	strings	availableDeviceExtensions(physDevice.getParamRef<strings>());
 	if (onEnablingFeatures)	features	= onEnablingFeatures(physDevice, availableDeviceExtensions);
 	features.sType = mkstype<decltype(features)>;
-	if (enableDebugPrintf)
+	// Add common features
 	{
+		if (enableDebugPrintf)
+		{
+			availableDeviceExtensions.push_back(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME);
+		}
 		// vertexPipelineStoresAndAtomics & fragmentStoresAndAtomics must be enabled
 		VkPhysicalDeviceFeatures tmp{};
 		vkGetPhysicalDeviceFeatures(*physDevice, &tmp);
@@ -645,16 +645,16 @@ ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
 
 	VkDeviceCreateInfo createInfo		= makeVkStruct();
 
-	createInfo.queueCreateInfoCount		= static_cast<uint32_t>(queueCreateInfos.size());
+	createInfo.queueCreateInfoCount		= data_count(queueCreateInfos);
 	createInfo.pQueueCreateInfos		= queueCreateInfos.data();
 
 	createInfo.pNext					= onEnablingFeatures ? &features : nullptr;
 	createInfo.pEnabledFeatures			= onEnablingFeatures ? nullptr : &features.features;
 
-	createInfo.enabledExtensionCount	= static_cast<uint32_t>(extensions.size());
-	createInfo.ppEnabledExtensionNames	= extensions.size() ? extensions.data() : nullptr;
-	createInfo.enabledLayerCount		= static_cast<uint32_t>(layers.size());
-	createInfo.ppEnabledLayerNames		= layers.size() ? layers.data() : nullptr;
+	createInfo.enabledExtensionCount	= data_count(extensions);
+	createInfo.ppEnabledExtensionNames	= data_or_null(extensions);
+	createInfo.enabledLayerCount		= data_count(layers);
+	createInfo.ppEnabledLayerNames		= data_or_null(layers);
 
 	ZDevice logicalDevice(VK_NULL_HANDLE, callbacks, physDevice, std::move(queueCreateExInfos), {/*std::vector<ZQueue>*/});
 	VKASSERT2(vkCreateDevice(*physDevice, &createInfo, callbacks, logicalDevice.setter()));
@@ -669,10 +669,10 @@ ZPhysicalDevice	deviceGetPhysicalDevice (ZDevice device)
 
 ZQueue deviceGetNextQueue (ZDevice device, VkQueueFlags queueFlags, bool mustSupportSurface)
 {
-	add_ref<std::vector<VkDeviceQueueCreateInfoEx>> infos =
-		device.getParamRef<ZDistType<QueueCreateInfoList, std::vector<VkDeviceQueueCreateInfoEx>>>();
+	add_ref<std::vector<ZDeviceQueueCreateInfo>> infos =
+		device.getParamRef<ZDistType<QueueCreateInfoList, std::vector<ZDeviceQueueCreateInfo>>>();
 	add_ref<std::vector<ZQueue>> queues = device.getParamRef<ZDistType<QueueList, std::vector<ZQueue>>>();
-	for (add_ref<VkDeviceQueueCreateInfoEx> info : infos)
+	for (add_ref<ZDeviceQueueCreateInfo> info : infos)
 	{
 		const bool allowSupportSurface = mustSupportSurface ? info.surfaceSupport : true;
 		if (((queueFlags & info.queueFlags) != 0) && allowSupportSurface)
@@ -748,7 +748,7 @@ void waitForFence (ZFence fence, uint64_t timeout)
 
 void waitForFences (std::initializer_list<ZFence> fences, uint64_t timeout)
 {
-	if (auto count = static_cast<uint32_t>(fences.size()); count)
+	if (auto count = data_count(fences); count)
 	{
 		auto b = fences.begin();
 		const ZDevice device = b->getParam<ZDevice>();
@@ -764,7 +764,7 @@ void waitForFences (std::initializer_list<ZFence> fences, uint64_t timeout)
 
 void waitForFences (std::vector<ZFence> fences, uint64_t timeout)
 {
-	if (auto count = static_cast<uint32_t>(fences.size()); count)
+	if (auto count = data_count(fences); count != 0)
 	{
 		auto b = fences.begin();
 		const ZDevice device = b->getParam<ZDevice>();
@@ -786,7 +786,7 @@ void resetFence (ZFence fence)
 
 void resetFences (std::initializer_list<ZFence> fences)
 {
-	if (auto count = static_cast<uint32_t>(fences.size()); count)
+	if (auto count = data_count(fences); count != 0)
 	{
 		auto b = fences.begin();
 		const ZDevice device = b->getParam<ZDevice>();
@@ -802,7 +802,7 @@ void resetFences (std::initializer_list<ZFence> fences)
 
 void resetFences (std::vector<ZFence> fences)
 {
-	if (auto count = static_cast<uint32_t>(fences.size()); count)
+	if (auto count = data_count(fences); count != 0)
 	{
 		auto b = fences.begin();
 		const ZDevice device = b->getParam<ZDevice>();

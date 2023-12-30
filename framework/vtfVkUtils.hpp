@@ -20,9 +20,11 @@ namespace vtf
 constexpr uint32_t INVALID_UINT32 = (~(static_cast<uint32_t>(0u)));
 constexpr uint64_t INVALID_UINT64 = (~(static_cast<uint64_t>(0u)));
 
-#define ARRAY_LENGTH(a) std::extent<decltype(a)>::value
+#define ARRAY_LENGTH(a__) (std::extent<decltype(a__)>::value)
+#define ARRAY_LENGTH_CAST(a__, cast__) (static_cast<cast__>(ARRAY_LENGTH(a__)))
 
-#define UNREF(x) static_cast<void>(x)
+#define UNREF(x__) static_cast<void>(x__)
+#define SIDE_EFFECT(x__) UNREF(x__)
 
 #ifdef _MSC_VER
 	#define UNUSED [[maybe_unused]]
@@ -30,7 +32,8 @@ constexpr uint64_t INVALID_UINT64 = (~(static_cast<uint64_t>(0u)));
 	#define UNUSED __attribute__((unused))
 #endif
 
-#define ROUNDUP(x__, multipler__) ((((x__)+((multipler__)-1))/(multipler__))*(multipler__))
+#define MULTIPLERUP(x__, multipler__) (((x__)+((multipler__)-1))/(multipler__))
+#define ROUNDUP(x__, multipler__) (MULTIPLERUP((x__),(multipler__))*(multipler__))
 #define ROUNDDOWN(x__, multipler__) (((x__)/(multipler__))*(multipler__))
 
 #define VKASSERT2(expr__) {				\
@@ -177,7 +180,7 @@ template<class CompType> // int32_t: IVec4, uint32_t: UVec4, float: Vec4
 VkClearColorValue makeClearColorValue (const VecX<CompType,4>& color);
 
 std::ostream&	operator<<(std::ostream& str, add_cref<ZDistType<QueueFlags, VkQueueFlags>> flags);
-std::ostream&	operator<<(std::ostream& str, add_cref<VkDeviceQueueCreateInfoEx> props);
+std::ostream&	operator<<(std::ostream& str, add_cref<ZDeviceQueueCreateInfo> props);
 std::ostream&	operator<<(std::ostream& str, add_cref<VkPrimitiveTopology> topo);
 std::ostream&	operator<<(std::ostream& str, add_cref<VkShaderStageFlagBits> stage);
 

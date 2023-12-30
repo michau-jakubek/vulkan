@@ -65,37 +65,45 @@ inline X select_if (const C<X, Y...>& c, const X& defaultResult, S&& s)
 	return x != c.end() ? *x : defaultResult;
 }
 
-template<template<class, class...> class Ctr, class T, class... Aux>
-VkDeviceSize data_byte_length (const Ctr<T, Aux...>& ctr)
+template<template<class, class...> class Ctr, class T, class... ImplCppSpecDontCare>
+VkDeviceSize data_byte_length (const Ctr<T, ImplCppSpecDontCare...>& ctr)
 {
 	return static_cast<VkDeviceSize>(ctr.size() * sizeof(T));
 }
 
-template<template<class, class...> class Ctr, class T, class... Aux>
-uint32_t data_count (const Ctr<T, Aux...>& ctr)
+template<template<class, class...> class Ctr, class T, class... ImplCppSpecDontCare>
+uint32_t data_count (const Ctr<T, ImplCppSpecDontCare...>& ctr)
 {
 	return static_cast<uint32_t>(ctr.size());
 }
 
-template<template<class, class...> class Ctr, class T, class... Aux>
-add_ptr<T> data_or_null (Ctr<T, Aux...>& ctr)
+template<template<class, class...> class Ctr, class T, class... ImplCppSpecDontCare>
+add_ptr<T> data_or_null (Ctr<T, ImplCppSpecDontCare...>& ctr)
 {
 	return ctr.size() ? ctr.data() : nullptr;
 }
 
-template<template<class, class...> class Ctr, class T, class... Aux>
-add_cptr<T> data_or_null (const Ctr<T, Aux...>& ctr)
+template<template<class, class...> class Ctr, class T, class... ImplCppSpecDontCare>
+add_cptr<T> data_or_null (const Ctr<T, ImplCppSpecDontCare...>& ctr)
 {
 	return ctr.size() ? ctr.data() : nullptr;
+}
+
+template<template<class, class...> class Container, class value_type_t, class value_type, class... ImplCppSpecDontCare>
+void container_push_back_more (Container<value_type_t, ImplCppSpecDontCare...>& cntr, std::initializer_list<value_type> values)
+{
+	for (value_type value : values)
+		cntr.push_back(value);
 }
 
 template<class X> struct collection_element;
-template<template<class,class...> class coll__, class X, class... Y>
+template<template<class, class...> class coll__, class X, class... Y>
 struct collection_element<coll__<X, Y...>>
 {
 	typedef X type;
 };
 template<class coll__> using collection_element_t = typename collection_element<coll__>::type;
+
 
 template<template<class, class...> class coll__, class T, class... Aux>
 uint32_t elem_byte_length (const coll__<T, Aux...>&)
@@ -174,6 +182,8 @@ void copy_initializer_list (const std::initializer_list<ListItem>& src, ListItem
 	}
 }
 
+#define STRINGIZE(value__) #value__
+
 #define BEGIN_SWITCH_STR(variable_lhs_, variable_rhs_, switch__) {	\
 	const char* variable_rhs_ = nullptr;							\
 	const char*& variable_rhs_ref_ = variable_rhs_;					\
@@ -218,7 +228,10 @@ struct routine_signature
 };
 template<class R, class... Args> struct routine_t;
 template<class R, class... Args> struct routine_t<R(Args...)>
-	: routine_signature<R, Args...> { };
+	: routine_signature<R, Args...>
+{
+	//typedef R(Args...) type;
+};
 
 template<class routine_type__, std::size_t at__>
 using routine_arg_t = std::tuple_element_t<at__, typename routine_t<routine_type__>::ArgList>;

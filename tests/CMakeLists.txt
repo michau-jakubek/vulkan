@@ -17,6 +17,12 @@ set(tests_files
     multiViewTests.hpp
     intMatrixTests.cpp
     intMatrixTests.hpp
+    intCompute.cpp
+    intCompute.hpp
+    intCipher.cpp
+    intCipher.hpp
+    subgroupMatrixTests.cpp
+    subgroupMatrixTests.hpp
     topologyTests.cpp
     topologyTests.hpp
     )

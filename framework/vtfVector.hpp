@@ -1,6 +1,8 @@
 #ifndef __VTF_VECTOR_HPP_INCLUDED__
 #define __VTF_VECTOR_HPP_INCLUDED__
 
+#include "vtfCUtils.hpp"
+
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -58,12 +60,12 @@ protected:
 	template<class VecZ, class I>
 	void swizzle_impl (VecZ& z, size_t k, I i) const
 	{
-		z[k] = operator[](i);
+		z[k] = operator[](make_unsigned(i));
 	}
 	template<class VecZ, class I, class... J>
 	void swizzle_impl (VecZ& z, size_t k, I i, J... j) const
 	{
-		z[k] = operator[](i);
+		z[k] = operator[](make_unsigned(i));
 		swizzle_impl<VecZ, J...>(z, k+1, j...);
 	}
 
@@ -278,6 +280,14 @@ public:
 		return product;
 	}
 
+	T prod () const
+	{
+		T p = static_cast<T>(1);
+		for (size_t i = 0; i < N; ++i)
+			p *= data[i];
+		return p;
+	}
+
 	T angle (const VecX& other) const
 	{
 		const T product = dot(other);
@@ -333,6 +343,9 @@ public:
 			x.t = operator[](i);
 			v[i] = x.u;
 		}
+		x.t = T(0);
+		for (size_t i = N; i < M; ++i)
+			v[i] = x.u;
 		return v;
 	}
 

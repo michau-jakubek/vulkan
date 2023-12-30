@@ -22,6 +22,10 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 {
 	performTest = false;
 
+	GlobalAppFlags globalAppFlags;
+
+	globalAppFlags.thisAppPath = argv[0];
+
 	if (argc < 2)
 	{
 		std::cout << "Pass available option as a parameter:" << std::endl;
@@ -33,6 +37,18 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	int consumeRes = (-1);
 	strings allArgs(&argv[1], &argv[1] + argc - 1);
 	auto testNamePos = allArgs.end();
+
+	Option help3{ "--print-global-help", 0 };
+
+	bool status;
+	strings sink;
+	std::vector<Option>	options { help3 };
+
+	if (consumeOptions(help3, options, allArgs, sink) > 0)
+	{
+		printUsage(std::cout);
+		return 0;
+	}
 
 	{
 		const auto testNames = getTestNames(AllTestRecords);
@@ -49,10 +65,6 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	if (allArgs.end() != testNamePos)
 		std::copy(allArgs.begin(), testNamePos, std::back_inserter(appArgs));
 	else std::copy(allArgs.begin(), allArgs.end(), std::back_inserter(appArgs));
-
-	bool status;
-	strings sink;
-	std::vector<Option>	options;
 
 	Option help1{ "-h", 0 };					options.push_back(help1);
 	Option help2{ "--help", 0 };				options.push_back(help2);
@@ -72,11 +84,10 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	Option vulkan{ "-vulkan", 1 };				options.push_back(vulkan);
 	Option spirv{ "-spirv",  1 };				options.push_back(spirv);
 	Option spvValid{ "-spvvalid", 0 };			options.push_back(spvValid);
+	Option spvDisassm{ "-spvdisassm", 0 };		options.push_back(spvDisassm);
 	Option verbose{ "-verbose", 1 };			options.push_back(verbose);
 	Option nowerror{ "-nowerror", 0 };			options.push_back(nowerror);
 	Option dprintf{ "-dprintf", 0 };			options.push_back(dprintf);
-
-	GlobalAppFlags globalAppFlags;
 
 	if (consumeOptions(help1, options, appArgs, sink) > 0
 		|| consumeOptions(help2, options, appArgs, sink) > 0)
@@ -274,7 +285,8 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 
 	globalAppFlags.assetsPath.assign(ASSETS_PATH);
 	globalAppFlags.debugPrintfEnabled = consumeOptions(dprintf, options, appArgs, sink) > 0;
-	globalAppFlags.spirvValidate = consumeOptions(dprintf, options, appArgs, sink) > 0;
+	globalAppFlags.spirvValidate = consumeOptions(spvValid, options, appArgs, sink) > 0;
+	globalAppFlags.genSpirvDisassembly = consumeOptions(spvDisassm, options, appArgs, sink) > 0;
 	globalAppFlags.nowerror = (consumeOptions(nowerror, options, appArgs, sink) > 0);
 	globalAppFlags.noWarning_VUID_Undefined = (consumeOptions(optLayNoVuid, options, appArgs, sink) > 0);
 	consumeOptions(optSuppressVUID, options, appArgs, globalAppFlags.suppressedVUIDs);
@@ -338,6 +350,9 @@ void printUsage(std::ostream& str)
 	str << "Usage: app [options, ...] <test_name> [<test_param>,...]" << std::endl;
 	str << "Application ptions:" << std::endl;
 	str << "  -h, --help:               prints this help and exits" << std::endl;
+	str << "  --print-global-help:      this option has global scope\n"
+	    << "                            even if it exists after any test name or its params\n"
+	    << "                            however the test can override it by itself" << std::endl;
 	str << "  -t:                       prints available test names" << std::endl;
 	str << "  -c:                       builds auto-complete command" << std::endl;
 	str << "  -dl:                      prints available device list" <<std::endl;
@@ -369,8 +384,11 @@ void printUsage(std::ostream& str)
 	       "                             * *spirv1.3  under --target - env vulkan1.1\n"
 	       "                             * *spirv1.5  under --target - env vulkan1.2\n"
 	       "                             Multiple --target - env can be specified.\n";
-	str << "  -spvvalid:                enable SPIR-V assembly validation" << std::endl;
-
+	str << "  -spvvalid:                performs SPIR-V assembly validation, if failed then\n"
+	    << "                            invalid binary file is saved as {hash}.{shader_file_name}.invalid.spvbin,\n"
+	    << "                            otherwise spirv-val tool is launched anyway.\n"
+	    << "                            glslang and spirv-val can give different results" <<std::endl;
+	str << "  -spvdisassm:              generate SPIR-V dissassembly file" << std::endl;
 	str << "  -nowerror:                allows warnig(s) from external compilators" << std::endl;
 	str << "Available test(s):" << std::endl;
 	printAvailableTests(str, AllTestRecords, "\t", true);

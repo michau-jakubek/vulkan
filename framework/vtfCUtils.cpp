@@ -32,10 +32,29 @@ template<class T> T fromText(const std::string& text, const T& defResult, bool& 
 	status = false;
 	return defResult;
 }
-template int			fromText<int>			(const std::string& text, const int&			defResult, bool& status);
 template float			fromText<float>			(const std::string& text, const float&			defResult, bool& status);
 template std::string	fromText<std::string>	(const std::string& text, const std::string&	defResult, bool& status);
-template uint32_t		fromText<uint32_t>		(const std::string& text, const uint32_t&		defResult, bool& status);
+template<> uint32_t		fromText<uint32_t>		(const std::string& text, const uint32_t&		defResult, bool& status)
+{
+	uint32_t result { defResult };
+	std::stringstream s;
+	s << text;
+	std::string_view sw(text);
+	if (sw.substr(0,2) == std::string_view("0x"))
+		s >> std::hex >> result;
+	else s >> result;
+	if (!s.fail())
+	{
+		status = true;
+		return result;
+	}
+	status = false;
+	return defResult;
+}
+template<> int32_t		fromText<int32_t>		(const std::string& text, const int32_t&		defResult, bool& status)
+{
+	return make_signed(fromText<uint32_t>(text, make_unsigned(defResult), status));
+}
 template<> bool			fromText<bool>			(const std::string& text, const bool&			defResult, bool& status)
 {
 	int logic = fromText<int>(text, defResult, status);
@@ -201,12 +220,14 @@ std::string captureSystemCommandResult (const char* cmd, bool& status, const cha
 			if (!skip)
 			{
 				++length;
+				UNREF(length);
 				ss << c;
 			}
 		}
 		cross_platform_pclose(pp);
+		ss.flush();
 		result = ss.str();
-		status = length > 0;
+		status = true;
 	}
 	else
 	{

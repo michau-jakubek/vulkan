@@ -286,7 +286,7 @@ typedef ZDeletable<VkQueue,
 	, bool /*surfaceSupported*/>
 ZQueue;
 
-struct VkDeviceQueueCreateInfoEx : VkDeviceQueueCreateInfo
+struct ZDeviceQueueCreateInfo : VkDeviceQueueCreateInfo
 {
 	VkQueueFlags	queueFlags;
 	bool			surfaceSupport;
@@ -295,7 +295,7 @@ typedef ZDeletable<VkDevice,
 	decltype(&vkDestroyDevice), &vkDestroyDevice,
 	swizzle_two_param, VkAllocationCallbacksPtr,
 	ZPhysicalDevice,
-	ZDistType<QueueCreateInfoList, std::vector<VkDeviceQueueCreateInfoEx>>,
+	ZDistType<QueueCreateInfoList, std::vector<ZDeviceQueueCreateInfo>>,
 	ZDistType<QueueList, std::vector<ZQueue>>
 >
 ZDevice;

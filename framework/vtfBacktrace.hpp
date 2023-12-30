@@ -37,7 +37,9 @@ struct GlobalAppFlags
 	uint32_t		verbose;
 	char			tmpDir[_MAX_PATH];
 	std::string		assetsPath;
+	std::string		thisAppPath;
 	bool			spirvValidate;
+	bool			genSpirvDisassembly;
 	bool			nowerror;
 	bool			debugPrintfEnabled;
 	bool			noWarning_VUID_Undefined;

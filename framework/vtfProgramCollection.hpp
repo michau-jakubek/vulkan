@@ -26,15 +26,24 @@ class ProgramCollection
 	const std::string	m_basePath;
 	const std::string	m_tempDir;
 	std::map<VkShaderStageFlagBits, uint32_t> m_stageToCount;
-	std::map<std::pair<VkShaderStageFlagBits, uint32_t>, strings> m_stageToCode; // [0]: glsl code, [1]: entry name, [2...]: include path(s)
+	// [0]: glsl code, [1]: entry name, [2] file name, [3...]: include path(s)
+	std::map<std::pair<VkShaderStageFlagBits, uint32_t>, strings> m_stageToCode;
 	std::map<std::pair<VkShaderStageFlagBits, uint32_t>, std::vector<unsigned char>> m_stageToBinary;
 public:
+	enum StageToCode
+	{
+		shaderCode,
+		entryName,
+		fileName,
+		includePaths
+	};
 	ProgramCollection (ZDevice device, const std::string& basePath = std::string());
 	void addFromText (VkShaderStageFlagBits type, const std::string& code, const strings& includePaths = {}, const std::string& entryName = "main");
 	bool addFromFile (VkShaderStageFlagBits type,
 					 const std::string& fileName, const strings& includePaths = {},
 					 const std::string& entryName = "main", bool verbose = true);
-	void buildAndVerify (const Version& vulkanVer = Version(1,0), const Version& spirvVer = Version(1,0), bool enableValidation = false, bool buildAlways = false);
+	void buildAndVerify (const Version& vulkanVer = Version(1,0), const Version& spirvVer = Version(1,0),
+						 bool enableValidation = false, bool genDisassembly = false, bool buildAlways = false);
 	auto getShader (VkShaderStageFlagBits stage, uint32_t index = 0u, bool verbose = false) const -> ZShaderModule;
 };
 

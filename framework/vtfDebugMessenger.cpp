@@ -2,6 +2,7 @@
 #include "vtfDebugMessenger.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfThreadSafeLogger.hpp"
+#include "vtfStructUtils.hpp"
 
 namespace vtf
 {
@@ -22,31 +23,30 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallback(
 	const char*					pMessage,
 	void*						pUserData);
 
-void getDebugCreateInfo (VkDebugUtilsMessengerCreateInfoEXT& result, void* pUserData, void* pNext, bool enableDebugPrintf)
+void makeDebugCreateInfo (VkDebugUtilsMessengerCreateInfoEXT& result, void* pUserData, void* pNext, bool enableDebugPrintf)
 {
-	VkDebugUtilsMessageSeverityFlagsEXT noneDebugPrintfSeverityFlags = 0
+	VkDebugUtilsMessageSeverityFlagsEXT debugPrintfBit = enableDebugPrintf
+			? VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT : 0;
+	VkDebugUtilsMessageSeverityFlagsEXT severityFlags = 0
 		//| VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
 		| VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
-		| VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+		| VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT
+		| debugPrintfBit;
 
-	result.sType			= VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-	result.pNext			= pNext;
-	result.flags			= 0;
-
-	result.messageSeverity	= enableDebugPrintf
-								? VkDebugUtilsMessageSeverityFlagsEXT(VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
-								: noneDebugPrintfSeverityFlags;
-	result.messageType		= VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
-								| VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
-								| VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-	result.messageType		|= enableDebugPrintf ? VK_DEBUG_REPORT_INFORMATION_BIT_EXT : 0;
+	VkDebugUtilsMessageTypeFlagsEXT	typeFlags =	VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
+												| VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
+												| VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+	result = makeVkStruct(pNext);
+	result.messageSeverity	= severityFlags;
+	result.messageType		= typeFlags;
 	result.pfnUserCallback	= debugMessengerCallback;
 	result.pUserData		= pUserData;
 }
 
 void createDebugMessenger (ZInstance instance, VkAllocationCallbacksPtr callbacks, const VkDebugUtilsMessengerCreateInfoEXT& info, VkDebugUtilsMessengerEXT& messenger)
 {
-	auto createDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(*instance, "vkCreateDebugUtilsMessengerEXT");
+	auto createDebugUtilsMessengerEXT =	 (PFN_vkCreateDebugUtilsMessengerEXT)
+			vkGetInstanceProcAddr(*instance, "vkCreateDebugUtilsMessengerEXT");
 	ASSERTION(createDebugUtilsMessengerEXT != nullptr);
 
 	ASSERTION(messenger == VK_NULL_HANDLE);
@@ -57,7 +57,8 @@ void destroyDebugMessenger (ZInstance instance, VkAllocationCallbacksPtr callbac
 {
 	if (messenger != VK_NULL_HANDLE)
 	{
-		auto destroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(*instance, "vkDestroyDebugUtilsMessengerEXT");
+		auto destroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)
+				vkGetInstanceProcAddr(*instance, "vkDestroyDebugUtilsMessengerEXT");
 		ASSERTION(destroyDebugUtilsMessengerEXT != nullptr);
 		ASSERTION(messenger != VK_NULL_HANDLE);
 		destroyDebugUtilsMessengerEXT(*instance, messenger, callbacks);
@@ -65,20 +66,22 @@ void destroyDebugMessenger (ZInstance instance, VkAllocationCallbacksPtr callbac
 	}
 }
 
-void getDebugCreateInfo (VkDebugReportCallbackCreateInfoEXT& result, void* pUserData, void* pNext, bool enableDebugPrintf)
+void makeDebugCreateInfo (VkDebugReportCallbackCreateInfoEXT& result, void* pUserData, void* pNext, bool enableDebugPrintf)
 {
-	result.sType	= VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
-	result.pNext	= pNext;
-	result.flags	= VK_DEBUG_REPORT_INFORMATION_BIT_EXT | VK_DEBUG_REPORT_DEBUG_BIT_EXT;
-	result.flags	= VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT | VK_DEBUG_REPORT_ERROR_BIT_EXT;
-	result.flags	|= (enableDebugPrintf ? VK_DEBUG_REPORT_INFORMATION_BIT_EXT : 0);
+	const VkDebugReportFlagsEXT debugPrintfBit = enableDebugPrintf ? VK_DEBUG_REPORT_INFORMATION_BIT_EXT : 0;
+	result = makeVkStruct(pNext);
+	result.flags	= debugPrintfBit
+						| VK_DEBUG_REPORT_WARNING_BIT_EXT
+						| VK_DEBUG_REPORT_ERROR_BIT_EXT
+						| VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
 	result.pfnCallback	= debugReportCallback;
 	result.pUserData	= pUserData;
 }
 
 void createDebugReport (ZInstance instance, VkAllocationCallbacksPtr callbacks, const VkDebugReportCallbackCreateInfoEXT& info, VkDebugReportCallbackEXT& report)
 {
-	auto createDebugReportCallbackEXT = (PFN_vkCreateDebugReportCallbackEXT) vkGetInstanceProcAddr(*instance, "vkCreateDebugReportCallbackEXT");
+	auto createDebugReportCallbackEXT =	 (PFN_vkCreateDebugReportCallbackEXT)
+			vkGetInstanceProcAddr(*instance, "vkCreateDebugReportCallbackEXT");
 	ASSERTION(createDebugReportCallbackEXT != nullptr);
 
 	ASSERTION(report == VK_NULL_HANDLE);
@@ -89,7 +92,8 @@ void destroyDebugReport (ZInstance instance, VkAllocationCallbacksPtr callbacks,
 {
 	if (report != VK_NULL_HANDLE)
 	{
-		auto destroyDebugReportCallbackEXT = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(*instance, "vkDestroyDebugReportCallbackEXT");
+		auto destroyDebugReportCallbackEXT = (PFN_vkDestroyDebugReportCallbackEXT)
+				vkGetInstanceProcAddr(*instance, "vkDestroyDebugReportCallbackEXT");
 		ASSERTION(destroyDebugReportCallbackEXT != nullptr);
 		ASSERTION(report != VK_NULL_HANDLE);
 		destroyDebugReportCallbackEXT(*instance, report, callbacks);
@@ -119,7 +123,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugMessengerCallback(
 		if (s.length() > 5 && std::strncmp(s.c_str(), pCallbackData->pMessageIdName, s.length()) == 0)
 			return VK_FALSE;
 	}
-	std::cout << "[VL]: " << pCallbackData->pMessage <<  std::endl;
+	std::cout << "[MSG]: " << pCallbackData->pMessage <<  std::endl;
 	return VK_FALSE;
 }
 
@@ -152,15 +156,20 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallback(
 			return VK_FALSE;
 	}
 
-	std::string prefix = "[WARNING]";
-	if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
-		prefix = "[ERROR]";
+	static add_cptr<char> const infoPrefix		= "[INFO]";
+	static add_cptr<char> const warningPrefix	= "[WARNING]";
+	static add_cptr<char> const errorPrefix		= "[ERROR]";
+	static add_cptr<char> const debugPrefix		= "[DEBUG]";
+
+	add_cptr<char> prefix = "[APP]";
+	if (flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT)
+		prefix = infoPrefix;
 	else if (flags & (VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT))
-		prefix = "[WARNING]";
-	else if (flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT)
-		prefix = "[INFO]";
+		prefix = warningPrefix;
+	else if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
+		prefix = errorPrefix;
 	else if (flags & VK_DEBUG_REPORT_DEBUG_BIT_EXT)
-		prefix = "[DEBUG]";
+		prefix = debugPrefix;
 
 
 	/*if (pUserData)
