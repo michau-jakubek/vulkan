@@ -12,6 +12,7 @@
 #include <charconv>
 #include <cstring>
 #include <functional>
+#include <stdio.h>
 
 namespace
 {
@@ -421,6 +422,8 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine (ZDevic
 	{
 		if (consumeOptions(optAddressMode, options, args, sink) > 0)
 		{
+			/*
+			* TODO: temporary disabled
 			if (strcasecmp(sink.back().c_str(), Params::addressingModeToString(AddresingMode::absolut)) == 0)
 				resultParams.addressingMode = AddresingMode::absolut;
 			else if (strcasecmp(sink.back().c_str(), Params::addressingModeToString(AddresingMode::local)) == 0)
@@ -429,6 +432,7 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine (ZDevic
 			{
 				appendMessage(optAddressMode, sink.back(), std::string(addressingModeToString(resultParams.addressingMode)));
 			}
+			*/
 		}
 	}
 
@@ -460,6 +464,8 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine (ZDevic
 				name[1u] = inputName;
 				name[2u] = floatSwitch;
 				std::to_chars(&name[std::get<2>(it2)], ((&name[0]) + ARRAY_LENGTH(name) - std::get<2>(it2)), inv, 10);
+
+				status = false;
 
 				if (consumeOptions(optInputValue, options, args, sink) > 0)
 				{

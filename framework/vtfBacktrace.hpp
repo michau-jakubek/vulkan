@@ -49,4 +49,6 @@ struct GlobalAppFlags
 const GlobalAppFlags& getGlobalAppFlags ();
 void setGlobalAppFlags (const GlobalAppFlags&);
 
+extern int qqq;
+
 #endif // __VTF_BACKTRACE_HPP_INCLUDED__

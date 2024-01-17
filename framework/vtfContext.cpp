@@ -60,11 +60,15 @@ VulkanContext::VulkanContext (add_cptr<char>		appName,
 	, m_callbacks					(getAllocationCallbacks())
 	, m_debugMessenger				(VK_NULL_HANDLE)
 	, m_debugReport					(VK_NULL_HANDLE)
-	, m_instance					(createInstance(appName, m_callbacks, instanceLayers, instanceExtensions,
-													&m_debugMessenger, this, &m_debugReport, this,
-													apiVersion, enableDebugPrintf))
-	, m_physicalDevice				(selectPhysicalDevice(make_signed(getGlobalAppFlags().physicalDeviceIndex), m_instance, deviceExtensions))
-	, m_device						(createLogicalDevice(m_physicalDevice, onEnablingFeatures, ZSurfaceKHR(), enableDebugPrintf))
+	, m_instance					(getSharedInstance()
+									 | ([&,this]() -> ZInstance
+										{
+									 return createInstance(appName, m_callbacks, instanceLayers, instanceExtensions,
+													  &m_debugMessenger, this, &m_debugReport, this, apiVersion, enableDebugPrintf);}))
+	, m_physicalDevice				(getSharedPhysicalDevice()
+									 | selectPhysicalDevice(make_signed(getGlobalAppFlags().physicalDeviceIndex), m_instance, deviceExtensions))
+	, m_device						(getSharedDevice() |createLogicalDevice(
+										 m_physicalDevice, onEnablingFeatures, ZSurfaceKHR(), enableDebugPrintf))
 	, m_graphicsQueue				(deviceGetNextQueue(m_device, VK_QUEUE_GRAPHICS_BIT, false))
 	, m_computeQueue				((queueGetFlags(m_graphicsQueue) & VK_QUEUE_COMPUTE_BIT)
 										? m_graphicsQueue
@@ -77,6 +81,14 @@ VulkanContext::~VulkanContext ()
 {
 	destroyDebugMessenger(m_instance, m_callbacks, m_debugMessenger);
 	destroyDebugReport(m_instance, m_callbacks, m_debugReport);
+	if (getGlobalAppFlags().verbose)
+	{
+		std::cout << "[INFO] Destructor " << __func__ << ' '
+				  << device << '(' << device.use_count() << ") "
+				  << physicalDevice << '(' << physicalDevice.use_count() << ") "
+				  << instance << '(' << instance.use_count() << ") "
+				  << std::endl;
+	}
 }
 
 uint32_t VulkanContext::getGraphicsQueueFamilyIndex () const

@@ -73,7 +73,7 @@ int prepareTests (const TestRecord& record, const strings& cmdLineParams)
 	UNREF(cmdLineParams);
 	std::cout << "Parameters"									<< std::endl;
 	std::cout << "  [-t <num>]  run on threads, default is 2"	<< std::endl;
-	std::cout << "  [-i]  infinity repeat"						<< std::endl;
+	std::cout << "  [-i]        infinity repeat"				<< std::endl;
 	std::cout << "Navigation keys"								<< std::endl;
 	std::cout << "  Escape: quit this app"						<< std::endl;
     add_cref<GlobalAppFlags> gf = getGlobalAppFlags();

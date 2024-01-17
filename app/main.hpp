@@ -1,4 +1,4 @@
-#ifndef MAIN_HPP_INCLUDED
-#define MAIN_HPP_INCLUDED
+#ifndef __MAIN_HPP_INCLUDED__
+#define __MAIN_HPP_INCLUDED__
 
-#endif // MAIN_HPP_INCLUDED
+#endif // __MAIN_HPP_INCLUDED__

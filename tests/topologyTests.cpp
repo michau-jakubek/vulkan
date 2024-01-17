@@ -50,11 +50,12 @@ Params::Params ()
 
 void Params::print (add_ref<std::ostream> log) const
 {
-	log << "Area (-x,-y,+x,+y): (" << minusX << ',' << minusY << ',' << plusX << ',' << plusY << ')' << std::endl;
-	log << "Topology:    " << topo << std::endl;
-	log << "FrontFace:   " << (ccwFronFace ? "VK_FRONT_FACE_COUNTER_CLOCKWISE" : "VK_FRONT_FACE_CLOCKWISE") << std::endl;
-	log << "PointSize:   " << pointSize << std::endl;
-	log << "Vertex count: " << vertices.size() << ", few first vertices: ";
+	log << "Current settings:" << std::endl;
+	log << "  Area (-x,-y,+x,+y): (" << minusX << ',' << minusY << ',' << plusX << ',' << plusY << ')' << std::endl;
+	log << "  Topology:           " << topo << std::endl;
+	log << "  FrontFace:          " << (ccwFronFace ? "VK_FRONT_FACE_COUNTER_CLOCKWISE" : "VK_FRONT_FACE_CLOCKWISE") << std::endl;
+	log << "  PointSize:          " << pointSize << std::endl;
+	log << "  Vertex count:       " << vertices.size() << ", few first vertices: ";
 	for (uint32_t i = 0; i < 5 && i < data_count(vertices); ++i)
 	{
 		log << vertices[i] << ' ';
@@ -203,7 +204,12 @@ Params printUsage (std::ostream& log)
 		<< "  Mouse Click: add new point\n"
 		<< "  Mouse Move: track position to add new point\n"
 		<< "  Ctrl+z:    remote last point\n"
-		<< "  Escape: quit this app"
+		<< "  Escape: quit this app\n"
+		<< "Overall purpose:\n"
+		<< "  Click everywhere on the surface then move the mice cursor\n"
+		<< "  wherever you want with holding left key pressed concurrently.\n"
+		<< "  Program will draw lines, points or triangles according to\n"
+		<< "  a topology it used with green border color and fill polygons.\n"
 		<< std::endl;
 	return p;
 }

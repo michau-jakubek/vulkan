@@ -1,5 +1,6 @@
 set(framework_files
         demangle.hpp
+	demangle.cpp
         stb_image.h
         stb_image_resize.h
         stb_image.cpp
@@ -11,6 +12,7 @@ set(framework_files
         vtfBacktrace.hpp
         vtfCUtils.cpp
         vtfCUtils.hpp
+        vtfStrictTemplates.hpp
         vtfVkUtils.hpp
         vtfVkUtils.cpp
         vtfZUtils.cpp

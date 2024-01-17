@@ -1,6 +1,8 @@
 #include <sstream>
 #include <string_view>
+#include "GLFW/glfw3.h"
 #include "vtfZDeletable.hpp"
+#include "vtfBacktrace.hpp"
 
 #if SYSTEM_OS_LINUX == 1
 #include "vtfBacktrace.hpp"
@@ -31,8 +33,13 @@ void assertion (bool cond, const char* func, const char* file, int line, add_cre
 	}
 }
 
-void freeWindow(add_ptr<GLFWwindow>)
+void freeWindow(add_ptr<GLFWwindow> window)
 {
+	glfwDestroyWindow(window);
+	if (getGlobalAppFlags().verbose)
+	{
+		std::cout << "[INFO] Calling " << __func__ << ' ' << window << std::endl;
+	}
 }
 
 void deletable_selfTest () {}

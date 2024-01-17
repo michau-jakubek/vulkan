@@ -284,6 +284,10 @@ static std::string makeFileName (uint32_t index, VkShaderStageFlagBits stage,
 								 const bool enableValidation, const bool genDisassembly,
 								 const char* prefix = nullptr, const char* suffix = nullptr)
 {
+	const std::string fileName = codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName).empty()
+			? shaderStageToCommand(stage)
+			: fs::path(codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName)).filename().string();
+
 	size_t hash = 0;
 	{
 		std::ostringstream ss;
@@ -302,11 +306,7 @@ static std::string makeFileName (uint32_t index, VkShaderStageFlagBits stage,
 	}
 	std::ostringstream ss;
 	if (prefix) ss << prefix;
-	ss << hash;
-	ss << '.';
-	ss << (codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName).empty()
-		   ? shaderStageToCommand(stage)
-		   : codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName));
+	ss << hash << '.' << fileName;
 	if (suffix) ss << suffix;
 	return ss.str();
 }
@@ -500,17 +500,17 @@ static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
 	bool status = false;
 	std::stringstream errorCollection;
 	const char* tmpDir = getGlobalAppFlags().tmpDir;
-	fs::path tmpPath = std::strlen(tmpDir) ? fs::path(tmpDir) : fs::temp_directory_path();
-	const std::string pathName(makeFileName(index, stage, codeAndEntryAndIncludes, vulkanVer, spirvVer,
-											enableValidation, genDisassmebly,
-											(tmpPath / "").generic_u8string().c_str()));
+	const fs::path tmpPath = std::strlen(tmpDir) ? fs::path(tmpDir) : fs::temp_directory_path();
+	const std::string fileName(makeFileName(index, stage, codeAndEntryAndIncludes, vulkanVer, spirvVer,
+											enableValidation, genDisassmebly));
+	const std::string pathName((tmpPath / fileName).string());
 	const fs::path textPath(pathName + (isGlsl ? ".glsl" : ".spvasm"));
 	const fs::path binPath(pathName + ".spvbin");
 	const fs::path asmPath(pathName + ".spvasm");
 	if (!fs::exists(textPath))
 	{
 		std::ofstream textFile(textPath.c_str());
-		ASSERTION(textFile.is_open());
+		ASSERTMSG(textFile.is_open(), textPath.string());
 		textFile << codeAndEntryAndIncludes[ProgramCollection::StageToCode::shaderCode];
 	}
 	if (getGlobalAppFlags().verbose)
@@ -688,18 +688,19 @@ bool ProgramCollection::addFromFile(VkShaderStageFlagBits type,
 									const std::string& fileName, const strings& includePaths,
 									const std::string& entryName, bool verbose)
 {
-	bool result = false;
-	const std::string source_name(m_basePath + fileName);
-	std::ifstream source_handle(source_name);
+	bool				result			(false);
+	const std::string	source_name		((fs::path(m_basePath) / fileName).string());
+	std::ifstream		source_handle	(source_name);
 	if (source_handle.is_open())
-	{		
-		std::string source_content = std::string((std::istreambuf_iterator<char>(source_handle)), std::istreambuf_iterator<char>());
+	{
+		std::istreambuf_iterator<char> end, begin(source_handle);
+		std::string source_content = std::string(begin, end);
 		source_handle.close();
 		const auto key = std::make_pair(type, m_stageToCount[type]++);
 		// [0]: glsl code, [1]: entry name, [2] file name, [3...]: include path(s)
 		m_stageToCode[key].push_back(source_content);
 		m_stageToCode[key].push_back(entryName);
-		m_stageToCode[key].push_back(fs::path(fileName).filename().generic_u8string().c_str());
+		m_stageToCode[key].push_back(source_name);
 		for (size_t p = 0; p < includePaths.size(); ++p)
 			m_stageToCode[key].push_back(m_basePath + includePaths[p]);
 		result = true;

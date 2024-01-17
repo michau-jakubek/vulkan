@@ -212,7 +212,7 @@ auto iterator_from_index (const Container_<X_...>& c, uint32_t index)
 	return i;
 }
 
-// externals are defined for types: int, float, std::string, bool (true, false, 0 && !0 logic)
+// externals are defined for types: int32, uin32, uint64, float, std::string, bool (true, false, 0 && !0 logic)
 template<class T> T fromText (const std::string& text, const T& defResult, bool& status);
 
 template<class T> bool between (const T& paramValue, const T& paramMin, const T& paramMax);

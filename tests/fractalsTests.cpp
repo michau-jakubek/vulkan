@@ -412,9 +412,9 @@ UNUSED void commandBufferPushConstants (ZCommandBuffer cmdBuffer, ZPipelineLayou
 
 int performTest (Canvas& cs, const std::string&	assets, bool enableFloat64, uint32_t animationTicks, const GlobalAppFlags& flags)
 {
-	ProgramCollection		programs(cs.device);
-	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, (assets + "shader.vert"));
-	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, (assets + (enableFloat64 ? "dshader.frag" : "fshader.frag")));
+	ProgramCollection		programs(cs.device, assets);
+	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
+	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, (enableFloat64 ? "dshader.frag" : "fshader.frag"));
 	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
 
 	ZShaderModule			vertShaderModule	= programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);

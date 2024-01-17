@@ -4,11 +4,13 @@
 #include "vtfCUtils.hpp"
 #include "allTests.hpp"
 
+std::vector<TestRecord> AllTestRecords;
+
 TestRecord::TestRecord ()
-	: name				()
-	, desc				()
-	, assets			()
-	, call			()
+	: name		()
+	, desc		()
+	, assets	()
+	, call		()
 {
 }
 
@@ -80,7 +82,7 @@ void recordAllTests (std::vector<TestRecord>& records)
 	assertUiqueTest(records);
 }
 
-std::vector<const char*> getTestNames(const std::vector<TestRecord>& records)
+std::vector<const char*> getTestNames (const std::vector<TestRecord>& records)
 {
 	std::vector<const char*> names;
 	names.reserve(records.size());

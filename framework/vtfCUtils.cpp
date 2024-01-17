@@ -34,9 +34,9 @@ template<class T> T fromText(const std::string& text, const T& defResult, bool& 
 }
 template float			fromText<float>			(const std::string& text, const float&			defResult, bool& status);
 template std::string	fromText<std::string>	(const std::string& text, const std::string&	defResult, bool& status);
-template<> uint32_t		fromText<uint32_t>		(const std::string& text, const uint32_t&		defResult, bool& status)
+template<> uint64_t		fromText<uint64_t>		(const std::string& text, const uint64_t&		defResult, bool& status)
 {
-	uint32_t result { defResult };
+	uint64_t result { defResult };
 	std::stringstream s;
 	s << text;
 	std::string_view sw(text);
@@ -51,10 +51,26 @@ template<> uint32_t		fromText<uint32_t>		(const std::string& text, const uint32_
 	status = false;
 	return defResult;
 }
+/*
+template unsigned long long	fromText<
+		typename std::enable_if<!std::is_same<unsigned long long, uint64_t>::value, unsigned long long>::type>
+			(const std::string& text, const unsigned long long&	defResult, bool& status);
+template unsigned long	fromText<
+		typename std::enable_if<!std::is_same<unsigned long, uint32_t>::value, unsigned long>::type>
+			(const std::string& text, const unsigned long&	defResult, bool& status);
+*/
+template<> uint32_t		fromText<uint32_t>		(const std::string& text, const uint32_t&		defResult, bool& status)
+{
+	return static_cast<uint32_t>(fromText<uint64_t>(text, static_cast<uint64_t>(defResult), status) & 0xFFFFFFFF);
+}
 template<> int32_t		fromText<int32_t>		(const std::string& text, const int32_t&		defResult, bool& status)
 {
-	return make_signed(fromText<uint32_t>(text, make_unsigned(defResult), status));
+	return static_cast<int32_t>(
+						make_signed(fromText<uint64_t>(text,
+						static_cast<uint64_t>(make_unsigned(defResult)),
+												status)) & 0xFFFFFFFF);
 }
+
 template<> bool			fromText<bool>			(const std::string& text, const bool&			defResult, bool& status)
 {
 	int logic = fromText<int>(text, defResult, status);

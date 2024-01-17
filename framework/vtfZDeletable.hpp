@@ -2,19 +2,24 @@
 #define __VTF_ZDELETABLE_HPP_INCLUDED__
 
 #include <atomic>
+#include <bitset>
 #include <functional>
+#include <iomanip>
 #include <map>
 #include <memory>
 #include <optional>
+#include <ostream>
 #include <string>
 #include <tuple>
 #include <type_traits>
 #include <typeindex>
 #include <vector>
-#include <ostream>
+#include <utility>
 
 #include "vulkan/vulkan.h"
 #include "vtfThreadSafeLogger.hpp"
+#include "vtfStrictTemplates.hpp"
+#include "demangle.hpp"
 
 #define NEXT_MAGIC() (__COUNTER__ + 1)
 
@@ -60,68 +65,100 @@ template<class Z> struct ZAccess
 };
 
 struct ZDeletableMark { };
+template<class X> constexpr bool is_zdeletable2 = std::is_convertible_v<add_ptr<X>, add_ptr<ZDeletableMark>>;
+
+constexpr int DontDereferenceParamOffset = 100;
 
 template<int I> struct ParamTraits
 {
-	// needs a dereferencing
-	template<size_t J, class Params> using is_zdeletable =
-		std::is_convertible<add_ptr<std::tuple_element_t<J, Params>>, add_ptr<ZDeletableMark>>;
+	template<std::size_t J> struct Squash {
+		enum { K = J < DontDereferenceParamOffset ? J : (J - DontDereferenceParamOffset) };
+	};
 
-	template<class Z, class Params, typename std::enable_if<is_zdeletable<I, Params>::value, bool>::type = true>
+	// needs a dereferencing
+	template<std::size_t J, class Params> using is_zdeletable =
+		std::is_convertible<add_ptr<std::tuple_element_t<Squash<J>::K, Params>>, add_ptr<ZDeletableMark>>;
+
+	template<class Z, class Params, typename std::enable_if<
+		(I < DontDereferenceParamOffset) && is_zdeletable<I, Params>::value, bool>::type = true>
 	auto operator()(Z, const Params& params) {
-		return *std::get<I>(params);
+		return *std::get<Squash<I>::K>(params);
 	}
 
-	template<class Z, class Params, typename std::enable_if<!is_zdeletable<I, Params>::value, bool>::type = true>
+	template<class Z, class Params, typename std::enable_if<
+		(I < DontDereferenceParamOffset) && ! is_zdeletable<I, Params>::value, bool>::type = false>
 	auto operator()(Z, const Params& params) {
-		return std::get<I>(params);
+		return std::get<Squash<I>::K>(params);
+	}
+
+	template<class Z, class Params, typename std::enable_if<
+		is_zdeletable<I, Params>::value && !(I < DontDereferenceParamOffset), bool>::type = false>
+	auto operator()(Z, const Params& params) {
+		return std::get<Squash<I>::K>(params);
 	}
 };
 
 template<> struct ParamTraits<-1>
 {
 	template<class Z, class Params>
-	auto operator()(Z z, const Params&)	{
+	Z operator()(Z z, const Params&) {
 		return z;
 	}
 };
 
-template<class Object, int... I>
-struct ZObjectDeleter
+template<> struct ParamTraits<-2>
 {
-	void operator()(Object* obj) const
-	{
-		/* if (obj->handle != VK_NULL_HANDLE && obj->routine != nullptr) {
-			std::invoke(obj->routine, ParamTraits<I>()(obj->handle, obj->params)...);
-		} */
-		obj->template destroy<I...>();
+	template<class Z, class Params>
+	const Params& operator()(Z, const Params& params) {
+		return params;
 	}
 };
 
-template<class Object, class Indexes> struct ZDeleterTraits;
-template<class Object, int... I>
-	struct ZDeleterTraits<Object, std::integer_sequence<int, I...>>
+template<class Object, class D, int... I>
+struct ZObjectDeleter
+{
+	virtual ~ZObjectDeleter () = default;
+	void operator() (Object* obj) const
 	{
-		typedef ZObjectDeleter<Object, I...> type;
+		obj->template destroy<D, I...>();
+		delete obj;
+	}
+};
+
+template<class Object, class D, class Indexes> struct ZDeleterTraits;
+template<class Object, class D, int... I>
+	struct ZDeleterTraits<Object, D, std::integer_sequence<int, I...>>
+	{
+		typedef ZObjectDeleter<Object, D, I...> type;
+		virtual ~ZDeleterTraits () = default;
 	};
 
 template<class Z, class F, class P>
 struct ZObject
 {
-	Z	handle;
-	F	routine;
-	P	params;
-	ZObject(F ptr)
+	Z			handle;
+	F			routine;
+	P			params;
+	std::string	name;
+	bool		verbose;
+	ZObject (F ptr)
 		: handle	(VK_NULL_HANDLE)
 		, routine	(ptr)
-		, params	() { }
-	ZObject(Z z, F ptr, add_cref<P> params)
+		, params	()
+		, name		()
+		, verbose	(false) { }
+	ZObject (Z z, F ptr, add_cref<P> params)
 		: handle	(z)
 		, routine	(ptr)
-		, params	(params) { }
-	template<int... I> void destroy() {
+		, params	(params)
+		, name		()
+		, verbose	(false) { }
+	virtual ~ZObject () = default;
+	template<class D, int... I> void destroy() {
 		if (handle != VK_NULL_HANDLE && routine != nullptr) {
 			std::invoke(routine, ParamTraits<I>()(handle, params)...);
+			if (verbose) std::cout << "[INFO] Destroing: " << demangledName<Z>() << ' ' << handle << std::endl;
+			handle = VK_NULL_HANDLE;
 		}
 	}
 };
@@ -132,31 +169,37 @@ template<class Z, class F, F Ptr, class Tr, class... X> struct ZDeletable
 	static_assert(std::is_pointer<Z>::value, "Z must be of pointer type");
 
 	typedef Z											handle_type;
-	typedef ZObject<Z, F, std::tuple<X...>>				AnObject;
+	typedef ZDeletable<Z,F,Ptr,Tr,X...>					deletable_type;
+	typedef ZObject<Z,F,std::tuple<X...>>				AnObject;
 	typedef std::shared_ptr<AnObject>					super;
-	typedef typename ZDeleterTraits<AnObject, Tr>::type	ADeleter;
-	ZDeletable()	: std::shared_ptr<AnObject>(
-						  new AnObject(Ptr)
-						  , ADeleter())
-					, ZDeletableMark(), m_name() { /* Intentionally empty */ }
-	ZDeletable(Z z, add_cref<X>... x)	: std::shared_ptr<AnObject>(
-							  new AnObject(z, Ptr, std::make_tuple(x...))
-							  , ADeleter())
-						, ZDeletableMark(), m_name() { /* Intentionally empty */ }
+	typedef typename ZDeleterTraits<AnObject, deletable_type, Tr>::type	ADeleter;
+	ZDeletable()
+		: super(new AnObject(Ptr), ADeleter())
+		, ZDeletableMark() { /* Intentionally empty */ }
+	ZDeletable(Z z, add_cref<X>... x)
+		: super(new AnObject(z, Ptr, std::make_tuple(x...)), ADeleter())
+		, ZDeletableMark() { /* Intentionally empty */ }
+	ZDeletable(const super& s)
+		: super(s)
+		, ZDeletableMark() { /* Intentionally empty */ }
 	virtual ~ZDeletable() = default;
-	static ZDeletable create(Z z, add_cref<X>... x)
+	static typename ZDeletable::deletable_type create(Z z, add_cref<X>... x)
 	{
 		return ZDeletable(z, x...);
 	}
 	ZAccess<Z> setter()
 	{
 		return ZAccess<Z>(true, std::bind(&ZDeletable::replace, this, std::placeholders::_1));
-	}	
+	}
 	bool has_handle () const
 	{
 		add_cptr<AnObject> obj = super::get();
 		ASSERTMSG(nullptr != obj, "Object must not be null");
 		return (VK_NULL_HANDLE != obj->handle);
+	}
+	Z handle () const
+	{
+		return super::get()->handle;
 	}
 	add_cptr<Z> ptr() const
 	{
@@ -169,6 +212,10 @@ template<class Z, class F, F Ptr, class Tr, class... X> struct ZDeletable
 	Z operator*() const
 	{
 		return *ptr();
+	}
+	super asSharedPtr () const
+	{
+		return (*this);
 	}
 	bool operator==(add_cref<ZDeletable> other) const
 	{
@@ -190,30 +237,30 @@ template<class Z, class F, F Ptr, class Tr, class... X> struct ZDeletable
 	{
 		std::get<T>(super::get()->params) = param;
 	}
-	long use_count() const noexcept
+	template<class Then, class Else> auto select(const Then& then_, const Else& else_)
+		-> std::common_type_t<::vtf::lambda_result_type<Then>, ::vtf::lambda_result_type<Else>>
 	{
-		return super::use_count();
+		auto predicate = [this]{ return has_handle(); };
+		static_assert(::vtf::is_lambda_param_v(predicate), "???");
+		return ::vtf::select(predicate, then_, else_);
 	}
-	std::ostream& operator<<(std::ostream& str) const
+	template<class MaybeLambda>
+		ZDeletable operator| (MaybeLambda&& maybeLambda)
 	{
-		return (str << static_cast<void*>(super::get()->handle));
+		return ::vtf::select(has_handle(), *this, std::forward<MaybeLambda>(maybeLambda));
 	}
-	add_cref<std::string> name () const { return m_name; }
-	std::string name (add_cref<std::string> newName)
-	{
-		std::string oldName = m_name;
-		m_name = newName;
-		return oldName;
-	}
+	long use_count() const noexcept	{ return super::use_count(); }
+	add_cref<std::string> name () const	{ return super::get()->name; }
+	void name (add_cref<std::string> newName) { super::get()->name = newName; }
+	bool verbose () const { return super::get()->verbose; }
+	void verbose (bool value) { super::get()->verbose = value; }
 	friend std::ostream& operator<<(std::ostream& str, add_cref<ZDeletable> z)
 	{
-		if (z.m_name.length() == 0u)
-			return (str << static_cast<void*>(static_cast<add_cref<super>>(z).get()->handle));
-		return (str << static_cast<void*>(static_cast<add_cref<super>>(z).get()->handle)
-					<< " \"" << z.m_name << '\"');
+		if (z.name().length() == 0u)
+			return (str << demangledName<handle_type>() << ' ' << z.handle());
+		return (str << demangledName<handle_type>() << ' ' << z.handle() << std::quoted(z.name()));
 	}
 private:
-	std::string m_name;
 	void replace(Z z)
 	{
 		add_ptr<AnObject> obj = super::get();
@@ -225,7 +272,12 @@ private:
 /*
  * Controls the params passed to a deleter routine from a tuple.
  * (-1) means that Vulkan handle from ZDeletable
- * otherwise parameter at desired index will be passed.
+ * (-2) means that pointer to ZDeletable being deleted
+ * <0, DontDereferenceParamOffset) means that
+ *    a parameter at index will be derefernced if it is ZDeletable
+ *    otherwise will be passed as is
+ * <DontDereferenceParamOffset, ...) means that a parameter will be passed as is
+ *    and it will not be dereferenced even if it is ZDeletable
  */
 typedef std::integer_sequence<int>				swizzle_no_param;
 typedef std::integer_sequence<int, -1>			swizzle_one_param;
@@ -239,7 +291,7 @@ enum ZDistName
 	RequiredLayerExtensions,	AvailableLayerExtensions,
 	RequiredDeviceExtensions,	AvailableDeviceExtensions,
 	Width, Height, Depth,		PatchControlPoints, SubpassIndex,
-	QueueFamilyIndex, QueueIndex, QueueFlags, QueueCreateInfoList, QueueList,
+	QueueFamilyIndex, QueueIndex, QueueFlags,
 	CullModeFlags, DepthTestEnable, DepthWriteEnable, StencilTestEnable,
 	LineWidth, AttachmentCount, SubpassCount, ViewportCount, ScissorCount,
 	MultiviewIndex,
@@ -277,29 +329,6 @@ typedef ZDeletable<VkPhysicalDevice,
 	, VkPhysicalDeviceProperties>
 ZPhysicalDevice;
 
-typedef ZDeletable<VkQueue,
-	void(*)(void), nullptr
-	, swizzle_no_param
-	, ZDistType<QueueFamilyIndex, uint32_t>
-	, ZDistType<QueueIndex, uint32_t>
-	, ZDistType<QueueFlags, VkQueueFlags>
-	, bool /*surfaceSupported*/>
-ZQueue;
-
-struct ZDeviceQueueCreateInfo : VkDeviceQueueCreateInfo
-{
-	VkQueueFlags	queueFlags;
-	bool			surfaceSupport;
-};
-typedef ZDeletable<VkDevice,
-	decltype(&vkDestroyDevice), &vkDestroyDevice,
-	swizzle_two_param, VkAllocationCallbacksPtr,
-	ZPhysicalDevice,
-	ZDistType<QueueCreateInfoList, std::vector<ZDeviceQueueCreateInfo>>,
-	ZDistType<QueueList, std::vector<ZQueue>>
->
-ZDevice;
-
 struct GLFWwindow;
 void freeWindow(add_ptr<GLFWwindow>);
 typedef typename std::add_pointer<GLFWwindow>::type GLFWwindowPtr;
@@ -311,8 +340,39 @@ ZGLFWwindowPtr;
 typedef ZDeletable<VkSurfaceKHR,
 	decltype(&vkDestroySurfaceKHR), &vkDestroySurfaceKHR,
 	swizzle_three_params, ZInstance, VkAllocationCallbacksPtr,
-	ZGLFWwindowPtr>
+	std::weak_ptr<ZGLFWwindowPtr::AnObject>>
 ZSurfaceKHR;
+
+struct ZDeviceQueueCreateInfo : VkDeviceQueueCreateInfo
+{
+	std::bitset<32>	queues;
+	VkQueueFlags	queueFlags;
+	bool			surfaceSupport;
+};
+typedef ZDeletable<VkDevice,
+	decltype(&vkDestroyDevice), &vkDestroyDevice,
+	swizzle_two_param, VkAllocationCallbacksPtr,
+	ZPhysicalDevice,
+	std::vector<ZDeviceQueueCreateInfo>
+> ZDevice;
+
+typedef std::tuple<	ZDistType<QueueFamilyIndex, uint32_t>
+					, ZDistType<QueueIndex, uint32_t>
+					, ZDistType<QueueFlags, VkQueueFlags>
+					, ZDevice /*device which this queue belong*/
+					, bool /*surfaceSupported*/
+> QueueParams;
+// implemented in vtfZUtils.cpp
+void releaseQueue(const QueueParams&);
+typedef ZDeletable<VkQueue,
+	decltype(&releaseQueue), &releaseQueue
+	, std::integer_sequence<int, -2>
+	, ZDistType<QueueFamilyIndex, uint32_t>
+	, ZDistType<QueueIndex, uint32_t>
+	, ZDistType<QueueFlags, VkQueueFlags>
+	, ZDevice /*device which this queue belong*/
+	, bool /*surfaceSupported*/
+> ZQueue;
 
 typedef ZDeletable<VkSwapchainKHR,
 	decltype(&vkDestroySwapchainKHR),	&vkDestroySwapchainKHR,

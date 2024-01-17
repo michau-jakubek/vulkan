@@ -3,8 +3,15 @@
 #include "vtfBacktrace.hpp"
 
 #include <iomanip>
-#include <termios.h>    // tc(g|s)etattr
-#include <unistd.h>     // read()
+#if SYSTEM_OS_LINUX == 1
+ #include <termios.h>	// tc(g|s)etattr
+#else
+ #include <Windows.h>
+#endif
+
+#ifndef __CHAR_BIT__
+#define __CHAR_BIT__ 8
+#endif
 
 namespace
 {
@@ -190,19 +197,38 @@ std::string Params::readPhrase (ostream_ref log, add_ref<std::stringstream> errC
 {
 	struct DisableEcho
 	{
+#if SYSTEM_OS_LINUX == 1
 		termios before, after;
 		DisableEcho ()
 		{
-			tcgetattr(0, &before);
-			after = before;
-			after.c_lflag &= make_unsigned(~ICANON);
-			after.c_lflag &= make_unsigned(~ECHO);
-			tcsetattr(0, TCSANOW, &after);
+			//tcgetattr(0, &before);
+			//after = before;
+			//after.c_lflag &= make_unsigned(~ICANON);
+			//after.c_lflag &= make_unsigned(~ECHO);
+			//tcsetattr(0, TCSANOW, &after);
 		}
 		~DisableEcho ()
 		{
-			tcsetattr(0, TCSANOW, &before);
+			//tcsetattr(0, TCSANOW, &before);
 		}
+#else
+		DWORD before, after;
+		DisableEcho ()
+		{
+			HANDLE hConsole = GetStdHandle(STD_INPUT_HANDLE);
+			BOOL status = GetConsoleMode(hConsole, &before);
+			UNREF(status);
+			after = before;
+			after &= ~ENABLE_ECHO_INPUT;
+			after &= ~ENABLE_LINE_INPUT;
+			SetConsoleMode(hConsole, after);
+		}
+		~DisableEcho()
+		{
+			HANDLE hConsole = GetStdHandle(STD_INPUT_HANDLE);
+			SetConsoleMode(hConsole, before);
+		}
+#endif
 	}			disableEcho;
 
 	SIDE_EFFECT(disableEcho);
@@ -536,7 +562,7 @@ int runIntComputeSingleThread (cstring_ref assets, add_cref<Params> params)
 	}
 	catch (add_cref<std::exception>& e)
 	{
-		std::cout << msg << std::endl;
+		std::cout << e.what() << std::endl;
 		return (-1);
 	}
 

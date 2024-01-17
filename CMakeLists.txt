@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10.2)
 
-project(my_project)
+project(my_project CXX)
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     message(STATUS "OS is ${CMAKE_SYSTEM_NAME}")
@@ -16,6 +16,8 @@ add_definitions(-DSYSTEM_OS_WINDOWS=${SYSTEM_OS_WINDOWS})
 message(STATUS "Create definition: -DSYSTEM_OS_LINUX=${SYSTEM_OS_LINUX}")
 message(STATUS "Create definition: -DSYSTEM_OS_WINDOWS=${SYSTEM_OS_WINDOWS}")
 
+set(CMAKE_CXX_STANDARD 17)
+
 string(TOUPPER ${CMAKE_GENERATOR} UPPER_CASE_CMAKE_GENERATOR)
 string(REGEX MATCH "VISUAL" CURRENT_GENERATOR ${UPPER_CASE_CMAKE_GENERATOR})
 if ("${CURRENT_GENERATOR}" STREQUAL "VISUAL")
@@ -25,7 +27,7 @@ if ("${CURRENT_GENERATOR}" STREQUAL "VISUAL")
     set(ADDITIONAL_RELEASE_BUILD_OPTIONS "")
     set(ADDITIONAL_LIBS "")
 else ()
-    set(COMMON_BUILD_OPTIONS "-std=c++17 -Wall -Wextra -Wno-long-long -Wconversion -Wpedantic")
+	set(COMMON_BUILD_OPTIONS "-std=c++17 -Wall -Wextra -Wno-long-long -Wconversion -Wpedantic -fPIC")
     set(ADDITIONAL_DEBUG_BUILD_OPTIONS "-ggdb -O0")
     set(ADDITIONAL_RELEASE_BUILD_OPTIONS "-O2")
     if (${SYSTEM_OS_LINUX} EQUAL 0)
@@ -70,7 +72,7 @@ if("${GLFW3_INCLUDE_PATH}" STREQUAL "")
     if(${SYSTEM_OS_LINUX} EQUAL 0)
         message(FATAL_ERROR "GLFW3_INCLUDE_PATH not defined, try for an example c:\\glfw-3.3.6.bin.WIN64\\include")
     else()
-        message(FATAL_ERROR "GLFW3_INCLUDE_PATH not defined, try for an example /opt/vulkan/1.2.198.1/x86_64/include")
+        message(FATAL_ERROR "GLFW3_INCLUDE_PATH not defined, try for an example /opt/glfw/include")
     endif()
 endif()
 
@@ -78,7 +80,7 @@ if("${GLFW3_LIB_PATH}" STREQUAL "")
     if(${SYSTEM_OS_LINUX} EQUAL 0)
         message(FATAL_ERROR "GLFW3_LIB_PATH not defined, try for an example c:\\glfw-3.3.6.bin.WIN64\\lib-vc2019\\glfw3.lib")
     else()
-        message(FATAL_ERROR "GLFW3_LIB_PATH not defined, try for an example /opt/vulkan/1.2.192.1/x86_64/lib/libvulkan.so")
+        message(FATAL_ERROR "GLFW3_LIB_PATH not defined, try for an example /opt/glfw/build/src/libglfw3.a")
     endif()
 endif()
 
@@ -89,16 +91,34 @@ include_directories(${GLFW3_INCLUDE_PATH})
 get_filename_component(ABS_VULKAN_LIB_PATH ${VULKAN_LIB_PATH} REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
 get_filename_component(ABS_GLFW3_LIB_PATH ${GLFW3_LIB_PATH} REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
 set(COMMON_LIBS ${ADDITIONAL_LIBS} ${ABS_VULKAN_LIB_PATH} ${ABS_GLFW3_LIB_PATH})
-message(INFO "USE" ${COMMON_LIBS})
+message(STATUS "Used libraries: " ${COMMON_LIBS})
+
+set(ASSETS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assets)
+
+add_subdirectory(console)
+include_directories(console)
 
 add_subdirectory(framework)
 include_directories(framework)
 
+add_subdirectory(daemon)
+include_directories(daemon)
+
 add_subdirectory(tests)
 include_directories(tests)
 
-set(app_libs ${COMMON_LIBS} framework tests)
+set(app_libs ${COMMON_LIBS} framework console tests)
 
-set(ASSETS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assets)
+include_directories(app)
 add_subdirectory(app)
+
+add_custom_target(copy-binaries ALL
+                    DEPENDS daemon console app
+                    COMMENT "Copy binaries ...")
+add_custom_command(TARGET copy-binaries
+                POST_BUILD
+                COMMAND ${CMAKE_COMMAND} ARGS -E echo
+                #"Copying" $<TARGET_FILE:daemon> "to" $<TARGET_FILE_DIR:app>
+                COMMAND ${CMAKE_COMMAND} ARGS -E copy
+                $<TARGET_FILE:daemon> $<TARGET_FILE_DIR:app>)
 

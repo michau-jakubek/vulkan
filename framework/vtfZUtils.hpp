@@ -12,6 +12,16 @@
   #include "demangle.hpp"
 #endif
 
+#if SYSTEM_OS_WINDOWS == 1
+ #if SHARED_LIBRARY == 1
+  #define SHARED_RESOURCE __declspec(dllexport)
+ #else
+  #define SHARED_RESOURCE __declspec(dllimport)
+ #endif
+#else
+ #define SHARED_RESOURCE
+#endif
+
 namespace vtf
 {
 
@@ -31,6 +41,10 @@ std::ostream& operator<<(std::ostream& str, const ZetDeletable& z)
 #endif // SYSTEM_OS_LINUX
 
 Version			getVulkanImplVersion (std::optional<ZInstance> instance = {});
+
+ZDevice			getSharedDevice ();
+ZInstance		getSharedInstance ();
+ZPhysicalDevice	getSharedPhysicalDevice ();
 
 ZInstance		createInstance (const char*							appName,
 								VkAllocationCallbacksPtr			callbacks,

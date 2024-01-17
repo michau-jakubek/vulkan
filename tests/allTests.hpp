@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <ostream>
+#include <memory>
 #include "vtfVkUtils.hpp"
 
 #define DEFINE_TEST(test_name_) \
@@ -24,11 +25,20 @@ template<int> struct TestRecorder
 	static	bool record (TestRecord& out);
 };
 
+extern std::vector<TestRecord> AllTestRecords;
+
 void recordAllTests (std::vector<TestRecord>& records);
 void printAvailableTests (const std::vector<TestRecord>& records, const char* indent = "\t");
 std::ostream& printAvailableTests (std::ostream& str, const std::vector<TestRecord>& records, const char* indent = "\t", bool includeNewLine = true);
 bool findAndUpdateTestByName (TestRecord& rec, const std::vector<TestRecord>& records, const char* name);
 std::vector<const char*> getTestNames (const std::vector<TestRecord>& records);
+
+class Shell;
+typedef std::function<void(bool& doContinue, const vtf::strings& chunks, std::ostream& output)> OnShellCommand;
+std::shared_ptr<Shell> getOrCreateUniqueShell(std::ostream&			output,
+											  OnShellCommand		onCommand,
+											  add_cref<std::string>	helpMessage = "This is help message",
+											  add_cref<std::string>	historyFile = {});
 
 #define USE_TEST_IDENTIFIER
 #ifdef USE_TEST_IDENTIFIER
@@ -49,6 +59,7 @@ enum TestIdentifier
 	INT_CIPHER,
 	SUBGROUP_MATRIX,
 	TOPOLOGY,
+	DAEMON,
 	FRACTALS,
 
 	ALL_TESTS_END = FRACTALS

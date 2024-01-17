@@ -21,25 +21,61 @@
 namespace vtf
 {
 
+GlfwInitializerFinalizer::GlfwInitializerFinalizer(bool initialize)
+	: m_initialize(initialize)
+{
+	if (initialize)
+	{
+		ASSERTMSG(GLFW_TRUE == glfwInit(), "Failed to initialize GLFW library");
+	}
+}
+
+GlfwInitializerFinalizer::~GlfwInitializerFinalizer ()
+{
+	if (m_initialize) glfwTerminate();
+	if (getGlobalAppFlags().verbose)
+	{
+		std::cout << "[INFO] Destructor " << __func__
+				  << (m_initialize ? " calls glfwTerminate()" : "") << std::endl;
+	}
+}
+
+CanvasContext::~CanvasContext ()
+{
+	if (getGlobalAppFlags().verbose)
+	{
+		std::cout << "[INFO] Destructor " << __func__ << ' '
+				  << cc_device << '(' << cc_device.use_count() << ") "
+				  << cc_physicalDevice << '(' << cc_physicalDevice.use_count() << ") "
+				  << cc_instance << '(' << cc_instance.use_count() << ") "
+				  << std::endl;
+	}
+}
+
 Canvas::~Canvas	()
 {
+	if (getGlobalAppFlags().verbose)
+	{
+		std::cout << "[INFO] Destructor " << __func__ << std::endl;
+	}
 }
 
 int Canvas::m_drawTrigger;
 const CanvasStyle Canvas::DefaultStyle
 {
-	800u,
-	600u,
-	0.0f,
-	1.0f,
-	true,
-	true,
-	0
+	800u,	// width
+	600u,	// height
+	0.0f,	// minDepth
+	1.0f,	// maxDepth
+	true,	// visible
+	true,	// resizable
+	0		// surfaceFormatFlags
 };
 
 strings			getGlfwRequiredInstanceExtensions ();
 ZGLFWwindowPtr	createWindow (const CanvasStyle& style, const char* title, add_ptr<void> windowUserPointer);
 ZSurfaceKHR		createSurface (ZInstance instance, VkAllocationCallbacksPtr callbacks, ZGLFWwindowPtr window);
+ZGLFWwindowPtr	updateWindow (ZGLFWwindowPtr window, const CanvasStyle& style, const char* title, add_ptr<void> windowUserPointer);
 
 CanvasContext::CanvasContext (add_cptr<char>		appName,
 							  add_cref<Version>		apiVersion,
@@ -53,12 +89,20 @@ CanvasContext::CanvasContext (add_cptr<char>		appName,
 	: cc_callbacks		(getAllocationCallbacks())
 	, cc_debugMessenger	(VK_NULL_HANDLE)
 	, cc_debugReport	(VK_NULL_HANDLE)
-	, cc_instance		(createInstance(appName, cc_callbacks, instanceLayers, mergeStringsDistinct(getGlfwRequiredInstanceExtensions(), instanceExtensions),
-										&cc_debugMessenger, this, &cc_debugReport, this, apiVersion, enableDebugPrintf))
+	, cc_instance		(getSharedInstance() | ([&,this]() -> ZInstance {
+							return createInstance(appName, cc_callbacks, instanceLayers,
+												  mergeStringsDistinct(getGlfwRequiredInstanceExtensions(), instanceExtensions),
+												  &cc_debugMessenger, this, &cc_debugReport, this, apiVersion, enableDebugPrintf);
+							 }))
 	, cc_window			(createWindow(style, appName, canvas))
 	, cc_surface		(createSurface(cc_instance, cc_callbacks, cc_window))
-	, cc_physicalDevice	(selectPhysicalDevice(make_signed(getGlobalAppFlags().physicalDeviceIndex), cc_instance, deviceExtensions, cc_surface))
-	, cc_device			(createLogicalDevice(cc_physicalDevice, onEnablingFeatures, cc_surface, enableDebugPrintf))
+	, cc_physicalDevice	(getSharedInstance().select(getSharedPhysicalDevice(), ([&,this]() -> ZPhysicalDevice {
+								return selectPhysicalDevice(make_signed(getGlobalAppFlags().physicalDeviceIndex),
+															cc_instance, deviceExtensions, cc_surface);
+							 })))
+	, cc_device			(getSharedInstance().select(getSharedDevice(), ([&,this]() -> ZDevice {
+								return createLogicalDevice(cc_physicalDevice, onEnablingFeatures, cc_surface, enableDebugPrintf);
+							 })))
 {
 }
 
@@ -122,15 +166,42 @@ strings getGlfwRequiredInstanceExtensions ()
 
 ZGLFWwindowPtr createWindow (const CanvasStyle& style, const char* title, add_ptr<void> windowUserPointer)
 {
+	const char* caption = title ? title : "Vulkan";
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	// invisible at start, if style.visible is set the call glfwShowWindows() later
 	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 	glfwWindowHint(GLFW_RESIZABLE, (style.resizable ? GLFW_TRUE : GLFW_FALSE));
-	GLFWwindow* pWindow = glfwCreateWindow(static_cast<int>(style.width), static_cast<int>(style.height), (title ? title : "Vulkan"), nullptr, nullptr);
+	GLFWwindow* pWindow = glfwCreateWindow(static_cast<int>(style.width), static_cast<int>(style.height), caption, nullptr, nullptr);
 	ZGLFWwindowPtr window = ZGLFWwindowPtr::create(pWindow);
-	ASSERTMSG(*window, "Failed to create GLFW window");
+	ASSERTMSG(window.has_handle(), "Failed to create GLFW window");
 	glfwSetWindowUserPointer(*window, windowUserPointer);
+	if (getGlobalAppFlags().verbose)
+	{
+		std::cout << "[INFO] " << __func__ << ' ' << window
+				  << ", Caption: " << std::quoted(caption)
+				  << ", windowUserPointer: " << windowUserPointer
+				  << std::endl;
+	}
+	return window;
+}
 
+ZGLFWwindowPtr updateWindow (ZGLFWwindowPtr window, const CanvasStyle& style, const char* title, add_ptr<void> windowUserPointer)
+{
+	const char* caption = title ? title : "Vulkan";
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint(GLFW_RESIZABLE, (style.resizable ? GLFW_TRUE : GLFW_FALSE));
+	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+	if (getGlobalAppFlags().verbose)
+	{
+		std::cout << "[INFO] " << __func__ << ' ' << window
+				  << ", Caption: " << std::quoted(caption)
+				  << ", windowUserPointer: " << windowUserPointer
+				  << std::endl;
+	}
+	if (window.has_handle() == false) return window;
+	glfwSetWindowSize(*window, static_cast<int>(style.width), static_cast<int>(style.height));
+	glfwSetWindowTitle(*window, caption);
+	glfwSetWindowUserPointer(*window, windowUserPointer);
 	return window;
 }
 
@@ -138,7 +209,11 @@ ZSurfaceKHR	createSurface (ZInstance instance, VkAllocationCallbacksPtr callback
 {
 	VkSurfaceKHR surface = VK_NULL_HANDLE;
 	VKASSERT2(glfwCreateWindowSurface(*instance, *window, callbacks, &surface));
-	return ZSurfaceKHR::create(surface, instance, callbacks, window);
+	if (getGlobalAppFlags().verbose)
+	{
+		std::cout << "[INFO] " << __func__ << ' ' << surface << ' ' << window << std::endl;
+	}
+	return ZSurfaceKHR::create(surface, instance, callbacks, window.asSharedPtr());
 }
 
 Canvas::SurfaceDetails::SurfaceDetails ()
@@ -301,11 +376,12 @@ void Canvas::Swapchain::createFramebuffers (ZRenderPass rp, uint32_t minImageCou
 
 	std::vector<VkImage>		presentImages;
 	const uint32_t				imageCount = enumerateSwapchainImages(*canvas.device, m_handle, presentImages);
-	ASSERTION(imageCount == minImageCount);
+	ASSERTION(imageCount >= minImageCount);
 	const VkFormat				format = canvas.surfaceDetails.formats[canvas.surfaceFormatIndex].format;
 	const ZImageUsageFlags		usage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 
-	for (uint32_t i = 0; i < imageCount; ++i)
+	minImageCount = std::min(minImageCount, imageCount);
+	for (uint32_t i = 0; i < minImageCount; ++i)
 	{
 		ZNonDeletableImage image = ZNonDeletableImage::create(presentImages[i], canvas.device, format, m_extent.width, m_extent.height, usage);
 		m_images.emplace_back(image);

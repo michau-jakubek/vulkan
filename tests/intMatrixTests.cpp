@@ -71,10 +71,14 @@ int runIntMatrixSingleThread (VulkanContext& ctx, const std::string& assets)
 	{
 		return 1;
 	}
-
-	ProgramCollection		programs(ctx.device, assets);
+	auto					onShellCommand		= [](bool& doContinue, const vtf::strings&, std::ostream&) -> void
+												{
+													doContinue = false;
+												};
+	auto					shell				= getOrCreateUniqueShell(std::cout, onShellCommand);
+	ProgramCollection		programs			(ctx.device, assets);
 	programs.addFromFile(VK_SHADER_STAGE_COMPUTE_BIT, "shader.comp");
-	const GlobalAppFlags	flags(getGlobalAppFlags());
+	const GlobalAppFlags	flags				(getGlobalAppFlags());
 	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
 	ZShaderModule			compShaderModule	= programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT);
 

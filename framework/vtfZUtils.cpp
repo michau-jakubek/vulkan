@@ -12,6 +12,30 @@
 #include "vtfBacktrace.hpp"
 #include "vtfThreadSafeLogger.hpp"
 
+void releaseQueue(const QueueParams& params)
+{
+	const uint32_t	queueFamilyIndex	= std::get<ZDistType<QueueFamilyIndex, uint32_t>>(params);
+	const uint32_t	queueIndex			= std::get<ZDistType<QueueIndex, uint32_t>>(params);
+	ZDevice			device				= std::get<ZDevice>(params);
+	add_ref<std::vector<ZDeviceQueueCreateInfo>> infos = device.getParamRef<std::vector<ZDeviceQueueCreateInfo>>();
+	add_ref<std::bitset<32>> queues		= infos.at(queueFamilyIndex).queues;
+
+	queues.set(queueIndex);
+
+	if (getGlobalAppFlags().verbose)
+	{
+
+		const bool		surfaceSupported	= std::get<bool>(params);
+		//const VkQueueFlags	queueFlags		= std::get<ZDistType<QueueFlags, VkQueueFlags>>(params);
+
+		std::cout << "[INFO] Releasing ZQueue, "
+				  << "familyIndex: " << queueFamilyIndex << ", "
+				  << "queueIndex: " << queueIndex << ", "
+				  << "surfaceSupported: " << std::boolalpha << surfaceSupported << std::noboolalpha
+				  << std::endl;
+	}
+}
+
 namespace vtf
 {
 
@@ -183,7 +207,7 @@ ZRenderPass	createRenderPassImpl (ZDevice device, void* pNext,
 		desc.format	= colorFormats.at(attachment);
 		if (attachment < clearColorCount)
 		{
-			if (0u != *((uint32_t*)&pClearColors->at(attachment).color.float32[3]))
+			if (0u != pClearColors->at(attachment).color.uint32[3])
 			{
 				desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 				desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -367,6 +391,35 @@ Version getVulkanImplVersion (std::optional<ZInstance> instance)
 	return version;
 }
 
+SHARED_RESOURCE extern ZDevice globalSharedDevice;
+
+ZDevice getSharedDevice ()
+{
+	if (getGlobalAppFlags().verbose)
+	{
+		std::cout << "[INFO] " << __func__ << ' ' << globalSharedDevice << std::endl;
+	}
+	return globalSharedDevice;
+}
+ZPhysicalDevice getSharedPhysicalDevice ()
+{
+	ZPhysicalDevice dev = globalSharedDevice.getParam<ZPhysicalDevice>();
+	if (getGlobalAppFlags().verbose)
+	{
+		std::cout << "[INFO] " << __func__ << ' ' << dev << std::endl;
+	}
+	return dev;
+}
+ZInstance getSharedInstance ()
+{
+	ZInstance inst = globalSharedDevice.getParam<ZPhysicalDevice>().getParam<ZInstance>();
+	if (getGlobalAppFlags().verbose)
+	{
+		std::cout << "[INFO] " << __func__ << ' ' << inst << std::endl;
+	}
+	return inst;
+}
+
 ZInstance		createInstance (const char*							appName,
 								VkAllocationCallbacksPtr			callbacks,
 								const strings&						desiredLayers,
@@ -468,6 +521,8 @@ ZInstance		createInstance (const char*							appName,
 		logger << "[APP] Vulkan Implementation Version:       " << vulkanApiVersion << std::endl;
 	}
 
+	instance.verbose(getGlobalAppFlags().verbose != 0);
+
 	return instance;
 }
 
@@ -481,14 +536,17 @@ ZPhysicalDevice	getPhysicalDeviceByIndex (ZInstance instance, uint32_t physicalD
 	const strings				extensions	= enumerateDeviceExtensions(devices.at(physicalDeviceIndex), layers);
 	VkPhysicalDeviceProperties	deviceProps	{};
 	vkGetPhysicalDeviceProperties(physDevice, &deviceProps);
-	return ZPhysicalDevice::create(physDevice, instance.getParam<VkAllocationCallbacksPtr>(), instance, physicalDeviceIndex, extensions, deviceProps);
+	auto dev = ZPhysicalDevice::create(physDevice, instance.getParam<VkAllocationCallbacksPtr>(), instance,
+									   physicalDeviceIndex, extensions, deviceProps);
+	dev.verbose(getGlobalAppFlags().verbose != 0);
+	return dev;
 }
 
 ZPhysicalDevice selectPhysicalDevice(const int								proposedDeviceIndex,
 									 ZInstance								instance,
 									 add_cref<strings>						requiredExtensions,
 									 ZSurfaceKHR							surface)
-{
+{	
 	std::vector<VkPhysicalDevice> devices;
 	const uint32_t deviceCount = enumeratePhysicalDevices(*instance, devices);
 	ASSERTMSG(deviceCount != 0, "Failed to find GPUs that suppors Vulkan!");
@@ -554,16 +612,19 @@ ZPhysicalDevice selectPhysicalDevice(const int								proposedDeviceIndex,
 
 	vkGetPhysicalDeviceProperties(result, &deviceProperties);
 
-	return ZPhysicalDevice(result,
+	auto dev = ZPhysicalDevice(result,
 						   instance.getParam<VkAllocationCallbacksPtr>(), instance,
 						   physicalDeviceIndex, availableExtensions, deviceProperties);
+	dev.verbose(getGlobalAppFlags().verbose != 0);
+
+	return dev;
 }
 
 ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
 							 OnEnablingFeatures		onEnablingFeatures,
 							 ZSurfaceKHR			surface,
 							 bool					enableDebugPrintf)
-{
+{	
 	uint32_t								queueFamilyPropCount = 0;
 	std::vector<float>						queuePriorities;
 	std::vector<VkQueueFamilyProperties>	queueFamilyProps;
@@ -612,6 +673,10 @@ ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
 		queueCreateExInfo.queueFlags = queueProperties.queueFlags;
 		queueCreateExInfo.surfaceSupport = surfaceSupportedIndices.end() !=
 				std::find(surfaceSupportedIndices.begin(), surfaceSupportedIndices.end(), queueFamilyIndex);
+		for (uint32_t availableIndex = 0u; availableIndex < queueProperties.queueCount; ++ availableIndex)
+		{
+			queueCreateExInfo.queues.set(availableIndex);
+		}
 
 		if (getGlobalAppFlags().verbose)
 		{
@@ -656,8 +721,9 @@ ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
 	createInfo.enabledLayerCount		= data_count(layers);
 	createInfo.ppEnabledLayerNames		= data_or_null(layers);
 
-	ZDevice logicalDevice(VK_NULL_HANDLE, callbacks, physDevice, std::move(queueCreateExInfos), {/*std::vector<ZQueue>*/});
+	ZDevice logicalDevice(VK_NULL_HANDLE, callbacks, physDevice, std::move(queueCreateExInfos));
 	VKASSERT2(vkCreateDevice(*physDevice, &createInfo, callbacks, logicalDevice.setter()));
+	logicalDevice.verbose(getGlobalAppFlags().verbose != 0);
 
 	return logicalDevice;
 }
@@ -669,21 +735,32 @@ ZPhysicalDevice	deviceGetPhysicalDevice (ZDevice device)
 
 ZQueue deviceGetNextQueue (ZDevice device, VkQueueFlags queueFlags, bool mustSupportSurface)
 {
+	UNREF(device);
+	UNREF(queueFlags);
+	UNREF(mustSupportSurface);
+	auto findLSB = [](const auto& bitset) -> uint32_t
+	{
+		for (std::size_t i = 0; i < bitset.size(); ++i)
+			if (bitset.test(i))
+				return static_cast<uint32_t>(i);
+		return INVALID_UINT32;
+	};
 	add_ref<std::vector<ZDeviceQueueCreateInfo>> infos =
-		device.getParamRef<ZDistType<QueueCreateInfoList, std::vector<ZDeviceQueueCreateInfo>>>();
-	add_ref<std::vector<ZQueue>> queues = device.getParamRef<ZDistType<QueueList, std::vector<ZQueue>>>();
+		device.getParamRef<std::vector<ZDeviceQueueCreateInfo>>();
 	for (add_ref<ZDeviceQueueCreateInfo> info : infos)
 	{
 		const bool allowSupportSurface = mustSupportSurface ? info.surfaceSupport : true;
 		if (((queueFlags & info.queueFlags) != 0) && allowSupportSurface)
 		{
-			if (info.queueCount > 0)
+			const uint32_t queueIndex = findLSB(info.queues);
+			if (queueIndex != INVALID_UINT32)
 			{
+				info.queues.reset(queueIndex);
 				VkQueue handle = VK_NULL_HANDLE;
-				info.queueCount = info.queueCount - 1;
-				vkGetDeviceQueue(*device, info.queueFamilyIndex, info.queueCount, &handle);
-				queues.emplace_back(ZQueue::create(handle, info.queueFamilyIndex, info.queueCount, info.queueFlags, info.surfaceSupport));
-				return queues.back();
+				vkGetDeviceQueue(*device, info.queueFamilyIndex, queueIndex, &handle);
+				ZQueue q = ZQueue::create(handle, info.queueFamilyIndex, queueIndex, info.queueFlags, device, info.surfaceSupport);
+				q.verbose(getGlobalAppFlags().verbose != 0);
+				return q;
 			}
 		}
 	}

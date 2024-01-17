@@ -62,8 +62,14 @@ void destroyDebugMessenger (ZInstance instance, VkAllocationCallbacksPtr callbac
 		ASSERTION(destroyDebugUtilsMessengerEXT != nullptr);
 		ASSERTION(messenger != VK_NULL_HANDLE);
 		destroyDebugUtilsMessengerEXT(*instance, messenger, callbacks);
-		messenger = VK_NULL_HANDLE;
+
+		if (getGlobalAppFlags().verbose)
+		{
+			std::cout << "[INFO] Calling vkDestroyDebugUtilsMessengerEXT "
+					  << instance << " VkDebugUtilsMessengerEXT " << messenger << std::endl;
+		}
 	}
+	messenger = VK_NULL_HANDLE;
 }
 
 void makeDebugCreateInfo (VkDebugReportCallbackCreateInfoEXT& result, void* pUserData, void* pNext, bool enableDebugPrintf)
@@ -97,8 +103,14 @@ void destroyDebugReport (ZInstance instance, VkAllocationCallbacksPtr callbacks,
 		ASSERTION(destroyDebugReportCallbackEXT != nullptr);
 		ASSERTION(report != VK_NULL_HANDLE);
 		destroyDebugReportCallbackEXT(*instance, report, callbacks);
-		report = VK_NULL_HANDLE;
+
+		if (getGlobalAppFlags().verbose)
+		{
+			std::cout << "[INFO] Calling vkDestroyDebugReportCallbackEXT "
+					  << instance << " VkDebugReportCallbackEXT " << report << std::endl;
+		}
 	}
+	report = VK_NULL_HANDLE;
 }
 
 static const char* VUID_Undefined = "VUID_Undefined";

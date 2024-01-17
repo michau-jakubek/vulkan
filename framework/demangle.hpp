@@ -2,12 +2,12 @@
 #define DEMANGLE_HPP
 
 #include <string>
-#include <execinfo.h>
 #include <typeinfo>
 #include <ostream>
 
 #ifdef __GNUG__
 
+#include <execinfo.h>
 #include <cxxabi.h>
 #include <memory>
 
@@ -29,10 +29,7 @@ static std::string demangledName(const std::type_info& info)
 
 #else
 
-static std::string demangledName(const std::type_info& info)
-{
-   return info.name();
-}
+std::string demangledName(const std::type_info& info);
 
 #endif // __GNUG__
 

@@ -20,8 +20,9 @@ class Canvas;
 
 struct GlfwInitializerFinalizer
 {
-	GlfwInitializerFinalizer() { ASSERTMSG(GLFW_TRUE == glfwInit(), "Failed to initialize GLFW library"); }
-	~GlfwInitializerFinalizer() { glfwTerminate(); }
+	const bool m_initialize;
+	GlfwInitializerFinalizer (bool initialize = true);
+	virtual ~GlfwInitializerFinalizer ();
 };
 
 struct CanvasStyle
@@ -55,7 +56,7 @@ struct CanvasContext
 					 bool					enableDebugPrintf,
 					 add_cref<CanvasStyle>	style,
 					 add_ptr<Canvas>		canvas);
-	virtual ~CanvasContext() = default;
+	virtual ~CanvasContext();
 };
 
 class Canvas : public GlfwInitializerFinalizer, public CanvasContext, public VulkanContext

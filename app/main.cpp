@@ -13,8 +13,6 @@
 
 using namespace vtf;
 
-std::vector<TestRecord> AllTestRecords;
-
 static void printUsage (std::ostream& str);
 static std::string constructCompleteCommand (const char* appPath);
 
@@ -296,8 +294,8 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 
 	if (!((allArgs.end() != testNamePos) && findAndUpdateTestByName(testRecord, AllTestRecords, testNamePos->c_str())))
 	{
-		std::cout << "ERROR: Unable to find any test name in app parameters" << std::endl;
 		printUsage(std::cout);
+		std::cout << "ERROR: Unable to find any test name in app parameters" << std::endl;
 		return 1;
 	}
 
@@ -308,9 +306,7 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 		return 1;
 	}
 
-	testRecord.assets = assets.length()
-		? (fs::path(fs::path(assets)  / "").generic_u8string().c_str())
-		: (fs::path(fs::path(ASSETS_PATH) / *testNamePos / "").generic_u8string().c_str());
+	testRecord.assets = ((assets.length() ? fs::path(assets) : fs::path(ASSETS_PATH)) / *testNamePos).string();
 
 	std::copy(std::next(testNamePos), allArgs.end(), std::back_inserter(testArgs));
 	performTest = true;
@@ -345,7 +341,7 @@ int main (int argc, char* argv[])
 	return result;
 }
 
-void printUsage(std::ostream& str)
+void printUsage (std::ostream& str)
 {
 	str << "Usage: app [options, ...] <test_name> [<test_param>,...]" << std::endl;
 	str << "Application ptions:" << std::endl;
@@ -394,7 +390,7 @@ void printUsage(std::ostream& str)
 	printAvailableTests(str, AllTestRecords, "\t", true);
 }
 
-std::string constructCompleteCommand(const char* appPath)
+std::string constructCompleteCommand (const char* appPath)
 {
 	const auto names = getTestNames(AllTestRecords);
 	std::stringstream ss;

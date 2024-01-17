@@ -16,8 +16,8 @@
 static int addr2line(const char* bin, const char* addr, char* output, size_t size)
 {		
 	char cmd[1024];
-    char path[256];
-    realpath(bin, path);
+	char path[256];
+	const auto rpl = realpath(bin, path); UNREF(rpl);
 	snprintf(cmd, ARRAY_LENGTH(cmd), "addr2line -Cfe %s %s", path, addr);
 	FILE* pipe = popen(cmd, "r");
 	if (!pipe) return -1;
@@ -124,3 +124,4 @@ GlobalAppFlags::GlobalAppFlags()
 {
 }
 
+int qqq;
