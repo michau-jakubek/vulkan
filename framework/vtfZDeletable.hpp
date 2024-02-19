@@ -291,7 +291,7 @@ enum ZDistName
 	RequiredLayerExtensions,	AvailableLayerExtensions,
 	RequiredDeviceExtensions,	AvailableDeviceExtensions,
 	Width, Height, Depth,		PatchControlPoints, SubpassIndex,
-	QueueFamilyIndex, QueueIndex, QueueFlags,
+	QueueFamilyIndex, QueueIndex, QueueFlags, ApiVer, VulkanVer, SpirvVer,
 	CullModeFlags, DepthTestEnable, DepthWriteEnable, StencilTestEnable,
 	LineWidth, AttachmentCount, SubpassCount, ViewportCount, ScissorCount,
 	MultiviewIndex,

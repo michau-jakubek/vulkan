@@ -239,6 +239,23 @@ using routine_arg_t = std::tuple_element_t<at__, typename routine_t<routine_type
 template<class routine_type__>
 using routine_res_t = typename routine_t<routine_type__>::Result;
 
+template<class T, class E> struct expander
+{
+	/*
+	* dont forget abuout promote operator=
+	* using expander<ZImageEx, ZImage>::operator=;
+	*/
+	T* self() { return static_cast<T*>(this); }
+	const T* self() const { return static_cast<const T*>(this); }
+	bool operator!=(const E& expanded) const {
+		return !dynamic_cast<const E*>(self())->operator==(expanded);
+	}
+	T& operator=(const E& expanded) {
+		dynamic_cast<E*>(self())->operator=(expanded);
+		return *self();
+	}
+};
+
 } // namespace vtf
 
 #endif // __VTF_C_UTILS_HPP_INCLUDED__

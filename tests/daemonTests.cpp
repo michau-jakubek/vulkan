@@ -14,10 +14,21 @@ static auto DaemonTestInstanceShellCreator = [](add_ref<std::ostream>	output,
 	return createOrGetSingletonShell(output, onCommand, helpMessage, historyFile);
 };
 typedef decltype(DaemonTestInstanceShellCreator) dtisc_t;
+
+static auto DaemonTestInstanceDeviceCreator = [](add_cptr<char> name, bool graphical)
+											-> vtf::SharedDevice
+{
+	return createOrGetSharedDevice(name, graphical);
+};
+typedef decltype(DaemonTestInstanceDeviceCreator) dtidc_t;
+
 struct DaemonTestInstanceDetector
 {
-	dtisc_t creator;
-	DaemonTestInstanceDetector(dtisc_t lambda) : creator(lambda) {}
+	dtisc_t shellCreator;
+	dtidc_t deviceCreator;
+	DaemonTestInstanceDetector(dtisc_t sc, dtidc_t dc)
+		: shellCreator	(sc)
+		, deviceCreator	(dc) {}
 }
 static const *ptrDaemonTestInstanceDetector;
 std::shared_ptr<Shell> getOrCreateUniqueShell(std::ostream&			output,
@@ -26,8 +37,15 @@ std::shared_ptr<Shell> getOrCreateUniqueShell(std::ostream&			output,
 											  add_cref<std::string>	historyFile)
 {
 	if (ptrDaemonTestInstanceDetector)
-		return ptrDaemonTestInstanceDetector->creator(output, onCommand, helpMessage, historyFile);
+		return ptrDaemonTestInstanceDetector->shellCreator(output, onCommand, helpMessage, historyFile);
 	return std::make_shared<Shell>(output, onCommand, helpMessage, historyFile);
+}
+
+vtf::SharedDevice getOrCreateSharedDevice (add_cptr<char> name, bool graphical)
+{
+	if (ptrDaemonTestInstanceDetector)
+		return ptrDaemonTestInstanceDetector->deviceCreator(name, graphical);
+	return vtf::SharedDevice(name, graphical);
 }
 
 namespace
@@ -44,7 +62,7 @@ struct Params : DaemonTestInstanceDetector
 	static std::tuple<bool,Params,std::string> parseCommandLine (const TestRecord& record, add_cref<strings> cmdLineParams);
 };
 Params::Params ()
-	: DaemonTestInstanceDetector(DaemonTestInstanceShellCreator)
+	: DaemonTestInstanceDetector(DaemonTestInstanceShellCreator, DaemonTestInstanceDeviceCreator)
 	, history		()
 	, notSurface	(false)
 	, thisTestName	(nullptr)
@@ -90,7 +108,7 @@ std::tuple<bool,Params,std::string> Params::parseCommandLine (const TestRecord& 
 	return makeResult(true);
 }
 
-int runSubgroupMatrixSingleThread (const std::string& assets, const Params& params);
+int runDaemonTestsSingleThread (const std::string& assets, const Params& params);
 
 int prepareTests (const TestRecord& record, const strings& cmdLineParams)
 {
@@ -106,7 +124,7 @@ int prepareTests (const TestRecord& record, const strings& cmdLineParams)
 	}
 
 	ptrDaemonTestInstanceDetector = &params;
-	const int result = runSubgroupMatrixSingleThread(record.assets, params);
+	const int result = runDaemonTestsSingleThread(record.assets, params);
 	ptrDaemonTestInstanceDetector = nullptr;
 
 	return result;
@@ -122,7 +140,7 @@ std::string makeHelpMessage(const Shell& shell)
 	os.flush();
 	return os.str();
 }
-int runSubgroupMatrixSingleThread (const std::string& assets, const Params& params)
+int runDaemonTestsSingleThread (const std::string& assets, const Params& params)
 {
 	UNREF(assets);
 	int result = 0;
@@ -156,7 +174,7 @@ int runSubgroupMatrixSingleThread (const std::string& assets, const Params& para
 			output << "Unknown command or test name: " << std::quoted(cmd) << std::endl;
 		}
 	};
-	createSharedDevice(params.thisTestName, !params.notSurface);
+	createOrGetSharedDevice(params.thisTestName, !params.notSurface);
 	auto shell = createOrGetSingletonShell(std::cout, onCommand, {}, params.history);
 	std::string helpMessage = makeHelpMessage(*shell);
 	std::cout << helpMessage;

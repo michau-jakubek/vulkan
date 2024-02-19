@@ -236,7 +236,7 @@ VkDeviceSize bufferReadData (ZBuffer buffer, uint8_t* dst, const VkBufferCopy& c
 
 	ZDeviceMemory			memory		= buffer.getParam<ZDeviceMemory>();
 	VkMemoryPropertyFlags	props		= memory.getParam<VkMemoryPropertyFlags>();
-	ZDevice					device = buffer.getParam<ZDevice>();
+	ZDevice					device		= buffer.getParam<ZDevice>();
 	const VkDeviceSize		bufferSize	= buffer.getParam<VkDeviceSize>();
 
 	ASSERTMSG(copy.srcOffset < bufferSize, "Too long data requested to copy from buffer");

@@ -8,7 +8,7 @@ GLFWEvents::GLFWEvents (Canvas& canvas)
 	: cbCursorPos	(canvas, &glfwSetCursorPosCallback, &GLFWEvents::onCursorPos)
 	, cbScroll		(canvas, &glfwSetScrollCallback, &GLFWEvents::onScroll)
 	, cbKey			(canvas, &glfwSetKeyCallback, &GLFWEvents::onKey)
-	, cbMouseButton	(canvas, &glfwSetMouseButtonCallback, &GLFWEvents::onMuseBtn)
+	, cbMouseButton	(canvas, &glfwSetMouseButtonCallback, &GLFWEvents::onMouseBtn)
 	, cbWindowSize	(canvas, &glfwSetWindowSizeCallback, &GLFWEvents::onResize)
 {
 }
@@ -43,7 +43,7 @@ void GLFWEvents::onKey (GLFWwindow* window, int key, int scancode, int action, i
 	}
 }
 
-void GLFWEvents::onMuseBtn (GLFWwindow* window,  int button, int action, int mods)
+void GLFWEvents::onMouseBtn (GLFWwindow* window,  int button, int action, int mods)
 {
 	Canvas* canvas = reinterpret_cast<Canvas*>(glfwGetWindowUserPointer(window));
 	if (canvas->events().cbMouseButton.callback)

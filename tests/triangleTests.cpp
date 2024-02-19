@@ -79,7 +79,7 @@ int prepareTests (const TestRecord& record, const strings& cmdLineParams)
     add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	CanvasStyle canvasStyle = Canvas::DefaultStyle;
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
-	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, nullptr, false, gf.vulkanVer);	
+	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, nullptr, false, gf.apiVer);
 	const uint32_t threadCount = userRunOnThreads(cmdLineParams, std::cout);
 	return (threadCount >= 2)
 			? runTriangleMultipleThreads(cs, record.assets, threadCount)

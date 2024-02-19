@@ -5,6 +5,8 @@
 #include "vtfDebugMessenger.hpp"
 #include "vtfCanvas.hpp"
 
+#include "vtfZSharedDevice.hpp"
+
 #include "daemon.hpp"
 
 #if SYSTEM_OS_LINUX
@@ -18,80 +20,17 @@
 
 #include <memory>
 
-namespace vtf
-{
-struct SharedDevice : GlfwInitializerFinalizer
-{
-	add_cref<GlobalAppFlags>	m_globalAppFlags;
-	VkAllocationCallbacksPtr	m_callbacks;
-	VkDebugUtilsMessengerEXT	m_debugMessenger;
-	VkDebugReportCallbackEXT	m_debugReport;
-	const bool					m_graphical;
-	ZDevice						m_device;
-	SharedDevice (add_cptr<char> name, bool graphical);
-	virtual ~SharedDevice ();
-};
-
-extern strings			getGlfwRequiredInstanceExtensions ();
-extern ZGLFWwindowPtr	createWindow (const CanvasStyle& style, const char* title, add_ptr<void> windowUserPointer);
-extern ZSurfaceKHR		createSurface (ZInstance instance, VkAllocationCallbacksPtr callbacks, ZGLFWwindowPtr window);
-
-SharedDevice::SharedDevice (add_cptr<char> name, bool graphical)
-	: GlfwInitializerFinalizer(graphical)
-	, m_globalAppFlags	(getGlobalAppFlags())
-	, m_callbacks		(getAllocationCallbacks())
-	, m_debugMessenger	()
-	, m_debugReport		()
-	, m_graphical		(graphical)
-{
-	ZInstance instance = createInstance(name, m_callbacks,
-									m_globalAppFlags.layers, {/*instanceExtensions*/},
-									&m_debugMessenger, this, &m_debugReport, this,
-									m_globalAppFlags.apiVer, m_globalAppFlags.debugPrintfEnabled);
-	ZPhysicalDevice physDev = selectPhysicalDevice(make_signed(m_globalAppFlags.physicalDeviceIndex), instance, {/*deviceExtensions*/});
-	VkPhysicalDeviceFeatures2 resultFeatures = makeVkStruct();
-	auto onEnablingFeatures = [&](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
-	{
-		UNREF(extensions);
-		vkGetPhysicalDeviceFeatures2(*physicalDevice, &resultFeatures);
-		return resultFeatures;
-	};
-
-	ZGLFWwindowPtr	window;
-	ZSurfaceKHR		surface;
-	if (graphical)
-	{
-		window = createWindow(Canvas::DefaultStyle, name, this);
-		surface = createSurface(instance, m_callbacks, window);
-	}
-	m_device = createLogicalDevice(physDev, onEnablingFeatures, surface, m_globalAppFlags.debugPrintfEnabled);
-}
-
-SharedDevice::~SharedDevice ()
-{
-	ZInstance i = m_device.getParam<ZPhysicalDevice>().getParam<ZInstance>();
-	destroyDebugMessenger(i, m_callbacks, m_debugMessenger);
-	destroyDebugReport(i, m_callbacks, m_debugReport);
-}
-
-} // namespace vtf
 
 static std::vector<vtf::SharedDevice> privateSharedDeviceList;
 static std::vector<std::shared_ptr<Shell>> privateSingletonShell;
-namespace vtf
-{
-	SHARED_RESOURCE ZDevice globalSharedDevice; 
-}
 
-std::tuple<ZDevice, std::string>
-createSharedDevice (add_cptr<char> name, bool graphical)
+vtf::SharedDevice createOrGetSharedDevice (add_cptr<char> name, bool graphical)
 {
 	if (privateSharedDeviceList.empty())
 	{
 		privateSharedDeviceList.emplace_back(name, graphical);
-		vtf::globalSharedDevice = privateSharedDeviceList.at(0).m_device;
 	}
-	return { privateSharedDeviceList.at(0).m_device, {} };
+	return privateSharedDeviceList.at(0);
 }
 
 std::shared_ptr<Shell> createOrGetSingletonShell (std::ostream&			output,

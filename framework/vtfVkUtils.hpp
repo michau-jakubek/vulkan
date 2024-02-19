@@ -84,6 +84,14 @@ struct Version
 		x.nmajor	= v / 10;
 		return x;
 	}
+	uint32_t to10xMajorPlusMinor () const
+	{
+		return nmajor * 10 + nminor;
+	}
+	bool operator< (const Version& other) const
+	{
+		return (nmajor < other.nmajor) || (nminor < other.nminor);
+	}
 	operator uint32_t () const
 	{
 		return VK_MAKE_API_VERSION(nvariant, nmajor, nminor, npatch);
@@ -93,6 +101,9 @@ struct Version
 		return VK_MAKE_API_VERSION(variant, major, minor, patch);
 	}
 };
+typedef ZDistType<ApiVer, Version> ApiVersion;
+typedef ZDistType<VulkanVer, Version> VulkanVersion;
+typedef ZDistType<SpirvVer, Version> SpirvVersion;
 std::ostream& operator<<(std::ostream& str, const Version& v);
 
 template<class ResultFlags, class Bits> //, class... OtherBits>

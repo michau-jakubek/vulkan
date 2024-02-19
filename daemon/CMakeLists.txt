@@ -6,5 +6,5 @@ set(daemon_files
         daemon.cpp
         daemon.hpp)
 add_library(daemon SHARED ${daemon_files})
-target_include_directories(daemon BEFORE PRIVATE ${VULKAN_INCLUDE_PATH})
-target_link_libraries(daemon ${COMMON_LIBS} console framework)
+target_include_directories(daemon BEFORE PRIVATE ${VULKAN_INCLUDE_DIR})
+target_link_libraries(daemon framework console ${COMMON_LIBS})

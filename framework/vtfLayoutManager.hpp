@@ -190,6 +190,7 @@ private:
 	const ExtBinding&						verifyGetExtBinding			(std::type_index index, uint32_t binding) const;
 	void									writeBinding_				(std::type_index index, uint32_t binding, const uint8_t* data, VkDeviceSize bytes);
 	void									readBinding_				(std::type_index index, uint32_t binding, uint8_t* data, VkDeviceSize bytes) const;
+	void									getBinding_					(uint32_t binding, std::optional<ZBuffer>&) const;
 	void									getBinding_					(uint32_t binding, std::optional<ZImageView>&) const;
 	void									getBinding_					(uint32_t binding, std::optional<ZSampler>&) const;
 	void									getBinding_					(uint32_t binding, std::optional<std::pair<ZImageView,ZSampler>>&) const;

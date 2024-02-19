@@ -281,7 +281,7 @@ static const char* shaderStageToCommand (VkShaderStageFlagBits stage)
 static std::string makeFileName (uint32_t index, VkShaderStageFlagBits stage,
 								 const strings& codeAndEntryAndIncludes,
 								 const Version& vulkanVer, const Version& spirvVer,
-								 const bool enableValidation, const bool genDisassembly,
+								 const bool enableValidation, const bool genDisassembly, const bool buildAlways,
 								 const char* prefix = nullptr, const char* suffix = nullptr)
 {
 	const std::string fileName = codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName).empty()
@@ -295,6 +295,10 @@ static std::string makeFileName (uint32_t index, VkShaderStageFlagBits stage,
 		ss << (codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName).empty()
 			   ? codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::shaderCode)
 			   : codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName));
+		if (buildAlways && !codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName).empty())
+		{
+			ss << codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::shaderCode);
+		}
 		ss << (enableValidation ? 777 : 392);
 		ss << (genDisassembly ? 111 : 577);
 		ss << vulkanVer.nmajor;
@@ -502,7 +506,7 @@ static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
 	const char* tmpDir = getGlobalAppFlags().tmpDir;
 	const fs::path tmpPath = std::strlen(tmpDir) ? fs::path(tmpDir) : fs::temp_directory_path();
 	const std::string fileName(makeFileName(index, stage, codeAndEntryAndIncludes, vulkanVer, spirvVer,
-											enableValidation, genDisassmebly));
+											enableValidation, genDisassmebly, buildAlways));
 	const std::string pathName((tmpPath / fileName).string());
 	const fs::path textPath(pathName + (isGlsl ? ".glsl" : ".spvasm"));
 	const fs::path binPath(pathName + ".spvbin");

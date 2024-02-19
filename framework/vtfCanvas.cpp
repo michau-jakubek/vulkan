@@ -113,7 +113,7 @@ Canvas::Canvas	(add_cptr<char>			appName,
 				 add_cref<CanvasStyle>	canvasStyle,
 				 OnEnablingFeatures		onEnablingFeatures,
 				 bool					enableDebugPrintf,
-				 add_cref<Version>		apiVersion)
+				 add_cref<ApiVersion>	apiVersion)
 	: GlfwInitializerFinalizer()
 	, CanvasContext(appName, apiVersion, instanceLayers, instanceExtensions, deviceExtensions, onEnablingFeatures, enableDebugPrintf, canvasStyle, this)
 	, VulkanContext	(cc_callbacks, cc_debugMessenger, cc_debugReport, cc_instance, cc_physicalDevice, cc_device)
@@ -949,7 +949,8 @@ int Canvas::run (OnSubcommandRecordingThenBlit onCommandRecordingThenBlit, add_c
 int Canvas::run (OnCommandRecording				onCommandRecording,
 				 ZRenderPass					renderPass,
 				 std::reference_wrapper<int>	drawTrigger,
-				 OnIdle							onIdle)
+				 OnIdle							onIdle,
+				 OnAfterRecording				onAfterRecording)
 {
 	Swapchain				swapchain				(*this);
 	const uint32_t			acquirableImageCount	= MAX_BACK_BUFFER_COUNT;
@@ -987,10 +988,15 @@ int Canvas::run (OnCommandRecording				onCommandRecording,
 				 acquirableImageCount,
 				 backBuffersQueue,
 				 nullptr, // buffersQueueMutex
-				 nullptr, // eadyBuffersStack
+				 nullptr, // readyBuffersStack
 				 nullptr, // readyBuffersStackMutex
 				 nullptr, // readyBufferCondition
 				 onCommandRecording);
+
+		if (onAfterRecording)
+		{
+			onAfterRecording(*this);
+		}
 	}
 
 	return 0;

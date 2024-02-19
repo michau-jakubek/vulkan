@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10.2)
 
-project(my_project CXX)
+project(vulkan-trivial-framework CXX)
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     message(STATUS "OS is ${CMAKE_SYSTEM_NAME}")
@@ -22,7 +22,7 @@ string(TOUPPER ${CMAKE_GENERATOR} UPPER_CASE_CMAKE_GENERATOR)
 string(REGEX MATCH "VISUAL" CURRENT_GENERATOR ${UPPER_CASE_CMAKE_GENERATOR})
 if ("${CURRENT_GENERATOR}" STREQUAL "VISUAL")
     # Globally disable terribly onerous warning C26812: Prefer 'enum class' over 'enum' (Enum.3)
-    set(COMMON_BUILD_OPTIONS "/std:c++17 /W4 /GR /wd26812")
+	set(COMMON_BUILD_OPTIONS "/std:c++17 /W4 /GR /wd26812 /MP")
     set(ADDITIONAL_DEBUG_BUILD_OPTIONS "")
     set(ADDITIONAL_RELEASE_BUILD_OPTIONS "")
     set(ADDITIONAL_LIBS "")
@@ -47,51 +47,100 @@ else()
 endif()
 
 # Cached variables only for Cmake-GUI
-set(VULKAN_INCLUDE_PATH "" CACHE STRING "Full path to Vulkan includes")
-set(VULKAN_LIB_PATH "" CACHE STRING "Full path to Vulkan link library")
-set(GLFW3_INCLUDE_PATH "" CACHE STRING "Full path to GLFW v3 includes")
-set(GLFW3_LIB_PATH "" CACHE STRING "Full path to GLFW v3 link library")
+set(VULKAN_INCLUDE_DIR "" CACHE STRING "Directory with Vulkan includes")
+set(VULKAN_LIB_PATH    "" CACHE STRING "Full path to Vulkan link library")
+set(GLFW3_INCLUDE_DIR  "" CACHE STRING "Directory with GLFW v3 includes")
+set(GLFW3_LIB_PATH     "" CACHE STRING "Full path to GLFW v3 link library")
 
-if("${VULKAN_INCLUDE_PATH}" STREQUAL "")
-    if(${SYSTEM_OS_LINUX} EQUAL 0)
-        message(FATAL_ERROR "VULKAN_INCLUDE_PATH not defined, try for an example c:\\VulkanSDK\\1.3.216.0\\Include")
-    else()
-        message(FATAL_ERROR "VULKAN_INCLUDE_PATH not defined, try for an example /opt/vulkan/1.3.216.0/x86_64/include")
-    endif()
+# Unfortunately CMAKE_SURRENT_SOURCE_DIR inside of 'cmake' subdirectory doesn't point to 'cmake' directory :(
+set(PROJECT_MODULES_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_MODULES_PATH})
+find_package(Python REQUIRED)
+find_package(LookForDependencies REQUIRED)
+message(STATUS "Found Python interpreter: " ${Python_EXECUTABLE})
+
+
+if ("${GLFW3_LIB_PATH}" STREQUAL "" OR "${GLFW3_INCLUDE_DIR}" STREQUAL ""
+		OR "${VULKAN_LIB_PATH}" STREQUAL "" OR "${VULKAN_INCLUDE_DIR}" STREQUAL "")
+	message(STATUS "Looking for dependencies...")
+	get_filename_component(ABS_LOOK_FOR_VULKAN ${LOOK_FOR_VULKAN} REALPATH)
+	get_filename_component(ABS_LOOK_FOR_GLFW3 ${LOOK_FOR_GLFW3} REALPATH)
+	#message("ABS_LOOK_FOR_VULKAN: ${ABS_LOOK_FOR_VULKAN}")
+	#message("ABS_LOOK_FOR_GLFW3: ${ABS_LOOK_FOR_GLFW3}")
+	find_vulkan("${ABS_LOOK_FOR_VULKAN}" "${HINT_FOR_VULKAN}" Q_VULKAN_INCLUDE_DIR Q_VULKAN_LIB_PATH)
+	find_glfw3( "${ABS_LOOK_FOR_GLFW3}"  "${HINT_FOR_GLFW3}" Q_GLFW3_INCLUDE_DIR Q_GLFW3_LIB_PATH)
+	string(REPLACE "\"" "" VULKAN_INCLUDE_DIR "${Q_VULKAN_INCLUDE_DIR}")
+	string(REPLACE "\"" "" VULKAN_LIB_PATH    "${Q_VULKAN_LIB_PATH}")
+	string(REPLACE "\"" "" GLFW3_INCLUDE_DIR  "${Q_GLFW3_INCLUDE_DIR}")
+	string(REPLACE "\"" "" GLFW3_LIB_PATH     "${Q_GLFW3_LIB_PATH}")
+	message(STATUS "Looking for dependencied finished.")
 endif()
+
+if("${VULKAN_INCLUDE_DIR}" STREQUAL "")
+    if(${SYSTEM_OS_LINUX} EQUAL 0)
+		message(STATUS "VULKAN_INCLUDE_DIR not defined, try for an example: c:\\VulkanSDK\\1.3.216.0\\Include")
+    else()
+		message(STATUS "VULKAN_INCLUDE_DIR not defined, try for an example: /opt/vulkan/1.3.216.0/x86_64/include")
+    endif()
+	message(STATUS "You can also try -DLOOK_FOR_VULKAN and -DHINT_FOR_VULKAN if it is ambigous")
+	message(FATAL_ERROR "Looking for Vulkan dependencies failed.")
+endif()
+message(STATUS "Define variable VULKAN_INCLUDE_DIR=${VULKAN_INCLUDE_DIR}")
 
 if("${VULKAN_LIB_PATH}" STREQUAL "")
     if(${SYSTEM_OS_LINUX} EQUAL 0)
-        message(FATAL_ERROR "VULKAN_LIB_PATH not defined, try for an example c:\\VulkanSDK\\1.3.216.0\\Lib\\vulkan-1.lib")
-    else()
-        message(FATAL_ERROR "VULKAN_LIB_PATH not defined, try for an example /opt/vulkan/1.3.216.0/x86_64/lib/libvulkan.so")
+        message(STATUS "VULKAN_LIB_PATH not defined, try for an example: c:\\VulkanSDK\\1.3.216.0\\Lib\\vulkan-1.lib")
+    Belse()
+        message(STATUS "VULKAN_LIB_PATH not defined, try for an example: /opt/vulkan/1.3.216.0/x86_64/lib/libvulkan.so")
     endif()
+	message(FATAL_ERROR "You can also try -DLOOK_FOR_VULKAN and -DHINT_FOR_VULKAN if it is ambigous")
 endif()
+message(STATUS "Define variable VULKAN_LIB_PATH=${VULKAN_LIB_PATH}")
 
-if("${GLFW3_INCLUDE_PATH}" STREQUAL "")
+if("${GLFW3_INCLUDE_DIR}" STREQUAL "")
     if(${SYSTEM_OS_LINUX} EQUAL 0)
-        message(FATAL_ERROR "GLFW3_INCLUDE_PATH not defined, try for an example c:\\glfw-3.3.6.bin.WIN64\\include")
+		message(STATUS "GLFW3_INCLUDE_DIR not defined, try for an example: c:\\glfw-3.3.6.bin.WIN64\\include")
     else()
-        message(FATAL_ERROR "GLFW3_INCLUDE_PATH not defined, try for an example /opt/glfw/include")
+		message(STATUS "GLFW3_INCLUDE_DIR not defined, try for an example: /opt/glfw/include")
     endif()
+	message(STATUS "You can also try -DLOOK_FOR_GLFW3 and -DHINT_FOR_GLFW3 if it is ambigous")
+	message(FATAL_ERROR "Looking for GLFW3 dependencied failed.")
 endif()
+message(STATUS "Define variable GLFW3_INCLUDE_DIR=${GLFW3_INCLUDE_DIR}")
 
 if("${GLFW3_LIB_PATH}" STREQUAL "")
     if(${SYSTEM_OS_LINUX} EQUAL 0)
-        message(FATAL_ERROR "GLFW3_LIB_PATH not defined, try for an example c:\\glfw-3.3.6.bin.WIN64\\lib-vc2019\\glfw3.lib")
+        message(STATUS "GLFW3_LIB_PATH not defined, try for an example: c:\\glfw-3.3.6.bin.WIN64\\lib-vc2019\\glfw3.lib")
     else()
-        message(FATAL_ERROR "GLFW3_LIB_PATH not defined, try for an example /opt/glfw/build/src/libglfw3.a")
+        message(STATUS "GLFW3_LIB_PATH not defined, try for an example: /opt/glfw/build/src/libglfw3.a")
     endif()
+	message(FATAL_ERROR "You can also try -DLOOK_FOR_GLFW3 and -DHINT_FOR_GLFW3 if it is ambigous")
+endif()
+message(STATUS "Define variable GLFW3_LIB_PATH=${GLFW3_LIB_PATH}")
+
+if(NOT EXISTS "${VULKAN_INCLUDE_DIR}" OR NOT EXISTS "${VULKAN_LIB_PATH}"
+	OR NOT EXISTS "${GLFW3_INCLUDE_DIR}" OR NOT EXISTS "${GLFW3_LIB_PATH}")
+message(FATAL_ERROR "--- Some of the following do not exist: ---\n"
+		"VULKAN_INCLUDE_DIR=${VULKAN_INCLUDE_DIR}\n"
+		"VULKAN_LIB_PATH=${VULKAN_LIB_PATH}\n"
+		"GLFW3_INCLUDE_DIR=${GLFW3_INCLUDE_DIR}\n"
+		"GLFW3_LIB_PATH=${GLFW3_LIB_PATH}\n"
+		"--- Try also: ---\n"
+		"LOOK_FOR_VULKAN=<Vulkan path> [HINT_FOR_VULKAN=[subdir[, ...]]]\n"
+		"LOOK_FOR_GLFW3=<GLFW3 path> [HINT_FOR_GLFW3=[subdir[, ...]]]\n")
 endif()
 
+#message(STATUS "Found VULKAN_INCLUDE_DIR=${VULKAN_INCLUDE_DIR}")
+#message(STATUS "Found VULKAN_LIB_PATH=${VULKAN_LIB_PATH}")
+#message(STATUS "Found GLFW3_INCLUDE_DIR=${GLFW3_INCLUDE_DIR}")
+#message(STATUS "Found GLFW3_LIB_PATH=${GLFW3_LIB_PATH}")
 
-include_directories(${VULKAN_INCLUDE_PATH})
-include_directories(${GLFW3_INCLUDE_PATH})
+include_directories(${VULKAN_INCLUDE_DIR})
+include_directories(${GLFW3_INCLUDE_DIR})
 
 get_filename_component(ABS_VULKAN_LIB_PATH ${VULKAN_LIB_PATH} REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
 get_filename_component(ABS_GLFW3_LIB_PATH ${GLFW3_LIB_PATH} REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
 set(COMMON_LIBS ${ADDITIONAL_LIBS} ${ABS_VULKAN_LIB_PATH} ${ABS_GLFW3_LIB_PATH})
-message(STATUS "Used libraries: " ${COMMON_LIBS})
 
 set(ASSETS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assets)
 

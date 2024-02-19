@@ -16,6 +16,7 @@
 #endif
 
 #include "console.hpp"
+#include "vtfCUtils.hpp"
 
 #if SYSTEM_OS_LINUX == 1
 
@@ -159,15 +160,11 @@ typedef std::integral_constant<int, K_WhiteSpace				> WhiteSpace;
 
 namespace icon {
 
-template<class I>
-bool isEmptyString(I first, I last)
+template<class X> void trimTrailingSpaces (add_ref<X> x)
 {
-    while (first != last) {
-        if (*first != ' ')
-            return false;
-        ++first;
-    }
-    return true;
+	auto i =  std::find_if( x.rbegin() , x.rend() ,
+		[](vtf::collection_element_t<X> s){ return s != ' '; });
+	x.erase( i.base() , x.end() );
 }
 
 RawConsole::RawConsole(add_ref<std::ostream> str, size_t maxHistoryCount)
@@ -380,8 +377,8 @@ size_t RawConsole::load(const std::string& fileName)
         std::string line;
         while (std::getline(f, line))
         {
-            if (line.length() == 0
-                || isEmptyString(line.begin(), line.end()))
+			trimTrailingSpaces<decltype(line)>(line);
+			if (line.length() == 0)
                 continue;
 
             auto v = fromString(line);
@@ -529,11 +526,25 @@ void RawConsole::process(ON_NEW_LINE const& onNewLine, _uUser user)
                 // At the last, currently being written item
                 if (hist.size() - pos_hist == 1)
                 {
+					trimTrailingSpaces<std::remove_reference_t<decltype(buff.get())>>(buff.get());
+					pos_buff = buff.get().size();
                     hist.at(pos_hist).first = pos_buff;
-                    if (false == isEmptyString(beg, std::next(beg, static_cast<int>(pos_buff))))
+
+					if (pos_buff)
                     {
-                        hist.resize(hist.size() + 1);
-                        ++pos_hist;
+						bool append = true;
+						if (hist.size() > 1)
+						{
+							decltype(buff.get()) prev = hist.at(pos_hist - 1).second;
+							static_assert(std::is_lvalue_reference_v<decltype(prev)>, "Not l-value reference");
+							decltype(prev) curr = buff.get();
+							append = !std::equal(curr.begin(), curr.end(), prev.begin(), prev.end());
+						}
+						if (append)
+						{
+							hist.resize(hist.size() + 1);
+							++pos_hist;
+						}
                     }
                 }
                 // At the each other item except penultimate

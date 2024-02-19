@@ -163,7 +163,7 @@ public:
 			 add_cref<CanvasStyle>	canvasStyle				= DefaultStyle,
 			 OnEnablingFeatures		onEnablingFeatures		= {},
 			 bool					enableDebugPrintf		= false,
-			 add_cref<Version>		apiVersion				= Version(1,0));
+			 add_cref<ApiVersion>	apiVersion				= Version(1,0));
 	virtual ~Canvas	();
 
 	add_cref<ZGLFWwindowPtr>	window;
@@ -180,13 +180,15 @@ public:
 
 	void updateExtent();
 
+	typedef std::function<void (add_ref<Canvas>)> OnAfterRecording;
 	typedef std::function<void (add_ref<Canvas>, add_ref<int> drawTrigger)> OnIdle;
 	typedef std::function<void (add_ref<Canvas>, add_cref<Swapchain>, ZCommandBuffer, ZFramebuffer)> OnCommandRecording;
 	typedef std::function<ZImage (add_ref<Canvas>, add_cref<Swapchain>, ZCommandBuffer, uint32_t threadID)> OnSubcommandRecordingThenBlit;
 	int						run					(OnCommandRecording				onCommandRecording,
 												 ZRenderPass					renderPass,
 												 std::reference_wrapper<int>	drawTrigger,
-												 OnIdle							onIdle = nullptr);
+												 OnIdle							onIdle = {},
+												 OnAfterRecording				onAfterRecording = {});
 	int						run					(OnSubcommandRecordingThenBlit	onCommandRecordingThenBlit,
 												 add_cref<std::vector<ZQueue>>	threadQueues);
 

@@ -286,19 +286,6 @@ void onResize (add_ref<Canvas> cs, add_ptr<void> userData, int width, int height
 	static_cast<add_ptr<UserData>>(userData)->drawTrigger += 1;
 }
 
-template<class T, class E> struct expander
-{
-	T* self () { return static_cast<T*>(this); }
-	const T* self () const { return static_cast<const T*>(this); }
-	bool operator!=(const E& expanded) const {
-		return !dynamic_cast<const E*>(self())->operator==(expanded);
-	}
-	T& operator=(const E& expanded) {
-		dynamic_cast<E*>(self())->operator=(expanded);
-		return *self();
-	}
-};
-
 struct ImageLoader;
 
 struct ZImageEx : public expander<ZImageEx, ZImage>, public ZImage

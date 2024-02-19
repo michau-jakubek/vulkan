@@ -649,6 +649,12 @@ void LayoutManager::getBinding_ (uint32_t binding, std::optional<std::pair<ZImag
 	const ExtBinding& b = verifyGetExtBinding(index, binding);
 	result = m_viewsAndSamplers[b.offset];
 }
+void LayoutManager::getBinding_ (uint32_t binding, std::optional<ZBuffer>& result) const
+{
+	const ExtBinding& b = verifyGetExtBinding(binding);
+	const std::pair<VkDescriptorType, int> key(b.descriptorType, make_signed(binding));
+	result = m_buffers.at(key);
+}
 
 } // namespace vtf
 

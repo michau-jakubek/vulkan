@@ -7,6 +7,7 @@
 #include <tuple>
 #include "vtfZDeletable.hpp"
 #include "vtfZUtils.hpp"
+#include "vtfZSharedDevice.hpp"
 #include "shell.hpp"
 
 #if 0
@@ -21,8 +22,7 @@ std::tuple<bool,SharedData,std::string> getSharedString (add_cref<SharedData>);
 #endif // #if 0
 
 SHARED_RESOURCE
-std::tuple<ZDevice, std::string>
-createSharedDevice (add_cptr<char> name, bool graphical);
+vtf::SharedDevice createOrGetSharedDevice (add_cptr<char> name, bool graphical);
 
 SHARED_RESOURCE
 std::shared_ptr<Shell> createOrGetSingletonShell (std::ostream&			output,

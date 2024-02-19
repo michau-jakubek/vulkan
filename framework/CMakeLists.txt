@@ -22,6 +22,8 @@ set(framework_files
         vtfFormatUtils.hpp
         vtfStructUtils.cpp
         vtfStructUtils.hpp
+        vtfExtensions.cpp
+        vtfExtensions.hpp
         vtfTermColor.cpp
         vtfTermColor.hpp
         vtfVector.hpp
@@ -35,6 +37,8 @@ set(framework_files
         vtfZBuffer.hpp
         vtfZImage.cpp
         vtfZImage.hpp
+		vtfZSharedDevice.cpp
+		vtfZSharedDevice.hpp
         vtfTextImage.cpp
         vtfTextImage.hpp
         vtfZCommandBuffer.cpp
@@ -61,7 +65,7 @@ set(framework_files
 )
 
 add_library(framework STATIC ${framework_files})
-target_include_directories(framework BEFORE PRIVATE ${GLFW3_INCLUDE_PATH})
-target_include_directories(framework BEFORE PRIVATE ${VULKAN_INCLUDE_PATH})
+target_include_directories(framework BEFORE PRIVATE ${GLFW3_INCLUDE_DIR})
+target_include_directories(framework BEFORE PRIVATE ${VULKAN_INCLUDE_DIR})
 target_link_libraries(framework ${COMMON_LIBS})
 

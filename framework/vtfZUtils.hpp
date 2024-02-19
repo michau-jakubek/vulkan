@@ -19,26 +19,13 @@
   #define SHARED_RESOURCE __declspec(dllimport)
  #endif
 #else
- #define SHARED_RESOURCE
+ #define SHARED_RESOURCE extern
 #endif
 
 namespace vtf
 {
 
 class VertexInput;
-
-#if SYSTEM_OS_LINUX == 1
-/*
-template<class ZetDeletable,
-		 typename std::enable_if< std::is_convertible< add_ptr<ZetDeletable>, add_ptr<ZDeletableMark> >::value, bool>::type = true>
-std::ostream& operator<<(std::ostream& str, const ZetDeletable& z)
-{
-	str << demangledName<typename ZetDeletable::vulkan_type>()
-		<< ": " << static_cast<void*>(*z);
-	return str;
-}
-*/
-#endif // SYSTEM_OS_LINUX
 
 Version			getVulkanImplVersion (std::optional<ZInstance> instance = {});
 
@@ -106,6 +93,7 @@ ZSemaphore		createSemaphore	(ZDevice device);
 ZShaderModule	createShaderModule(ZDevice device, VkShaderStageFlagBits stage, const std::string& code);
 ZShaderModule	createShaderModule(ZDevice device, VkShaderStageFlagBits stage, const std::vector<unsigned char>& code);
 
+ZFramebuffer	createFramebuffer (ZRenderPass renderPass, add_cref<VkExtent2D> size, const std::vector<ZImageView>& attachments);
 ZFramebuffer	createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t height, const std::vector<ZImageView>& attachments);
 
 struct ZRenderPassBeginInfo : protected VkRenderPassBeginInfo

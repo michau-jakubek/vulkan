@@ -102,6 +102,11 @@ ZShaderModule createShaderModule(ZDevice device, VkShaderStageFlagBits stage, co
 	return ZShaderModule::create(shaderModule, device, callbacks, stage);
 }
 
+ZFramebuffer createFramebuffer (ZRenderPass renderPass, add_cref<VkExtent2D> size, const std::vector<ZImageView>& attachments)
+{
+	return createFramebuffer(renderPass, size.width, size.height, attachments);
+}
+
 ZFramebuffer createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t height, const std::vector<ZImageView>& attachments)
 {
 	const uint32_t	renderAttachmentCount	= renderPass.getParam<ZDistType<AttachmentCount, uint32_t>>();
@@ -391,33 +396,35 @@ Version getVulkanImplVersion (std::optional<ZInstance> instance)
 	return version;
 }
 
-SHARED_RESOURCE extern ZDevice globalSharedDevice;
-
-ZDevice getSharedDevice ()
+ZDevice getSharedDevice()
 {
-	if (getGlobalAppFlags().verbose)
-	{
-		std::cout << "[INFO] " << __func__ << ' ' << globalSharedDevice << std::endl;
-	}
-	return globalSharedDevice;
+	//if (getGlobalAppFlags().verbose)
+	//{
+	//	std::cout << "[INFO] " << __func__ << ' ' << globalSharedDevice << std::endl;
+	//}
+	//return globalSharedDevice;
+	return {};
 }
+
 ZPhysicalDevice getSharedPhysicalDevice ()
 {
-	ZPhysicalDevice dev = globalSharedDevice.getParam<ZPhysicalDevice>();
-	if (getGlobalAppFlags().verbose)
-	{
-		std::cout << "[INFO] " << __func__ << ' ' << dev << std::endl;
-	}
-	return dev;
+	//ZPhysicalDevice dev = globalSharedDevice.getParam<ZPhysicalDevice>();
+	//if (getGlobalAppFlags().verbose)
+	//{
+	//	std::cout << "[INFO] " << __func__ << ' ' << dev << std::endl;
+	//}
+	//return dev;
+	return {};
 }
 ZInstance getSharedInstance ()
 {
-	ZInstance inst = globalSharedDevice.getParam<ZPhysicalDevice>().getParam<ZInstance>();
-	if (getGlobalAppFlags().verbose)
-	{
-		std::cout << "[INFO] " << __func__ << ' ' << inst << std::endl;
-	}
-	return inst;
+	//ZInstance inst = globalSharedDevice.getParam<ZPhysicalDevice>().getParam<ZInstance>();
+	//if (getGlobalAppFlags().verbose)
+	//{
+	//	std::cout << "[INFO] " << __func__ << ' ' << inst << std::endl;
+	//}
+	//return inst;
+	return {};
 }
 
 ZInstance		createInstance (const char*							appName,
@@ -642,11 +649,6 @@ ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
 
 	auto makeQueueCreateInfo = [&](uint32_t familyIndex, uint32_t queueCount) -> VkDeviceQueueCreateInfo
 	{
-		if (queuePriorities.size() < queueCount)
-		{
-			queuePriorities.resize(queuePriorities.size() + queueCount, 1.0f);
-		}
-
 		VkDeviceQueueCreateInfo qci = makeVkStruct();
 		qci.flags				= VkDeviceQueueCreateFlags(0);
 		qci.queueFamilyIndex	= familyIndex;
@@ -658,6 +660,15 @@ ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
 	if (getGlobalAppFlags().verbose)
 	{
 		logger << "[INFO} Create device with " << queueFamilyPropCount << " queue family indices" << std::endl;
+	}
+
+	{
+		uint32_t queuePriorityCount = 0u;
+		for (uint32_t queueFamilyIndex = 0; queueFamilyIndex < queueFamilyPropCount; ++queueFamilyIndex)
+		{
+			queuePriorityCount = std::max(queuePriorityCount, queueFamilyProps[queueFamilyIndex].queueCount);
+		}
+		queuePriorities.resize(queuePriorityCount, 1.0f);
 	}
 
 	const std::vector<uint32_t> surfaceSupportedIndices = findSurfaceSupportedQueueFamilyIndices(*physDevice, surface);

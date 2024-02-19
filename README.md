@@ -23,14 +23,14 @@ Vulkan is excellent and awesome. Although it is terribly huge, I'm fascinated by
   <BR />
   <li>In general to create a project or a solution type:
   <pre>
-    cmake -G "???" -DCMAKE_BUILD_TYPE=??? -DVULKAN_INCLUDE_PATH=??? -DVULKAN_LIB_PATH=???
-                                          -DGLFW3_INCLUDE_PATH=???  -DGLFW3_LIB_PATH=??? ..
+    cmake -G "???" -DCMAKE_BUILD_TYPE=??? -DVULKAN_INCLUDE_DIR=??? -DVULKAN_LIB_PATH=???
+                                          -DGLFW3_INCLUDE_DIR=???  -DGLFW3_LIB_PATH=??? ..
   </pre>
   <ul>
     <li>-DCMAKE_BUILD_TYPE    Debug or Release</li>
-    <li>-DVULKAN_INCLUDE_PATH must point to the Vulkan include path</li>
+    <li>-DVULKAN_INCLUDE_DIR  must point to the Vulkan include path</li>
     <li>-DVULKAN_LIB_PATH     must point to the Vulkan link library</li>
-    <li>-DGLFW3_INCLUDE_PATH  must point to the GLFW v3 include path</li>
+    <li>-DGLFW3_INCLUDE_DIR  must point to the GLFW v3 include path</li>
     <li>-DGLFW3_LIB_PATH      must point to the GLFW v3 link library</li>
     <li>.. (do not forget)    must point to the folder with project CMakeLists.txt</li>
     <li>You can also specify -DCMAKE_CXX_COMPILER for your favorite one</li>
@@ -38,18 +38,23 @@ Vulkan is excellent and awesome. Although it is terribly huge, I'm fascinated by
   <BR />
     Linux example:
     <pre>
-    cmake -DCMAKE_BUILD_TYPE=DEBUG -DVULKAN_INCLUDE_PATH=/opt/vulkan/1.3.204.1/x86_64/include \
+    cmake -DCMAKE_BUILD_TYPE=DEBUG -DVULKAN_INCLUDE_DIR=/opt/vulkan/1.3.204.1/x86_64/include \
                                    -DVULKAN_LIB_PATH=/opt/vulkan/1.3.204.1/x86_64/lib/libvulkan.so \
-                                   -DGLFW3_INCLUDE_PATH=/usr/include \
+                                   -DGLFW3_INCLUDE_DIR=/usr/include \
                                    -DGLFW3_LIB_PATH=/usr/lib/x86_64-linux-gnu/libglfw.so.3 ..
     </pre>
     Windows example:
     <pre>
-    cmake -G "Visual Studio 16 2019" -DVULKAN_INCLUDE_PATH=c:\\VulkanSDK\\1.3.216.0\\Include ^
+    cmake -G "Visual Studio 16 2019" -DVULKAN_INCLUDE_DIR=c:\\VulkanSDK\\1.3.216.0\\Include ^
                                      -DVULKAN_LIB_PATH=c:\\VulkanSDK\\1.3.216.0\\Lib\\vulkan-1.lib ^
-                                     -DGLFW3_INCLUDE_PATH=c:\\VulkanDeps\\glfw-3.3.8.bin.WIN64\\include ^
+                                     -DGLFW3_INCLUDE_DIR=c:\\VulkanDeps\\glfw-3.3.8.bin.WIN64\\include ^
                                      -DGLFW3_LIB_PATH=c:\\VulkanDeps\\glfw-3.3.8.bin.WIN64\\lib-vc2019\\glfw3.lib ..
     </pre>
+	<pre>
+	Additionally, instead of specifing VULKAN_* and GLFW3_*, you can try LOOK_FOR_VULKAN and LOOK_FOR_GLFW
+	giving a folder name with VulkanSDK and GLFw3 stuff. If they seem to be ambigous try HINT_FOR_VULKAN or
+	HINT_FOR_GLFW3 respectively to tell more details. For example this would be VulkanSDK version like 1.3.204.1,Lib32.
+	</pre>
     </li>
 </ul>
 <h3>Build an executable:</h3>

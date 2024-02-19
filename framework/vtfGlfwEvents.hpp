@@ -69,7 +69,7 @@ private:
 	static void onCursorPos (GLFWwindow* window, double xpos, double ypos);
 	static void onScroll	(GLFWwindow* window, double xoffset, double yoffset);
 	static void onKey		(GLFWwindow* window, int key, int scancode, int action, int mods);
-	static void onMuseBtn	(GLFWwindow* window, int button, int action, int mods);
+	static void onMouseBtn	(GLFWwindow* window, int button, int action, int mods);
 	static void onResize	(GLFWwindow* window, int width, int height);
 };
 
