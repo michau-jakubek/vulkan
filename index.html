@@ -1,5 +1,38 @@
+<!DOCTYPE html>
+<html>
 <head>
-    <title>Vulkan Trivial Framework (VTF)</title>
-    <meta name="google-site-verification" content="31Kau8LdpTSmz_mYWQlfo7qkrC99OjSBQoySYlc8LDg" />
+<script>
+function embedHTML() {
+  var me = document.getElementsByTagName("*");
+  for (var i = 0; i < me.length; i++) {
+    var elem = me[i];
+    var file = elem.getAttribute("w3-include-html");
+    if (file) {
+      elem.innerHTML = file;
+      httpReq = new XMLHttpRequest();
+      httpReq.onreadystatechange = function() {
+        if (this.readyState == 4) {
+          if (this.status == 200) { elem.innerHTML = this.responseText; }
+          if (this.status == 404) { elem.innerHTML = "Page not found."; }
+          elem.removeAttribute("w3-include-html");
+          embedHTML();
+        }
+      }
+      elem.innerHTML = file; //   me[5].tagName;
+      httpReq.open("GET", file, true);
+      httpReq.send();
+      return;
+    }
+  }
+}
+</script>
 </head>
+<body>
+  <div w3-include-html="file://README.md">??????</div>
+  <h1>Hello</h1>
+  <script>
+	  embedHTML();
+  </script>
+</body>
+</html>
 

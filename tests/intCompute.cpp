@@ -90,6 +90,7 @@ struct Params
 		uint32_t printDesc		: 1;	// print description and exits
 		uint32_t printInHex		: 1;	// print numbers in hexadecimal format
 		uint32_t printCapital	: 1;	// print capital characters
+		uint32_t printZero		: 1;	// print zero in result
 		uint32_t noPrintResult	: 1;	// don't print result
 		uint32_t enableSUCF		: 1;	// enable subgroup_uniform_control_flow extension
 	}
@@ -99,6 +100,7 @@ struct Params
 		0, // printDesc
 		0, // printHex
 		0, // printCapital
+		0, // printZero
 		0, // noPrintResult
 		0, // enableSUCF
 	};
@@ -247,8 +249,9 @@ void Params::usage (ZDevice device, add_ref<std::ostream> log) const
 		<< "  [--help]                        print usage and exit\n"
 		<< "  [--print-desc]                  print description and execute\n"
 		<< "  [--print-params]                print params and execute\n"
+		<< "  {--print-zero]                  print zero in result, default false\n"
 		<< "  [--no-print-result]             prevent from printing result\n"
-		<< "  [--enable-sucf]                 enable subgroup_uniform_control_flow extension\n"
+		<< "  [--enable-sucf]                 enable VK_KHR_shader_subgroup_uniform_control_flow extension\n"
 		<< "  [-limits]                       print device limits and exit\n"
 		<< "  [-hex]                          print result in hexadecimal format" << std::endl
 		<< "  [-HEX]                          print result using capital characters" << std::endl
@@ -363,15 +366,17 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine (ZDevic
 	Option optSUCF			{ "--enable-sucf", 0 };
 	Option optPrintInHex	{ "-hex", 0 };
 	Option optPrintCapital	{ "-HEX", 0 };
+	Option optPrintZero		{ "--print-zero", 0 };
 	container_push_back_more(options, { optWorkGroupX, optWorkGroupY, optWorkGroupZ });
 	container_push_back_more(options, { optLocalSizeX, optLocalSizeY, optLocalSizeZ });
 	container_push_back_more(options, { optCheckpointMax, optPrintColCnt, optAddressMode });
-	container_push_back_more(options, { optPrintParams, optPrintDesc });
+	container_push_back_more(options, { optPrintParams, optPrintDesc, optPrintZero });
 
 	resultParams.flags.printDesc = (consumeOptions(optPrintDesc, options, args, sink) > 0) ? 1 : 0;
 	resultParams.flags.printParams = (consumeOptions(optPrintParams, options, args, sink) > 0) ? 1 : 0;
 	resultParams.flags.enableSUCF = (consumeOptions(optSUCF, options, args, sink)) > 0 ? 1 : 0u;
 	resultParams.flags.noPrintResult = (consumeOptions(optNoPrintRes, options, args, sink) > 0) ? 1 : 0;
+	resultParams.flags.printZero = (consumeOptions(optPrintZero, options, args, sink) > 0) ? 1 : 0;
 	{
 		const uint32_t printInHex = (consumeOptions(optPrintInHex, options, args, sink) > 0) ? 1 : 0;
 		const uint32_t printCapital = (consumeOptions(optPrintCapital, options, args, sink) > 0) ? 1 : 0;
@@ -520,10 +525,23 @@ void printOutputBuffer (ostream_ref log, add_cref<Params> params, u32vec_cref da
 	UNREF(horizontal);
 	ASSERTION(horizontal == false);
 	ASSERTION((rowCount > 0u) && (colCount > 0u));
-	const uint32_t	itemCount	= data_count(data);
-	const uint32_t	groupSize	= rowCount * colCount;
-	const uint32_t	groupCount	= MULTIPLERUP(itemCount, groupSize);
-	const int32_t	itemWidth	= static_cast<int32_t>(std::log10(float(itemCount))) + 1;
+	const uint32_t		itemCount	= data_count(data);
+	const uint32_t		groupSize	= rowCount * colCount;
+	const uint32_t		groupCount	= MULTIPLERUP(itemCount, groupSize);
+	const int32_t		itemWidth	= static_cast<int32_t>(std::log10(float(itemCount))) + 1;
+	const auto			calcWidth	= [&]() -> int {
+		std::ostringstream os;
+		const uint32_t	ii			= 0xFFFFFFFF;
+		const float		pi			= std::atan(1.0f) * 4.0f;
+		SIDE_EFFECT((params.flags.printInHex != 0) ? (os << std::hexfloat << pi) : (os << pi));
+		const int		floatWidth	= int(os.str().length());
+		os.str(std::string());
+		SIDE_EFFECT((params.flags.printInHex != 0) ? (os << std::showbase << std::hex << ii) : (os << ii));
+		const int		intWidth	= int(os.str().length());
+		return std::max(floatWidth, intWidth);
+	};
+	const int			valueWidth	= calcWidth();
+	const std::string	blankValue	(make_unsigned(valueWidth + 1), ' ');
 
 	for (uint32_t i = 0u, g = 0u; g < groupCount; ++g)
 	{
@@ -542,25 +560,35 @@ void printOutputBuffer (ostream_ref log, add_cref<Params> params, u32vec_cref da
 			for (uint32_t c = 0u; c < cc; ++c, ++i)
 			{
 				const uint32_t ii = rr + (c * rowCount);
-				log << "[" << std::setw(itemWidth) << std::right << ii << "]: ";
+				log << "[" << std::setw(itemWidth) << std::right << ii << "] ";
+				const uint32_t type = params.inputTypes.at(ii);
 				const uint32_t value = data.at(ii);
-				if (value == 0u)
-					log << "           ";
+				if (value == 0u && (params.flags.printZero == 0))
+					log << blankValue;
 				else
 				{
-					log << std::left;
-					if (params.flags.printInHex != 0)
-						log << "0x" << std::setw(8);
-					else log << std::setw(10);
-					if (params.flags.printInHex != 0)
-						log << std::hex;
+					log << std::left << std::setw(valueWidth);
 					if (params.flags.printCapital != 0)
 						log << std::uppercase;
-					log << value;
-					if (params.flags.printCapital != 0)
-						log << std::nouppercase;
-					if (params.flags.printInHex != 0)
-						log << std::dec;
+					if (type == 2)
+					{
+						union U {
+							U(uint32_t u_) : u(u_) {}
+							uint32_t	u;
+							float		f;
+						} x(value);
+						if (params.flags.printInHex != 0)
+							log << std::hexfloat << x.f << std::defaultfloat;
+						else log << x.f;
+					}
+					else
+					{
+						if (params.flags.printInHex != 0)
+							log << std::showbase << std::hex << value << std::dec << std::noshowbase;
+						else log << value;
+					}
+					if (params.flags.printCapital != 0) log << std::nouppercase;
+					log << std::setw(0);
 					log << ' ';
 				}
 			}
@@ -639,11 +667,9 @@ int prepareTests (const TestRecord& record, const strings& cmdLineParams)
 	};
 	const bool sucfEnabled = hasCmdLineSUCF();
 	VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR sucfFeatures = makeVkStruct();
-	VkPhysicalDeviceMaintenance4Features mainFeatures = makeVkStruct(sucfEnabled ? &sucfFeatures : nullptr);
-	VkPhysicalDeviceFeatures2 resultFeatures = makeVkStruct(&mainFeatures);
+	VkPhysicalDeviceFeatures2 resultFeatures = makeVkStruct(sucfEnabled ? &sucfFeatures : nullptr);
 	auto onEnablingFeatures = [&](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
 	{
-		extensions.emplace_back(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
 		if (sucfEnabled)
 		{
 			extensions.emplace_back(VK_KHR_SHADER_SUBGROUP_UNIFORM_CONTROL_FLOW_EXTENSION_NAME);
@@ -682,8 +708,10 @@ ZShaderModule createShader (ZDevice device, add_cref<std::string> assets, VkShad
 {
 	const GlobalAppFlags	flags(getGlobalAppFlags());
 	ProgramCollection		programs(device, assets);
-							programs.addFromFile(stage, "compute.shader");
-							programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
+
+	programs.addFromFile(stage, "main.compute", {"."}, "main_entry");
+	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, false, true);
+
 	return programs.getShader(stage);
 }
 

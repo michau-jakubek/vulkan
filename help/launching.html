@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {
+	margin-left: 100px;
+	margin-right: 100px;
+}
+code { background-color: #ddd; }
+p {
+	text-indent: 35px;
+	text-align: justify;
+}
+p.red { text-indent: 0px; color: red; }
+p.green { text-indent: 0px; color: green; }
+p.normal { text-indent: 0px; color: normal; display: inline; }
+p.blue { text-indent: 0px; color: blue; }
+.aaa {
+}
+.column { float: left; }
+.left {
+	width: 10%;
+	text: bold;
+}
+.right { width: 75%; }
+</style>
+</head>
+<body>
+<h1>Launching</h1>
+<p>Eventually, after <a href="installation.html">installation</a> and <a href="building.html">building</a>
+the best time has come up to launch an application. Typically, if you don't change anything, the build process
+created the <code>app.exe</code> on the Windows or <code>app</code> executable in the case of the Linux OS.
+Finally your application you can run by typing in the command line interpreter:</p>
+<div class="row">
+	<div class="column left">
+		<div class="aaa">Linux:</div>
+		<div class="aaa">Windows:</div>
+	</div>
+	<div class="column right">
+		<div class="aaa">./app [app_params] &lt;test_name&gt; [test_params]</div>
+		<div class="aaa">app [app_params] &lt;test_name&gt; [test_params]</div>
+	</div>
+</div>
+<br /><br />
+<h2>Program options/parameters</h2>
+<p>The program options starts from <code>-</code>, sometimes from <code>--</code>, followed by the option name.
+One of them require a value and another don't. The value of the option is given after white space. If any option
+needs the value and it is not provided or a different option name is provided, then whatever follows the option
+name will be consumed and treated as the value, which will result in incorrect work of the program. Aany option
+can appear any number of times on the command line, with the last one taken into account.</p>
+<p>The option list is usually followed by the name of the test and it separates the application options from the
+test options.</p>
+<p class="normal"><font color="normal">./app</font>
+<font color="blue">-d 1 -api 13 -spirv 16 -spvvalid</font>
+<font color="red">triangle</font>
+<font color="green">-t 2</font>, where painted blue are <font color="blue">application options</font>,
+red is the <font color="red">test name</font> and green are <font>test parameters</font></p>.
+<p>When running the application without parameters it will print a list of available options similar to this one:</p>
+<pre style="font-weight: bold">
+Pass available option as a parameter:
+Usage: app [options, ...] <test_name> [<test_param>,...]
+Application ptions:
+  -h, --help:               prints this help and exits
+  --print-global-help:      this option has global scope
+                            even if it exists after any test name or its params
+                            however the test can override it by itself
+  -t:                       prints available test names
+  -c:                       builds auto-complete command
+  -dl:                      prints available device list
+  -d &lt;id&gt;:                  picks device by id, default is 0
+  -de &lt;id&gt;:                 prints extension for device of id, default is 0
+                            honors options -api and -l if present
+  -ll:                      prints available instance layer names
+  -l &lt;layer&gt; [-l &lt;layer&gt;]:  enable layer(s)
+  -l-no-vuid-undefined:     suppress layers(s) VUID_Undefined warning
+  -l-suppress &lt;VUID&gt;:       suppress layers(s) specific VUID message: warning, error, etc.,
+                            that match at least first 5 characters. No wildcard is applied.
+                            e.g. "-l-suppress VUID-vkBeginCommandBuffer-commandBuffer"
+                            will match to VUID-vkBeginCommandBuffer-commandBuffer-00049
+  -api &lt;version&gt;:           Vulkan API version to apply, (major * 10 + minor), default is 1.1
+  -assets &lt;assets_dir&gt;:      change assets directory, default is ${REPO}/assets/&lt;test_name&gt;
+  -tmp &lt;temp_dir&gt;:           change temp directory, default is system's temp directory
+  -verbose &lt;level&gt;:          enable application diagnostic messages, default is 0 that means disabled
+  -dprintf:                 enable Debug Printf feature
+                            #extension GL_EXT_debug_printf : enable and debugPrintfEXT(...)
+  -bt:                      enable backtrace
+Compiler options:
+  -vulkan &lt;version&gt;:        (major * 10 + minor), default is 11 aka vulkan1.0
+  -spirv &lt;version&gt;:         (major * 10 + minor), default is 10 aka spirv1.0
+                            Set the execution environment where the shaders will be executed in.
+                            Defaults to :
+                             * vulkan1.0 under --client vulkan&lt;version&gt;
+                             * opengl    under --client opengl&lt;version&gt;
+                             * spirv1.0  under --target - env vulkan1.0
+                             * *spirv1.3  under --target - env vulkan1.1
+                             * *spirv1.5  under --target - env vulkan1.2
+                             Multiple --target - env can be specified.
+  -spvvalid:                performs SPIR-V assembly validation, if failed then
+                            invalid binary file is saved as {hash}.{shader_file_name}.invalid.spvbin,
+                            otherwise spirv-val tool is launched anyway.
+                            glslang and spirv-val can give different results
+  -spvdisassm:              generate SPIR-V dissassembly file
+  -nowerror:                allows warnig(s) from external compilators
+</pre>
+<p>Most of the options are self-explanatory but several deserve the special attention. These are
+<code>-d</code>, <code>-api</code>, <code>-vulkan</code>, <code>-spirv</code> and <code>-spvvalid</code>.
+</p>
+<pre>
+
+
+
+
+</pre>
+</body>
+</html>

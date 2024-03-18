@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {
+	margin-left: 100px;
+	margin-right: 100px;
+}
+p {
+	text-indent: 35px;
+	text-align: justify;
+}
+</style>
+</head>
+<body>
+<script>
+function cp2clipboard() { navigator.clipboard.writeText("git clone https://github.com/michau-jakubek/vulkan.git vtf"); }
+</script>
+<h1>Installation</h1>
+<h3>Prerequisites:</h3>
+<ul>
+  <li>Vulkan SDK</li>
+  <li>GLFW library</li>
+  <li>CMake</li>
+  <li>Python</li>
+  <li>C++ compilers</li>
+</ul>
+
+<h3>Prepare needed things:</h3>
+<ul>
+	<li>Download and install Vulkan SDK   - <a href="https://vulkan.lunarg.com/">https://vulkan.lunarg.com/</a></li>
+	<li>Download and install GLFW library - <a href="https://www.glfw.org/download">https://www.glfw.org/download</a></li>
+	<li>Download and CMake build system   - <a href="https://cmake.org/download/">https://cmake.org/download/</a></li>
+	<li>Install Git and Python the way you like it</li>
+	<li>Install compilers. On Linux prefered g++ or clang++, on Windows the Visual Studio</li>
+	<li>Download project from this site using: <font color="brown">git clone https://github.com/michau-jakubek/vulkan.git vtf</font>
+		<a href="#" onClick="cp2clipboard();">(copy)</a></li>
+	<li>Move to the newly created &quot;vtf&quot; folder of the project</li>
+	<li>Inside &quot;vtf&quot; create a build folder (e.g. 'build') and go into</li>
+</ul>
+
+<h3>Creating a project or a solution:</h3>
+<p>Creating a project is basically very simple. To create the project you need to run <code>cmake</code> tool
+with several parameters. Beside the built-in <code>cmake</code>'s parameters e.g. <code>CMAKE_BUILD_TYPE</code>, this
+tool needs to know where it should look for the project's dependencies, and these are the Vulkan library,
+Vulkan headers, the GLFW library and its headers. To specify them to the <code>cmake</code> use:</p>
+<ul>
+    <li>VULKAN_LIB_PATH     should point to the Vulkan link library</li>
+    <li>VULKAN_INCLUDE_DIR  should point to the Vulkan include path</li>
+    <li>GLFW3_LIB_PATH      should point to the GLFW v3 link library</li>
+    <li>GLFW3_INCLUDE_DIR   should point to the GLFW v3 include path</li>
+</ul>
+For an example your command to create the project would look like:<br /><br />
+    On Linux:
+    <pre>
+    cmake -DCMAKE_BUILD_TYPE=DEBUG -DVULKAN_INCLUDE_DIR=/opt/vulkan/1.3.204.1/x86_64/include \
+                                   -DVULKAN_LIB_PATH=/opt/vulkan/1.3.204.1/x86_64/lib/libvulkan.so \
+                                   -DGLFW3_INCLUDE_DIR=/usr/include \
+                                   -DGLFW3_LIB_PATH=/usr/lib/x86_64-linux-gnu/libglfw.so.3 ..
+    </pre>
+    On Windows:
+    <pre>
+    cmake -G "Visual Studio 16 2019" -DVULKAN_INCLUDE_DIR=c:\\VulkanSDK\\1.3.216.0\\Include ^
+                                     -DVULKAN_LIB_PATH=c:\\VulkanSDK\\1.3.216.0\\Lib\\vulkan-1.lib ^
+                                     -DGLFW3_INCLUDE_DIR=c:\\VulkanDeps\\glfw-3.3.8.bin.WIN64\\include ^
+                                     -DGLFW3_LIB_PATH=c:\\VulkanDeps\\glfw-3.3.8.bin.WIN64\\lib-vc2019\\glfw3.lib ..
+    </pre>
+Sometime typing this command is too tedious, so you can try other parameters:
+<ul>
+	<li>LOOK_FOR_VULKAN</li>
+	<li>LOOK_FOR_GLFW3</li>
+	<li>HINT_FOR_VULKAN</li>
+	<li>HINT_FOR_GLFW3</li>
+</ul>
+<p>Parameters started with LOOK_ should point to the folder where exists
+both headers and library for the Vulkan and the GLFW3 respectively.
+The <code>cmake</code> will first look for libraries, and if it finds any, it will
+start searching for the headeers in the directory of the found library.
+Sometime it may happen that found paths are ambigous, especially when
+you have several versions of the SDK or the GLFW3 is in the same directory as the SDK.
+To resolve these ambiguities you can use the remaining two parameter starting with HINT_.</p>
+<p>The parameters started with HINT_ can take a comma-separated list of subfolders.
+Let's consider your catalog structure on th Windows consists of more than one version
+and it looks similar to this:</p>
+<pre>
+    c:\
+     |
+     +--- VulkanSDK\
+           |
+           +--- 1.3.231.1\
+           |     |
+           |     +--- Include\
+           |     |     |
+           |     |     +--- vulkan_core.h
+           |     |
+           |     +--- Lib\
+           |     |     |
+           |     |     +--- vulkan-1.lib
+           |     |
+           |     +--- Lib32\
+           |           |
+           |           +--- vulkan-1.lib
+           |
+           +--- 1.3.250.1\
+                 |
+                 +--- Include\
+                 |     |
+                 |     +--- vulkan_core.h
+                 |
+                 +--- Lib\
+                 |     |
+                 |     +--- vulkan-1.lib
+                 |
+                 +--- Lib32\
+                       |
+                       +--- vulkan-1.lib
+</pre>
+and you want to use <b>Lib32</b> from the latest version, then the <code>cmake</code>'s parameters would like look like:
+<ul><li>-DLOOK_FOR_VULKAN=c:\VulkanSDK -DHINT_FOR_VULKAN=1.3.250.1,Lib32</li></ul>
+The same rules are applied to the GLFW3.
+
+<h3>Suggestion:</h3>
+<p>Please note that the <code>cmake</code> likes to hold values passed to the variables between
+subsequent calls in its cache, especially if you call it with different variables. Thus it is good
+idea to enforce it to configure always fresh build tree by using the <b><i>--fresh</i></b> option.</p>
+<p>Another thing is that the Windows OS is case insensitive. In the contrast, the Linux OS is case
+sensitive, so be carefully while you pass folder or subfolder names to mentioned variables.</p>
+<pre>
+
+
+
+
+</pre>
+</body>
+<html>

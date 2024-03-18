@@ -14,4 +14,5 @@ set(app_files
         main.hpp)
 add_executable(app ${app_files})
 target_include_directories(app BEFORE PRIVATE ${VULKAN_INCLUDE_DIR})
+target_include_directories(app BEFORE PRIVATE ${GLFW3_INCLUDE_DIR})
 target_link_libraries(app ${app_libs} daemon)

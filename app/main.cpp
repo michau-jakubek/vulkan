@@ -70,6 +70,7 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	Option complCmd{ "-c", 0 };					options.push_back(complCmd);
 	Option devList{ "-dl", 0 };					options.push_back(devList);
 	Option extList{ "-de", 1 };					options.push_back(extList);
+	Option excludeDevExt{ "-ede", 1 };			options.push_back(excludeDevExt);
 	Option curDev{ "-d", 1 };					options.push_back(curDev);
 	Option layer{ "-l", 1 };					options.push_back(layer);
 	Option layList{ "-ll", 0 };					options.push_back(layList);
@@ -287,6 +288,7 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	globalAppFlags.genSpirvDisassembly = consumeOptions(spvDisassm, options, appArgs, sink) > 0;
 	globalAppFlags.nowerror = (consumeOptions(nowerror, options, appArgs, sink) > 0);
 	globalAppFlags.noWarning_VUID_Undefined = (consumeOptions(optLayNoVuid, options, appArgs, sink) > 0);
+	consumeOptions(excludeDevExt, options, appArgs, globalAppFlags.excludedDevExtensions);
 	consumeOptions(optSuppressVUID, options, appArgs, globalAppFlags.suppressedVUIDs);
 	consumeOptions(layer, options, appArgs, globalAppFlags.layers);
 
@@ -355,6 +357,7 @@ void printUsage (std::ostream& str)
 	str << "  -d <id>:                  picks device by id, default is 0" <<std::endl;
 	str << "  -de <id>                  prints extension for device of id, default is 0" << std::endl;
 	str << "                            honors options -api and -l if present" << std::endl;
+	str << "  -ede <ext> [-ede <ext>]:  don't load extension during device creation" << std::endl;
 	str << "  -ll:                      prints available instance layer names" << std::endl;
 	str << "  -l <layer> [-l <layer>]:  enable layer(s)" << std::endl;
 	str << "  -l-no-vuid-undefined:     suppress layers(s) VUID_Undefined warning" << std::endl;

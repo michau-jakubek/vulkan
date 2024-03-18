@@ -395,7 +395,7 @@ static auto makeCompileGlslCommand (VkShaderStageFlagBits stage,
 		cmd << "--spirv-val ";
 	}
 	cmd << "-S" << space << shaderStageToCommand(stage) << space
-		// ***** "-e " << entryName << space
+		<< "-e " << std::quoted(entryName) << space
 		<< input << space
 		<< "-o " << output << space
 #if SYSTEM_OS_LINUX
@@ -693,7 +693,8 @@ bool ProgramCollection::addFromFile(VkShaderStageFlagBits type,
 									const std::string& entryName, bool verbose)
 {
 	bool				result			(false);
-	const std::string	source_name		((fs::path(m_basePath) / fileName).string());
+	const fs::path		basePath		(m_basePath);
+	const std::string	source_name		((basePath / fileName).string());
 	std::ifstream		source_handle	(source_name);
 	if (source_handle.is_open())
 	{
@@ -706,7 +707,7 @@ bool ProgramCollection::addFromFile(VkShaderStageFlagBits type,
 		m_stageToCode[key].push_back(entryName);
 		m_stageToCode[key].push_back(source_name);
 		for (size_t p = 0; p < includePaths.size(); ++p)
-			m_stageToCode[key].push_back(m_basePath + includePaths[p]);
+			m_stageToCode[key].push_back((basePath / includePaths[p]).string());
 		result = true;
 	}
 	else if (verbose)

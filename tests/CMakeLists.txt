@@ -42,7 +42,7 @@ add_definitions(-DASSETS_PATH="${ASSETS_PATH}")
 add_library(tests STATIC ${tests_files})
 target_include_directories(tests
                            BEFORE PRIVATE ${GLFW3_INCLUDE_DIR}
-						   BEFORE PRIVATE ${VULKAN_INCLUDE_DIR}
+			   BEFORE PRIVATE ${VULKAN_INCLUDE_DIR}
                            AFTER PRIVATE  ${console_headers}
                            AFTER PRIVATE  ${daemon_headers}
                            AFTER PRIVATE  ${CMAKE_CURRENT_SOURCE_DIR}

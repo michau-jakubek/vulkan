@@ -511,12 +511,12 @@ struct QuadInfo
 	PixelInfo	right;
 	PixelInfo	bottom;
 	PixelInfo	diagonal;
-	const add_cref<PixelInfo> at (uint32_t i) const {
+	add_cref<PixelInfo> at (uint32_t i) const {
 		ASSERTION(i < 4);
 		const PixelInfo* a[4] { &base, &right, &bottom, &diagonal };
 		return *a[i];
 	}
-	const add_cref<PixelInfo> operator[] (uint32_t i) const {
+	add_cref<PixelInfo> operator[] (uint32_t i) const {
 		return at(i);
 	}
 };
@@ -1114,13 +1114,13 @@ int runDemoteInvocationsSingleThread (Canvas& cs, const std::string& assets, add
 	const Bindings				bindings
 	{
 						/* outputP */				lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-														make_unsigned(params.width * params.height * primitiveStride + 48)),
+														(make_unsigned(params.width) * make_unsigned(params.height) * primitiveStride + 48u)),
 						/* inputQuads */			lm.addBindingAsVector<QuadPoints>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-														make_unsigned(params.width * params.height * 4)),
+														(make_unsigned(params.width) * make_unsigned(params.height) * 4u)),
 						/* outputQuads */			lm.addBindingAsVector<QuadInfo>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 														primitiveStride),
 						/* outputDerivatives */		lm.addBindingAsVector<DerivativeEntry>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-														make_unsigned((params.width + 1) * (params.height + 1) * primitiveStride)),
+														((make_unsigned(params.width) + 1u) * (make_unsigned(params.height) + 1u) * primitiveStride)),
 						/* testH */					lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 														make_unsigned(params.width * params.height)),
 	};

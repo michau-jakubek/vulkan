@@ -32,8 +32,24 @@ template<class T> T fromText(const std::string& text, const T& defResult, bool& 
 	status = false;
 	return defResult;
 }
-template float			fromText<float>			(const std::string& text, const float&			defResult, bool& status);
 template std::string	fromText<std::string>	(const std::string& text, const std::string&	defResult, bool& status);
+template<> float		fromText<float>			(const std::string& text, const float&			defResult, bool& status)
+{
+	float result{ defResult };
+	std::stringstream s;
+	s << text;
+	std::string_view sw(text);
+	if (sw.substr(0, 2) == std::string_view("0x"))
+		s >> std::hexfloat >> result;
+	else s >> result;
+	if (!s.fail())
+	{
+		status = true;
+		return result;
+	}
+	status = false;
+	return defResult;
+}
 template<> uint64_t		fromText<uint64_t>		(const std::string& text, const uint64_t&		defResult, bool& status)
 {
 	uint64_t result { defResult };

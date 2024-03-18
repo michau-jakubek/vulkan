@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {
+	margin-left: 100px;
+	margin-right: 100px;
+}
+p {
+	text-indent: 35px;
+	text-align: justify;
+}
+</style>
+</head>
+<body>
+<h1>Building the executable</h1>
+<p>After successful <a href="installation.html">installation</a> you can go to the building of the project.
+There is no single and unificated method how to do this. For an example if you prefer work on the Windows
+with Microsoft Visual Studio then it is enough that you will start the building process by clicking the
+<code>build project</code> from its menu. The second thing is that the Visual Studio has its own settings
+for the project type: Release and Debug, while under the Linux the project type is specified by some
+parameters passed to the command line, i.a. <code>-ggdb</code>. On the Linux system(s) basically the most
+convinient method is to go to the <code>cmake</code>'s binary dir and type <code>make</code> command.
+Anyway, always you can also build the project using <code>cmake</code> only specifying the command:</p>
+<ul><li>cmake --build <${CMAKE_BINARY_DIR}> -j 8</li></ul>
+<p>This approach is good because in the case of Microsoft Visual Studio you don't have to launch it at all.
+You dont't have to specify any compilers manually, <code>cmake</code> will find a proper compiler and utilize it.
+In the cited build command I used also <code>-j 8</code> parameter. It tells to the compiler how many threads
+it will use to build your project. In the case of building from scratch under the Linux with <code>make</code>
+you can also manipulate the number of running threads by specifying <code>make -j 8</code>.</p>
+<h1>Compiling the shaders</h1>
+<pre>
+
+
+
+
+</pre>
+</body>
+<html>

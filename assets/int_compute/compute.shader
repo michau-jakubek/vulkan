@@ -1,4 +1,3 @@
-#version 450
 
 #extension GL_EXT_subgroup_uniform_control_flow : require
 #extension GL_KHR_shader_subgroup_basic : require
@@ -63,7 +62,7 @@ void writeParams()
 		outputP.p[6] = iMax;
 	}
 }
-void main()
+void main_entry()
 {
 	writeParams();
 }

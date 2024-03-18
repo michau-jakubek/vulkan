@@ -702,6 +702,7 @@ ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
 	std::vector<const char*>	layers		(to_cstrings(instance.getParamRef<ZDistType<RequiredLayers,strings>>().get()));
 
 	strings	availableDeviceExtensions(physDevice.getParamRef<strings>());
+	removeStrings(getGlobalAppFlags().excludedDevExtensions, availableDeviceExtensions);
 	if (onEnablingFeatures)	features	= onEnablingFeatures(physDevice, availableDeviceExtensions);
 	features.sType = mkstype<decltype(features)>;
 	// Add common features

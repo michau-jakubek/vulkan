@@ -7,4 +7,5 @@ set(daemon_files
         daemon.hpp)
 add_library(daemon SHARED ${daemon_files})
 target_include_directories(daemon BEFORE PRIVATE ${VULKAN_INCLUDE_DIR})
+target_include_directories(daemon BEFORE PRIVATE ${GLFW3_INCLUDE_DIR})
 target_link_libraries(daemon framework console ${COMMON_LIBS})

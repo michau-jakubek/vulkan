@@ -1,0 +1,36 @@
+#version 450
+#extension GL_GOOGLE_include_directive : enable
+#include "compute.shader"
+
+/*
+layout(push_constant) uniform PushConstant
+{
+	uint addressingMode;
+	uint checkpointMax;
+	uint controlIndex0;
+	uint controlIndex1;
+	uint controlIndex2;
+	uint controlIndex3;
+	uint controlIndex4;
+};
+layout(binding = 1) buffer InvocationsTinput { uint t[]; } inputT;
+layout(binding = 2) buffer InvocationsIinput { uint i[]; } inputI;
+layout(binding = 3) buffer InvocationsJinput { uint j[]; } inputJ;
+layout(binding = 4) buffer InvocationsRoutput { uint r[]; } outputR;
+*/
+void main()
+{
+	if (inputT.t[gl_LocalInvocationIndex] == 2)
+	{
+		const float x = uintBitsToFloat(inputI.i[gl_LocalInvocationIndex]);
+		outputR.r[gl_LocalInvocationIndex] = floatBitsToUint(x * 2.0);
+	}
+	else
+	{
+		outputR.r[gl_LocalInvocationIndex] = inputI.i[gl_LocalInvocationIndex];
+	}
+
+	/*
+	*			Enter your code HERE
+	*/
+}

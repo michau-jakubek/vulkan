@@ -313,26 +313,10 @@ void mapFragmentsToInvocationsAndDerivatives(const uint subgroupID)
 void main()
 {
 	uint tmpSubgroupID              = 0u;
-	uint helperInvocationCount		= 0u;
-	uint nonHelperInvocationCount	= 0u;
-	uvec4 helperInvocationsBits		= uvec4(0, 0, 0, 0);
-	uvec4 nonHelperInvocationsBits	= uvec4(0, 0, 0, 0);
-	if (gl_HelperInvocation)
-	{
-		helperInvocationsBits = subgroupBallot(true);
-		helperInvocationCount = 1u;
-	}
-	else
-	{
-		nonHelperInvocationsBits = subgroupBallot(true);
-		nonHelperInvocationCount = 1u;
-	}
-	helperInvocationsBits			= subgroupOr(helperInvocationsBits);
-	nonHelperInvocationsBits		= subgroupOr(nonHelperInvocationsBits);
-	uint helperBitCount				= subgroupBallotBitCount(helperInvocationsBits);
-	uint nonHelperBitCount			= subgroupBallotBitCount(nonHelperInvocationsBits);
-	helperInvocationCount			= subgroupAdd(helperInvocationCount);
-	nonHelperInvocationCount		= subgroupAdd(nonHelperInvocationCount);
+	uvec4 nonHelperInvocationsBits	= subgroupBallot(true);
+	uvec4 helperInvocationsBits		= subgroupBallot(gl_HelperInvocation);
+	uint nonHelperInvocationCount	= subgroupBallotBitCount(nonHelperInvocationsBits);
+	uint helperInvocationCount		= subgroupBallotBitCount(helperInvocationsBits);
 	const uint nonHelperElectBit	= subgroupBallotFindLSB(nonHelperInvocationsBits);
 	if (gl_SubgroupInvocationID == nonHelperElectBit)
 	{
