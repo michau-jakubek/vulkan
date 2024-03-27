@@ -87,6 +87,7 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	Option verbose{ "-verbose", 1 };			options.push_back(verbose);
 	Option nowerror{ "-nowerror", 0 };			options.push_back(nowerror);
 	Option dprintf{ "-dprintf", 0 };			options.push_back(dprintf);
+	Option compilerIndex{ "-compiler", 1 };		options.push_back(compilerIndex);
 
 	if (consumeOptions(help1, options, appArgs, sink) > 0
 		|| consumeOptions(help2, options, appArgs, sink) > 0)
@@ -129,6 +130,15 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 		{
 			std::cout << "ERROR: Unable to parse physical device index" << std::endl;
 			return 1;
+		}
+	}
+
+	if (consumeOptions(compilerIndex, options, appArgs, sink) > 0)
+	{
+		globalAppFlags.compilerIndex = fromText(sink.back(), 0u, status);
+		if (!status)
+		{
+			std::cout << "WARNING: Unable to parse compiler index, default 0 value will be used" << std::endl;
 		}
 	}
 
@@ -323,7 +333,7 @@ int main (int argc, char* argv[])
 	TestRecord	testRecord;
 	strings		testArgs;
 	bool		performTest	(false);
-	int			result		(0);
+	TriLogicInt result		(0);
 
 	try
 	{
@@ -337,10 +347,13 @@ int main (int argc, char* argv[])
 	}
 	if (performTest)
 	{
-		std::cout << "The test \"" << testRecord.name << "\" " << (result == 0 ? "Passed" : "FAILED") << std::endl;
+		std::cout << "The test " << std::quoted(testRecord.name) << ' '
+			<< (result.hasValue()
+				? (result == 0 ? "Passed" : "FAILED")
+				: "finished but no results to show") << std::endl;
 	}
 
-	return result;
+	return result.hasValue() ? result.value() : (1);
 }
 
 void printUsage (std::ostream& str)
@@ -388,7 +401,12 @@ void printUsage (std::ostream& str)
 	    << "                            otherwise spirv-val tool is launched anyway.\n"
 	    << "                            glslang and spirv-val can give different results" <<std::endl;
 	str << "  -spvdisassm:              generate SPIR-V dissassembly file" << std::endl;
-	str << "  -nowerror:                allows warnig(s) from external compilators" << std::endl;
+	str << "  -compiler <index>:        set compiler index from looking it on the operating system, default is 0" << std::endl;
+	str << "  -nowerror:                allows warnig(s) from external compilators\n" << std::endl;
+	str << "  NOTE: The app internally uses some of the Vulkan SDK tools e.g. glslangValidator or spirv-val\n"
+		<< "        so these have to be visible to it. In order to find where certain tool sits the app\n"
+		<< "        uses \"where\" command on Windows or \"type\" on Linux, so these also must have to\n"
+		<< "        be visible either as built-in shell command or standalone executable.\n" << std::endl;
 	str << "Available test(s):" << std::endl;
 	printAvailableTests(str, AllTestRecords, "\t", true);
 }

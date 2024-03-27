@@ -99,9 +99,9 @@ uint32_t printMultiDrawProperties (ZPhysicalDevice device, std::ostream& log)
 	return multiviewProps.maxMultiviewViewCount;
 }
 
-int runMultiViewSingleThread (Canvas& canvas, const std::string& assets, const uint32_t multiLayerCount, bool useDeviceIndex);
+TriLogicInt runMultiViewSingleThread (Canvas& canvas, const std::string& assets, const uint32_t multiLayerCount, bool useDeviceIndex);
 
-int prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
 {
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	CanvasStyle canvasStyle = Canvas::DefaultStyle;
@@ -121,7 +121,7 @@ int prepareTests (const TestRecord& record, const strings& cmdLineParams)
 
 		return resultFeatures;
 	};
-	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFeatures, gf.debugPrintfEnabled, gf.apiVer);
+	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFeatures, gf.apiVer, gf.debugPrintfEnabled);
 	if (!multiviewFeatures.multiview)
 	{
 		std::cout << "[ERROR] VK_EXT_multi_draw not supported by device" << std::endl;
@@ -188,7 +188,7 @@ void populateVertexAttributes (add_ref<VertexInput> vertexInput)
 	vertexInput.binding(0).addAttributes(vertices, colors);
 }
 
-int runMultiViewSingleThread (Canvas& cs, const std::string& assets, const uint32_t multiLayerCount, bool useDeviceIndex)
+TriLogicInt runMultiViewSingleThread (Canvas& cs, const std::string& assets, const uint32_t multiLayerCount, bool useDeviceIndex)
 {
 	LayoutManager				pl	(cs.device);
 

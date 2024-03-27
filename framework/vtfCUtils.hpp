@@ -22,7 +22,8 @@ typedef std::map<std::string, std::string> string_to_string_map;
 std::string	subst_variables (const std::string& templateStr, const vtf::string_to_string_map& variables);
 
 std::string getRealPath (const char* path, bool& status);
-std::string	readFile (const std::string& filename);
+// if status is null or points to false then throw on error, otherwise opening status is returned
+std::string	readFile (const std::string& filename, bool* status = nullptr);
 uint32_t	readFile(const fs::path& path, std::vector<unsigned char>& buffer);
 std::string captureSystemCommandResult (const char* cmd, bool& status, const char LF = '\0');
 
@@ -242,7 +243,7 @@ using routine_res_t = typename routine_t<routine_type__>::Result;
 template<class T, class E> struct expander
 {
 	/*
-	* dont forget abuout promote operator=
+	* don't forget abuout promote operator=
 	* using expander<ZImageEx, ZImage>::operator=;
 	*/
 	T* self() { return static_cast<T*>(this); }
@@ -254,6 +255,22 @@ template<class T, class E> struct expander
 		dynamic_cast<E*>(self())->operator=(expanded);
 		return *self();
 	}
+};
+
+struct TriLogicInt
+{
+				TriLogicInt	() : m_value{}, m_hasValue(false) {}
+				TriLogicInt (int value) : m_value(value), m_hasValue(true) {}
+	// definition of implicit copy assignment operator for 'TriLogicInt'
+	// is deprecated because it has a user - provided copy constructor
+	// TriLogicInt (add_cref<TriLogicInt> other) = default;
+	inline bool	hasValue	() const { return m_hasValue; }
+	inline int	value		() const { ASSERTMSG(m_hasValue, "TriLogicInt has no value"); return m_value; }
+	inline void	reset()		{ m_hasValue = false;}
+	inline bool operator==	(int value) const { return m_hasValue ? (m_value == value) : false; }
+private:
+	int		m_value;
+	bool	m_hasValue;
 };
 
 } // namespace vtf

@@ -214,9 +214,9 @@ Params printUsage (std::ostream& log)
 	return p;
 }
 
-int runTopologyTestsSingleThread (add_ref<Canvas> canvas, add_cref<std::string> assets, add_cref<Params> params);
+TriLogicInt runTopologyTestsSingleThread (add_ref<Canvas> canvas, add_cref<std::string> assets, add_cref<Params> params);
 
-int prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
 {
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	CanvasStyle canvasStyle = Canvas::DefaultStyle;
@@ -265,7 +265,7 @@ int prepareTests (const TestRecord& record, const strings& cmdLineParams)
 #endif
 		return resultFeatures;
 	};
-	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFeatures, gf.debugPrintfEnabled, gf.apiVer);
+	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFeatures, gf.apiVer, gf.debugPrintfEnabled);
 	if (!featuresAvailable)
 	{
 		errorCollection.flush();
@@ -468,7 +468,7 @@ std::array<ZShaderModule, 6> buildProgram (ZDevice device, add_cref<std::string>
 	return shaders;
 }
 
-int runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> assets, add_cref<Params> params)
+TriLogicInt runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> assets, add_cref<Params> params)
 {
 	params.print(std::cout);
 

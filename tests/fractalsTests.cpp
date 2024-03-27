@@ -39,9 +39,9 @@ uint32_t userAnimationTicks (const strings& params)
 	return 0;
 }
 
-int performTest (Canvas& canvas, const std::string&	assets, bool enableFloat64, uint32_t animationTicks, const GlobalAppFlags& flags);
+TriLogicInt performTest (Canvas& canvas, const std::string&	assets, bool enableFloat64, uint32_t animationTicks, const GlobalAppFlags& flags);
 
-int prepareTest (const TestRecord& record, const strings& params)
+TriLogicInt prepareTest (const TestRecord& record, const strings& params)
 {
 	UNREF(params);
 
@@ -81,7 +81,7 @@ int prepareTest (const TestRecord& record, const strings& params)
 	};
 
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
-	Canvas	cs(record.name, gf.layers, {}, {}, Canvas::DefaultStyle, onGetEnabledFeatures, false, gf.apiVer);
+	Canvas	cs(record.name, gf.layers, {}, {}, Canvas::DefaultStyle, onGetEnabledFeatures, gf.apiVer);
 
 	const uint32_t animationTicks = userAnimationTicks(params);
 	std::cout << "Current shader mode Float" << (enableFloat64 ? "64" : "32") << std::endl;
@@ -410,7 +410,7 @@ UNUSED void commandBufferPushConstants (ZCommandBuffer cmdBuffer, ZPipelineLayou
 	else ::vtf::commandBufferPushConstants(cmdBuffer, pipelineLayout, std::get<UserInput<float>>(vui).pc);
 }
 
-int performTest (Canvas& cs, const std::string&	assets, bool enableFloat64, uint32_t animationTicks, const GlobalAppFlags& flags)
+TriLogicInt performTest (Canvas& cs, const std::string&	assets, bool enableFloat64, uint32_t animationTicks, const GlobalAppFlags& flags)
 {
 	ProgramCollection		programs(cs.device, assets);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");

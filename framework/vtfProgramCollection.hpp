@@ -44,7 +44,7 @@ public:
 					 const std::string& entryName = "main", bool verbose = true);
 	void buildAndVerify (const Version& vulkanVer = Version(1,0), const Version& spirvVer = Version(1,0),
 						 bool enableValidation = false, bool genDisassembly = false, bool buildAlways = false);
-	auto getShader (VkShaderStageFlagBits stage, uint32_t index = 0u, bool verbose = false) const -> ZShaderModule;
+	auto getShader (VkShaderStageFlagBits stage, uint32_t index = 0u, bool verbose = true) const -> ZShaderModule;
 };
 
 void addProgram (ProgramCollection& programCollection,	const std::string& programName,		VkShaderStageFlagBits programType,

@@ -2,7 +2,6 @@
 #include "vtfMatrix.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfContext.hpp"
-#include "vtfCanvas.hpp"
 #include "vtfProgramCollection.hpp"
 #include "vtfZPipeline.hpp"
 #include "vtfZCommandBuffer.hpp"
@@ -11,9 +10,9 @@ namespace
 {
 using namespace vtf;
 
-int runIntMatrixSingleThread (VulkanContext& ctx, const std::string& assets);
+TriLogicInt runIntMatrixSingleThread (VulkanContext& ctx, const std::string& assets);
 
-int prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
 {
 	UNREF(cmdLineParams);
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
@@ -65,7 +64,7 @@ bool matrixTranslate2 ()
 	return b4 && b3;
 }
 
-int runIntMatrixSingleThread (VulkanContext& ctx, const std::string& assets)
+TriLogicInt runIntMatrixSingleThread (VulkanContext& ctx, const std::string& assets)
 {
 	if (!matrixTranslate() || !matrixTranslate2())
 	{

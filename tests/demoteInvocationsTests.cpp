@@ -61,8 +61,8 @@ struct Params
 	void usage (add_ref<std::ostream> log) const;
 };
 
-int runDemoteInvocationsSingleThread (Canvas& canvas, const std::string& assets, add_cref<Params> params);
-int prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt runDemoteInvocationsSingleThread (Canvas& canvas, const std::string& assets, add_cref<Params> params);
+TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
 {
 	const Version reqSpirv(1,3);
 	if (getGlobalAppFlags().spirvVer < reqSpirv)
@@ -98,7 +98,7 @@ int prepareTests (const TestRecord& record, const strings& cmdLineParams)
     add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	CanvasStyle canvasStyle = Canvas::DefaultStyle;
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
-	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFatures, false, gf.apiVer);
+	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFatures, gf.apiVer);
 	if (!demoteFeatures.shaderDemoteToHelperInvocation)
 	{
 		std::cout << "ERROR: shaderDemoteToHelperInvocation is not supported by device" << std::endl;
@@ -1074,7 +1074,7 @@ void printInfo (add_ref<VulkanContext>, add_ref<UserData> ui)
 	}
 }
 
-int runDemoteInvocationsSingleThread (Canvas& cs, const std::string& assets, add_cref<Params> params)
+TriLogicInt runDemoteInvocationsSingleThread (Canvas& cs, const std::string& assets, add_cref<Params> params)
 {
 	PostponedJobs				jobs		{};
 	ostream_ref					log			(std::cout);

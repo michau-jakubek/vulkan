@@ -1,0 +1,25 @@
+Parameters:
+    --help, -h:                 print this help
+    -brief:                     print test descrition
+    -print-params:              print params passed to the app
+    -build-always:              enforce to build the shaders
+                                  each time when running the application
+    -visual:                    enable visual mode instead of offline
+    -single-triangle:           draw single triangle instead of two
+    -tessellation:              enable tessellation shaders
+    -geometry:                  enable geometry shader
+    -vert  <shader_file>:       set vertex shader file, default is shader.vert
+    -tesc  <shader_file>:       set tessellation control shader file,
+                                  default is shader.tesc, implies -tessellation
+    -tese  <shader_file>:       set tessellation evaluation shader file,
+                                  default is shader.tese, immplies -tessellation
+    -geom  <shader_file>:       set geometry shader file, default is shader.geom,
+                                  implies -geometry
+    -frag  <shader_file>:       set fragment shader file, default is shader.frag
+    -width     <uint>:          set framebuffer width, default is 8
+    -height    <uint>:          set framebuffer height, default is 8
+    -tol       <vec4>           set tolerance for pixels comparison,
+                                  default is 0.001 for all compnents
+    -match-all <vec4>:          verify that all pixels match the value in form x,y,z,w
+    -match<N>  <vec4>:          verify that Nth pixel mathes the value in form x,y,z,w
+    -attr<N>   <vec4>:          specify Nth vertex attribute in form x,y,z,w

@@ -90,9 +90,9 @@ TestParams userReadParams (const strings& params, add_ref<std::ostream> log)
 	return p;
 }
 
-int runTestSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets, add_cref<TestParams> params);
+TriLogicInt runTestSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets, add_cref<TestParams> params);
 
-int prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
 {
 	UNREF(cmdLineParams);
 	printUsage(std::cout);
@@ -110,7 +110,7 @@ int prepareTests (const TestRecord& record, const strings& cmdLineParams)
 		enabledFeatures.features.wideLines = availableFeatures.wideLines;
 		return enabledFeatures;
 	};
-	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFeatures, false, gf.vulkanVer);
+	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFeatures, gf.vulkanVer);
 
 	const TestParams params = userReadParams(cmdLineParams, std::cout);
 
@@ -173,7 +173,7 @@ int verifyImage (ZCommandPool commandPool, ZImage image, add_cref<TestParams> pa
 			: 1;
 }
 
-int runTestSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets, add_cref<TestParams> params)
+TriLogicInt runTestSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets, add_cref<TestParams> params)
 {
 	add_cref<VkPhysicalDeviceLimits> limits = deviceGetPhysicalLimits(cs.device);
 	ASSERTMSG(params.verticalWidth >= uint32_t(limits.lineWidthRange[0])

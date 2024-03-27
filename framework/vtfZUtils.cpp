@@ -797,6 +797,13 @@ add_cref<VkPhysicalDeviceLimits> deviceGetPhysicalLimits (ZPhysicalDevice device
 	return device.getParamRef<VkPhysicalDeviceProperties>().limits;
 }
 
+VkPhysicalDeviceFeatures2 deviceGetPhysicalFeatures2 (ZPhysicalDevice device, void* pNext)
+{
+	VkPhysicalDeviceFeatures2 features = makeVkStruct(pNext);
+	vkGetPhysicalDeviceFeatures2(*device, &features);
+	return features;
+}
+
 uint32_t queueGetFamilyIndex (ZQueue queue)
 {
 	return queue.has_handle() ? queue.getParamRef<ZDistType<QueueFamilyIndex, uint32_t>>().get() : INVALID_UINT32;
@@ -1052,60 +1059,6 @@ VkFormat selectBestDepthStencilFormat (ZPhysicalDevice					device,
 	ASSERTION(0);
 	return VK_FORMAT_UNDEFINED;
 }
-
-
-// TODO: Why below are commented?
-//void copyBufferToImage (ZCommandPool commandPool, ZBuffer buffer, ZImageView view, VkImageLayout newLayout)
-//{
-//	ZImage							image	= view.getParam<ZImage>();
-//	const VkImageViewCreateInfo&	info	= view.getParamRef<VkImageViewCreateInfo>();
-//	copyBufferToImage(commandPool, buffer, image, info.subresourceRange.baseMipLevel, info.subresourceRange.levelCount, newLayout);
-//}
-
-//void copyBufferToImage (ZCommandPool commandPool, ZBuffer buffer, ZImage image, uint32_t baseLevel, uint32_t levels, VkImageLayout newLayout)
-//{
-//	auto&				createInfo		= image.getParamRef<VkImageCreateInfo>();
-//	const uint32_t		pixelWidth		= make_unsigned(computePixelByteWidth(createInfo.format));
-//	const uint32_t		effectiveLevels = (INVALID_UINT32 == levels) ? createInfo.mipLevels : levels;
-//	const VkDeviceSize	bufferSize		= computeBufferSize(image, baseLevel, levels);
-
-//	ASSERTION(0 < effectiveLevels && (baseLevel + effectiveLevels) <= createInfo.mipLevels);
-//	ASSERTION(bufferSize >= buffer.getParam<VkDeviceSize>());
-
-//	VkDeviceSize		offset		= 0;
-//	uint32_t			width		= (createInfo.extent.width >> baseLevel);
-//	uint32_t			height		= (createInfo.extent.height >> baseLevel);
-//	auto				shotCommand	= createOneShotCommandBuffer(commandPool);
-
-//	transitionImage(shotCommand->commandBuffer, image, newLayout,
-//					0/*VK_ACCESS_NONE*/, VK_ACCESS_TRANSFER_WRITE_BIT,
-//					VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-
-//	VkBufferImageCopy region{};
-//	for (uint32_t level = 0; level < effectiveLevels; ++level)
-//	{
-//		ASSERTION(width > 0 && height > 0);
-
-//		region.bufferOffset = offset;
-//		region.bufferRowLength = 0;
-//		region.bufferImageHeight = 0;
-//		region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-//		region.imageSubresource.mipLevel = (baseLevel + level);
-//		region.imageSubresource.baseArrayLayer = 0;
-//		region.imageSubresource.layerCount = 1;
-//		region.imageOffset = {0, 0, 0};
-//		region.imageExtent = { width, height, createInfo.extent.depth };
-
-//		vkCmdCopyBufferToImage(*shotCommand->commandBuffer, *buffer, *image, newLayout, 1, &region);
-
-//		offset += width * height * pixelWidth;
-//		height /= 2;
-//		width /= 2;
-//	}
-
-//	createInfo.initialLayout = newLayout;
-//	image.setParam<VkImageCreateInfo>(createInfo);
-//}
 
 void computeBufferRange (ZImage image, uint32_t level, uint32_t& bufferSize, uint32_t pixelCount)
 {

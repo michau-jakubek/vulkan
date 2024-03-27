@@ -58,8 +58,13 @@ ZPhysicalDevice selectPhysicalDevice		(const int									proposedDeviceIndex,
 // VkDeviceCreateInfo::pNext during logical device creation. Do not care about sType field and pNext
 // field of that struct, these will be populated properly behind the scene.
 // Typically a signature and a body of that callback would look like this:
+// 
+// VkPhysicalDeviceFeatures2	requiredfeatures = makeVkStruct();
 // auto onEnablingFeatures = [](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
 // {
+// 		VkPhysicalDeviceFeatures2 availableFatures = deviceGetPhysicalFeatures2(physicalDevice);
+//		requiredfeatures.features.tessellationShader = availableFatures.features.tessellationShader;
+//		return availableFeatures;
 // };
 typedef std::function<VkPhysicalDeviceFeatures2(ZPhysicalDevice, add_ref<strings> deviceExtensions)> OnEnablingFeatures;
 ZDevice			createLogicalDevice	(ZPhysicalDevice		physDevice,
@@ -72,6 +77,8 @@ add_cref<VkPhysicalDeviceLimits>
 				deviceGetPhysicalLimits (ZDevice device);
 add_cref<VkPhysicalDeviceLimits>
 				deviceGetPhysicalLimits (ZPhysicalDevice device);
+VkPhysicalDeviceFeatures2
+				deviceGetPhysicalFeatures2 (ZPhysicalDevice device, void* pNext = nullptr);
 ZPhysicalDevice	deviceGetPhysicalDevice (ZDevice device);
 ZQueue			deviceGetNextQueue			(ZDevice device, VkQueueFlags queueFlags, bool mustSupportSurface);
 uint32_t		queueGetFamilyIndex			(ZQueue queue);

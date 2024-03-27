@@ -36,6 +36,7 @@ struct GlobalAppFlags
 	vtf::strings	suppressedVUIDs;
 	uint32_t		physicalDeviceIndex;
 	uint32_t		verbose;
+	uint32_t		compilerIndex;
 	char			tmpDir[_MAX_PATH];
 	std::string		assetsPath;
 	std::string		thisAppPath;

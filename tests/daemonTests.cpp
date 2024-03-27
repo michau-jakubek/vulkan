@@ -108,9 +108,9 @@ std::tuple<bool,Params,std::string> Params::parseCommandLine (const TestRecord& 
 	return makeResult(true);
 }
 
-int runDaemonTestsSingleThread (const std::string& assets, const Params& params);
+TriLogicInt runDaemonTestsSingleThread (const std::string& assets, const Params& params);
 
-int prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
 {
 	UNREF(record);
 	UNREF(cmdLineParams);
@@ -124,7 +124,7 @@ int prepareTests (const TestRecord& record, const strings& cmdLineParams)
 	}
 
 	ptrDaemonTestInstanceDetector = &params;
-	const int result = runDaemonTestsSingleThread(record.assets, params);
+	const TriLogicInt result = runDaemonTestsSingleThread(record.assets, params);
 	ptrDaemonTestInstanceDetector = nullptr;
 
 	return result;
@@ -140,10 +140,10 @@ std::string makeHelpMessage(const Shell& shell)
 	os.flush();
 	return os.str();
 }
-int runDaemonTestsSingleThread (const std::string& assets, const Params& params)
+TriLogicInt runDaemonTestsSingleThread (const std::string& assets, const Params& params)
 {
 	UNREF(assets);
-	int result = 0;
+	TriLogicInt result = 0;
 	auto onCommand = [&](bool& doContinue, const Shell::strings& chunks, std::ostream& output) -> void
 	{
 		UNREF(doContinue);

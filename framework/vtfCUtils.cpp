@@ -18,7 +18,7 @@
 namespace vtf
 {
 
-template<class T> T fromText(const std::string& text, const T& defResult, bool& status)
+template<class T> T fromText (const std::string& text, const T& defResult, bool& status)
 {
 	T s_result {};
 	std::stringstream s;
@@ -110,12 +110,18 @@ template<> bool			fromText<bool>			(const std::string& text, const bool&			defRe
 	return defResult;
 }
 
-std::string readFile (const std::string& filename)
+std::string readFile (const std::string& filename, bool* status)
 {
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
 	if (!file.is_open()) {
-		throw std::runtime_error("failed to open file! " + filename);
+		if (nullptr == status || !(*status))
+			throw std::runtime_error("failed to open file! " + filename);
+		else
+		{
+			*status = false;
+			return std::string();
+		}
 	}
 
 	long fileSize	= static_cast<long>(file.tellg());
@@ -126,10 +132,12 @@ std::string readFile (const std::string& filename)
 
 	file.close();
 
+	if (nullptr != status) *status = true;
+
 	return buffer;
 }
 
-uint32_t readFile(const fs::path& path, std::vector<unsigned char>& buffer)
+uint32_t readFile (const fs::path& path, std::vector<unsigned char>& buffer)
 {
 	if (!fs::exists(path)) return INVALID_UINT32;
 	const uint32_t length = (uint32_t)fs::file_size(path);
@@ -141,7 +149,7 @@ uint32_t readFile(const fs::path& path, std::vector<unsigned char>& buffer)
 	return length;
 }
 
-std::string subst_variables(const std::string& templateStr, const vtf::string_to_string_map& variables)
+std::string subst_variables (const std::string& templateStr, const vtf::string_to_string_map& variables)
 {
 	std::string result(templateStr);
 	for (auto kv = variables.begin(); kv != variables.end(); ++kv)
@@ -216,7 +224,7 @@ strings mergeStringsDistinct (const strings& a, const strings& b)
 	return c;
 }
 
-strings splitString(const std::string& delimitedString, char delimiter)
+strings splitString (const std::string& delimitedString, char delimiter)
 {
 	strings result;
 	std::stringstream ss(delimitedString);
@@ -268,20 +276,20 @@ std::string captureSystemCommandResult (const char* cmd, bool& status, const cha
 	return result;
 }
 
-std::string getRealPath(const char* path, bool& status)
+std::string getRealPath (const char* path, bool& status)
 {
 	const auto cmd = std::string("realpath ") + path;
 	std::string realpath = captureSystemCommandResult(cmd.c_str(), status);
 	return status ? realpath : std::string(path);
 }
 
-template<class T> bool between(const T& paramValue, const T& paramMin, const T& paramMax)
+template<class T> bool between (const T& paramValue, const T& paramMin, const T& paramMax)
 {
 	return (paramMin <= paramValue && paramValue <= paramMax);
 }
 
-template bool between(const int& paramValue, const int& paramMin, const int& paramMax);
-template bool between(const float& paramValue, const float& paramMin, const float& paramMax);
-template bool between(const uint32_t& paramValue, const uint32_t& paramMin, const uint32_t& paramMax);
+template bool between (const int& paramValue, const int& paramMin, const int& paramMax);
+template bool between (const float& paramValue, const float& paramMin, const float& paramMax);
+template bool between (const uint32_t& paramValue, const uint32_t& paramMin, const uint32_t& paramMax);
 
 } // namespace vtf

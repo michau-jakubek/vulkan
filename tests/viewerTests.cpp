@@ -98,11 +98,11 @@ std::vector<ImageFileInfo> userReadImageFiles (add_cref<strings> params, add_cre
 	return imageFiles;
 }
 
-int runViewerSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets,
-						   add_cref<std::vector<ImageFileInfo>> files,
-						   const int32_t regularCount, const int32_t panoramaCount);
+TriLogicInt runViewerSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets,
+								   add_cref<std::vector<ImageFileInfo>> files,
+								   const int32_t regularCount, const int32_t panoramaCount);
 
-int prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
+TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
 {
 	UNREF(cmdLineParams);
 	printUsage(std::cout);
@@ -110,11 +110,11 @@ int prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	CanvasStyle canvasStyle = Canvas::DefaultStyle;
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
-	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, nullptr, false, gf.vulkanVer);
+	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, nullptr, gf.vulkanVer);
 
-	int result = (1);
-	int32_t regularCount	= 0;
-	int32_t panoramaCount	= 0;
+	TriLogicInt	result			(1);
+	int32_t		regularCount	= 0;
+	int32_t		panoramaCount	= 0;
 	std::vector<ImageFileInfo> files = userReadImageFiles(cmdLineParams, record.assets, std::cout, regularCount, panoramaCount);
 	if (regularCount + panoramaCount)
 	{
@@ -603,7 +603,7 @@ void populateVertexInput (add_ref<VertexInput> input)
 	input.binding(0).addAttributes(v, n);
 }
 
-int runViewerSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets,
+TriLogicInt runViewerSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets,
 						   add_cref<std::vector<ImageFileInfo> > files, const int32_t regularCount, const int32_t panoramaCount)
 {
 	UserData		userData	(static_cast<uint32_t>(files.size()));

@@ -14,7 +14,7 @@ struct TestRecord
 	const char*		name;			// test name (mandatory)
 	const char*		desc;			// test description (mandatory)
 	std::string		assets;			// given by caller
-	int (*call)(const TestRecord& record, const vtf::strings& args);
+	vtf::TriLogicInt (*call)(const TestRecord& record, const vtf::strings& args);
 	TestRecord ();
 	void valid () const;
 	void reset ();
@@ -55,6 +55,7 @@ enum TestIdentifier
 	LINE_WIDTH,
 	MULTIVIEW,
 	INT_COMPUTE,
+	INT_GRAPHICS,
 	INT_MATRIX,
 	INT_CIPHER,
 	SUBGROUP_MATRIX,

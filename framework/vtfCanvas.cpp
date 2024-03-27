@@ -112,8 +112,8 @@ Canvas::Canvas	(add_cptr<char>			appName,
 				 add_cref<strings>		deviceExtensions,
 				 add_cref<CanvasStyle>	canvasStyle,
 				 OnEnablingFeatures		onEnablingFeatures,
-				 bool					enableDebugPrintf,
-				 add_cref<ApiVersion>	apiVersion)
+				 add_cref<ApiVersion>	apiVersion,
+				 bool					enableDebugPrintf)
 	: GlfwInitializerFinalizer()
 	, CanvasContext(appName, apiVersion, instanceLayers, instanceExtensions, deviceExtensions, onEnablingFeatures, enableDebugPrintf, canvasStyle, this)
 	, VulkanContext	(cc_callbacks, cc_debugMessenger, cc_debugReport, cc_instance, cc_physicalDevice, cc_device)

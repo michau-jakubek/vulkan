@@ -66,9 +66,9 @@ bool verifyQueues (add_cref<std::vector<ZQueue>> queues)
 	return true;
 }
 
-int runTriangeSingleThread (Canvas& canvas, const std::string& assets, bool infinityRepeat);
-int runTriangleMultipleThreads (Canvas& canvas, const std::string& assets, uint32_t threadCount);
-int prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt runTriangeSingleThread (Canvas& canvas, const std::string& assets, bool infinityRepeat);
+TriLogicInt runTriangleMultipleThreads (Canvas& canvas, const std::string& assets, uint32_t threadCount);
+TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
 {
 	UNREF(cmdLineParams);
 	std::cout << "Parameters"									<< std::endl;
@@ -79,7 +79,7 @@ int prepareTests (const TestRecord& record, const strings& cmdLineParams)
     add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	CanvasStyle canvasStyle = Canvas::DefaultStyle;
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
-	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, nullptr, false, gf.apiVer);
+	Canvas cs(record.name, gf.layers, strings(), strings(), canvasStyle, nullptr, gf.apiVer);
 	const uint32_t threadCount = userRunOnThreads(cmdLineParams, std::cout);
 	return (threadCount >= 2)
 			? runTriangleMultipleThreads(cs, record.assets, threadCount)
@@ -108,7 +108,7 @@ void onKey (Canvas& cs, void* userData, const int key, int scancode, int action,
 	}
 }
 
-int runTriangeSingleThread (Canvas& cs, const std::string& assets, bool infinityRepeat)
+TriLogicInt runTriangeSingleThread (Canvas& cs, const std::string& assets, bool infinityRepeat)
 {
 	LayoutManager				pl			(cs.device);
 	ProgramCollection			programs	(cs.device, assets);
@@ -161,7 +161,7 @@ int runTriangeSingleThread (Canvas& cs, const std::string& assets, bool infinity
 	return cs.run(onCommandRecording, renderPass, std::ref(drawTrigger));
 }
 
-int runTriangleMultipleThreads (Canvas& cs, const std::string& assets, const uint32_t threadCount)
+TriLogicInt runTriangleMultipleThreads (Canvas& cs, const std::string& assets, const uint32_t threadCount)
 {
 	std::vector<ZQueue> queues	= buildQueues(cs.device, threadCount);
 	if (!verifyQueues(queues))

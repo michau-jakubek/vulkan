@@ -337,6 +337,51 @@ static bool containsWarningString(const std::string& text)
 	return std::regex_search(text, std::regex("warning:", std::regex_constants::icase));
 }
 
+static std::vector<std::pair<std::string, std::string>> makeCompilerSignature(bool glslangValidator)
+{
+	bool status = false;
+	// As far I know glslangValidator is an alias to glslang utility
+	const char* exe = glslangValidator ? "glslangValidator" : "glslang";
+	const std::string locCmd(
+#if SYSTEM_OS_LINUX == 1
+		std::string("type -a -P ") + exe
+#else
+		std::string("where ") + exe
+#endif
+	);
+	auto getCompilerVersion = [&](add_cref<std::string> comp) -> std::string
+	{
+		const std::string verCmd = '\"' + comp + "\" --version";
+		return captureSystemCommandResult(verCmd.c_str(), status, '\n');
+	};
+	std::string compiler;
+	std::vector<std::pair<std::string, std::string>> compilers;
+	std::istringstream str(captureSystemCommandResult(locCmd.c_str(), status, '\n'));
+	while (std::getline(str, compiler))
+	{
+		compilers.emplace_back(compiler, getCompilerVersion(compiler));
+	}
+	return compilers;
+}
+
+static std::string getCompilerExecutable()
+{
+	const auto compilers = makeCompilerSignature(true);
+	ASSERTMSG(data_count(compilers) > 0u,
+		"[ERROR] No GLSL compiler found. Try update environment PATH variable");
+	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
+	uint32_t compilerIndex = gf.compilerIndex;
+	if (compilerIndex >= data_count(compilers))
+	{
+		compilerIndex = 0u;
+		if (gf.verbose > 0)
+		{
+			std::cout << "[APP WARNING] Compiler index exceeds compilers list, index 0 will be used\n";
+		}
+	}
+	return compilers.at(compilerIndex).first;
+}
+
 /*
 *  glslangValidator options that are used
 * ========================================
@@ -371,6 +416,8 @@ static bool containsWarningString(const std::string& text)
 *   --spirv-val                       execute the SPIRV-Tools validator
 *   -e <name> | --entry-point <name>  specify <name> as the entry-point function name
 */
+static std::string maybe_quoted (add_cref<std::string> s) { return s; }
+
 static auto makeCompileGlslCommand (VkShaderStageFlagBits stage,
 									const strings& codeAndEntryAndIncludes,
 									const Version& vulkanVer, const Version& spirvVer,
@@ -383,7 +430,7 @@ static auto makeCompileGlslCommand (VkShaderStageFlagBits stage,
 	UNREF(entryName);
 
 	std::stringstream cmd;
-	cmd << "glslangValidator" << space;
+	cmd << maybe_quoted(getCompilerExecutable()) << space;
 	for (size_t j = ProgramCollection::StageToCode::includePaths; j < codeAndEntryAndIncludes.size(); ++j)
 	{
 		cmd << "-I" << codeAndEntryAndIncludes.at(j) << space;
@@ -413,7 +460,7 @@ static auto makeCompileSpvCommand (const Version& vulkanVer, const Version& spir
 	const char* space = " ";
 	std::stringstream cmd;
 
-	cmd << "spirv-as ";
+	cmd << maybe_quoted((fs::path(getCompilerExecutable()).parent_path() / "spirv-as").string()) << space;
 	cmd << "--target-env spv" << spirvVer.nmajor << "." << spirvVer.nminor << space;
 	UNREF(vulkanVer);
 	//cmd << "--target-env vulkan" << vulkanVer.nmajor << "." << vulkanVer.nminor << space;
@@ -437,7 +484,7 @@ static auto makeBuildSpvAsm (VkShaderStageFlagBits stage,
 	const char* space = " ";
 	std::stringstream cmd;
 
-	cmd << "glslangValidator -g -H --spirv-dis" << space;
+	cmd << maybe_quoted(getCompilerExecutable()) << " -g -H --spirv-dis" << space;
 	for (size_t j = ProgramCollection::StageToCode::includePaths; j < codeAndEntryAndIncludes.size(); ++j)
 	{
 		cmd << "-I" << codeAndEntryAndIncludes.at(j) << space;
@@ -454,7 +501,8 @@ static auto makeBuildSpvAsm (VkShaderStageFlagBits stage,
 static auto makeBuildSpvAsm (const fs::path& input, const fs::path& output) -> std::string
 {
 	std::stringstream cmd;
-	cmd << "spirv-dis --comment --no-color " << input << " -o " << output << " 2>&1";
+	cmd << maybe_quoted((fs::path(getCompilerExecutable()).parent_path() / "spirv-dis").string());
+	cmd << " --comment --no-color " << input << " -o " << output << " 2>&1";
 	cmd.flush();
 	return cmd.str();
 }
@@ -464,32 +512,13 @@ static auto makeValidateCommand (const Version& vulkanVer, const Version& spirvV
 	const char* space = " ";
 	std::stringstream cmd;
 
-	cmd << "spirv-val" << space;
+	cmd << maybe_quoted(((fs::path(getCompilerExecutable()).parent_path() / "spirv-val").string())) << space;
 	cmd << "--target-env vulkan" << vulkanVer.nmajor << "." << vulkanVer.nminor << space;
 	cmd << "--target-env spv" << spirvVer.nmajor << "." << spirvVer.nminor << space;
 	cmd << output << space;
 	cmd << "2>&1";
 	cmd.flush();
 	return cmd.str();
-}
-
-static std::string makeCompilerSignature (bool glslangValidator)
-{
-	bool status = false;
-	// As far I know glslangValidator is an alias to glslang utility
-	const char* exe = glslangValidator ? "glslangValidator" : "glslang";
-	const std::string locCmd(
-#if SYSTEM_OS_LINUX == 1
-							std::string("type ") + exe
-#else
-							std::string("where ") + exe
-#endif
-							);
-	const std::string locRes = captureSystemCommandResult(locCmd.c_str(), status, '\n');
-	const std::string verCmd(exe + std::string(" --version"));
-	const std::string verRes = captureSystemCommandResult(verCmd.c_str(), status, '\n');
-	return	"[APP] Compiler path:\n[APP] " + locRes
-			+ "[APP] Compiler version:\n" + verRes;
 }
 
 static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
@@ -519,7 +548,20 @@ static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
 	}
 	if (getGlobalAppFlags().verbose)
 	{
-		std::cout << makeCompilerSignature(true);
+		std::string versionLine;
+		std::cout << "[APP] Found compilers:\n";
+		auto compilers = makeCompilerSignature(true);
+		for (uint32_t cv = 0u; cv < data_count(compilers); ++cv)
+		{
+			add_ref<std::pair<std::string, std::string>> item = compilers.at(cv);
+			std::cout << "  " << cv << ": " << std::quoted(item.first) << '\n';
+			std::cout << "  Version:\n";
+			std::istringstream version(std::move(item.second));
+			while (std::getline(version, versionLine))
+			{
+				std::cout << "    " << versionLine << '\n';
+			}
+		}
 	}
 	if (!buildAlways && fs::exists(binPath))
 	{

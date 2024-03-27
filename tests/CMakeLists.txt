@@ -25,6 +25,8 @@ set(tests_files
     intMatrixTests.hpp
     intCompute.cpp
     intCompute.hpp
+	intGraphics.cpp
+	intGraphics.hpp
     intCipher.cpp
     intCipher.hpp
     daemonTests.cpp

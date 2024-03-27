@@ -74,6 +74,22 @@ void commandBufferBegin (ZCommandBuffer commandBuffer)
 	VKASSERT2(vkBeginCommandBuffer(*commandBuffer, &beginInfo));
 }
 
+void commandBufferExecuteCommands (ZCommandBuffer primary, std::initializer_list<ZCommandBuffer> secondaryCommands)
+{
+	ASSERTMSG((secondaryCommands.size() > 0u && secondaryCommands.size() <= 256u),
+			"\"secondaryCommands\" must not be empty and not bigger than 256");
+	ASSERTMSG(primary.getParam<bool>(), "The first \"primary\" param must be primary command buffer");
+	VkCommandBuffer commands[256];
+	for (auto begin = secondaryCommands.begin(), i = begin; i != secondaryCommands.end(); ++i)
+	{
+		commands[std::distance(begin, i)] = **i;
+		ASSERTMSG((false == i->getParam<bool>()),
+			"\"secondaryCommands\" elements must be secondary command buffers");
+	}
+
+	vkCmdExecuteCommands(*primary, static_cast<uint32_t>(secondaryCommands.size()), commands);
+}
+
 void commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFence, uint64_t timeout)
 {
 	ZDevice			device		= commandBuffer.getParam<ZDevice>();

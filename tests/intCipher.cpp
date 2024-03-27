@@ -258,13 +258,13 @@ std::string Params::readPhrase (ostream_ref log, add_ref<std::stringstream> errC
 	return phrase2;
 }
 
-int prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams);
-int runIntComputeSingleThread (cstring_ref assets, add_cref<Params> params);
-int prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
+TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams);
+TriLogicInt runIntComputeSingleThread (cstring_ref assets, add_cref<Params> params);
+TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
 {
 	const auto [status, params, errorString] =
 			Params::parseCommandLine(cmdLineParams, std::cout);
-	int result = (-1);
+	TriLogicInt result(-1);
 	if (status)
 		result = runIntComputeSingleThread(record.assets, params);
 	else
@@ -531,7 +531,7 @@ auto encodeByFile (Params::Method method) -> bool (&)(add_cref<Params>, string_r
 	ASSERTMSG(Params::Method::None != method, "Unknown method");
 	return xorByFile;
 }
-int runIntComputeSingleThread (cstring_ref assets, add_cref<Params> params)
+TriLogicInt runIntComputeSingleThread (cstring_ref assets, add_cref<Params> params)
 {
 	UNREF(assets);
 	params.print(std::cout);

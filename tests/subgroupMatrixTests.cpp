@@ -10,9 +10,9 @@ struct Params
 {
 };
 
-int runSubgroupMatrixSingleThread (VulkanContext& ctx, const std::string& assets, const Params& params);
+TriLogicInt runSubgroupMatrixSingleThread (VulkanContext& ctx, const std::string& assets, const Params& params);
 
-int prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
 {
 	UNREF(record);
 	UNREF(cmdLineParams);
@@ -25,7 +25,7 @@ int prepareTests (const TestRecord& record, const strings& cmdLineParams)
 	return runSubgroupMatrixSingleThread(ctx, record.assets, params);
 }
 
-int runSubgroupMatrixSingleThread (VulkanContext& ctx, const std::string& assets, const Params& params)
+TriLogicInt runSubgroupMatrixSingleThread (VulkanContext& ctx, const std::string& assets, const Params& params)
 {
 	UNREF(ctx);
 	UNREF(assets);

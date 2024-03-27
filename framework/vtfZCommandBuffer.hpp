@@ -47,6 +47,7 @@ ZCommandBuffer	createCommandBuffer (ZCommandPool commandPool, bool primary = tru
 ZCommandPool	commandBufferGetCommandPool (ZCommandBuffer commandBuffer);
 void			commandBufferEnd (ZCommandBuffer commandBuffer);
 void			commandBufferBegin (ZCommandBuffer commandBuffer);
+void			commandBufferExecuteCommands (ZCommandBuffer primary, std::initializer_list<ZCommandBuffer> secondaryCommands);
 void			commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFence = ZFence(), uint64_t timeout = INVALID_UINT64);
 /**
  * Binds a pipeline to a command buffer.

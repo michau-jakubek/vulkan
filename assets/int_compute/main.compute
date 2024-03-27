@@ -18,19 +18,27 @@ layout(binding = 2) buffer InvocationsIinput { uint i[]; } inputI;
 layout(binding = 3) buffer InvocationsJinput { uint j[]; } inputJ;
 layout(binding = 4) buffer InvocationsRoutput { uint r[]; } outputR;
 */
-void main()
+
+int readIntI(uint at) {
+	int result = 0;
+	if ((inputT.t[at] & 0xFFFF) == 2)
+		result = int(uintBitsToFloat(inputI.i[at]));
+	else result = int(inputI.i[at]);
+	return result;
+}
+void write(uint x, uint at)
 {
-	if (inputT.t[gl_LocalInvocationIndex] == 2)
+	if ((inputT.t[at] & 0xFFFF) == 2)
 	{
-		const float x = uintBitsToFloat(inputI.i[gl_LocalInvocationIndex]);
-		outputR.r[gl_LocalInvocationIndex] = floatBitsToUint(x * 2.0);
+		outputR.r[at] = floatBitsToUint(float(x));
 	}
 	else
 	{
-		outputR.r[gl_LocalInvocationIndex] = inputI.i[gl_LocalInvocationIndex];
+		outputR.r[at] = x;
 	}
-
-	/*
-	*			Enter your code HERE
-	*/
+}
+void main()
+{
+	outputR.r[gl_LocalInvocationIndex] = inputT.t[gl_LocalInvocationIndex] & 0xFFFF;
+	write( inputT.t[gl_LocalInvocationIndex] & 0xFFFF, gl_LocalInvocationIndex );
 }

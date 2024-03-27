@@ -191,7 +191,7 @@ template<> void Params::setInput<uint32_t> (const uint32_t& val, uint32_t at, u3
 	else if (&values == &inputJvalues)
 		typeIdx = 1u;
 	else { ASSERTION(0); }
-	((uint8_t*)(&inputTypes.at(at)))[typeIdx] = Int32;
+	((uint16_t*)(&inputTypes.at(at)))[typeIdx] = Int32;
 	values.at(at) = val;
 }
 template<> void Params::setInput<float> (const float& val, uint32_t at, u32vec_ref values)
@@ -203,7 +203,7 @@ template<> void Params::setInput<float> (const float& val, uint32_t at, u32vec_r
 	else if (&values == &inputJvalues)
 		typeIdx = 1u;
 	else { ASSERTION(0); }
-	((uint8_t*)(&inputTypes.at(at)))[typeIdx] = Float32;
+	((uint16_t*)(&inputTypes.at(at)))[typeIdx] = Float32;
 	values.at(at) = Vec1(val).bitcast<UVec1>().x();
 }
 bool Params::verify (ZDevice device, add_ref<std::ostream> log) const
@@ -502,6 +502,8 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine (ZDevic
 				}
 			}
 		}
+
+		options.pop_back();
 	}
 
 	errorMessage.flush();
@@ -561,7 +563,13 @@ void printOutputBuffer (ostream_ref log, add_cref<Params> params, u32vec_cref da
 			{
 				const uint32_t ii = rr + (c * rowCount);
 				log << "[" << std::setw(itemWidth) << std::right << ii << "] ";
-				const uint32_t type = params.inputTypes.at(ii);
+				const uint32_t iType = std::max((params.inputTypes.at(ii) & 0xFFFF), 2u);
+				const uint32_t jType = std::max((params.inputTypes.at(ii) >> 16), 2u);
+				const Params::InputTypes type = (iType != 0)
+													? Params::InputTypes(iType)
+													: (jType != 0)
+														? Params::InputTypes(jType)
+														: Params::InputTypes::Int32;
 				const uint32_t value = data.at(ii);
 				if (value == 0u && (params.flags.printZero == 0))
 					log << blankValue;
@@ -637,7 +645,7 @@ void printInputParamsFromShader (ostream_ref log, add_cref<Params> params, add_c
 	}
 }
 
-int runIntComputeSingleThread (VulkanContext& ctx, const std::string& assets, const Params& params);
+TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, const std::string& assets, const Params& params);
 
 void printDeviceLimits (ZDevice device, add_ref<std::ostream> log)
 {
@@ -652,7 +660,7 @@ void printDeviceLimits (ZDevice device, add_ref<std::ostream> log)
 	log << "gl_SubgroupSize:                " << gl_SubgroupSize << std::endl;
 }
 
-int prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
 {
 	UNREF(record);
 	UNREF(cmdLineParams);
@@ -715,7 +723,7 @@ ZShaderModule createShader (ZDevice device, add_cref<std::string> assets, VkShad
 	return programs.getShader(stage);
 }
 
-int runIntComputeSingleThread (VulkanContext& ctx, const std::string& assets, const Params& params)
+TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, const std::string& assets, const Params& params)
 {
 	const VkShaderStageFlagBits	stage			(VK_SHADER_STAGE_COMPUTE_BIT);
 	const VkDescriptorType		descType		(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
