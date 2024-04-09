@@ -41,8 +41,15 @@ namespace vtf
 
 std::ostream& operator<<(std::ostream& str, const Version& v)
 {
-	str << "(" << v.nmajor << ", " << v.nminor << ", " << v.npatch << ")";
-	return str;
+	return str << "(" << v.nmajor << ", " << v.nminor << ", " << v.npatch << ")";
+}
+
+std::ostream& operator<<(std::ostream& str, const VtfVersion& v)
+{
+	return str	<< v.get().nmajor << '.'
+				<< v.get().nminor << '.'
+				<< v.get().npatch << '.'
+				<< v.get().nvariant;
 }
 
 ZShaderModule createShaderModule(ZDevice device, VkShaderStageFlagBits stage, const std::string& code)

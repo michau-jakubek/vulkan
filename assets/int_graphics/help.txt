@@ -1,5 +1,7 @@
 Parameters:
-    --help, -h:                 print this help
+    -h, --help:                 print this help
+    -print-help, --print-help:  do the same as -h does, it is usefull
+                                   if the app is running as subprocess
     -brief:                     print test descrition
     -print-params:              print params passed to the app
     -build-always:              enforce to build the shaders

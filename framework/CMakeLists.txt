@@ -5,6 +5,8 @@ set(framework_files
         stb_image_resize.h
         stb_image.cpp
         stb_image.hpp
+        vtfLocale.cpp
+        vtfLocale.hpp
         vtfFilesystem.hpp
         vtfZDeletable.cpp
         vtfZDeletable.hpp

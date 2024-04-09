@@ -56,12 +56,18 @@ struct Version
 	uint32_t nminor;
 	uint32_t npatch;
 	uint32_t nvariant;
-	Version (uint32_t major, uint32_t minor)
-		: nmajor	(major)
-		, nminor	(minor)
-		, npatch	(0)
-		, nvariant	(0)
-	{ }
+	constexpr	Version (uint32_t major, uint32_t minor)
+					: nmajor	(major)
+					, nminor	(minor)
+					, npatch	(0)
+					, nvariant	(0)
+				{ }
+	constexpr	Version	(uint32_t major, uint32_t minor, uint32_t path, uint32_t variant)
+					: nmajor	(major)
+					, nminor	(minor)
+					, npatch	(path)
+					, nvariant	(variant)
+				{ }
 	void update (uint32_t v)
 	{
 		nmajor		= (VK_API_VERSION_MAJOR(v));
@@ -101,10 +107,12 @@ struct Version
 		return VK_MAKE_API_VERSION(variant, major, minor, patch);
 	}
 };
+typedef ZDistType<VtfVer, Version> VtfVersion;
 typedef ZDistType<ApiVer, Version> ApiVersion;
 typedef ZDistType<VulkanVer, Version> VulkanVersion;
 typedef ZDistType<SpirvVer, Version> SpirvVersion;
 std::ostream& operator<<(std::ostream& str, const Version& v);
+std::ostream& operator<<(std::ostream& str, const VtfVersion& v);
 
 template<class ResultFlags, class Bits> //, class... OtherBits>
 struct Flags

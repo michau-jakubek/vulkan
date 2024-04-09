@@ -9,11 +9,13 @@
 #include "vtfZUtils.hpp"
 #include "vtfContext.hpp"
 #include "vtfFilesystem.hpp"
+#include "vtfLocale.hpp"
 #include "allTests.hpp"
 
 using namespace vtf;
 
 static void printUsage (std::ostream& str);
+static void printVtfVersion (std::ostream& str, uint32_t level);
 static std::string constructCompleteCommand (const char* appPath);
 
 int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref<strings> testArgs, add_ref<bool> performTest)
@@ -88,6 +90,27 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	Option nowerror{ "-nowerror", 0 };			options.push_back(nowerror);
 	Option dprintf{ "-dprintf", 0 };			options.push_back(dprintf);
 	Option compilerIndex{ "-compiler", 1 };		options.push_back(compilerIndex);
+	Option optVtfVersion21{ "-v", 0 };			options.push_back(optVtfVersion21);
+	Option optVtfVersion1{ "-vv", 0 };			options.push_back(optVtfVersion1);
+	Option optVtfVersion0{ "-vvv", 0 };			options.push_back(optVtfVersion0);
+	Option optVtfVersion22{ "--version", 0 };	options.push_back(optVtfVersion22);
+
+	if ((consumeOptions(optVtfVersion21, options, appArgs, sink) > 0)
+		|| (consumeOptions(optVtfVersion22, options, appArgs, sink) > 0))
+	{
+		printVtfVersion(std::cout, 2);
+		return 0;
+	}
+	if (consumeOptions(optVtfVersion1, options, appArgs, sink) > 0)
+	{
+		printVtfVersion(std::cout, 1);
+		return 0;
+	}
+	if (consumeOptions(optVtfVersion0, options, appArgs, sink) > 0)
+	{
+		printVtfVersion(std::cout, 0);
+		return 0;
+	}
 
 	if (consumeOptions(help1, options, appArgs, sink) > 0
 		|| consumeOptions(help2, options, appArgs, sink) > 0)
@@ -356,11 +379,54 @@ int main (int argc, char* argv[])
 	return result.hasValue() ? result.value() : (1);
 }
 
+void printVtfVersion (std::ostream& str, uint32_t level)
+{
+	switch (level)
+	{
+	case 0:
+		// -vvv
+		str << VtfVersion(CurrentVtfVersion);
+		break;
+	case 1:
+		// -vv
+		str << "Vulkan Trivial Framework (VTF) ";
+		str << "version " << VtfVersion(CurrentVtfVersion);
+		break;
+	case 2:
+		// -v, --version
+		str << "Vulkan Trivial Framework (VTF) ";
+		str << "version " << VtfVersion(CurrentVtfVersion) << '\n';
+		{
+			str << "Author: ";
+			if (false == isPolishLocaleInstalled())
+				str << "Michal";
+			else
+			{
+				std::locale curLocale = str.getloc();
+				std::locale tmpLocale = makeLocale(Locales::pl_PL);
+				add_cptr<Diacritics> d = findDiacriticsByName(Locales::pl_PL, std::string());
+				const wchar_t l = (d != nullptr) ? d->encode('l') : 'l';
+				str.imbue(tmpLocale);
+				str << "Micha" << WcharOrChar(l);
+				str.imbue(curLocale);
+			}
+			str << ' ' << "Jakubek\n";
+		}
+		str << "E-mail: michau.jakubek@gmail.com\n";
+		break;
+	}
+}
+
 void printUsage (std::ostream& str)
 {
+	printVtfVersion(str, 2);
+
 	str << "Usage: app [options, ...] <test_name> [<test_param>,...]" << std::endl;
 	str << "Application ptions:" << std::endl;
 	str << "  -h, --help:               prints this help and exits" << std::endl;
+	str << "  -v, --version:            prints program version info" << std::endl;
+	str << "  -vv:                      prints program name and version number" << std::endl;
+	str << "  -vvv:                     prints version number only" << std::endl;
 	str << "  --print-global-help:      this option has global scope\n"
 	    << "                            even if it exists after any test name or its params\n"
 	    << "                            however the test can override it by itself" << std::endl;

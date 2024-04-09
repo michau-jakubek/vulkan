@@ -172,9 +172,13 @@ std::tuple<TestParams, std::string> TestParams::parseCmdLine (add_cref<std::stri
 	{
 		Option optHelp1	{ "-h", 0 };
 		Option optHelp2	{ "--help", 0 };
-		std::vector opts{ optHelp1, optHelp2 };
+		Option optHelp3 { "-print-help", 0 };
+		Option optHelp4	{ "--print-help", 0 };
+		std::vector opts{ optHelp1, optHelp2, optHelp3, optHelp4 };
 		if ((consumeOptions(optHelp1, opts, args, sink) > 0)
-			|| (consumeOptions(optHelp2, opts, args, sink) > 0))
+			|| (consumeOptions(optHelp2, opts, args, sink) > 0)
+			|| (consumeOptions(optHelp3, opts, args, sink) > 0)
+			|| (consumeOptions(optHelp4, opts, args, sink) > 0))
 		{
 			res.flags.help = 1;
 			return { res, std::string() };
@@ -222,9 +226,9 @@ std::tuple<TestParams, std::string> TestParams::parseCmdLine (add_cref<std::stri
 		const int width = fromText(sink.back(), make_signed(res.extent.width), status);
 		if (false == status)
 			messages << "[WARINNG] Unable to parse " << optWidth.name << ", default " << res.extent.width << " applied" << std::endl;
-		if (width < 1 || width > 1024)
-			messages << "[WARINNG] " << optWidth.name << "must be between <1,1024>, default " << res.extent.width << " applied" << std::endl;
-		res.extent.width = (width >= 1 && width <= 1024) ? make_unsigned(width) : res.extent.width;
+		if (width < 1 || width > 256)
+			messages << "[WARINNG] " << optWidth.name << "must be between <1,256>, default " << res.extent.width << " applied" << std::endl;
+		res.extent.width = (width >= 1 && width <= 256) ? make_unsigned(width) : res.extent.width;
 		res.flags.warning = 1;
 	}
 	if (consumeOptions(optHeight, opts, args, sink) > 0)
@@ -232,9 +236,9 @@ std::tuple<TestParams, std::string> TestParams::parseCmdLine (add_cref<std::stri
 		const int height = fromText(sink.back(), make_signed(res.extent.height), status);
 		if (false == status)
 			messages << "[WARINNG] Unable to parse " << optHeight.name << ", default " << res.extent.height << " applied" << std::endl;
-		if (height < 1 || height > 1024)
-			messages << "[WARINNG] " << optHeight.name << "must be between <1,1024>, default " << res.extent.height << " applied" << std::endl;
-		res.extent.height = (height >= 1 && height <= 1024) ? make_unsigned(height) : res.extent.height;
+		if (height < 1 || height > 256)
+			messages << "[WARINNG] " << optHeight.name << "must be between <1,256>, default " << res.extent.height << " applied" << std::endl;
+		res.extent.height = (height >= 1 && height <= 256) ? make_unsigned(height) : res.extent.height;
 		res.flags.warning = 1;
 	}
 
@@ -268,7 +272,11 @@ std::tuple<TestParams, std::string> TestParams::parseCmdLine (add_cref<std::stri
 		const uint32_t maxPixelCount = res.extent.width * res.extent.height;
 		for (uint32_t px = 0u; px < maxPixelCount; ++px)
 		{
+#ifdef _MSC_VER
+			sprintf_s(name, "-match%u", px);
+#else
 			std::sprintf(name, "-match%u", px);
+#endif
 			if (consumeOptions(optMatchNth, opts, args, sink) > 0)
 			{
 				Vec4 match = parseVector(sink.back(), status);
@@ -455,7 +463,8 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 	}
 
 	add_cref<GlobalAppFlags>	gf	= getGlobalAppFlags();
-	VkPhysicalDeviceShaderTerminateInvocationFeatures		terminateFeature	= makeVkStruct();
+	VkPhysicalDeviceVulkan11Features						vulkan11Features	= makeVkStruct();
+	VkPhysicalDeviceShaderTerminateInvocationFeatures		terminateFeature	= makeVkStruct(&vulkan11Features);
 	VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures	demoteFeature		= makeVkStruct(&terminateFeature);
 	VkPhysicalDeviceFeatures2								requiredfeatures	= makeVkStruct(&demoteFeature);
 	auto onEnablingFeatures = [&](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
@@ -470,14 +479,18 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 		{
 			requiredfeatures.features.geometryShader = availableFatures.features.geometryShader;
 		}
+		requiredfeatures.features.shaderFloat64 = availableFatures.features.shaderFloat64;
+		requiredfeatures.features.shaderInt64 = availableFatures.features.shaderInt64;
+		requiredfeatures.features.shaderInt16 = availableFatures.features.shaderInt16;
 		return requiredfeatures;
 	};
 	CanvasStyle canvasStyle = Canvas::DefaultStyle;
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
 
+	const Version usedApiVer = (gf.apiVer < Version(1, 2)) ? Version(1, 2) : gf.apiVer;
 	std::shared_ptr<VulkanContext> ctx = (params.flags.visual != 0)
-		? std::make_shared<Canvas>(record.name, gf.layers, strings(), strings(), canvasStyle, onEnablingFeatures, gf.apiVer)
-		: std::make_shared<VulkanContext>(record.name, gf.layers, strings(), strings(), onEnablingFeatures, gf.apiVer);
+		? std::make_shared<Canvas>(record.name, gf.layers, strings(), strings(), canvasStyle, onEnablingFeatures, usedApiVer)
+		: std::make_shared<VulkanContext>(record.name, gf.layers, strings(), strings(), onEnablingFeatures, usedApiVer);
 	if (needsTessellation && (false == requiredfeatures.features.tessellationShader))
 	{
 		std::cout << "[ERROR] Tessellation shader not supported by device" << std::endl;
