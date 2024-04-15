@@ -12,6 +12,8 @@
 #include <charconv>
 #include <cstring>
 #include <functional>
+#include <random>
+#include <string_view>
 #include <stdio.h>
 
 namespace
@@ -55,13 +57,13 @@ struct Params
 {
 	enum class Status
 	{
-		OK, Help, Limits, Error
+		OK, Help, Limits, Error, Warning
 	};
 	enum InputTypes
 	{
-		Unknown,
-		Int32,
-		Float32
+		Uint32	= 0,
+		Int32	= 1,
+		Float32	= 2
 	};
 	enum class AddresingMode : uint32_t
 	{
@@ -82,9 +84,9 @@ struct Params
 	const uint32_t			controlIndex2;	// subgroupSize - 1
 	const uint32_t			controlIndex3;	// subgroupSize
 	const uint32_t			controlIndex4;	// subgroupSize + 1
-	std::vector<uint32_t>	inputIvalues;
-	std::vector<uint32_t>	inputJvalues;
-	std::vector<uint32_t>	inputTypes;
+	mutable std::vector<uint32_t>	inputIvalues;
+	mutable std::vector<uint32_t>	inputJvalues;
+	mutable std::vector<uint32_t>	inputTypes;
 	struct {
 		uint32_t printParams	: 1;	// print params from cmdLine and continue
 		uint32_t printDesc		: 1;	// print description and exits
@@ -93,6 +95,7 @@ struct Params
 		uint32_t printZero		: 1;	// print zero in result
 		uint32_t noPrintResult	: 1;	// don't print result
 		uint32_t enableSUCF		: 1;	// enable subgroup_uniform_control_flow extension
+		uint32_t noBuildAlways	: 1;	// disable automatic shader builing
 	}
 	flags {
 		// designated initializers are a C++20 extension [-Werror,-Wc++20-designator]
@@ -103,10 +106,11 @@ struct Params
 		0, // printZero
 		0, // noPrintResult
 		0, // enableSUCF
+		0, // noAlwaysBuild
 	};
 	void		print (add_ref<std::ostream> log) const;
-	void		usage (ZDevice device, add_ref<std::ostream> log) const;
 	bool		verify (ZDevice device, add_ref<std::ostream> log) const;
+	void		usage (ZDevice device, add_ref<std::ostream> log, add_cref<std::string> assets) const;
 	add_cptr<char> static addressingModeToString (AddresingMode am);
 	std::tuple<Params::Status, Params, std::string>
 	static parseCommandLine (ZDevice device, add_cref<strings> cmdLineParams);
@@ -123,7 +127,9 @@ struct Params
 	friend std::ostream& operator<<(std::ostream& str, const StreamThrough& streamThrough);
 
 private:
-	template<class X> void setInput (const X& val, uint32_t at, u32vec_ref values);
+	void setInputType (u32vec_cref values, const uint32_t at, InputTypes type);
+	template<class X> void setInput (const X& val, const uint32_t at, u32vec_ref values);
+	template<class X> void setInput (u32vec_ref values, const X& a, const X& b);
 	void printInputValueImpl (add_ref<std::ostream> str, add_cref<StreamThrough> streamThrough) const;
 };
 Params::Params (uint32_t inSubgroupSize)
@@ -175,14 +181,15 @@ void Params::printInputValueImpl (add_ref<std::ostream> str, add_cref<StreamThro
 	const uint32_t inputValue = (streamThrough.val == INVALID_UINT32)
 							? inputValues.at(streamThrough.at)
 							: streamThrough.val;
-	switch ((InputTypes)((uint8_t const*)&inputTypes.at(streamThrough.at))[streamThrough.sto])
+	switch ((InputTypes)((uint16_t const*)&inputTypes.at(streamThrough.at))[streamThrough.sto])
 	{
-	case Int32:		str << std::setw(8) << inputValue << std::setw(0); break;
+	case Uint32:	str << std::setw(8) << inputValue << std::setw(0); break;
+	case Int32:		str << std::setw(8) << make_signed(inputValue) << std::setw(0); break;
 	case Float32:	str << std::setw(8) << UVec1(inputValue).bitcast<Vec1>().x() << std::setw(0); break;
 	default:		str << "<unk>" << std::setw(3) << inputValue << std::setw(0); break;
 	}
 }
-template<> void Params::setInput<uint32_t> (const uint32_t& val, uint32_t at, u32vec_ref values)
+void Params::setInputType (u32vec_cref values, const uint32_t at, InputTypes type)
 {
 	// looks like stupid but only in test purpose
 	uint32_t typeIdx = 0u;
@@ -191,20 +198,79 @@ template<> void Params::setInput<uint32_t> (const uint32_t& val, uint32_t at, u3
 	else if (&values == &inputJvalues)
 		typeIdx = 1u;
 	else { ASSERTION(0); }
-	((uint16_t*)(&inputTypes.at(at)))[typeIdx] = Int32;
+	if (at != INVALID_UINT32)
+		((uint16_t*)(&inputTypes.at(at)))[typeIdx] = uint16_t(type);
+	else
+	{
+		for (add_ref<uint32_t> i : inputTypes)
+			((uint16_t*)&i)[typeIdx] = uint16_t(type);
+	}
+}
+template<> void Params::setInput<int32_t> (const int32_t& val, uint32_t at, u32vec_ref values)
+{
+	setInputType(values, at, Int32);
+	values.at(at) = make_unsigned(val);
+}
+template<> void Params::setInput<uint32_t> (const uint32_t& val, uint32_t at, u32vec_ref values)
+{
+	setInputType(values, at, Uint32);
 	values.at(at) = val;
 }
 template<> void Params::setInput<float> (const float& val, uint32_t at, u32vec_ref values)
 {
-	// looks like stupid but only in test purpose
-	uint32_t typeIdx = 0u;
-	if (&values == &inputIvalues)
-		typeIdx = 0u;
-	else if (&values == &inputJvalues)
-		typeIdx = 1u;
-	else { ASSERTION(0); }
-	((uint16_t*)(&inputTypes.at(at)))[typeIdx] = Float32;
+	setInputType(values, at, Float32);
 	values.at(at) = Vec1(val).bitcast<UVec1>().x();
+}
+template<> void Params::setInput<int32_t>(u32vec_ref values, const int32_t& a, const int32_t& b)
+{
+	setInputType(values, INVALID_UINT32, Int32);
+	if (a == b)
+	{
+		for (add_ref<uint32_t> i : values)
+			i = make_unsigned(a);
+	}
+	else
+	{
+		std::random_device						rd;
+		std::mt19937							gen(rd());
+		std::uniform_int_distribution<int32_t>	dis(a, b);
+		for (add_ref<uint32_t> i : values)
+			i = make_unsigned(dis(gen));
+	}
+}
+template<> void Params::setInput<uint32_t> (u32vec_ref values, const uint32_t& a, const uint32_t& b)
+{
+	setInputType(values, INVALID_UINT32, Uint32);
+	if (a == b)
+	{
+		for (add_ref<uint32_t> i : values)
+			i = a;
+	}
+	else
+	{
+		std::random_device						rd;
+		std::minstd_rand0						gen(rd());
+		std::uniform_int_distribution<uint32_t> dis(a, b);
+		for (add_ref<uint32_t> i : values)
+			i = dis(gen);
+	}
+}
+template<> void Params::setInput<float> (u32vec_ref values, const float& a, const float& b)
+{
+	setInputType(values, INVALID_UINT32, Float32);
+	if (a == b)
+	{
+		for (add_ref<uint32_t> i : values)
+			i = Vec1(a).bitcast<UVec1>().x();
+	}
+	else
+	{
+		std::random_device						rd;
+		std::mt19937							gen(rd());
+		std::uniform_real_distribution<float>	dis(a, b);
+		for (add_ref<uint32_t> i : values)
+			i = Vec1(dis(gen)).bitcast<UVec1>().x();
+	}
 }
 bool Params::verify (ZDevice device, add_ref<std::ostream> log) const
 {
@@ -241,38 +307,32 @@ bool Params::verify (ZDevice device, add_ref<std::ostream> log) const
 
 	return result;
 }
-void Params::usage (ZDevice device, add_ref<std::ostream> log) const
+void Params::usage (ZDevice device, add_ref<std::ostream> log, add_cref<std::string> assets) const
 {
+	bool status = true;
+	const std::string usageFile = (fs::path(assets) / "usage.txt").string();
+	const std::string formattedContent = readFile(usageFile, &status);
+	if (false == status)
+	{
+		log << "[WARNING] Unable to open " << std::quoted(usageFile) << std::endl;
+		return;
+	}
 	const Params def(getSystemSubgroupSize(device));
-	log << "Usage:\n"
-		<< "  [-h]                            print usage and exit\n"
-		<< "  [--help]                        print usage and exit\n"
-		<< "  [--print-desc]                  print description and execute\n"
-		<< "  [--print-params]                print params and execute\n"
-		<< "  {--print-zero]                  print zero in result, default false\n"
-		<< "  [--no-print-result]             prevent from printing result\n"
-		<< "  [--enable-sucf]                 enable VK_KHR_shader_subgroup_uniform_control_flow extension\n"
-		<< "  [-limits]                       print device limits and exit\n"
-		<< "  [-hex]                          print result in hexadecimal format" << std::endl
-		<< "  [-HEX]                          print result using capital characters" << std::endl
-		<< "  [-wx <uint>]                    work group count X, default " << def.workGroup.x() << std::endl
-		<< "  [-wy <uint>]                    work group count Y, default " << def.workGroup.y() << std::endl
-		<< "  [-wz <uint>]                    work group count Z, default " << def.workGroup.z() << std::endl
-		<< "  [-lx <uint>]                    local size X, default " << def.localSize.x() << std::endl
-		<< "  [-ly <uint>]                    local size Y, default " << def.localSize.y() << std::endl
-		<< "  [-lz <uint>]                    local size Z, default " << def.localSize.z() << std::endl
-		<< "  [-cm <uint>]                    checkpoint count max, default " << def.checkpointMax << std::endl
-		<< "  [-cols <uint>                   column count used to printing output, default " << def.printColCount << std::endl
-		<< "  [-rows <uint>                   row count used to printing output, default " << def.printRowCount << std::endl
-		<< "  [-am <string>]                  addressing mode, default " << addressingModeToString(def.addressingMode) << std::endl
-		<< "                                   * " << addressingModeToString(AddresingMode::local) << ": gl_LocalInvocationID\n"
-		<< "                                   * " << addressingModeToString(AddresingMode::absolut)
-												   << ": gl_SubgroupID * gl_SubgroupSize + gl_SubgroupInvocationID\n"
-		<< "  [[-(i|I)Nth <int>]...]          set int32 value for N'th invocation in buffer 0\n"
-		<< "  [[-(j|J)Nth <int>]...]          set int32 value for N'th invocation in buffer 1\n"
-		<< "  [[-((i|I)(f|F))Nth <float>]...] set float32 value for N'th invocation in buffer 0\n"
-		<< "  [[-((j|J)(f|F))Nth <float>]...] set float32 value for N'th invocation in buffer 1"
-		<< std::endl;
+	const string_to_string_map abbreviations
+	{
+		{	"WX",	std::to_string(def.workGroup.x())	},
+		{	"WY",	std::to_string(def.workGroup.y())	},
+		{	"WZ",	std::to_string(def.workGroup.z())	},
+		{	"LX",	std::to_string(def.localSize.x())	},
+		{	"LY",	std::to_string(def.localSize.y())	},
+		{	"LZ",	std::to_string(def.localSize.z())	},
+		{	"CM",	std::to_string(def.checkpointMax)	},
+		{	"CC",	std::to_string(def.printColCount)	},
+		{	"RC",	std::to_string(def.printRowCount)	},
+		{	"AddresingMode::local",		addressingModeToString(AddresingMode::local)	},
+		{	"AddresingMode::absolut",	addressingModeToString(AddresingMode::absolut)	},
+	};
+	log << subst_variables(formattedContent, abbreviations, false);
 }
 void Params::print (add_ref<std::ostream> log) const
 {
@@ -317,7 +377,8 @@ add_cptr<char> Params::addressingModeToString (AddresingMode am)
 	ASSERTMSG(false, "Unknown AddressingMode");
 	return nullptr;
 }
-std::tuple<Params::Status, Params, std::string> Params::parseCommandLine (ZDevice device, add_cref<strings> cmdLineParams)
+template<class C> using add_cref2 = typename std::add_const<typename std::add_lvalue_reference<C>::type>::type;
+std::tuple<Params::Status, Params, std::string> Params::parseCommandLine(ZDevice device, add_cref<strings> cmdLineParams)
 {
 	bool status;
 	strings sink;
@@ -326,9 +387,9 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine (ZDevic
 	std::stringstream errorMessage;
 	Params resultParams(getSystemSubgroupSize(device));
 
-	Option optHelpShort		{ "-h", 0 };
-	Option optHelpLong		{ "--help", 0 };
-	Option optLimits		{ "-limits", 0 };
+	Option optHelpShort	{ "-h", 0 };
+	Option optHelpLong	{ "--help", 0 };
+	Option optLimits	{ "--print-device-limits", 0 };
 	container_push_back_more(options, { optHelpShort, optHelpLong, optLimits });
 	if (cmdLineParams.empty()
 		|| (consumeOptions(optHelpShort, options, args, sink) > 0)
@@ -341,174 +402,311 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine (ZDevic
 		return { Params::Status::Limits, resultParams, std::string() };
 	}
 
+	bool hasErrors = false;
+	bool hasWarnings = false;
 	auto appendMessage = [&](add_cref<Option> opt, add_cref<std::string> val, const auto& def, bool error = false) -> void
 	{
-		if (error)
-			errorMessage << "[ERROR] ";
-		else errorMessage << "[WARNING] ";
+		*(error ? &hasErrors : &hasWarnings) = true;
+		errorMessage << (error ? "[ERROR] " : "[WARNING] ");
 		errorMessage << "Unable to parse \'" << opt.name << " from \'" << val << "\' "
-					 << ", default value \'" << def << "\' was used" << std::endl;
+			<< ", default value \'" << def << "\' was used" << std::endl;
 	};
 
-	Option optWorkGroupX	{ "-wx", 1 };
-	Option optWorkGroupY	{ "-wy", 1 };
-	Option optWorkGroupZ	{ "-wz", 1 };
-	Option optLocalSizeX	{ "-lx", 1 };
-	Option optLocalSizeY	{ "-ly", 1 };
-	Option optLocalSizeZ	{ "-lz", 1 };
-	Option optCheckpointMax	{ "-cm", 1 };
-	Option optPrintColCnt	{ "-cols", 1 };
-	Option optPrintRowCnt	{ "-rows", 1 };
-	Option optAddressMode	{ "-am", 1 };
-	Option optPrintParams	{ "--print-params", 0 };
-	Option optNoPrintRes	{ "--no-print-result", 0 };
-	Option optPrintDesc		{ "--print-desc", 0 };
-	Option optSUCF			{ "--enable-sucf", 0 };
-	Option optPrintInHex	{ "-hex", 0 };
-	Option optPrintCapital	{ "-HEX", 0 };
-	Option optPrintZero		{ "--print-zero", 0 };
-	container_push_back_more(options, { optWorkGroupX, optWorkGroupY, optWorkGroupZ });
-	container_push_back_more(options, { optLocalSizeX, optLocalSizeY, optLocalSizeZ });
-	container_push_back_more(options, { optCheckpointMax, optPrintColCnt, optAddressMode });
-	container_push_back_more(options, { optPrintParams, optPrintDesc, optPrintZero });
-
-	resultParams.flags.printDesc = (consumeOptions(optPrintDesc, options, args, sink) > 0) ? 1 : 0;
-	resultParams.flags.printParams = (consumeOptions(optPrintParams, options, args, sink) > 0) ? 1 : 0;
-	resultParams.flags.enableSUCF = (consumeOptions(optSUCF, options, args, sink)) > 0 ? 1 : 0u;
-	resultParams.flags.noPrintResult = (consumeOptions(optNoPrintRes, options, args, sink) > 0) ? 1 : 0;
-	resultParams.flags.printZero = (consumeOptions(optPrintZero, options, args, sink) > 0) ? 1 : 0;
-	{
-		const uint32_t printInHex = (consumeOptions(optPrintInHex, options, args, sink) > 0) ? 1 : 0;
-		const uint32_t printCapital = (consumeOptions(optPrintCapital, options, args, sink) > 0) ? 1 : 0;
-		resultParams.flags.printInHex = ((printInHex | printCapital) != 0u) ? 1 : 0;
-		resultParams.flags.printCapital = (printCapital != 0u) ? 1 : 0;
-	}
-
-	// localSize, workGroup, checkpointMax, printColCount, printRowCount
+	// Regular options
 	if (true)
 	{
-		add_ptr<uint32_t>	const sizeAccess[]	{ &resultParams.localSize.x(),
-												  &resultParams.localSize.y(),
-												  &resultParams.localSize.z(),
-												  &resultParams.workGroup.x(),
-												  &resultParams.workGroup.y(),
-												  &resultParams.workGroup.z(),
-												  &resultParams.printColCount,
-												  &resultParams.printRowCount,
-												  &resultParams.checkpointMax };
-		add_cptr<Option>	const sizeOptions[ARRAY_LENGTH(sizeAccess)]
-												{ &optLocalSizeX, &optLocalSizeY, &optLocalSizeZ,
-												  &optWorkGroupX, &optWorkGroupY, &optWorkGroupZ,
-												  &optPrintColCnt, &optPrintRowCnt, &optCheckpointMax };
-		for (uint32_t i = 0; i < ARRAY_LENGTH_CAST(sizeOptions, uint32_t); ++i)
+		Option optWorkGroupX	{ "-wx", 1 };
+		Option optWorkGroupY	{ "-wy", 1 };
+		Option optWorkGroupZ	{ "-wz", 1 };
+		Option optLocalSizeX	{ "-lx", 1 };
+		Option optLocalSizeY	{ "-ly", 1 };
+		Option optLocalSizeZ	{ "-lz", 1 };
+		Option optCheckpointMax	{ "-cm", 1 };
+		Option optPrintColCnt	{ "-cols", 1 };
+		Option optPrintRowCnt	{ "-rows", 1 };
+		Option optAddressMode	{ "-am", 1 };
+		Option optPrintParams	{ "--print-params", 0 };
+		Option optNoPrintRes	{ "--no-print-result", 0 };
+		Option optNoBuildAlways	{ "--no-build-always", 0 };
+		Option optPrintDesc		{ "--print-desc", 0 };
+		Option optSUCF			{ "--enable-sucf", 0 };
+		Option optPrintInHex	{ "--hex", 0 };
+		Option optPrintCapital	{ "--HEX", 0 };
+		Option optPrintZero		{ "--print-zero", 0 };
+		container_push_back_more(options, { optWorkGroupX, optWorkGroupY, optWorkGroupZ });
+		container_push_back_more(options, { optLocalSizeX, optLocalSizeY, optLocalSizeZ });
+		container_push_back_more(options, { optCheckpointMax, optPrintColCnt, optAddressMode });
+		container_push_back_more(options, { optPrintParams, optPrintDesc, optPrintZero });
+
+		resultParams.flags.printDesc = (consumeOptions(optPrintDesc, options, args, sink) > 0) ? 1 : 0;
+		resultParams.flags.printParams = (consumeOptions(optPrintParams, options, args, sink) > 0) ? 1 : 0;
+		resultParams.flags.enableSUCF = (consumeOptions(optSUCF, options, args, sink)) > 0 ? 1 : 0u;
+		resultParams.flags.noPrintResult = (consumeOptions(optNoPrintRes, options, args, sink) > 0) ? 1 : 0;
+		resultParams.flags.noBuildAlways = (consumeOptions(optNoBuildAlways, options, args, sink) > 0) ? 1 : 0;
+		resultParams.flags.printZero = (consumeOptions(optPrintZero, options, args, sink) > 0) ? 1 : 0;
 		{
-			if (consumeOptions(*sizeOptions[i], options, args, sink) > 0)
-			{
-				uint32_t k = fromText(sink.back(), *sizeAccess[i], status);
-				if (status && (k != 0u))
-				{
-					*sizeAccess[i] = k;
-				}
-				else if (!status)
-				{
-					appendMessage(*sizeOptions[i], sink.back(), *sizeAccess[i]);
-				}
-				else
-				{
-					errorMessage << "{WARNING] \'" << sizeOptions[i]->name << "\' must not be 0,"
-								 << " default \'" << *sizeAccess[i] << "\' was used." << std::endl;
-				}
-			}
+			const uint32_t printInHex = (consumeOptions(optPrintInHex, options, args, sink) > 0) ? 1 : 0;
+			const uint32_t printCapital = (consumeOptions(optPrintCapital, options, args, sink) > 0) ? 1 : 0;
+			resultParams.flags.printInHex = ((printInHex | printCapital) != 0u) ? 1 : 0;
+			resultParams.flags.printCapital = (printCapital != 0u) ? 1 : 0;
 		}
-	}
 
-	// addressingMode
-	if (true)
-	{
-		if (consumeOptions(optAddressMode, options, args, sink) > 0)
+		// localSize, workGroup, checkpointMax, printColCount, printRowCount
+		if (true)
 		{
-			/*
-			* TODO: temporary disabled
-			if (strcasecmp(sink.back().c_str(), Params::addressingModeToString(AddresingMode::absolut)) == 0)
-				resultParams.addressingMode = AddresingMode::absolut;
-			else if (strcasecmp(sink.back().c_str(), Params::addressingModeToString(AddresingMode::local)) == 0)
-				resultParams.addressingMode = AddresingMode::local;
-			else
+			add_ptr<uint32_t>	const sizeAccess[]{ &resultParams.localSize.x(),
+													  &resultParams.localSize.y(),
+													  &resultParams.localSize.z(),
+													  &resultParams.workGroup.x(),
+													  &resultParams.workGroup.y(),
+													  &resultParams.workGroup.z(),
+													  &resultParams.printColCount,
+													  &resultParams.printRowCount,
+													  &resultParams.checkpointMax };
+			add_cptr<Option>	const sizeOptions[ARRAY_LENGTH(sizeAccess)]
+			{ &optLocalSizeX, &optLocalSizeY, &optLocalSizeZ,
+			  &optWorkGroupX, &optWorkGroupY, &optWorkGroupZ,
+			  &optPrintColCnt, &optPrintRowCnt, &optCheckpointMax };
+			for (uint32_t i = 0; i < ARRAY_LENGTH_CAST(sizeOptions, uint32_t); ++i)
 			{
-				appendMessage(optAddressMode, sink.back(), std::string(addressingModeToString(resultParams.addressingMode)));
-			}
-			*/
-		}
-	}
-
-	// inputValues
-	if (true)
-	{
-		const uint32_t invocationCount = ROUNDUP(resultParams.localSize.prod(), resultParams.subgroupSize);
-		resultParams.inputIvalues.resize(invocationCount, 0u);
-		resultParams.inputJvalues.resize(invocationCount, 0u);
-		resultParams.inputTypes.resize(invocationCount, Unknown);
-		char name[20u];
-		options.push_back(Option{&name[0], 1u});
-		add_ref<Option> optInputValue = options.back();
-
-		typedef std::tuple<u32vec_ref, uint32_t, char, char> t1;
-		for (add_cref<t1> it1 : { t1(resultParams.inputIvalues, 0u, 'i', 'I'), t1(resultParams.inputJvalues, 1u, 'j', 'J') })
-		{
-			typedef std::tuple<InputTypes, uint32_t, uint32_t, char, char> t2;
-			for (const char inputName : { std::get<2>(it1), std::get<3>(it1) })
-			for (uint32_t inv = 0; inv < invocationCount; ++inv)
-			for (add_cref<t2> it2 : { t2(Int32, 1u, 2u, 'x', 'x'), t2(Float32, 2u, 3u, 'f', 'F') })
-			for (uint32_t repeat = 0u; repeat < std::get<1>(it2); ++repeat)
-			{
-				const char floatSwitch = (0 == repeat) ? std::get<3>(it2) : std::get<4>(it2);
-				const InputTypes inputType = std::get<0>(it2);
-
-				std::fill(std::begin(name), std::end(name), '\0');
-				name[0u] = '-';
-				name[1u] = inputName;
-				name[2u] = floatSwitch;
-				std::to_chars(&name[std::get<2>(it2)], ((&name[0]) + ARRAY_LENGTH(name) - std::get<2>(it2)), inv, 10);
-
-				status = false;
-
-				if (consumeOptions(optInputValue, options, args, sink) > 0)
+				if (consumeOptions(*sizeOptions[i], options, args, sink) > 0)
 				{
-					if (inputType == Int32)
+					uint32_t k = fromText(sink.back(), *sizeAccess[i], status);
+					if (status && (k != 0u))
 					{
-						const auto k = fromText(sink.back(), 0u, status);
-						static_assert(std::is_same<std::remove_cv_t<std::remove_reference_t<decltype(k)>>
-									  , uint32_t>::value, "Not integral type");
-						resultParams.setInput(k, inv, std::get<0>(it1));
-						//std::cout << name << " = " << resultParams.printInputValue(inv, std::get<1>(it1)) << std::endl;
+						*sizeAccess[i] = k;
 					}
-					else if (inputType == Float32)
+					else if (!status)
 					{
-						const auto k = fromText(sink.back(), 0.0f, status);
-						static_assert(std::is_same<std::remove_cv_t<std::remove_reference_t<decltype(k)>>
-									  , float>::value, "Not floating type");
-						resultParams.setInput(k, inv, std::get<0>(it1));
-						//std::cout << name << " = " << resultParams.printInputValue(inv, std::get<1>(it1)) << std::endl;
-					}
-					else ASSERTION(false);
-					if (status)
-					{
-						resultParams.providedValueCount += 1u;
+						appendMessage(*sizeOptions[i], sink.back(), *sizeAccess[i]);
 					}
 					else
 					{
-						appendMessage(optInputValue, sink.back(), 0u);
+						errorMessage << "{WARNING] \'" << sizeOptions[i]->name << "\' must not be 0,"
+							<< " default \'" << *sizeAccess[i] << "\' was used." << std::endl;
 					}
 				}
 			}
 		}
 
-		options.pop_back();
-	}
+		// addressingMode
+		if (true)
+		{
+			if (consumeOptions(optAddressMode, options, args, sink) > 0)
+			{
+				/*
+				* TODO: temporary disabled
+				if (strcasecmp(sink.back().c_str(), Params::addressingModeToString(AddresingMode::absolut)) == 0)
+					resultParams.addressingMode = AddresingMode::absolut;
+				else if (strcasecmp(sink.back().c_str(), Params::addressingModeToString(AddresingMode::local)) == 0)
+					resultParams.addressingMode = AddresingMode::local;
+				else
+				{
+					appendMessage(optAddressMode, sink.back(), std::string(addressingModeToString(resultParams.addressingMode)));
+				}
+				*/
+			}
+		}
+	} // End of regular options
+
+	const uint32_t invocationCount = ROUNDUP(resultParams.localSize.prod(), resultParams.subgroupSize);
+	resultParams.inputIvalues.resize(invocationCount, 0u);
+	resultParams.inputJvalues.resize(invocationCount, 0u);
+	resultParams.inputTypes.resize(invocationCount, ((uint32_t(Float32) << 16) | Float32));
+
+	enum class OptionKinds { Single, Const, Random };
+	auto parseOtherOptions = [&](const OptionKinds optionKind)
+	{
+		char name[20u];
+		const Option optInputValue {&name[0], 1u};
+
+		typedef std::tuple<InputTypes, char> t2;
+		typedef std::tuple<u32vec_ref, uint32_t, char> t1;
+		for (add_cref<t1> it1 : {
+									t1(resultParams.inputIvalues, 0u, 'i'),
+									t1(resultParams.inputIvalues, 0u, 'I'),
+									t1(resultParams.inputJvalues, 1u, 'j'),
+									t1(resultParams.inputJvalues, 1u, 'J')
+								})
+		for (add_cref<t2> it2 : {
+									t2(Int32, 'i'), t2(Int32, 'I'),
+									t2(Uint32, 'u'), t2(Uint32, 'U'),
+									t2(Float32, 'f'), t2(Float32, 'F'),
+								})
+		{
+			std::fill(std::begin(name), std::end(name), '\0');
+			name[0u] = '-';
+			name[1u] = std::get<2>(it1);
+			name[2u] = std::get<1>(it2);
+			const std::string_view viewName(name);
+			const InputTypes inputType = std::get<0>(it2);
+
+			for (auto arg = args.begin(); arg != args.end();)
+			{
+				const std::string_view viewArg(*arg);
+				if (viewArg.find(viewName) != 0)
+				{
+					++arg; continue;
+				}
+
+				const std::string tail(viewArg.substr(3u).data());
+#if SYSTEM_OS_WINDOWS == 1
+				strncat_s(name, tail.c_str(), (ARRAY_LENGTH(name) - 4u));
+#else
+				std::strncat(name, tail.c_str(), (ARRAY_LENGTH(name) - 4u));
+#endif
+				bool invStatus = false;
+				const uint32_t inv = fromText(tail, INVALID_UINT32, invStatus);
+
+				if (optionKind == OptionKinds::Random && tail == "-random")
+				{
+					arg = args.erase(arg);
+					if (arg != args.end())
+					{
+						std::array<bool, 2> stats;
+						add_cref<std::string> input = *arg;
+						auto all_of_true = [](add_cref<bool> p) { return p; };
+
+						if (inputType == Int32)
+						{
+							const IVec2 def(std::numeric_limits<int32_t>::min(), std::numeric_limits<int32_t>::max());
+							const auto k = IVec2::fromText(input, def, stats);
+							if ((k.x() == k.y()) || !std::all_of(stats.begin(), stats.end(), all_of_true))
+							{
+								appendMessage(optInputValue, input, def);
+							}
+							resultParams.setInput(std::get<0>(it1), k.x(), k.y());
+						}
+						if (inputType == Uint32)
+						{
+							const UVec2 def(std::numeric_limits<uint32_t>::min(), std::numeric_limits<uint32_t>::max());
+							const auto k = UVec2::fromText(input, def, stats);
+							if ((k.x() == k.y()) || !std::all_of(stats.begin(), stats.end(), all_of_true))
+							{
+								appendMessage(optInputValue, input, def);
+							}
+							resultParams.setInput(std::get<0>(it1), k.x(), k.y());
+						}
+						if (inputType == Float32)
+						{
+							const Vec2 def(std::numeric_limits<float>::min(), std::numeric_limits<float>::max());
+							const auto k = Vec2::fromText(input, def, stats);
+							if ((k.x() == k.y()) || !std::all_of(stats.begin(), stats.end(), all_of_true))
+							{
+								appendMessage(optInputValue, input, def);
+							}
+							resultParams.setInput(std::get<0>(it1), k.x(), k.y());
+						}
+						arg = args.erase(arg);
+					}
+				}
+				else if (optionKind == OptionKinds::Const && tail == "-const")
+				{
+					arg = args.erase(arg);
+					if (arg != args.end())
+					{
+						bool constStatus = false;
+						add_cref<std::string> input = *arg;
+
+						if (inputType == Int32)
+						{
+							const int32_t def = 0;
+							const auto k = fromText(input, def, constStatus);
+							if (!constStatus)
+							{
+								appendMessage(optInputValue, input, def);
+							}
+							resultParams.setInput(std::get<0>(it1), k, k);
+						}
+						if (inputType == Uint32)
+						{
+							const uint32_t def = 0u;
+							const auto k = fromText(input, def, constStatus);
+							if (!constStatus)
+							{
+								appendMessage(optInputValue, input, def);
+							}
+							resultParams.setInput(std::get<0>(it1), k, k);
+						}
+						if (inputType == Float32)
+						{
+							const float def = 0.0f;
+							const auto k = fromText(input, def, constStatus);
+							if (!constStatus)
+							{
+								appendMessage(optInputValue, input, def);
+							}
+							resultParams.setInput(std::get<0>(it1), k, k);
+						}
+						arg = args.erase(arg);
+					}
+				}
+				else if (invStatus && (optionKind == OptionKinds::Single) && (inv < invocationCount))
+				{
+					arg = args.erase(arg);
+					if (arg != args.end())
+					{
+						add_cref<std::string> input = *arg;
+
+						if (inputType == Int32)
+						{
+							const auto k = fromText(input, 0, invStatus);
+							static_assert(std::is_same<std::remove_cv_t<std::remove_reference_t<decltype(k)>>
+								, int32_t>::value, "Not integral type");
+							resultParams.setInput(k, inv, std::get<0>(it1));
+							//std::cout << name << " = " << resultParams.printInputValue(inv, std::get<1>(it1)) << std::endl;
+						}
+						else if (inputType == Uint32)
+						{
+							const auto k = fromText(input, 0u, invStatus);
+							static_assert(std::is_same<std::remove_cv_t<std::remove_reference_t<decltype(k)>>
+								, uint32_t>::value, "Not integral type");
+							resultParams.setInput(k, inv, std::get<0>(it1));
+							//std::cout << name << " = " << resultParams.printInputValue(inv, std::get<1>(it1)) << std::endl;
+						}
+						else if (inputType == Float32)
+						{
+							const auto k = fromText(input, 0.0f, invStatus);
+							static_assert(std::is_same<std::remove_cv_t<std::remove_reference_t<decltype(k)>>
+								, float>::value, "Not floating type");
+							resultParams.setInput(k, inv, std::get<0>(it1));
+							//std::cout << name << " = " << resultParams.printInputValue(inv, std::get<1>(it1)) << std::endl;
+						}
+
+						if (invStatus)
+						{
+							resultParams.providedValueCount += 1u;
+						}
+						else
+						{
+							appendMessage(optInputValue, input, 0u);
+						}
+
+						arg = args.erase(arg);
+					}
+				}
+				else
+				{
+					++arg;
+				}
+			}
+		}
+	};
+
+	options.clear();
+	sink.clear();
+
+	parseOtherOptions(OptionKinds::Random);
+	parseOtherOptions(OptionKinds::Const);
+	parseOtherOptions(OptionKinds::Single);
 
 	errorMessage.flush();
 	Params::Status paramsStatus = resultParams.verify(device, errorMessage)
-									? Params::Status::OK
+									? hasErrors
+										? Params::Status::Error
+										: hasWarnings
+											? Params::Status::Warning
+											: Params::Status::OK
 									: Params::Status::Error;
 	if (!args.empty())
 	{
@@ -519,7 +717,8 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine (ZDevic
 	return { paramsStatus, resultParams, errorMessage.str() };
 }
 
-void printOutputBuffer (ostream_ref log, add_cref<Params> params, u32vec_cref data,
+void printOutputBuffer (ostream_ref log, add_cref<decltype(Params::flags)> flags,
+						u32vec_cref types, u32vec_cref data,
 						const uint32_t colCount = 4u, const uint32_t rowCount = 0u,
 						const uint32_t count = 0u, const bool horizontal = false)
 {
@@ -531,19 +730,19 @@ void printOutputBuffer (ostream_ref log, add_cref<Params> params, u32vec_cref da
 	const uint32_t		groupSize	= rowCount * colCount;
 	const uint32_t		groupCount	= MULTIPLERUP(itemCount, groupSize);
 	const int32_t		itemWidth	= static_cast<int32_t>(std::log10(float(itemCount))) + 1;
-	const auto			calcWidth	= [&]() -> int {
+	const auto			calcWidth	= [&]() -> uint32_t {
 		std::ostringstream os;
 		const uint32_t	ii			= 0xFFFFFFFF;
 		const float		pi			= std::atan(1.0f) * 4.0f;
-		SIDE_EFFECT((params.flags.printInHex != 0) ? (os << std::hexfloat << pi) : (os << pi));
-		const int		floatWidth	= int(os.str().length());
+		SIDE_EFFECT((flags.printInHex != 0) ? (os << std::hexfloat << pi) : (os << pi));
+		const uint32_t	floatWidth	= uint32_t(os.str().length());
 		os.str(std::string());
-		SIDE_EFFECT((params.flags.printInHex != 0) ? (os << std::showbase << std::hex << ii) : (os << ii));
-		const int		intWidth	= int(os.str().length());
+		SIDE_EFFECT((flags.printInHex != 0) ? (os << std::showbase << std::hex << ii) : (os << ii));
+		const uint32_t	intWidth	= uint32_t(os.str().length());
 		return std::max(floatWidth, intWidth);
 	};
-	const int			valueWidth	= calcWidth();
-	const std::string	blankValue	(make_unsigned(valueWidth + 1), ' ');
+	const uint32_t		valueWidth	= calcWidth() + 2u;
+	const std::string	blankValue	((valueWidth + 1), ' ');
 
 	for (uint32_t i = 0u, g = 0u; g < groupCount; ++g)
 	{
@@ -563,39 +762,40 @@ void printOutputBuffer (ostream_ref log, add_cref<Params> params, u32vec_cref da
 			{
 				const uint32_t ii = rr + (c * rowCount);
 				log << "[" << std::setw(itemWidth) << std::right << ii << "] ";
-				const uint32_t iType = std::max((params.inputTypes.at(ii) & 0xFFFF), 2u);
-				const uint32_t jType = std::max((params.inputTypes.at(ii) >> 16), 2u);
-				const Params::InputTypes type = (iType != 0)
-													? Params::InputTypes(iType)
-													: (jType != 0)
-														? Params::InputTypes(jType)
-														: Params::InputTypes::Int32;
+				const Params::InputTypes type = static_cast<Params::InputTypes>(std::min(
+					(types.at(ii) & 0xFFFF), static_cast<uint32_t>(Params::InputTypes::Float32)));
 				const uint32_t value = data.at(ii);
-				if (value == 0u && (params.flags.printZero == 0))
+				if (value == 0u && (flags.printZero == 0))
 					log << blankValue;
 				else
 				{
-					log << std::left << std::setw(valueWidth);
-					if (params.flags.printCapital != 0)
+					log << std::left << std::setw(make_signed(valueWidth));
+					if (flags.printCapital != 0)
 						log << std::uppercase;
-					if (type == 2)
+					if (type == Params::InputTypes::Float32)
 					{
 						union U {
 							U(uint32_t u_) : u(u_) {}
 							uint32_t	u;
 							float		f;
 						} x(value);
-						if (params.flags.printInHex != 0)
+						if (flags.printInHex != 0)
 							log << std::hexfloat << x.f << std::defaultfloat;
 						else log << x.f;
 					}
-					else
+					else if (type == Params::InputTypes::Int32)
 					{
-						if (params.flags.printInHex != 0)
-							log << std::showbase << std::hex << value << std::dec << std::noshowbase;
-						else log << value;
+						if (flags.printInHex != 0)
+							log << std::showbase << std::hex << make_signed(value) << std::dec << std::noshowbase;
+						else log << make_signed(value);
 					}
-					if (params.flags.printCapital != 0) log << std::nouppercase;
+					else // (type == Params::InputTypes::Uint32)
+					{
+						if (flags.printInHex != 0)
+							log << std::showbase << std::hex << (value) << std::dec << std::noshowbase;
+						else log << (value);
+					}
+					if (flags.printCapital != 0) log << std::nouppercase;
 					log << std::setw(0);
 					log << ' ';
 				}
@@ -694,7 +894,7 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 	}
 	if (status == Params::Status::Help)
 	{
-		params.usage(ctx.device, std::cout);
+		params.usage(ctx.device, std::cout, record.assets);
 		return 0;
 	}
 	if (params.flags.printParams != 0)
@@ -703,31 +903,31 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 			std::cout << errorMessage;
 		params.print(std::cout);
 	}
+	std::cout << errorMessage;
 	if (status == Params::Status::Error)
 	{
-		std::cout << errorMessage;
 		return (1);
 	}
 
 	return runIntComputeSingleThread(ctx, record.assets, params);
 }
 
-ZShaderModule createShader (ZDevice device, add_cref<std::string> assets, VkShaderStageFlagBits stage)
+ZShaderModule createShader (ZDevice device, add_cref<std::string> assets, bool buildAlways)
 {
 	const GlobalAppFlags	flags(getGlobalAppFlags());
 	ProgramCollection		programs(device, assets);
 
-	programs.addFromFile(stage, "main.compute", {"."}, "main_entry");
-	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, false, true);
+	programs.addFromFile(VK_SHADER_STAGE_COMPUTE_BIT, "main.compute", {"."}, "main_entry");
+	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, false, buildAlways);
 
-	return programs.getShader(stage);
+	return programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT);
 }
 
 TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, const std::string& assets, const Params& params)
 {
 	const VkShaderStageFlagBits	stage			(VK_SHADER_STAGE_COMPUTE_BIT);
 	const VkDescriptorType		descType		(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-	ZShaderModule				computeShader	= createShader(ctx.device, assets, stage);
+	ZShaderModule				computeShader	= createShader(ctx.device, assets, (params.flags.noBuildAlways ? false : true));
 	struct PushConstant
 	{
 		Params::AddresingMode	addressingMode;
@@ -738,10 +938,10 @@ TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, const std::string& as
 													params.controlIndex2, params.controlIndex3, params.controlIndex4 };
 	LayoutManager				lm				(ctx.device);
 	const uint32_t				bindingParams	= lm.addBinding<std::vector<uint32_t>>(descType, params.paramsBufferLength, stage);
-	const uint32_t				bindingTypes	= lm.addBinding<std::vector<uint32_t>>(descType, data_count(params.inputIvalues), stage);
+	const uint32_t				bindingTypes	= lm.addBinding<std::vector<uint32_t>>(descType, data_count(params.inputTypes), stage);
 	const uint32_t				bindingIinput	= lm.addBinding<std::vector<uint32_t>>(descType, data_count(params.inputIvalues), stage);
 	const uint32_t				bindingJinput	= lm.addBinding<std::vector<uint32_t>>(descType, data_count(params.inputJvalues), stage);
-	const uint32_t				bindingResult	= lm.addBinding<std::vector<uint32_t>>(descType, data_count(params.inputJvalues), stage);
+	const uint32_t				bindingResult	= lm.addBinding<std::vector<uint32_t>>(descType, data_count(params.inputTypes), stage);
 	ZPipelineLayout				pipelineLayout	= lm.createPipelineLayout<PushConstant>(lm.createDescriptorSetLayout(), stage);
 	ZPipeline					pipeline		= createComputePipeline(pipelineLayout, computeShader, params.localSize);
 	ZCommandPool				commandPool		= ctx.createComputeCommandPool();
@@ -752,6 +952,8 @@ TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, const std::string& as
 	lm.writeBinding(bindingJinput, params.inputJvalues);
 	lm.fillBinding(bindingResult, 0u);
 
+	params.inputJvalues.clear();
+	
 	// RAII
 	{
 		OneShotCommandBuffer shot(commandPool);
@@ -761,13 +963,14 @@ TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, const std::string& as
 		commandBufferDispatch(shotCmd, params.workGroup);
 	}
 
-	const uint32_t	resultLength	= lm.getBindingElementCount(bindingResult);
-	u32vec			resultData		(resultLength);
-	lm.readBinding(bindingResult, resultData);
-
 	if (params.flags.noPrintResult == 0u)
 	{
-		printOutputBuffer(std::cout, params, resultData, params.printColCount, params.printRowCount);
+		lm.readBinding(bindingTypes, params.inputTypes);
+		lm.readBinding(bindingResult, params.inputIvalues);
+
+		printOutputBuffer(std::cout, params.flags,
+							params.inputTypes, params.inputIvalues,
+							params.printColCount, params.printRowCount);
 	}
 
 	if (params.flags.printParams != 0u)

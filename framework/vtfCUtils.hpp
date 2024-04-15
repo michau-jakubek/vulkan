@@ -18,8 +18,10 @@ namespace vtf
 typedef std::vector<std::string> strings;
 typedef std::map<std::string, std::string> string_to_string_map;
 
-// variables must be in the form ${VARIABLE}
-std::string	subst_variables (const std::string& templateStr, const vtf::string_to_string_map& variables);
+// template string variables must be in the form ${VARIABLE}
+// map of variables must contain key-value pair in the form { "VARIABLE", "value" }
+std::string	subst_variables (const std::string& templateStr, const vtf::string_to_string_map& variables,
+							 bool validateVariableExistence = true);
 
 std::string getRealPath (const char* path, bool& status);
 // if status is null or points to false then throw on error, otherwise opening status is returned

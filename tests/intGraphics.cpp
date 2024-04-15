@@ -13,6 +13,7 @@
 #include <type_traits>
 #include <thread>
 #include <charconv>
+#include <algorithm>
 #include <array>
 
 namespace
@@ -150,20 +151,10 @@ void TestParams::printHelp (add_cref<std::string> assets, ostream_ref str)
 		str << content << std::endl;
 	else str << "[WARNING] Unable to open " << shortHelpFile << std::endl;
 }
-Vec4 parseVector (add_cref<std::string> text, bool& status)
-{
-	const strings chunks = splitString(text);
-	Vec4 result;
-	status = true;
-	for (uint32_t i = 0u; status && i < 4u && data_count(chunks); ++i)
-	{
-		result[i] = fromText(chunks.at(i), 0.0f, status);
-	}
-	return result;
-}
 std::tuple<TestParams, std::string> TestParams::parseCmdLine (add_cref<std::string> assets, add_cref<strings> cmdLineParams)
 {
 	bool				status;
+	std::array<bool, 4> vecStatus;
 	strings				sink;
 	strings				args(cmdLineParams);
 	std::ostringstream	messages;
@@ -242,9 +233,10 @@ std::tuple<TestParams, std::string> TestParams::parseCmdLine (add_cref<std::stri
 		res.flags.warning = 1;
 	}
 
+
 	if (consumeOptions(optMatchAll, opts, args, sink) > 0)
 	{
-		res.matchAll = parseVector(sink.back(), status);
+		res.matchAll = Vec4::fromText(sink.back(), Vec4(), vecStatus, &status);
 		res.flags.hasMatchAll = 1;
 		if (false == status)
 		{
@@ -256,7 +248,7 @@ std::tuple<TestParams, std::string> TestParams::parseCmdLine (add_cref<std::stri
 
 	if (consumeOptions(optTol, opts, args, sink) > 0)
 	{
-		res.tol = parseVector(sink.back(), status);
+		res.tol = Vec4::fromText(sink.back(), Vec4(), vecStatus, &status);
 		if (false == status)
 		{
 			res.flags.error = 1;
@@ -279,7 +271,7 @@ std::tuple<TestParams, std::string> TestParams::parseCmdLine (add_cref<std::stri
 #endif
 			if (consumeOptions(optMatchNth, opts, args, sink) > 0)
 			{
-				Vec4 match = parseVector(sink.back(), status);
+				const Vec4 match = Vec4::fromText(sink.back(), Vec4(), vecStatus, &status);
 				if (status)
 				{
 					res.flags.hasParticularMatch = 1;
@@ -323,7 +315,7 @@ std::tuple<TestParams, std::string> TestParams::parseCmdLine (add_cref<std::stri
 						res.attributes.resize(6u);
 				}
 
-				res.attributes.at(attrIdx) = parseVector(sink.back(), status);
+				res.attributes.at(attrIdx) = Vec4::fromText(sink.back(), Vec4(), vecStatus, &status);
 
 				if (false == status)
 				{
@@ -353,7 +345,7 @@ std::tuple<TestParams, std::string> TestParams::parseCmdLine (add_cref<std::stri
 					if (res.attributes.size() != 6u)
 						res.attributes.resize(6u);
 
-					res.attributes.at(attrIdx) = parseVector(sink.back(), status);
+					res.attributes.at(attrIdx) = Vec4::fromText(sink.back(), Vec4(), vecStatus, &status);
 
 					if (false == status)
 					{

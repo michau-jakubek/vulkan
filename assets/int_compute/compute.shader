@@ -24,8 +24,14 @@ layout(binding = 1) buffer InvocationsTinput { uint t[]; } inputT;
 layout(binding = 2) buffer InvocationsIinput { uint i[]; } inputI;
 layout(binding = 3) buffer InvocationsJinput { uint j[]; } inputJ;
 layout(binding = 4) buffer InvocationsRoutput { uint r[]; } outputR;
+
 #define UINT_MAX 0xFFFFFFFF
+#define TYPE_Uint32		0
+#define TYPE_Int32		1
+#define TYPE_Float32	2
+
 uint loc() { return gl_LocalInvocationIndex; }
+
 void writeParams()
 {
 	if (gl_LocalInvocationIndex == 0)
@@ -62,6 +68,90 @@ void writeParams()
 		outputP.p[6] = iMax;
 	}
 }
+
+float loadFloatI(uint at) {
+	return ((inputT.t[at] & 0xFFFF) == TYPE_Float32)
+		? uintBitsToFloat(inputI.i[at])
+		: ((inputT.t[at] & 0xFFFF) == TYPE_Int32)
+			? float(int(inputI.i[at]))
+			: float(inputI.i[at]);
+}
+
+int loadIntI(uint at) {
+	return ((inputT.t[at] & 0xFFFF) == TYPE_Float32)
+		? int(uintBitsToFloat(inputI.i[at]))
+		: int(inputI.i[at]);
+}
+
+uint loadUintI(uint at) {
+	return ((inputT.t[at] & 0xFFFF) == TYPE_Float32)
+		? uint(uintBitsToFloat(inputI.i[at]))
+		: inputI.i[at];
+}
+
+float loadFloatJ(uint at) {
+	return ((inputT.t[at] >> 16) == TYPE_Float32)
+		? uintBitsToFloat(inputJ.j[at])
+		: ((inputT.t[at] >> 16) == TYPE_Int32)
+			? float(int(inputJ.j[at]))
+			: float(inputJ.j[at]);
+}
+
+int loadIntJ(uint at) {
+	return ((inputT.t[at] >> 16) == TYPE_Float32)
+		? int(uintBitsToFloat(inputJ.j[at]))
+		: int(inputJ.j[at]);
+}
+
+uint loadUintJ(uint at) {
+	return ((inputT.t[at] >> 16) == TYPE_Float32)
+		? uint(uintBitsToFloat(inputJ.j[at]))
+		: inputJ.j[at];
+}
+
+void forceStoreFloat(float x, uint at) {
+	if (at >= inputT.t.length()) return;
+	inputT.t[at] = ((inputT.t[at] >> 16) << 16) | TYPE_Float32;
+	outputR.r[at] = floatBitsToUint(x);
+}
+
+void forceStoreInt(int x, uint at) {
+	if (at >= inputT.t.length()) return;
+	inputT.t[at] = ((inputT.t[at] >> 16) << 16) | TYPE_Int32;
+	outputR.r[at] = uint(x);
+}
+
+void forceStoreUint(uint x, uint at) {
+	if (at >= inputT.t.length()) return;
+	inputT.t[at] = ((inputT.t[at] >> 16) << 16) | TYPE_Uint32;
+	outputR.r[at] = x;
+}
+
+void storeFloat(float x, uint at) {
+	if (at >= inputT.t.length()) return;
+	outputR.r[at] = ((inputT.t[at] & 0xFFFF) == TYPE_Float32)
+						? floatBitsToUint(x)
+						: ((inputT.t[at] & 0xFFFF) == TYPE_Int32)
+							? uint(int(x))
+							: uint(x);
+}
+
+void storeUint(uint x, uint at) {
+	if (at >= inputT.t.length()) return;
+	outputR.r[at] = ((inputT.t[at] & 0xFFFF) == TYPE_Float32)
+						? floatBitsToUint(float(x))
+						: ((inputT.t[at] & 0xFFFF) == TYPE_Int32)
+							? uint(int(x))
+							: x;
+}
+
+void storeInt(int x, uint at) {
+	if (at >= inputT.t.length()) return;
+	outputR.r[at] = ((inputT.t[at] & 0xFFFF) == TYPE_Float32)
+						? floatBitsToUint(float(x))
+						: uint(x);
+}
+
 void main_entry()
 {
 	writeParams();

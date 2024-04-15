@@ -3,6 +3,10 @@
 #include "compute.shader"
 
 /*
+    *************************************
+    ***** Defined in compute.shader *****
+	*************************************
+
 layout(push_constant) uniform PushConstant
 {
 	uint addressingMode;
@@ -17,28 +21,35 @@ layout(binding = 1) buffer InvocationsTinput { uint t[]; } inputT;
 layout(binding = 2) buffer InvocationsIinput { uint i[]; } inputI;
 layout(binding = 3) buffer InvocationsJinput { uint j[]; } inputJ;
 layout(binding = 4) buffer InvocationsRoutput { uint r[]; } outputR;
+
+#define UINT_MAX	0xFFFFFFFF
+
+float loadFloatI (uint at);
+int   loadIntI   (uint at);
+uint  loadUintI  (uint at);
+float loadFloatJ (uint at);
+int   loadIntJ   (uint at);
+uint  loadUintJ  (uint at);
+void storeFloat (float x, uint at);
+void storeInt   (int   x, uint at);
+void storeUint  (uint  x, uint at);
+void forceStoreFloat (float x, uint at);
+void forceStoreInt   (int   x, uint at);
+void forceStoreUint  (uint  x, uint at);
 */
 
-int readIntI(uint at) {
-	int result = 0;
-	if ((inputT.t[at] & 0xFFFF) == 2)
-		result = int(uintBitsToFloat(inputI.i[at]));
-	else result = int(inputI.i[at]);
-	return result;
-}
-void write(uint x, uint at)
-{
-	if ((inputT.t[at] & 0xFFFF) == 2)
-	{
-		outputR.r[at] = floatBitsToUint(float(x));
-	}
-	else
-	{
-		outputR.r[at] = x;
-	}
-}
+
 void main()
 {
-	outputR.r[gl_LocalInvocationIndex] = inputT.t[gl_LocalInvocationIndex] & 0xFFFF;
-	write( inputT.t[gl_LocalInvocationIndex] & 0xFFFF, gl_LocalInvocationIndex );
+	storeInt(loadIntI(gl_LocalInvocationIndex), gl_LocalInvocationIndex);
 }
+
+
+
+
+
+
+
+
+
+

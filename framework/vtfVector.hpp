@@ -1,8 +1,11 @@
 #ifndef __VTF_VECTOR_HPP_INCLUDED__
 #define __VTF_VECTOR_HPP_INCLUDED__
 
+#include "vtfZDeletable.hpp"
 #include "vtfCUtils.hpp"
 
+#include <algorithm>
+#include <array>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -357,6 +360,21 @@ public:
 		for (size_t i = 0; i < N && i < M; ++i)
 			v[i] = operator[](i);
 		return v;
+	}
+
+	static VecX fromText (add_cref<std::string> text, add_cref<VecX> def,
+						  add_ref<std::array<bool, N>> status, add_ptr<bool> all = nullptr)
+	{
+		VecX				result;
+		bool				allStatus	= true;
+		const strings		chunks		= splitString(text);
+		for (std::size_t i = 0u; i < N && i < data_count(chunks); ++i)
+		{
+			result[i] = ::vtf::template fromText(chunks.at(i), def[i], status.at(i));
+			allStatus &= status.at(i);
+		}
+		if (all) *all = allStatus;
+		return result;
 	}
 
 	typedef T type;

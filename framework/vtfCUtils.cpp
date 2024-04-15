@@ -149,14 +149,14 @@ uint32_t readFile (const fs::path& path, std::vector<unsigned char>& buffer)
 	return length;
 }
 
-std::string subst_variables (const std::string& templateStr, const vtf::string_to_string_map& variables)
+std::string subst_variables (const std::string& templateStr, const vtf::string_to_string_map& variables, bool validateVariableExistence)
 {
 	std::string result(templateStr);
 	for (auto kv = variables.begin(); kv != variables.end(); ++kv)
 	{
 		std::string var("${" + kv->first + '}');
 		std::string::size_type pos = result.find(var);
-		ASSERTION(std::string::npos != pos);
+		if (validateVariableExistence) ASSERTION(std::string::npos != pos);
 		while (std::string::npos != pos)
 		{
 			result.replace(pos, var.length(), kv->second);

@@ -1,0 +1,57 @@
+Usage:
+  -h, --help                print usage and exit
+  --print-desc              print description and execute
+  --print-params            print params and execute
+  --print-zero              print zero in result, default false
+  --enable-sucf             enable VK_KHR_shader_subgroup_uniform_control_flow extension
+  --no-always-build         disable automatic shaders building
+  --no-print-result         prevent from printing result
+  --print-device-limits     print device limits and exit
+  --hex                     print result in hexadecimal format
+  --HEX                     print result using capital characters
+  -wx     <uint>            work group count X, default ${WX}
+  -wy     <uint>            work group count Y, default ${WY}
+  -wz     <uint>            work group count Z, default ${WZ}
+  -lx     <uint>            local size X, default ${LX}
+  -ly     <uint>            local size Y, default ${LY}
+  -lz     <uint>            local size Z, default ${LZ}
+  -cm     <uint>            checkpoint count max, default ${CM}
+  -cols   <uint>            column count used to printing output, default ${CC}
+  -rows   <uint>            row count used to printing output, default ${RC}
+  -am     <lteral>          addressing mode, default "${AM}"
+                             * ${AddresingMode::local}: gl_LocalInvocationID
+                             * ${AddresingMode::absolut}: gl_SubgroupID * gl_SubgroupSize + gl_SubgroupInvocationID
+
+  -(i|I)(i|I)Nth     <int>     set Int32   value in buffer I at Nth index
+  -(i|I)(u|U)Nth     <uint>    set Uint32  value in buffer I at Nth index
+  -(i|I)(f|F)Nth     <float>   set Float32 value in buffer I at Nth index
+  -(j|J)(i|I)Nth     <int>     set Int32   value in buffer J at Nth index
+  -(j|J)(u|U)Nth     <uint>    set Uint32  value in buffer J at Nth index
+  -(j|J)(f|F)Nth     <float>   set Float32 value in buffer J at Nth index
+  
+  -(i|I)(i|I)-const  <int>      populate buffer I with Int32   value
+  -(i|I)(u|U)-const  <uint>     populate buffer I with Uint32  value
+  -(i|I)(f|F)-const  <float>    populate buffer I with Float32 value
+  -(j|J)(i|I)-const  <int>      populate buffer J with Int32   value
+  -(j|J)(u|U)-const  <uint>     populate buffer J with Uint32  value
+  -(j|J)(f|F)-const  <float>    populate buffer J with Float32 value
+
+  -(i|I)(i|I)-random <int,int>      populate buffer I with values from std::uniform_int_distribution generator
+  -(i|I)(u|U)-random <uint,uint>    populate buffer I with values from std::uniform_int_distribution generator
+  -(i|I)(f|F)-random <floatfloat>   populate buffer I with values from std::uniform_real_distribution generator
+  -(j|J)(i|I)-random <int,int>      populate buffer J with values from std::uniform_int_distribution generator
+  -(j|J)(u|U)-random <uint,uint>    populate buffer J with values from std::uniform_int_distribution generator
+  -(j|J)(f|F)-random <float,float>  populate buffer J with values from std::uniform_real=l_distribution generator
+
+                       Note:     Both buffers, I and J are storage buffers where
+                             buffer I which is bound to descriptor set at binding 0 and
+                             buffer J which is bound to descriptor set at binding 1.
+
+                                 Parameters in the style of "-(buffer)(type)-* <???>"
+                             set also a type at desired index or for all buffers elements.
+
+                                 Parameters that involves to concrete index have higher
+                             priority than  "*-const" or "*-random" parameters so these
+                             overwrite any values given before. Random option has smallest
+							 priority.
+

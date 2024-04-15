@@ -1,0 +1,102 @@
+#version 450
+#extension GL_GOOGLE_include_directive : enable
+#include "compute.shader"
+
+/*
+layout(push_constant) uniform PushConstant
+{
+	uint addressingMode;
+	uint checkpointMax;
+	uint controlIndex0;
+	uint controlIndex1;
+	uint controlIndex2;
+	uint controlIndex3;
+	uint controlIndex4;
+};
+layout(binding = 1) buffer InvocationsTinput { uint t[]; } inputT;
+layout(binding = 2) buffer InvocationsIinput { uint i[]; } inputI;
+layout(binding = 3) buffer InvocationsJinput { uint j[]; } inputJ;
+layout(binding = 4) buffer InvocationsRoutput { uint r[]; } outputR;
+
+#define UINT_MAX	0xFFFFFFFF
+
+float loadFloatI (uint at);
+int   loadIntI   (uint at);
+uint  loadUintI  (uint at);
+float loadFloatJ (uint at);
+int   loadIntJ   (uint at);
+uint  loadUintJ  (uint at);
+void forceStoreFloat (float x, uint at);
+void forceStoreInt   (int   x, uint at);
+void forceStoreUint  (uint  x, uint at);
+*/
+
+
+void main()
+{
+	// -lx 32 -if0 3.1514 -ii1 -123 -iu2 342 -jf0 2.71828 -ji1 -567 -ju2 675
+
+	uint off = 0;
+
+	uint iu0 = loadUintI(0);
+	uint iu1 = loadUintI(1);
+	uint iu2 = loadUintI(2);
+	storeUint(iu0, off+4);
+	storeUint(iu1, off+5);
+	storeUint(iu2, off+6);
+
+	int ii0 = loadIntI(0);
+	int ii1 = loadIntI(1);
+	int ii2 = loadIntI(2);
+	storeInt(ii0, off+8);
+	storeInt(ii1, off+9);
+	storeInt(ii2, off+10);
+
+	float if0 = loadFloatI(0);
+	float if1 = loadFloatI(1);
+	float if2 = loadFloatI(2);
+	storeFloat(if0, off+12);
+	storeFloat(if1, off+13);
+	storeFloat(if2, off+14);
+
+	forceStoreFloat(if0, off+0);
+	forceStoreInt(ii1, off+1);
+	forceStoreUint(iu2, off+2);
+
+	off = 16;
+
+	uint ju0 = loadUintJ(0);
+	uint ju1 = loadUintJ(1);
+	uint ju2 = loadUintJ(2);
+	storeUint(ju0, off+4);
+	storeUint(ju1, off+5);
+	storeUint(ju2, off+6);
+
+	int ji0 = loadIntJ(0);
+	int ji1 = loadIntJ(1);
+	int ji2 = loadIntJ(2);
+	storeInt(ji0, off+8);
+	storeInt(ji1, off+9);
+	storeInt(ji2, off+10);
+
+	float jf0 = loadFloatJ(0);
+	float jf1 = loadFloatJ(1);
+	float jf2 = loadFloatJ(2);
+	storeFloat(jf0, off+12);
+	storeFloat(jf1, off+13);
+	storeFloat(jf2, off+14);
+
+	forceStoreFloat(jf0, off+0);
+	forceStoreInt(ji1, off+1);
+	forceStoreUint(ju2, off+2);
+}
+
+
+
+
+
+
+
+
+
+
