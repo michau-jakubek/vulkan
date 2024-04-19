@@ -72,11 +72,11 @@ ZDevice			createLogicalDevice	(ZPhysicalDevice		physDevice,
 									 ZSurfaceKHR			surface = ZSurfaceKHR(),
 									 bool					enableDebugPrintf = false);
 add_cref<VkPhysicalDeviceProperties>
-				deviceGetPhysicalProperties	(ZDevice device);
+				deviceGetPhysicalProperties	(add_cref<ZDevice> device);
 add_cref<VkPhysicalDeviceLimits>
-				deviceGetPhysicalLimits (ZDevice device);
+				deviceGetPhysicalLimits (add_cref<ZDevice> device);
 add_cref<VkPhysicalDeviceLimits>
-				deviceGetPhysicalLimits (ZPhysicalDevice device);
+				deviceGetPhysicalLimits (add_cref<ZPhysicalDevice> device);
 VkPhysicalDeviceFeatures2
 				deviceGetPhysicalFeatures2 (ZPhysicalDevice device, void* pNext = nullptr);
 ZPhysicalDevice	deviceGetPhysicalDevice (ZDevice device);

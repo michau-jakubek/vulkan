@@ -11,8 +11,10 @@ layout(std430, push_constant) uniform PC
 	double	xMax;
 	double	yMin;
 	double	yMax;
-	int		iterCount;
-	int		mode;
+	double  xSeed;
+	double  ySeed;
+	int	iterCount;
+	uint	method;
 } pc;
 
 const float w1 = 50.0;
@@ -49,7 +51,7 @@ void main()
 {
 	const double x = pc.xMin + (double(gl_FragCoord.x) / pc.width) * (pc.xMax - pc.xMin);
 	const double y = pc.yMin + ((pc.height - double(gl_FragCoord.y)) / pc.height) * (pc.yMax - pc.yMin);
-	const int s = dserie(0.0, 0.0, x, y);
+	const int s = (pc.method == 0) ? dserie(pc.xSeed, pc.ySeed, x, y) : dserie(x, y, pc.xSeed, pc.ySeed);
 	const float c = float(s) / float(pc.iterCount);
 	const float r = red(c);
 	const float g = green(c);

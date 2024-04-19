@@ -1,6 +1,7 @@
 #ifndef __VTF_BACKTRACE_HPP_INCLUDED__
 #define __VTF_BACKTRACE_HPP_INCLUDED__
 
+#include <cstdint>
 #include <cstdlib>
 #include <ostream>
 

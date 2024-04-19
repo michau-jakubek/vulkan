@@ -8,7 +8,9 @@
 #include "vtfZCommandBuffer.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfZPipeline.hpp"
+#include "vtfVector.hpp"
 
+#include <array>
 #include <variant>
 
 using namespace vtf;
@@ -16,63 +18,111 @@ using namespace vtf;
 namespace
 {
 
-bool userEnforcesFloat32 (const strings& params)
-{
-	strings				sink;
-	strings				args(params);
-	Option				enforceFloate32	{ "-float32", 0 };
-	std::vector<Option>	options { enforceFloate32 };
-	return consumeOptions(enforceFloate32, options, args, sink) > 0;
-}
+#define METH0 "0: z_0 = seed; z_n+1 = z_n^2 + point"
+#define METH1 "1: z_0 = point; z_n+1 = z_n^2 + seed"
 
-uint32_t userAnimationTicks (const strings& params)
+constexpr int32_t minIters = 50;
+struct TestConfig
+{
+	Vec2		seed;
+	uint32_t	ticks;
+	int32_t		iters;
+	bool		method;
+	bool		float32;
+			TestConfig	(add_cref<strings>		commandLineParams);
+	void	print		(add_ref<std::ostream>	str) const;
+};
+void TestConfig::print (add_ref<std::ostream> str) const
+{
+	str << "Animation:                ";
+	if (ticks)
+		str << "every " << ticks << " milliseconds";
+	else str << "disabled";
+	str << std::endl;
+
+	str << "Floating point in shader: Float" << (float32 ? "32" : "64") << std::endl;
+	str << "Starting point or seed:   " << seed << std::endl;
+	str << "Calculation method:       " << (method ? METH1 : METH0) << std::endl;
+	str << "Iteration count:          " << iters << std::endl;
+}
+TestConfig::TestConfig (add_cref<strings> commandLineParams)
+	: seed		()
+	, ticks		()
+	, iters		(minIters)
+	, method	()
+	, float32	()
 {
 	strings				sink;
-	strings				args(params);
-	Option				animationTicks	{ "-a", 1 };
-	std::vector<Option>	options { animationTicks };
-	if (consumeOptions(animationTicks, options, args, sink) > 0)
+	bool				status				(false);
+	strings				args				(commandLineParams);
+	Option				optMethod			{ "-m", 1 };
+	Option				optStartingPoint	{ "-s", 1 };
+	Option				optAnimationTicks	{ "-a", 1 };
+	Option				optIterationCount	{ "-i", 1 };
+	Option				optEnforceFloat32	{ "-float32", 0 };
+	std::vector<Option>	options{ optMethod, optStartingPoint, optAnimationTicks, optIterationCount, optEnforceFloat32 };
+	if (consumeOptions(optMethod, options, args, sink) > 0)
 	{
-		bool status = false;
-		return fromText(sink.back(), 0u, status);
+		method = fromText(sink.back(), 0u, status) != 0u;
 	}
-	return 0;
+	if (consumeOptions(optStartingPoint, options, args, sink) > 0)
+	{
+		std::array<bool, 2> statuses;
+		seed = Vec2::fromText(sink.back(), seed, statuses);
+	}
+	if (consumeOptions(optAnimationTicks, options, args, sink) > 0)
+	{
+		ticks = fromText(sink.back(), 0u, status);
+	}
+	if (consumeOptions(optIterationCount, options, args, sink) > 0)
+	{
+		const int32_t i = fromText(sink.back(), 0, status);
+		iters = std::abs(i) + minIters;
+	}
+	float32 = (consumeOptions(optEnforceFloat32, options, args, sink) > 0);
 }
 
-TriLogicInt performTest (Canvas& canvas, const std::string&	assets, bool enableFloat64, uint32_t animationTicks, const GlobalAppFlags& flags);
+TriLogicInt performTest (add_ref<Canvas> canvas, add_cref<std::string> assets,
+						 add_cref<TestConfig> config, add_cref<GlobalAppFlags> flags);
 
-TriLogicInt prepareTest (const TestRecord& record, const strings& params)
+TriLogicInt prepareTest (add_cref<TestRecord> record, add_cref<strings> commandLineParams)
 {
-	UNREF(params);
+	std::cout <<
+		"Parameters:\n"
+		"  [-float32]         Enforce using Float32 in shader\n"
+		"                     Otherwise Float64 will be used if available\n"
+		"  [-a <msecs>]       Run in animation mode, refresh every milliseconds\n"
+		"                      Hold pressed left mouse button or Ctrl key to zoom in\n"
+		"                      Hold pressed right mouse button or Ctrl key to zoom out\n"
+		"  [-s <float,float>] Set starting point or seed, default is \'0,0\'\n"
+		"  [-i <uint]         Set iteration count at start or reset, always " << minIters << "+\n"
+		"  [-m <bool>]        Set method used to generating a serie\n"
+		"                      " METH0 "\n"
+		"                      " METH1 "\n"
+		"\n"
+		"Navigation keys combination:\n"
+		"  Scroll Left|Right|Up|Down: Move the picture slowly\n"
+		"  Ctrl or|and Mice Button pressed:\n"
+		"   * cursor move:            Move the picture fast\n"
+		"   * scroll dowm:            Zoom in\n"
+		"   * scroll dowm:            Zoom out\n"
+		"   (Mice's buttons might not work the same way on some platforms)\n"
+		"  R:                         Restore to start settings\n"
+		"  S:                         Print diagnostic information\n"
+		"  Gray(+)                    Increment iteration count\n"
+		"  Gray(-)                    Decrement iteration count\n"
+		"  Esc:                       Quit Fractals\n\n";
 
-	std::cout << "Parameters"															<< std::endl;
-	std::cout << "  [-float32]   Enforce using Float32 in shader"						<< std::endl;
-	std::cout << "     Otherwise Float64 will be used if available"						<< std::endl;
-	std::cout << "  [-a <msecs>] Run in animation mode, refresh every milliseconds"		<< std::endl;
-	std::cout << "     Hold pressed left mouse button or Ctrl key to zoom in"			<< std::endl;
-	std::cout << "     Hold pressed right mouse button or Ctrl key to zoom out"			<< std::endl;
-	std::cout																			<< std::endl;
-	std::cout << "Navigation keys combination"											<< std::endl;
-	std::cout << "  Scroll Left|Right|Up|Down: Move the picture slowly"					<< std::endl;
-	std::cout << "  Ctrl or|and Mice Button pressed:"									<< std::endl;
-	std::cout << "   * cursor move:            Move the picture fast"					<< std::endl;
-	std::cout << "   * scroll dowm:            Zoom in"									<< std::endl;
-	std::cout << "   * scroll dowm:            Zoom out"								<< std::endl;
-	std::cout << "   (Mice's buttons might not work the same way on some platforms)"	<< std::endl;
-	std::cout << "  R:                         Restore to start settings"				<< std::endl;
-	std::cout << "  S:                         Print diagnostic information"			<< std::endl;
-	std::cout << "  Gray(+)                    Increment iteration count"				<< std::endl;
-	std::cout << "  Gray(-)                    Decrement iteration count"				<< std::endl;
-	std::cout << "  Esc:                       Quit Fractals"							<< std::endl;
+	TestConfig	config(commandLineParams);
 
-	bool	enableFloat64 = false;
+	bool		enableFloat64 = false;
 	auto onGetEnabledFeatures = [&](ZPhysicalDevice physDevice, add_ref<strings> /*deviceExtensions*/) -> VkPhysicalDeviceFeatures2
 	{
 		VkPhysicalDeviceFeatures features{};
 		vkGetPhysicalDeviceFeatures(*physDevice, &features);
 
 		VkPhysicalDeviceFeatures2 result{};
-		if (!userEnforcesFloat32(params))
+		if (!config.float32)
 		{
 			enableFloat64 = (features.shaderFloat64 != VK_FALSE);
 			result.features.shaderFloat64 = features.shaderFloat64;
@@ -83,23 +133,25 @@ TriLogicInt prepareTest (const TestRecord& record, const strings& params)
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	Canvas	cs(record.name, gf.layers, {}, {}, Canvas::DefaultStyle, onGetEnabledFeatures, gf.apiVer);
 
-	const uint32_t animationTicks = userAnimationTicks(params);
-	std::cout << "Current shader mode Float" << (enableFloat64 ? "64" : "32") << std::endl;
-	std::cout << "Animation " << (animationTicks ? "enabled" : "disabled") << std::endl;
+	config.float32 = !enableFloat64;
+	config.print(std::cout);
 
-	return performTest(cs, record.assets, enableFloat64, animationTicks, gf);
+	return performTest(cs, record.assets, config, gf);
 }
 
 template<class Float>
 struct PushConstant
 {
-	Float width;
-	Float height;
-	Float xMin;
-	Float xMax;
-	Float yMin;
-	Float yMax;
-	int   iterCount;
+	Float		width;
+	Float		height;
+	Float		xMin;
+	Float		xMax;
+	Float		yMin;
+	Float		yMax;
+	Float		xSeed;
+	Float		ySeed;
+	int			iterCount;
+	uint32_t	mode;
 };
 typedef Canvas::Swapchain Swapchain;
 struct UserInput_
@@ -115,7 +167,7 @@ struct UserInput_
 	bool				rightMicePressed;
 	double				miceKeyXcursor;
 	double				miceKeyYcursor;
-	const int			iterationCount;
+	mutable int			iterationCount;
 	const int			iterationStep;
 	const bool			adaptiveIteration;
 	int					iterationTick;
@@ -133,7 +185,7 @@ struct UserInput_
 		, rightMicePressed	()
 		, miceKeyXcursor	()
 		, miceKeyYcursor	()
-		, iterationCount	(50)
+		, iterationCount	(minIters)
 		, iterationStep		(20)
 		, adaptiveIteration	(true)
 		, iterationTick		(1)
@@ -143,6 +195,7 @@ struct UserInput_
 	}
 	virtual void reset (add_cref<Swapchain>) = 0;
 	virtual void updateDim (add_cref<Swapchain>) = 0;
+	virtual void setup (add_cref<Swapchain>, add_cref<TestConfig>) = 0;
 };
 
 template<class Float>
@@ -150,7 +203,16 @@ struct UserInput : UserInput_
 {
 	PushConstant<Float>	pc;
 	UserInput() : pc() {}
-	void reset (add_cref<Swapchain> swapchain) override
+	virtual void setup (add_cref<Swapchain> swapchain, add_cref<TestConfig> config) override
+	{
+		reset(swapchain);
+		pc.xSeed = config.seed.x();
+		pc.ySeed = config.seed.y();
+		pc.mode = config.method;
+		pc.iterCount = config.iters;
+		iterationCount = config.iters;
+	}
+	virtual void reset (add_cref<Swapchain> swapchain) override
 	{
 		pc.iterCount = iterationCount;
 		updateDim(swapchain);
@@ -162,7 +224,7 @@ struct UserInput : UserInput_
 		micePressed	= leftMicePressed = rightMicePressed = false;
 		glfwGetCursorPos(*swapchain.canvas.window, &xCursor, &yCursor);
 	}
-	void updateDim (add_cref<Canvas::Swapchain> swapchain) override
+	virtual void updateDim (add_cref<Canvas::Swapchain> swapchain) override
 	{
 		pc.width	= Float(swapchain.extent.width);
 		pc.height	= Float(swapchain.extent.height);
@@ -381,17 +443,9 @@ void onScroll (Canvas& canvas, void* userData, double xScrollOffset, double yScr
 	}
 }
 
-void initEvents (Canvas& cs, VarUserInput& vui, bool enableFloat64)
+void initEvents (Canvas& cs, VarUserInput& vui, bool forceFloat32)
 {
-	if (enableFloat64)
-	{
-		cs.events().cbWindowSize.set(onResize<double>,		&std::get<UserInput<double>>(vui));
-		cs.events().cbCursorPos.set(onCursorPos<double>,	&std::get<UserInput<double>>(vui));
-		cs.events().cbScroll.set(onScroll<double>,			&std::get<UserInput<double>>(vui));
-		cs.events().cbMouseButton.set(onMouseBtn<double>,	&std::get<UserInput<double>>(vui));
-		cs.events().cbKey.set(onKey<double>,				&std::get<UserInput<double>>(vui));
-	}
-	else
+	if (forceFloat32)
 	{
 		cs.events().cbWindowSize.set(onResize<float>,		&std::get<UserInput<float>>(vui));
 		cs.events().cbCursorPos.set(onCursorPos<float>,		&std::get<UserInput<float>>(vui));
@@ -399,23 +453,32 @@ void initEvents (Canvas& cs, VarUserInput& vui, bool enableFloat64)
 		cs.events().cbMouseButton.set(onMouseBtn<float>,	&std::get<UserInput<float>>(vui));
 		cs.events().cbKey.set(onKey<float>,					&std::get<UserInput<float>>(vui));
 	}
+	else
+	{
+		cs.events().cbWindowSize.set(onResize<double>,		&std::get<UserInput<double>>(vui));
+		cs.events().cbCursorPos.set(onCursorPos<double>,	&std::get<UserInput<double>>(vui));
+		cs.events().cbScroll.set(onScroll<double>,			&std::get<UserInput<double>>(vui));
+		cs.events().cbMouseButton.set(onMouseBtn<double>,	&std::get<UserInput<double>>(vui));
+		cs.events().cbKey.set(onKey<double>,				&std::get<UserInput<double>>(vui));
+	}
 }
 
 using namespace std::placeholders;
 UNUSED void commandBufferPushConstants (ZCommandBuffer cmdBuffer, ZPipelineLayout pipelineLayout,
-								 const VarUserInput& vui, bool enableFloat64)
+										const VarUserInput& vui, add_cref<TestConfig> config)
 {
-	if (enableFloat64)
-		::vtf::commandBufferPushConstants(cmdBuffer, pipelineLayout, std::get<UserInput<double>>(vui).pc);
-	else ::vtf::commandBufferPushConstants(cmdBuffer, pipelineLayout, std::get<UserInput<float>>(vui).pc);
+	if (config.float32)
+		::vtf::commandBufferPushConstants(cmdBuffer, pipelineLayout, std::get<UserInput<float>>(vui).pc);
+	else ::vtf::commandBufferPushConstants(cmdBuffer, pipelineLayout, std::get<UserInput<double>>(vui).pc);
 }
 
-TriLogicInt performTest (Canvas& cs, const std::string&	assets, bool enableFloat64, uint32_t animationTicks, const GlobalAppFlags& flags)
+TriLogicInt performTest (add_ref<Canvas> cs, add_cref<std::string> assets,
+						 add_cref<TestConfig> config, add_cref<GlobalAppFlags> flags)
 {
 	ProgramCollection		programs(cs.device, assets);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
-	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, (enableFloat64 ? "dshader.frag" : "fshader.frag"));
-	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
+	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, (config.float32 ? "fshader.frag" : "dshader.frag"));
+	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, flags.genSpirvDisassembly);
 
 	ZShaderModule			vertShaderModule	= programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
 	ZShaderModule			fragShaderModule	= programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);
@@ -439,20 +502,20 @@ TriLogicInt performTest (Canvas& cs, const std::string&	assets, bool enableFloat
 	const VkClearValue		clearColor			= {{{0.5f, 0.5f, 0.5, 0.5f}}};
 	const VkFormat			format				= cs.surfaceFormat;
 	ZRenderPass				renderPass			= createColorRenderPass(cs.device, {format}, {{clearColor}});
-	ZPipelineLayout			pipelineLayout		= enableFloat64
-													? pm.createPipelineLayout<PushConstant<double>>()
-													: pm.createPipelineLayout<PushConstant<float>>();
+	ZPipelineLayout			pipelineLayout		= config.float32
+													? pm.createPipelineLayout<PushConstant<float>>()
+													: pm.createPipelineLayout<PushConstant<double>>();
 	ZPipeline				pipeline			= createGraphicsPipeline(pipelineLayout, renderPass,
 																		 vertexInput, vertShaderModule, fragShaderModule,
 																		 VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
-	VarUserInput			vui					= selectUserInputVariant(enableFloat64);
-	add_ref<UserInput_>		ui					= enableFloat64
-													? static_cast<add_ref<UserInput_>>(std::get<UserInput<double>>(vui))
-													: static_cast<add_ref<UserInput_>>(std::get<UserInput<float>>(vui));
-	ui.reset(cs);
-	ui.animationEnabled = animationTicks != 0;
+	VarUserInput			vui					= selectUserInputVariant(!config.float32);
+	add_ref<UserInput_>		ui					= config.float32
+													? static_cast<add_ref<UserInput_>>(std::get<UserInput<float>>(vui))
+													: static_cast<add_ref<UserInput_>>(std::get<UserInput<double>>(vui));
+	ui.setup(cs, config);
+	ui.animationEnabled = config.ticks != 0;
 
-	initEvents(cs, vui, enableFloat64);
+	initEvents(cs, vui, (config.float32));
 
 	std::chrono::time_point<std::chrono::steady_clock>
 			start = std::chrono::steady_clock::now(); // in nanoseconds
@@ -462,16 +525,16 @@ TriLogicInt performTest (Canvas& cs, const std::string&	assets, bool enableFloat
 		const auto now = std::chrono::steady_clock::now();
 		const auto tickCount = make_unsigned(std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count());
 
-		if (tickCount > animationTicks)
+		if (tickCount > config.ticks)
 		{
 			start = now;
 			ui.animationTicks = tickCount;
 			if (ui.ctrlPressed || ui.micePressed)
 			{
-				if (enableFloat64)
-					onScroll<double>(canvas, &ui, 0.0, ((ui.leftCtrlPressed || ui.leftMicePressed) ? +1.0 : -1.0));
-				else
+				if (config.float32)
 					onScroll<float>(canvas, &ui, 0.0, ((ui.leftCtrlPressed || ui.leftMicePressed) ? +1.0 : -1.0));
+				else
+					onScroll<double>(canvas, &ui, 0.0, ((ui.leftCtrlPressed || ui.leftMicePressed) ? +1.0 : -1.0));
 			}
 		}
 	};
@@ -483,7 +546,7 @@ TriLogicInt performTest (Canvas& cs, const std::string&	assets, bool enableFloat
 		commandBufferBegin(cmdBuffer);
 			commandBufferBindPipeline(cmdBuffer, pipeline);
 			commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
-			commandBufferPushConstants(cmdBuffer, pipelineLayout, vui, enableFloat64);
+			commandBufferPushConstants(cmdBuffer, pipelineLayout, vui, config);
 			vkCmdSetViewport(*cmdBuffer, 0, 1, &swapchain.viewport);
 			vkCmdSetScissor(*cmdBuffer, 0, 1, &swapchain.scissor);
 			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer, 0);
@@ -493,7 +556,7 @@ TriLogicInt performTest (Canvas& cs, const std::string&	assets, bool enableFloat
 		commandBufferEnd(cmdBuffer);
 	};
 
-	return cs.run(onCommandRecording, renderPass, std::ref(ui.drawTrigger), (animationTicks ? onIdle : Canvas::OnIdle()));
+	return cs.run(onCommandRecording, renderPass, std::ref(ui.drawTrigger), (config.ticks ? onIdle : Canvas::OnIdle()));
 }
 
 } // unnamed namespace

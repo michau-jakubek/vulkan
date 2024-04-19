@@ -337,18 +337,49 @@ static bool containsWarningString(const std::string& text)
 	return std::regex_search(text, std::regex("warning:", std::regex_constants::icase));
 }
 
+static std::string makeCompilerListFromPATH(const char* compiler)
+{
+#if SYSTEM_OS_WINDOWS == 1
+	const char pathSep = ';';
+	const std::string exeExt(".exe");
+#else
+	const char pathSep = ':';
+	const std::string exeExt;
+#endif
+	bool any = false;
+	std::error_code ec;
+	std::ostringstream compilers;
+	const std::string compilerWithExt = compiler + exeExt;
+#if defined(_MSC_VER)
+ #pragma warning(disable : 4996)
+#endif
+	add_cptr<char> pathVar = std::getenv("PATH");
+#if defined(_MSC_VER)
+#pragma warning(default : 4996)
+#endif
+	const strings paths = splitString(pathVar ? std::string(pathVar) : std::string(), pathSep);
+
+	for (add_cref<std::string> path : paths)
+	{
+		const fs::path compilerPath(fs::absolute(fs::path(path), ec) / compilerWithExt);
+		if (fs::exists(compilerPath))
+		{
+			any = true;
+			compilers << compilerPath.string() << '\n';
+		}
+	}
+
+	if (any)
+		return compilers.str();
+
+	return compilerWithExt;
+}
+
 static std::vector<std::pair<std::string, std::string>> makeCompilerSignature(bool glslangValidator)
 {
 	bool status = false;
 	// As far I know glslangValidator is an alias to glslang utility
 	const char* exe = glslangValidator ? "glslangValidator" : "glslang";
-	const std::string locCmd(
-#if SYSTEM_OS_LINUX == 1
-		std::string("type -a -P ") + exe
-#else
-		std::string("where ") + exe
-#endif
-	);
 	auto getCompilerVersion = [&](add_cref<std::string> comp) -> std::string
 	{
 		const std::string verCmd = '\"' + comp + "\" --version";
@@ -356,7 +387,18 @@ static std::vector<std::pair<std::string, std::string>> makeCompilerSignature(bo
 	};
 	std::string compiler;
 	std::vector<std::pair<std::string, std::string>> compilers;
+	/*
+	* On WSL Ubuntu -aP switches to the type command cause an error, try searching the PATH
+	const std::string locCmd(
+#if SYSTEM_OS_LINUX == 1
+		std::string("type -aP ") + exe
+#else
+		std::string("where ") + exe
+#endif
+	);
 	std::istringstream str(captureSystemCommandResult(locCmd.c_str(), status, '\n'));
+	*/
+	std::istringstream str(makeCompilerListFromPATH(exe));
 	while (std::getline(str, compiler))
 	{
 		compilers.emplace_back(compiler, getCompilerVersion(compiler));
@@ -421,7 +463,7 @@ static std::string maybe_quoted (add_cref<std::string> s) { return s; }
 static auto makeCompileGlslCommand (VkShaderStageFlagBits stage,
 									const strings& codeAndEntryAndIncludes,
 									const Version& vulkanVer, const Version& spirvVer,
-									const bool enableValidation,
+									const bool enableValidation, const std::string& compilerExecutable,
 									const fs::path& input, const fs::path& output) -> std::string
 {
 	const char* space = " ";
@@ -430,7 +472,7 @@ static auto makeCompileGlslCommand (VkShaderStageFlagBits stage,
 	UNREF(entryName);
 
 	std::stringstream cmd;
-	cmd << maybe_quoted(getCompilerExecutable()) << space;
+	cmd << maybe_quoted(compilerExecutable) << space;
 	for (size_t j = ProgramCollection::StageToCode::includePaths; j < codeAndEntryAndIncludes.size(); ++j)
 	{
 		cmd << "-I" << codeAndEntryAndIncludes.at(j) << space;
@@ -455,12 +497,13 @@ static auto makeCompileGlslCommand (VkShaderStageFlagBits stage,
 }
 
 static auto makeCompileSpvCommand (const Version& vulkanVer, const Version& spirvVer,
+								   const std::string& compilerExecutable,
 								   const fs::path& input, const fs::path& output) -> std::string
 {
 	const char* space = " ";
 	std::stringstream cmd;
 
-	cmd << maybe_quoted((fs::path(getCompilerExecutable()).parent_path() / "spirv-as").string()) << space;
+	cmd << maybe_quoted((fs::path(compilerExecutable).parent_path() / "spirv-as").string()) << space;
 	cmd << "--target-env spv" << spirvVer.nmajor << "." << spirvVer.nminor << space;
 	UNREF(vulkanVer);
 	//cmd << "--target-env vulkan" << vulkanVer.nmajor << "." << vulkanVer.nminor << space;
@@ -475,34 +518,17 @@ static auto makeCompileSpvCommand (const Version& vulkanVer, const Version& spir
 	return cmd.str();
 }
 
-static auto makeBuildSpvAsm (VkShaderStageFlagBits stage,
-							 const strings& codeAndEntryAndIncludes,
-							 const Version& vulkanVer, const Version& spirvVer,
-							 const fs::path& input, const fs::path& output) -> std::string
-{
-	// glslangValidator -S vert -H --target-env spirv1.4 14580917305851103956.vert.glsl >> 14580917305851103956.vert.spvasm
-	const char* space = " ";
-	std::stringstream cmd;
-
-	cmd << maybe_quoted(getCompilerExecutable()) << " -g -H --spirv-dis" << space;
-	for (size_t j = ProgramCollection::StageToCode::includePaths; j < codeAndEntryAndIncludes.size(); ++j)
-	{
-		cmd << "-I" << codeAndEntryAndIncludes.at(j) << space;
-	}
-	cmd << "--target-env vulkan" << vulkanVer.nmajor << "." << vulkanVer.nminor << space;
-	cmd << "--target-env spirv" << spirvVer.nmajor << "." << spirvVer.nminor << space;
-	cmd << "-S " << shaderStageToCommand(stage) << space;
-	cmd << input << space << ">" << space << output << space;
-	cmd << "2>&1";
-	cmd.flush();
-	return cmd.str();
-}
-
-static auto makeBuildSpvAsm (const fs::path& input, const fs::path& output) -> std::string
+static auto makeBuildSpvAsm (const std::string& compilerExecutable, const fs::path& input, const fs::path& output) -> std::string
 {
 	std::stringstream cmd;
-	cmd << maybe_quoted((fs::path(getCompilerExecutable()).parent_path() / "spirv-dis").string());
-	cmd << " --comment --no-color " << input << " -o " << output << " 2>&1";
+	cmd << maybe_quoted((fs::path(compilerExecutable).parent_path() / "spirv-dis").string());
+	cmd << " --comment --no-color " << input << " -o " << output << " "
+#if SYSTEM_OS_LINUX
+	<< "2>&1 && ls "
+#else
+	<< "2>&1 && dir "
+#endif
+	<< output;
 	cmd.flush();
 	return cmd.str();
 }
@@ -540,6 +566,7 @@ static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
 	const fs::path textPath(pathName + (isGlsl ? ".glsl" : ".spvasm"));
 	const fs::path binPath(pathName + ".spvbin");
 	const fs::path asmPath(pathName + ".spvasm");
+	const std::string compilerExecutable = getCompilerExecutable();
 	if (!fs::exists(textPath))
 	{
 		std::ofstream textFile(textPath.c_str());
@@ -549,8 +576,8 @@ static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
 	if (getGlobalAppFlags().verbose)
 	{
 		std::string versionLine;
-		std::cout << "[APP] Found compilers:\n";
 		auto compilers = makeCompilerSignature(true);
+		std::cout << "[APP] Found " << data_count(compilers) << " compiler(s):\n";
 		for (uint32_t cv = 0u; cv < data_count(compilers); ++cv)
 		{
 			add_ref<std::pair<std::string, std::string>> item = compilers.at(cv);
@@ -569,14 +596,15 @@ static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
 		if (getGlobalAppFlags().verbose)
 		{
 			const std::string compileCmd = isGlsl
-				? makeCompileGlslCommand(stage, codeAndEntryAndIncludes, vulkanVer, spirvVer, enableValidation, textPath, binPath)
-				: makeCompileSpvCommand(vulkanVer, spirvVer, textPath, binPath);
+				? makeCompileGlslCommand(stage, codeAndEntryAndIncludes, vulkanVer, spirvVer, enableValidation,
+										compilerExecutable, textPath, binPath)
+				: makeCompileSpvCommand(vulkanVer, spirvVer, compilerExecutable, textPath, binPath);
 			std::cout << "[APP] Compile command: \"" << compileCmd << "\"" << std::endl;
 			std::cout << "      File exists: \"" << binPath << "\"" << std::endl;
 
-			if (isGlsl)
+			if (isGlsl && genDisassmebly)
 			{
-				const std::string buildAsmCmd = makeBuildSpvAsm(binPath, asmPath);
+				const std::string buildAsmCmd = makeBuildSpvAsm(compilerExecutable, binPath, asmPath);
 				std::cout << "[APP] Build assembly command: \"" << buildAsmCmd << "\"" << std::endl;
 				std::cout << "      File exists: \"" << asmPath << "\"" << std::endl;
 			}
@@ -590,8 +618,9 @@ static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
 	{
 		ASSERTION(verifyIncludes(codeAndEntryAndIncludes));
 		const std::string compileCmd = isGlsl
-				? makeCompileGlslCommand(stage, codeAndEntryAndIncludes, vulkanVer, spirvVer, enableValidation, textPath, binPath)
-				: makeCompileSpvCommand(vulkanVer, spirvVer, textPath, binPath);
+				? makeCompileGlslCommand(stage, codeAndEntryAndIncludes, vulkanVer, spirvVer, enableValidation,
+										compilerExecutable, textPath, binPath)
+				: makeCompileSpvCommand(vulkanVer, spirvVer, compilerExecutable, textPath, binPath);
 		std::string result = captureSystemCommandResult(compileCmd.c_str(), status, '\n');
 		bool areErrors = containsErrorString(result);
 		bool areWarnings = containsWarningString(result);
@@ -602,11 +631,13 @@ static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
 					  << "Warnings: " << (areWarnings ? "Yes" : "No") << ", "
 					  << "Status: " << std::boolalpha << status << std::noboolalpha
 					  << std::endl;
+			std::cout << "[SYS] Command result: " << std::quoted(result) << std::endl;
 		}
-		if (isGlsl)
+		if (isGlsl && genDisassmebly)
 		{
 			bool sinkStatus = true;
-			const std::string buildAsmCmd = makeBuildSpvAsm(stage, codeAndEntryAndIncludes, vulkanVer, spirvVer, textPath, asmPath);
+			//const std::string buildAsmCmd = makeBuildSpvAsm(stage, codeAndEntryAndIncludes, vulkanVer, spirvVer, textPath, asmPath);
+			const std::string buildAsmCmd = makeBuildSpvAsm(compilerExecutable, binPath, asmPath);
 			const std::string asmCmdResult = captureSystemCommandResult(buildAsmCmd.c_str(), sinkStatus, '\n');
 			if (!sinkStatus)
 			{
@@ -619,6 +650,7 @@ static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
 						  << "Errors: " << (containsErrorString(asmCmdResult) ? "Yes" : "No") << ", "
 						  << "Status: " << std::boolalpha << sinkStatus << std::noboolalpha
 						  << std::endl;
+				std::cout << "[SYS] Command result: " << std::quoted(asmCmdResult) << std::endl;
 			}
 		}
 		if (status)
@@ -645,10 +677,10 @@ static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
 				ASSERTION(readed != INVALID_UINT32);
 				ASSERTION(readed % 4 == 0);
 
-				if (isGlsl)
+				if (isGlsl && genDisassmebly)
 				{
 					bool sinkStatus = true;
-					const std::string buildAsmCmd = makeBuildSpvAsm(binPath, asmPath);
+					const std::string buildAsmCmd = makeBuildSpvAsm(compilerExecutable, binPath, asmPath);
 					const std::string asmCmdResult = captureSystemCommandResult(buildAsmCmd.c_str(), sinkStatus, '\n');
 					if (getGlobalAppFlags().verbose)
 					{
@@ -696,6 +728,7 @@ static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
 			}
 			else
 			{
+				errorCollection << binPath << " does not exist" << std::endl;
 				status = false;
 			}
 		}

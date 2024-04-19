@@ -918,7 +918,7 @@ ZShaderModule createShader (ZDevice device, add_cref<std::string> assets, bool b
 	ProgramCollection		programs(device, assets);
 
 	programs.addFromFile(VK_SHADER_STAGE_COMPUTE_BIT, "main.compute", {"."}, "main_entry");
-	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, false, buildAlways);
+	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, flags.genSpirvDisassembly, buildAlways);
 
 	return programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT);
 }

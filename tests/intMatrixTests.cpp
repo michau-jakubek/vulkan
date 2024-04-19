@@ -78,7 +78,7 @@ TriLogicInt runIntMatrixSingleThread (VulkanContext& ctx, const std::string& ass
 	ProgramCollection		programs			(ctx.device, assets);
 	programs.addFromFile(VK_SHADER_STAGE_COMPUTE_BIT, "shader.comp");
 	const GlobalAppFlags	flags				(getGlobalAppFlags());
-	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
+	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, flags.genSpirvDisassembly);
 	ZShaderModule			compShaderModule	= programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT);
 
 	const uint32_t			align = 8u;
