@@ -508,12 +508,12 @@ VkDeviceSize imageCalcMipLevelsSize (ZImage image, uint32_t baseMipLevel, uint32
 	return imageGetMipLevelsOffsetAndSize(image, baseMipLevel, mipLevelCount).second;
 }
 
-add_cref<VkImageCreateInfo> imageGetCreateInfo (ZImage image)
+add_cref<VkImageCreateInfo> imageGetCreateInfo (add_cref<ZImage> image)
 {
 	return image.getParamRef<VkImageCreateInfo>();
 }
 
-add_cref<VkExtent3D> imageGetExtent (ZImage image)
+add_cref<VkExtent3D> imageGetExtent (add_cref<ZImage> image)
 {
 	return image.getParamRef<VkImageCreateInfo>().extent;
 }

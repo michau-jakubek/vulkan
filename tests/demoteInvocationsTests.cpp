@@ -1083,7 +1083,7 @@ TriLogicInt runDemoteInvocationsSingleThread (Canvas& cs, const std::string& ass
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
 	const GlobalAppFlags		flags		(getGlobalAppFlags());
-	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, false, params.buildAlways());
+	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, flags.genSpirvDisassembly, params.buildAlways());
 
 	ZShaderModule				vertShaderModule	= programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
 	ZShaderModule				fragShaderModule	= programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);

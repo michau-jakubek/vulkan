@@ -786,19 +786,19 @@ ZQueue deviceGetNextQueue (ZDevice device, VkQueueFlags queueFlags, bool mustSup
 	return ZQueue();
 }
 
-add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (ZDevice device)
+add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (add_cref<ZDevice> device)
 {
 	ASSERTMSG(device.has_handle(), "Device must have handle");
 	return device.getParam<ZPhysicalDevice>().getParamRef<VkPhysicalDeviceProperties>();
 }
 
-add_cref<VkPhysicalDeviceLimits> deviceGetPhysicalLimits (ZDevice device)
+add_cref<VkPhysicalDeviceLimits> deviceGetPhysicalLimits (add_cref<ZDevice> device)
 {
 	ASSERTMSG(device.has_handle(), "Device must have handle");
 	return deviceGetPhysicalLimits(device.getParam<ZPhysicalDevice>());
 }
 
-add_cref<VkPhysicalDeviceLimits> deviceGetPhysicalLimits (ZPhysicalDevice device)
+add_cref<VkPhysicalDeviceLimits> deviceGetPhysicalLimits (add_cref<ZPhysicalDevice> device)
 {
 	ASSERTMSG(device.has_handle(), "Physical Device must have handle");
 	return device.getParamRef<VkPhysicalDeviceProperties>().limits;

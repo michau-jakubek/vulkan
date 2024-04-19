@@ -625,7 +625,7 @@ TriLogicInt runViewerSingleThread (add_ref<Canvas> cs, add_cref<std::string> ass
 		programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT,   "pan.vert", includes);
 		programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "pan.frag", includes);
 		const GlobalAppFlags		flags(getGlobalAppFlags());
-		programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
+		programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, flags.genSpirvDisassembly);
 		faceShader = programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT);
 		vertShader = programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
 		fragShader = programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);

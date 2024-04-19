@@ -227,7 +227,8 @@ void commandBufferEndRenderPass (add_cref<ZRenderPassBeginInfo> beginInfo)
 	}
 	vkCmdEndRenderPass(*cmdBuffer);
 	const VkImageLayout finalLayout = beginInfo.getRenderPass().getParam<VkImageLayout>();
-	add_cref<std::vector<ZImageView>> views = beginInfo.getFramebuffer().getParamRef<std::vector<ZImageView>>();
+	ZFramebuffer fb = beginInfo.getFramebuffer();
+	add_cref<std::vector<ZImageView>> views = fb.getParamRef<std::vector<ZImageView>>();
 	for (add_cref<ZImageView> view : views)
 	{
 		imageResetLayout(view.getParam<ZImage>(), finalLayout);

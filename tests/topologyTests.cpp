@@ -456,7 +456,7 @@ std::array<ZShaderModule, 6> buildProgram (ZDevice device, add_cref<std::string>
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShader);
 	programs.addFromFile(VK_SHADER_STAGE_COMPUTE_BIT, "unicompute.shader");
 	const GlobalAppFlags		flags(getGlobalAppFlags());
-	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
+	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, flags.genSpirvDisassembly);
 
 	std::array<ZShaderModule, 6> shaders
 	{

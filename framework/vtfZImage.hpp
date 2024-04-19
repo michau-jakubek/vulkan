@@ -38,8 +38,8 @@ ZImage				imageViewGetImage (ZImageView view);
 VkImageLayout		imageGetLayout	 (ZImage image);
 VkImageLayout		imageResetLayout (ZImage image, VkImageLayout layout);
 VkImageLayout		imageResetLayout (ZImageView view, VkImageLayout layout);
-auto				imageGetCreateInfo (ZImage image) -> add_cref<VkImageCreateInfo>;
-add_cref<VkExtent3D> imageGetExtent (ZImage image);
+auto				imageGetCreateInfo (add_cref<ZImage> image) -> add_cref<VkImageCreateInfo>;
+add_cref<VkExtent3D> imageGetExtent (add_cref<ZImage> image);
 VkFormat			imageGetFormat	(ZImage image);
 uint32_t			imageGetPixelWidth (ZImage image);
 std::pair<VkDeviceSize, VkDeviceSize>

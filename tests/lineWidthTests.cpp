@@ -187,7 +187,7 @@ TriLogicInt runTestSingleThread (add_ref<Canvas> cs, add_cref<std::string> asset
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
 	add_cref<GlobalAppFlags>	flags(getGlobalAppFlags());
-	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
+	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, flags.genSpirvDisassembly);
 
 	ZShaderModule				vertShaderModule	= programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
 	ZShaderModule				fragShaderModule	= programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);

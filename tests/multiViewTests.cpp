@@ -172,7 +172,7 @@ std::tuple<ZShaderModule, ZShaderModule> buildProgram (ZDevice device, const std
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, useDeviceIndex ? "gl_DeviceIndex.vert" : "gl_ViewIndex.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
 	const GlobalAppFlags		flags(getGlobalAppFlags());
-	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate);
+	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, flags.genSpirvDisassembly);
 
 	return
 	{
