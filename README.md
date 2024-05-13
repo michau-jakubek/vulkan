@@ -1,46 +1,49 @@
-<h1>Vulkan Trivial Framework (VTF)</h1>
+Vulkan Trivial Framework (VTF)
+========
+The main idea when writing this code was to get the fastest result with as little code as possible. The project was written in C++ language with the fetures available since the C++17 standard and my favorite one in C++, which is a templates. As you study the code, you will find some interesting solutions, I think. For example, the _VertexInput_ class tries to wrap everything up for creating an interface for shaders with automatic conversions from STL's vectors. In turn, the _PipelineManager_ class deals with the improvement of the creation of a wide range of descriptor sets, whereas _createGraphicsPipeline_ template function simplyfies creation of pipeline via recognizing subsequent states by type. Other methods or routines generalize to a greater or lesser extent the Vulkan API.  
+I hope one will find the following sources useful not only for fun but also for getting to know Vulkan better.
 
-<h3>About:</h3>
-<p align="justify">
-Vulkan is excellent and awesome. Although it is terribly huge, I'm fascinated by it and I want to learn it every day, deeper and depper. I recognize there is a lot of similar 'frameworks' on the Internet but I wanted to have my own. This is actually VTF. The main idea when writing the code was to get the fastest result with as little code as possible. The project was written absolutely in C ++ in the C++17 standard with lots of language templates and features. As you study the code, you will find some interesting solutions, I think. For example, the VertexInput class tries to wrap everything up for creating an interface for shaders with automatic conversions from STL's vectors. In turn, the PipelineLayout class deals with the improvement of the creation of a wide range of descriptor sets and pipelines themselves. Other methods or routines generalize to a greater or lesser extent the Vulkan API.<br>I hope one will find the following sources useful not only for fun but also for getting to know Vulkan better.</p> 
+Supported OSs and Requirements and Licensing
+---------
+This stuff strongly uses dynamically linked [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) which has to be installed separately. Along with Vulkan SDK some of their binaries must be visble to the final VTF executable e.g. _glslangValidator_ or _spirvas_. Next to the VKSDK  the sources of this repo uses statically linked [GLFW](https://www.glfw.org/) library for a rendering - which also has to be installed separately.  
+I wrote this code mainly with the idea that it would run under Linux OS, but Both of those installations are available for Linux and Windows operating systems so you can successfully run it under Windows as well if you like. Other systems, e.g. MacOS or Android are not currently supported, although who knows.  
+Together with aforementioned ones some third-party libraries are used, these are: _stb_image.h_ from [STB repository](https://github.com/nothings/stb) and _stl_reader.h_ from [STL_READER repository](https://github.com/sreiter/stl_reader). Both of them are automatically cloned from their Github repositories during the building process by the _fetch_externals.py_ script. Of course you can be up to date with those repos by calling the script from scratch.
+- [Vulkan SDK license](https://vulkan.lunarg.com/license/)
+- [GLFW license](https://www.glfw.org/license)
+- [STB license](https://github.com/nothings/stb/blob/master/LICENSE)
+- [STL_READER license](https://github.com/sreiter/stl_reader/blob/master/LICENSE)
 
-<h3><a href="help/installation.html">Installation</a>, <a href=help/building.html>building</a> and <a href="help/launching.html">launching</a></h3>
+[Installation](help/installation.html), [building](help/building.html) and [launching](help/launching.html)
+------------------------
 
-<h3>Triangle test</h3>
-In my opinion "Hello Triangle" must exist in every presentation, thus...<BR />
-<img src="triangle.png" alt="triangle" /><BR />
-This test might be run with <code>-t num_threads</code>parameter as well, where it means a number of GPU threads you may want to
- employ.<BR />In the mean time you can see how small amount of source code is needed to draw the triangle.
-<h3>Fractals test</h3>
-<p align="justify">
-This test will take you to a land where you can admire the beauty of the Mandelbrot's fractal. While holding down the mouse button, find any place where you would like to dive and then, by scrolling, go deeper and deeper. The test automatically detects if your machine supports Float64. If so, the journey will be even more interesting. Additionally I've add <code>-a msesc</code> execution parameter that allows to run animated fractal refreshed avery msecs period, then you can use mice buttons or control keys to manually manipulate of zoom.
-If -a parameter is present an application shows some interesting information, e.g. pseudo frame rate.
-</p>
-<img src="fractals.png" alt="fractals" />
-<h3>Panorma viewer test</h3>
-<p align="justify">
-In turn, this test acts as a simple image viewer that can process several well-known formats, for example JPG. 
-Additionally, the test allows you to view panoramic photos that are passed with the -p parameter, then you can move
+Shaders
+-------
+The shaders are built automatically at the first time when you are running particular test, although, there are the tests that force to build the shaders every time they are run. Shaders binaries are stored in the temprary system folder or in the location you can point as the parameter to the VTF executable. Basically the binaries are built every time their code changes. Then something kind of the checksum is calculated and if it does not match to the previous one then the shaders are rebuild.
+
+Triangle test
+-------------
+
+In my opinion "Hello Triangle" must exist in every presentation regardless which technology it was written, so ...
+
+![](triangle.png)
+
+Beside the test is really trivial you can run it on more than one thread, of course if your GPU supports multithreading.
+
+Fractals test
+-------------
+
+![](fractals.png)
+
+This test will take you to a land where you can admire the beauty of the Mandelbrot's fractal. While holding down the mouse button,
+find any place where you would like to dive and then, by scrolling, go deeper and deeper. The test automatically detects if your machine
+supports Float64. If so, the journey will be even more interesting. Additionally you can run the test in animation mode then using a mice or a touchpad along with keyboard keys will cause the fractal will be zoomed in or out every millisecond you passed as a parameter.
+
+Panorma viewer test
+-------------------
+
+In turn, this test acts as a simple image viewer that can process several well-known formats, for example JPG, PNG, etc (thanks to stb_image). Additionally, the test allows to render panoramic photos that are passed with the `-p` parameter, then you can move
 around inside the image. It turns out that the reading of the image from the storage is a serious bottle-neck, so don't
-worry if you will see a splash while the image is loading. Picture is loaded exactly once, next time if selected, it is
+worry if you will see a splash while the image is loading. Pictures are loaded exactly once, next time if selected, they are
 taken from a cache.
-</p>
-<h3>A few smaller tests that do not need description</h3>
-<ul>
-  <li><b>int_matrix</b> - test of internal matrices</li>
-  <li><b>line_width</b> - verifies that lines has been drawn correctly (uses many renderpasses)</li>
-  <li><b>toplogy</b> - allows interactively draw Vulkan's primitives depending on run parameters</li>
-</ul>
-<h3>Solutions you might be interested in</h3>
-<ul>
-  <li>main rendering loop callback</li>
-  <li>VertexInput class that simplifies of building vertex input</li>
-  <li>LayoutManager class that simplifies a work with descriptor sets</li>
-  <li>template C++ function to create graphics pipeline</li>
-  <li>template C++ function to manage barriers and barriers themself</li>
-  <li>compile time conversion between C++ built-in types and VkFormat</li>
-  <li>working with several renderpasses</li>
-  <li>dynamic rendering</li>
-</ul>
-<h2>Enjoy!</h2>
 
+# Enjoy!

@@ -55,6 +55,7 @@ set(GLFW3_LIB_PATH     "" CACHE STRING "Full path to GLFW v3 link library")
 # Unfortunately CMAKE_SURRENT_SOURCE_DIR inside of 'cmake' subdirectory doesn't point to 'cmake' directory :(
 set(PROJECT_MODULES_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_MODULES_PATH})
+find_package(Git REQUIRED)
 find_package(Python REQUIRED)
 find_package(LookForDependencies REQUIRED)
 message(STATUS "Found Python interpreter: " ${Python_EXECUTABLE})
@@ -158,17 +159,27 @@ set(COMMON_LIBS ${ADDITIONAL_LIBS} ${ABS_VULKAN_LIB_PATH} ${ABS_GLFW3_LIB_PATH})
 
 set(ASSETS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assets)
 
+add_subdirectory(external)
+include_directories(
+	external/stb
+	external/stl_reader
+	)
+
 add_subdirectory(console)
 include_directories(console)
+add_dependencies(console external)
 
 add_subdirectory(framework)
 include_directories(framework)
+add_dependencies(framework external)
 
 add_subdirectory(daemon)
 include_directories(daemon)
+add_dependencies(daemon external)
 
 add_subdirectory(tests)
 include_directories(tests)
+add_dependencies(tests external)
 
 set(app_libs ${COMMON_LIBS} framework console tests)
 

@@ -1,8 +1,6 @@
 set(framework_files
         demangle.hpp
-	demangle.cpp
-        stb_image.h
-        stb_image_resize.h
+		demangle.cpp
         stb_image.cpp
         stb_image.hpp
         vtfLocale.cpp
