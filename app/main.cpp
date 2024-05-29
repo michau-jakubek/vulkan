@@ -11,6 +11,7 @@
 #include "vtfFilesystem.hpp"
 #include "vtfLocale.hpp"
 #include "allTests.hpp"
+#include "vtfOptionParser.hpp"
 
 using namespace vtf;
 

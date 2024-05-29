@@ -26,6 +26,8 @@ set(framework_files
         vtfExtensions.hpp
         vtfTermColor.cpp
         vtfTermColor.hpp
+        vtfOptionParser.hpp
+        vtfOptionParser.cpp
         vtfVector.hpp
         vtfMatrix.cpp
         vtfMatrix.hpp

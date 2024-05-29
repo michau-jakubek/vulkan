@@ -1,5 +1,5 @@
-
 #include "allTests.hpp"
+#include "vtfOptionParser.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfZUtils.hpp"

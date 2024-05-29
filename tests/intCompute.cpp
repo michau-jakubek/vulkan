@@ -1,3 +1,4 @@
+#include "vtfOptionParser.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfContext.hpp"
 #include "vtfVector.hpp"
@@ -517,7 +518,7 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine(ZDevice
 	enum class OptionKinds { Single, Const, Random };
 	auto parseOtherOptions = [&](const OptionKinds optionKind)
 	{
-		char name[20u];
+		char name[20u] {};
 		const Option optInputValue {&name[0], 1u};
 
 		typedef std::tuple<InputTypes, char> t2;

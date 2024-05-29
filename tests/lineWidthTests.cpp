@@ -1,4 +1,5 @@
 #include "lineWidthTests.hpp"
+#include "vtfOptionParser.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfFilesystem.hpp"

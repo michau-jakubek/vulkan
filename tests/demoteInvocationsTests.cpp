@@ -1,3 +1,4 @@
+#include "vtfOptionParser.hpp"
 #include "triangleTests.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZImage.hpp"

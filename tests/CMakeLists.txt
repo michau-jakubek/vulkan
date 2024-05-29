@@ -37,6 +37,8 @@ set(tests_files
     topologyTests.hpp
     demoteInvocationsTests.cpp
     demoteInvocationsTests.hpp
+	blendingTests.cpp
+	blendingTests.hpp
     )
 
 add_definitions(-DASSETS_PATH="${ASSETS_PATH}")

@@ -242,7 +242,7 @@ ZRenderPass	createRenderPassImpl (ZDevice device, void* pNext,
 	VkSubpassDescription subpassTemplate;
 	subpassTemplate.flags					= VkSubpassDescriptionFlags(0);
 	subpassTemplate.pipelineBindPoint		= VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpassTemplate.colorAttachmentCount	= attachmentCount;
+	subpassTemplate.colorAttachmentCount	= data_count(references);
 	subpassTemplate.pColorAttachments		= references.data();
 	subpassTemplate.pDepthStencilAttachment	= nullptr;
 	subpassTemplate.inputAttachmentCount	= 0;

@@ -1,0 +1,10 @@
+# Line that starts with '#' is considered as a comment
+# All empty lines will be ignored
+# All parameters must fit on one line
+
+-bkg-color 0,1,0,0.6 -color0 1,0,0,0.6
+-bkg-color 1,0,0,0.6 -color0 0,1,0,0.6
+
+-dual-source -bkg-color 0,1,0,0.6 -color0 1,0,0,0.6 -color1 0,1,0,0.6 -dst-color-factor minus_src1_alpha
+-dual-source -bkg-color 1,0,0,0.6 -color0 0,1,0,0.6 -color1 1,0,0,0.6 -dst-color-factor minus_src1_alpha
+

@@ -295,7 +295,7 @@ enum ZDistName
 	QueueFamilyIndex, QueueIndex, QueueFlags,
 	CullModeFlags, DepthTestEnable, DepthWriteEnable, StencilTestEnable,
 	LineWidth, AttachmentCount, SubpassCount, ViewportCount, ScissorCount,
-	MultiviewIndex,
+	MultiviewIndex, BlendAttachmentState, BlendConstants,
 };
 template<ZDistName, class CType_>
 struct ZDistType

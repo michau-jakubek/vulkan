@@ -70,17 +70,6 @@ VkPipelineDepthStencilStateCreateInfo makeDepthStencilStateCreateInfo ()
 	return depthStencilState;
 }
 
-VkPipelineColorBlendAttachmentState makeBlendAttachmentState ()
-{
-	VkPipelineColorBlendAttachmentState blendAttachmentState{};
-	blendAttachmentState.colorWriteMask	= VK_COLOR_COMPONENT_R_BIT
-										| VK_COLOR_COMPONENT_G_BIT
-										| VK_COLOR_COMPONENT_B_BIT
-										| VK_COLOR_COMPONENT_A_BIT;
-	blendAttachmentState.blendEnable	= VK_FALSE;
-	return blendAttachmentState;
-}
-
 VkPipelineColorBlendStateCreateInfo makeBlendStateCreateInfo ()
 {
 	VkPipelineColorBlendStateCreateInfo colorBlending = makeVkStruct();
@@ -322,9 +311,12 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 	const uint32_t attachmentCount = settings.m_renderPass.has_handle()
 									? settings.m_renderPass.getParam<ZDistType<AttachmentCount, uint32_t>>().get()
 									: settings.m_attachmentCount;
-	ASSERTMSG(attachmentCount != 0u, "Ther must be at least one attachment");
-	settings.m_blendAttachments.resize(attachmentCount, makeBlendAttachmentState());
-	settings.m_blendState.attachmentCount	= attachmentCount;
+	ASSERTMSG(attachmentCount != 0u, "There must be at least one attachment");
+	if (settings.m_blendAttachments.empty())
+	{
+		settings.m_blendAttachments.resize(attachmentCount, gpp::defaultBlendAttachmentState);
+	}
+	settings.m_blendState.attachmentCount	= data_count(settings.m_blendAttachments);
 	settings.m_blendState.pAttachments		= settings.m_blendAttachments.data();
 	info.pColorBlendState					= &settings.m_blendState;
 
@@ -378,6 +370,21 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZShaderModu
 		shaderStageInfo.pName	= "main";
 		settings.m_shaderStages.emplace_back(shaderStageInfo);
 	}
+}
+
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::BlendAttachmentState> blendAttachmentState)
+{
+	const uint32_t attachment = blendAttachmentState.get().first;
+	settings.m_blendAttachments.resize((attachment + 1u), gpp::defaultBlendAttachmentState);
+	settings.m_blendAttachments.at(attachment) = blendAttachmentState.get().second;
+}
+
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::BlendConstants> blendConstants)
+{
+	settings.m_blendState.blendConstants[0] = blendConstants.get()[0];
+	settings.m_blendState.blendConstants[1] = blendConstants.get()[1];
+	settings.m_blendState.blendConstants[2] = blendConstants.get()[2];
+	settings.m_blendState.blendConstants[3] = blendConstants.get()[3];
 }
 
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZRenderPass renderPass)

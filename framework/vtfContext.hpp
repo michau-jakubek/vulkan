@@ -51,6 +51,7 @@ public:
 
 	ZCommandPool	createGraphicsCommandPool	();
 	ZCommandPool	createComputeCommandPool	();
+	ZImage			createColorImage2D			(VkFormat format, add_cref<VkExtent2D> extent) const;
 	ZImage			createColorImage2D			(VkFormat format, uint32_t width, uint32_t height) const;
 
 protected:

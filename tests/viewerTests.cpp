@@ -1,4 +1,5 @@
 #include "viewerTests.hpp"
+#include "vtfOptionParser.hpp"
 #include "vtfVertexInput.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfBacktrace.hpp"

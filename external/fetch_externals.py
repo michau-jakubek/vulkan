@@ -19,7 +19,7 @@ if not verify_git():
 	print("GIT not found, please install it")
 	exit(1)
 
-PWD = os.path.dirname(__file__)
+PWD = os.path.dirname(os.path.abspath(__file__))
 #print(PWD)
 
 def enable_rw(path):
@@ -82,6 +82,13 @@ def pull_repo(repo):
 	except subprocess.CalledProcessError as e:
 		print(e.output)
 
+def clone_repo(repo):
+	clone = ["git", "clone", repo[1], "."]
+	try:
+		subprocess.run(clone)
+	except subprocess.CalledProcessError as e:
+		print(e.output)
+
 for repo in required_repos:
 	check = repo[3]
 	path = os.path.join(PWD, repo[0])
@@ -91,7 +98,7 @@ for repo in required_repos:
 		print("Removing old repository")
 		remove_directory_content(path)
 		os.chdir(path)
-		pull_repo(repo)
+		clone_repo(repo)
 		os.chdir(PWD)
 
 

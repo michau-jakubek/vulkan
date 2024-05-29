@@ -35,7 +35,16 @@ bool		containsAnyString (const vtf::strings& range, const vtf::strings& include)
 uint32_t	removeStrings (const vtf::strings& strs, vtf::strings& list);
 strings		mergeStrings (const strings& a, const strings& b);
 strings		mergeStringsDistinct (const strings& a, const strings& b);
-strings		splitString(const std::string& delimitedString, char delimiter = ',');
+strings		splitString (const std::string& delimitedString, char delimiter = ',');
+
+std::string	toLower (add_cref<std::string> s);
+std::string	toUpper (add_cref<std::string> s);
+void		toLower (add_ref<std::string> inplace);
+void		toUpper (add_ref<std::string> inplace);
+void		toLower (add_ref<std::string> out, add_cref<std::string> src);
+void		toUpper (add_ref<std::string> out, add_cref<std::string> src);
+bool		startswith (add_cptr<char> s, char c);
+template<class CharType> bool startswith(std::basic_string<CharType> s, CharType c);
 
 // Be careful, source strings must be alive after to_strings() is invoked.
 template<template<class T, class... U> class C, class T, class... U>
@@ -238,9 +247,11 @@ template<class R, class... Args> struct routine_t<R(Args...)>
 
 template<class routine_type__, std::size_t at__>
 using routine_arg_t = std::tuple_element_t<at__, typename routine_t<routine_type__>::ArgList>;
+// Example: typedef routine_arg_t<decltype(std::setw), 0> sted_setw_param0_t;
 
 template<class routine_type__>
 using routine_res_t = typename routine_t<routine_type__>::Result;
+// Example: typedef routine_res_t<decltype(std::setw)> sted_setw_result_t;
 
 template<class T, class E> struct expander
 {

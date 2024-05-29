@@ -1,6 +1,7 @@
 #include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string_view>
 
 #include "vtfZUtils.hpp"
 #include "vtfCUtils.hpp"
@@ -102,8 +103,7 @@ template<> bool			fromText<bool>			(const std::string& text, const bool&			defRe
 	if (!s.fail())
 	{
 		status = true;
-		std::transform(str.begin(), str.end(), str.begin(),
-					   [](const char c) { return static_cast<char>(std::toupper(c)); });
+		toUpper(str);
 		return str == "TRUE";
 	}
 	status = false;
@@ -234,6 +234,56 @@ strings splitString (const std::string& delimitedString, char delimiter)
 		std::getline(ss, result.back(), delimiter);
 	}
 	return result;
+}
+
+inline static char toLowerChar (add_cref<char> c) { return (char)std::tolower(c); }
+inline static char toUpperChar (add_cref<char> c) { return (char)std::toupper(c); }
+
+std::string	toLower (add_cref<std::string> s)
+{
+	std::string t(s);
+	toLower(t);
+	return t;
+}
+
+std::string	toUpper (add_cref<std::string> s)
+{
+	std::string t(s);
+	toUpper(t);
+	return t;
+}
+
+void toLower (add_ref<std::string> inplace)
+{
+	std::transform(inplace.begin(), inplace.end(), inplace.begin(), toLowerChar);
+}
+
+void toUpper (add_ref<std::string> inplace)
+{
+	std::transform(inplace.begin(), inplace.end(), inplace.begin(), toUpperChar);
+}
+
+void toLower (add_ref<std::string> out, add_cref<std::string> src)
+{
+	out.resize(src.length());
+	std::transform(src.begin(), src.end(), out.begin(), toLowerChar);
+}
+
+void toUpper (add_ref<std::string> out, add_cref<std::string> src)
+{
+	out.resize(src.length());
+	std::transform(src.begin(), src.end(), out.begin(), toUpperChar);
+}
+
+bool startswith (add_cptr<char> s, char c)
+{
+	const std::string_view sv(s);
+	return sv.length() > 0 && sv[0] == c;
+}
+
+template<> bool startswith<char> (std::basic_string<char> s, char c)
+{
+	return startswith(s.c_str(), c);
 }
 
 std::string captureSystemCommandResult (const char* cmd, bool& status, const char LF)

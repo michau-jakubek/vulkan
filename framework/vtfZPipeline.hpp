@@ -6,6 +6,7 @@
 #include "vtfLayoutManager.hpp"
 #include "vtfVertexInput.hpp"
 #include <memory>
+#include <tuple>
 
 namespace vtf
 {
@@ -14,17 +15,35 @@ struct GraphicPipelineSettings;
 
 namespace gpp // Graphics Pipeline Param
 {
-	using PatchControlPoints	= ZDistType<PatchControlPoints, uint32_t>;
-	using CullModeFlags			= ZDistType<CullModeFlags, VkCullModeFlags>;
-	using DepthTestEnable		= ZDistType<DepthTestEnable, bool>;
-	using DepthWriteEnable		= ZDistType<DepthWriteEnable, bool>;
-	using StencilTestEnable		= ZDistType<StencilTestEnable, bool>;
-	using SubpassIndex			= ZDistType<SubpassIndex, uint32_t>;
-	using ViewportCount			= ZDistType<ViewportCount, uint32_t>;
-	using ScissorCount			= ZDistType<ScissorCount, uint32_t>;
-	using LineWidth				= ZDistType<LineWidth, float>;
-	using MultiviewIndex		= ZDistType<MultiviewIndex, uint32_t>;
-	using AttachmentCount		= ZDistType<AttachmentCount, uint32_t>;
+
+constexpr VkPipelineColorBlendAttachmentState defaultBlendAttachmentState = {
+	VK_FALSE,					// VkBool32                 blendEnable;
+	VK_BLEND_FACTOR_ZERO,		// VkBlendFactor            srcColorBlendFactor;
+	VK_BLEND_FACTOR_ZERO,		// VkBlendFactor            dstColorBlendFactor;
+	VK_BLEND_OP_ADD,			// VkBlendOp                colorBlendOp;
+	VK_BLEND_FACTOR_ZERO,		// VkBlendFactor            srcAlphaBlendFactor;
+	VK_BLEND_FACTOR_ZERO,		// VkBlendFactor            dstAlphaBlendFactor;
+	VK_BLEND_OP_ADD,			// VkBlendOp                alphaBlendOp;
+	(VK_COLOR_COMPONENT_R_BIT
+	| VK_COLOR_COMPONENT_G_BIT
+	| VK_COLOR_COMPONENT_B_BIT
+	| VK_COLOR_COMPONENT_A_BIT)	// VkColorComponentFlags    colorWriteMask;
+
+};
+
+using PatchControlPoints	= ZDistType<PatchControlPoints, uint32_t>;
+using CullModeFlags			= ZDistType<CullModeFlags, VkCullModeFlags>;
+using DepthTestEnable		= ZDistType<DepthTestEnable, bool>;
+using DepthWriteEnable		= ZDistType<DepthWriteEnable, bool>;
+using StencilTestEnable		= ZDistType<StencilTestEnable, bool>;
+using SubpassIndex			= ZDistType<SubpassIndex, uint32_t>;
+using ViewportCount			= ZDistType<ViewportCount, uint32_t>;
+using ScissorCount			= ZDistType<ScissorCount, uint32_t>;
+using LineWidth				= ZDistType<LineWidth, float>;
+using MultiviewIndex		= ZDistType<MultiviewIndex, uint32_t>;
+using AttachmentCount		= ZDistType<AttachmentCount, uint32_t>;
+using BlendAttachmentState	= ZDistType<BlendAttachmentState, std::pair<uint32_t, VkPipelineColorBlendAttachmentState>>;
+using BlendConstants		= ZDistType<BlendConstants, Vec4>;
 
 	// VkExtent2D	sets both viewport and scissor
 	// VkViewport	sets viewport only
@@ -55,6 +74,8 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::Subpas
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::MultiviewIndex>		multiviewIndex);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, ZRenderPass							renderPass);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::AttachmentCount>		attachmentCount);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::BlendAttachmentState>	blendAttachmentState);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::BlendConstants>		blendConstants);
 
 // end of template recursion
 void updateSettings (add_ref<GraphicPipelineSettings>);

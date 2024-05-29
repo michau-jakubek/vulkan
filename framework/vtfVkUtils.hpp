@@ -122,7 +122,8 @@ struct Flags
 	template<class... OtherBits>
 	Flags(const Bits& bit, const OtherBits&... others)
 		: Flags(nullptr, std::forward<const Bits>(bit), std::forward<const OtherBits>(others)...) {}
-	Flags(const Flags& other) : m_flags(other.m_flags) {}
+	// Implicit definition is deprecated because it provided by the compiler
+	// Flags(const Flags& other) : m_flags(other.m_flags) {}
 	explicit operator ResultFlags() const { return m_flags; }
 	ResultFlags operator()() const { return m_flags; }
 	static Flags empty() { return Flags(ResultFlags(0)); }
@@ -133,13 +134,14 @@ struct Flags
 	Flags operator+(Bits bit) const { Flags f(*this); f.m_flags |= bit; return f; }
 	Flags operator-(Bits bit) const { Flags f(*this); f.m_flags &= (~bit); return f; }
 	static Flags fromFlags(const ResultFlags& flags) { return Flags(flags); }
+	bool contain(const Bits& bit) const { return ((m_flags & ResultFlags(bit)) == ResultFlags(bit)); }
 protected:
 	ResultFlags m_flags;
 	Flags(const ResultFlags& flags) : m_flags(flags) {}
 	template<class... OtherBits>
 	Flags(std::nullptr_t sink, const Bits& bit, const OtherBits&... others)
 		: Flags(sink, std::forward<const OtherBits>(others)...) { m_flags |= bit; }
-	Flags(std::nullptr_t, const Bits& bit) { m_flags = bit; }
+	Flags(std::nullptr_t, const Bits& bit) { m_flags = ResultFlags(bit); }
 };
 typedef Flags<VkBufferUsageFlags, VkBufferUsageFlagBits>			ZBufferUsageFlags;
 typedef Flags<VkImageUsageFlags, VkImageUsageFlagBits>				ZImageUsageFlags;

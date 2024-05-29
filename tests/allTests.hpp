@@ -62,6 +62,7 @@ enum TestIdentifier
 	TOPOLOGY,
 	DAEMON,
 	DEMOTE_INVOCATIONS,
+	BLENDING,
 	FRACTALS,
 
 	ALL_TESTS_END = FRACTALS
@@ -89,13 +90,5 @@ template<class T, class Comp> bool warnParamRange(const std::string& paramName,
 {
 	return warnParamRange(comp(paramValue, paramMin, paramMax), paramName, paramValue, paramMin, paramMax, defaultValue, changeToDefault);
 }
-
-struct Option
-{
-	const char* name;
-	uint32_t follows;
-	bool operator==(const Option& other) const;
-};
-int consumeOptions (const Option& opt, const std::vector<Option>& opts, vtf::strings& args, vtf::strings& values);
 
 #endif // ALL_TESTS_HPP

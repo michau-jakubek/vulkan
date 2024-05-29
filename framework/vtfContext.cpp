@@ -121,6 +121,11 @@ ZCommandPool VulkanContext::createComputeCommandPool ()
 	return createCommandPool(device, computeQueue);
 }
 
+ZImage	VulkanContext::createColorImage2D (VkFormat format, add_cref<VkExtent2D> extent) const
+{
+	return createColorImage2D(format, extent.width, extent.height);
+}
+
 ZImage	VulkanContext::createColorImage2D (VkFormat format, uint32_t width, uint32_t height) const
 {
 	const ZImageUsageFlags usage = { VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
