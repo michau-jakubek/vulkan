@@ -381,12 +381,12 @@ OneShotCommandBuffer::OneShotCommandBuffer (ZDevice device, ZQueue queue)
 {
 }
 
-void OneShotCommandBuffer::endRecordingAndSubmit ()
+void OneShotCommandBuffer::endRecordingAndSubmit (ZFence hintFence, uint64_t timeout)
 {
 	if (!m_submitted)
 	{
 		commandBufferEnd(m_commandBuffer);
-		commandBufferSubmitAndWait(m_commandBuffer);
+		commandBufferSubmitAndWait(m_commandBuffer, hintFence, timeout);
 		m_submitted = true;
 	}
 }

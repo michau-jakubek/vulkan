@@ -173,11 +173,11 @@ ZImage createImage (ZDevice device, VkFormat format, VkImageType type, uint32_t 
 	VkMemoryRequirements memRequirements;
 	vkGetImageMemoryRequirements(*device, image, &memRequirements);
 
-	ZDeviceMemory	imageMemory = createMemory(device, memRequirements, properties());
+	auto allocations = createMemory(device, memRequirements, properties(), memRequirements.size, false);
 
-	vkBindImageMemory(*device, image, *imageMemory, 0);
+	vkBindImageMemory(*device, image, *allocations.at(0), 0);
 
-	return ZImage::create(image, device, callbacks, imageInfo, imageMemory, memRequirements.size);
+	return ZImage::create(image, device, callbacks, imageInfo, allocations.at(0), memRequirements.size);
 }
 
 ZNonDeletableImage::ZNonDeletableImage () : ZImage()
@@ -359,7 +359,8 @@ ZImage createCubeImageAndLoadFromFiles	(ZDevice device, ZCommandPool commandPool
 
 		ZBuffer buffer = createBuffer	(device, dataFormat, pixelCount,
 										 ZBufferUsageFlags(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
-										 ZMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+										 ZMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
+										 ZBufferCreateFlags());
 
 //#define MANUAL_IMAGE
 #ifdef MANUAL_IMAGE

@@ -144,6 +144,7 @@ protected:
 	Flags(std::nullptr_t, const Bits& bit) { m_flags = ResultFlags(bit); }
 };
 typedef Flags<VkBufferUsageFlags, VkBufferUsageFlagBits>			ZBufferUsageFlags;
+typedef Flags<VkBufferCreateFlags, VkBufferCreateFlagBits>			ZBufferCreateFlags;
 typedef Flags<VkImageUsageFlags, VkImageUsageFlagBits>				ZImageUsageFlags;
 typedef Flags<VkMemoryPropertyFlags, VkMemoryPropertyFlagBits>		ZMemoryPropertyFlags;
 typedef Flags<VkPipelineCreateFlags, VkPipelineCreateFlagBits>		ZPipelineCreateFlags;

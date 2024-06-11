@@ -291,11 +291,12 @@ enum ZDistName
 	RequiredLayerExtensions,	AvailableLayerExtensions,
 	RequiredDeviceExtensions,	AvailableDeviceExtensions,
 	Width, Height, Depth,		PatchControlPoints, SubpassIndex,
+	SizeFirst, SizeSecond, SizeThird,
 	VtfVer, ApiVer, VulkanVer, SpirvVer,
 	QueueFamilyIndex, QueueIndex, QueueFlags,
 	CullModeFlags, DepthTestEnable, DepthWriteEnable, StencilTestEnable,
 	LineWidth, AttachmentCount, SubpassCount, ViewportCount, ScissorCount,
-	MultiviewIndex, BlendAttachmentState, BlendConstants,
+	MultiviewIndex, BlendAttachmentState, BlendConstants, 
 };
 template<ZDistName, class CType_>
 struct ZDistType
@@ -412,7 +413,10 @@ ZSemaphore;
 typedef ZDeletable<VkDeviceMemory,
 	decltype(&vkFreeMemory), &vkFreeMemory,
 	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr,
-	VkMemoryPropertyFlags, VkDeviceSize, uint8_t*>
+	VkMemoryPropertyFlags, 
+	VkDeviceSize,							// VkMemoryRequirements::size
+	ZDistType<SizeSecond, VkDeviceSize>,	// requested size (buffer|image)
+	add_ptr<uint8_t>>
 ZDeviceMemory;
 
 typedef ZDeletable<VkImage,
@@ -467,7 +471,7 @@ struct type_index_with_default : public std::type_index
 typedef ZDeletable<VkBuffer,
 	decltype(&vkDestroyBuffer), &vkDestroyBuffer,
 	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr,
-	VkBufferCreateInfo, ZDeviceMemory, VkDeviceSize,
+	VkBufferCreateInfo, std::vector<ZDeviceMemory>, VkDeviceSize,
 	type_index_with_default, VkExtent3D, VkFormat>
 ZBuffer;
 

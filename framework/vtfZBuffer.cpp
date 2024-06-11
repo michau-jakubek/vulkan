@@ -1,5 +1,6 @@
 #include "vtfCUtils.hpp"
 #include "vtfZUtils.hpp"
+#include "vtfStructUtils.hpp"
 #include "vtfZBuffer.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfZImage.hpp"
@@ -20,50 +21,111 @@ static ZBuffer	createBuffer (ZDevice					device,
 							  VkFormat					format,
 							  add_cref<VkExtent3D>		extent,
 							  ZBufferUsageFlags			usage,
+							  ZBufferCreateFlags		flags,
 							  ZMemoryPropertyFlags		properties)
 {
-	VkBuffer								buffer		= VK_NULL_HANDLE;
+	VkBuffer								handle		= VK_NULL_HANDLE;
 	VkAllocationCallbacksPtr				callbacks	= device.getParam<VkAllocationCallbacksPtr>();
 	ZPhysicalDevice							phys		= device.getParam<ZPhysicalDevice>();
 	add_cref<VkPhysicalDeviceProperties>	pdp			= phys.getParamRef<VkPhysicalDeviceProperties>();
+	const bool								sparse		= flags.contain(VK_BUFFER_CREATE_SPARSE_BINDING_BIT);
 
 	if (VkBufferUsageFlags(usage) & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)
 	{
 		ASSERTMSG(size <= pdp.limits.maxStorageBufferRange, "Requested buffer size exceeds maxStorageBufferRange device limits");
 	}
-
 	if (VkBufferUsageFlags(usage) & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT)
 	{
 		ASSERTMSG(size <= pdp.limits.maxUniformBufferRange, "Requested buffer size exceeds maxUniformBufferRange device limits");
 	}
+	ASSERTMSG(size != 0u, "Requested buffer size must not be zero");
 
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType		= VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferInfo.size			= size;
+	bufferInfo.flags		= flags();
 	bufferInfo.usage		= VkBufferUsageFlags(usage) | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 	bufferInfo.sharingMode	= VK_SHARING_MODE_EXCLUSIVE;
 
-	VKASSERT(vkCreateBuffer(*device, &bufferInfo, callbacks, &buffer), "failed to create buffer!");
+	VKASSERT(vkCreateBuffer(*device, &bufferInfo, callbacks, &handle), "failed to create buffer!");
 
 	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(*device, buffer, &memRequirements);
+	vkGetBufferMemoryRequirements(*device, handle, &memRequirements);
 
-	ZDeviceMemory	bufferMemory = createMemory(device, memRequirements, VkMemoryPropertyFlags(properties));
+	auto allocations = createMemory(device, memRequirements, VkMemoryPropertyFlags(properties), size, sparse);
+	if (false == sparse)
+	{
+		for (add_ref<ZDeviceMemory> alloc : allocations)
+			VKASSERT2(vkBindBufferMemory(*device, handle, *alloc, 0));
+	}
 
-	VKASSERT2(vkBindBufferMemory(*device, buffer, *bufferMemory, 0));
-
-	return ZBuffer::create(buffer, device, callbacks, bufferInfo, bufferMemory, size, type, extent, format);
+	return ZBuffer::create(handle, device, callbacks, bufferInfo, allocations, size, type, extent, format);
 }
 
-ZBuffer	createBuffer (ZDevice device, VkDeviceSize size, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties)
+ZDeviceMemory bufferGetMemory (ZBuffer buffer, uint32_t index)
 {
-	return createBuffer(device, size, type_index_with_default(), VK_FORMAT_UNDEFINED, {}, usage, properties);
+	add_ref<std::vector<ZDeviceMemory>> allocations = buffer.getParamRef<std::vector<ZDeviceMemory>>();
+	ASSERTMSG((index < data_count(allocations)), "Index out of bounds");
+	return allocations.at(index);
 }
 
-ZBuffer createBuffer (ZDevice device, VkFormat format, uint32_t elements, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties)
+void bufferBindMemory (ZBuffer buffer, ZQueue sparseQueue)
+{
+	typedef std::vector<ZDeviceMemory> Allocations;
+	ZDevice				device		= buffer.getParam<ZDevice>();
+	const VkQueueFlags	queueFlags	= sparseQueue.getParam<ZDistType<QueueFlags, VkQueueFlags>>();
+	ASSERTMSG(queueFlags & VkQueueFlags(VK_QUEUE_SPARSE_BINDING_BIT), "Queue is not sparse");
+	ASSERTMSG(buffer.getParamRef<VkBufferCreateInfo>().flags & VK_BUFFER_CREATE_SPARSE_BINDING_BIT, "Buffer is not sparse");
+
+	VkDeviceSize resourceOffset = 0u;
+	add_cref<Allocations> allocations(buffer.getParamRef<Allocations>());
+	const typename Allocations::size_type allocCount = allocations.size();
+	std::vector<VkSparseMemoryBind> bindings(allocCount);
+	for (typename Allocations::size_type a = 0u; a < allocCount; ++a)
+	{
+		add_cref<ZDeviceMemory>		alloc			(allocations.at(a));
+		add_ref<VkSparseMemoryBind> b				(bindings.at(a));
+		const VkDeviceSize			allocationSize	= alloc.getParam<VkDeviceSize>();
+
+		b.resourceOffset	= resourceOffset;
+		b.size				= allocationSize;
+		b.memory			= *alloc;
+		b.memoryOffset		= 0u;
+		b.flags				= VkSparseMemoryBindFlags(0);
+
+		resourceOffset += allocationSize;
+	}
+
+	const VkSparseBufferMemoryBindInfo memoryBindInfo
+	{
+		*buffer,
+		static_cast<uint32_t>(allocCount),
+		bindings.data()
+	};
+
+	VkStruct<VkBindSparseInfo> bindInfo;
+	bindInfo.bufferBindCount	= 1u;
+	bindInfo.pBufferBinds		= &memoryBindInfo;
+
+	
+	ZFence			fence = createFence(device);
+	add_cptr<char>	error = "failed to bind sparse buffer allocations";
+
+	VKASSERT(vkQueueBindSparse(*sparseQueue, 1u, &bindInfo, *fence), error);
+	VKASSERT(vkWaitForFences(*device, 1u, fence.ptr(), VK_TRUE, INVALID_UINT64), error);
+}
+
+ZBuffer	createBuffer (ZDevice device, VkDeviceSize size,
+					ZBufferUsageFlags usage, ZMemoryPropertyFlags properties, ZBufferCreateFlags flags)
+{
+	return createBuffer(device, size, type_index_with_default(), VK_FORMAT_UNDEFINED, {}, usage, flags, properties);
+}
+
+ZBuffer createBuffer (ZDevice device, VkFormat format, uint32_t elements,
+					ZBufferUsageFlags usage, ZMemoryPropertyFlags properties, ZBufferCreateFlags flags)
 {
 	const VkDeviceSize bufferSize = make_unsigned(computePixelByteSize(format)) * elements;
-	return createBuffer(device, bufferSize, type_index_with_default::make<VkFormat>(), format, { elements, 0u, 0u }, usage, properties);
+	return createBuffer(device, bufferSize, type_index_with_default::make<VkFormat>(), format, { elements, 0u, 0u }, usage, flags, properties);
 }
 
 ZBuffer createIndexBuffer (ZDevice device, uint32_t indexCount, VkIndexType indexType)
@@ -82,7 +144,7 @@ ZBuffer createIndexBuffer (ZDevice device, uint32_t indexCount, VkIndexType inde
 	}
 	ASSERTMSG(width, "Unknown index type");
 	return createBuffer(device, (indexCount * width), type, VK_FORMAT_UNDEFINED, { indexCount, 0u, 0u },
-						VK_BUFFER_USAGE_INDEX_BUFFER_BIT, ZMemoryPropertyHostFlags);
+						VK_BUFFER_USAGE_INDEX_BUFFER_BIT, ZBufferCreateFlags(), ZMemoryPropertyHostFlags);
 }
 
 VkDeviceSize	computeBufferSize (VkFormat format, uint32_t imageWidth, uint32_t imageHeight,
@@ -92,18 +154,20 @@ VkDeviceSize	computeBufferSize (VkFormat format, uint32_t imageWidth, uint32_t i
 	return (size * layerCount);
 }
 
-ZBuffer createBuffer (ZImage image, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties)
+ZBuffer createBuffer (ZImage image, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties, ZBufferCreateFlags flags)
 {
 	ASSERTMSG(image.has_handle(), "Image must have a handle");
 	add_cref<VkImageCreateInfo> ci = imageGetCreateInfo(image);
 	const VkDeviceSize size = computeBufferSize(ci.format, ci.extent.width, ci.extent.height, 0u, ci.mipLevels, ci.arrayLayers);
 	return createBuffer(image.getParam<ZDevice>(), size,
 						type_index_with_default::make<ZImage>(), ci.format, ci.extent,
-						usage, properties);
+						usage, flags, properties);
 }
 
 ZBuffer bufferDuplicate (ZBuffer buffer)
 {
+	ASSERT_NOT_IMPLEMENTED();
+	/*
 	ASSERTMSG(buffer.has_handle(), "Buffer handle must not be VK_NULL_HANDLE");
 
 	ZDevice							dev		= buffer.getParam<ZDevice>();
@@ -111,6 +175,8 @@ ZBuffer bufferDuplicate (ZBuffer buffer)
 	VkMemoryPropertyFlags			mprop	= buffer.getParam<ZDeviceMemory>().getParam<VkMemoryPropertyFlags>();
 
 	return createBuffer(dev, cinfo.size, ZBufferUsageFlags::fromFlags(cinfo.usage), ZMemoryPropertyFlags::fromFlags(mprop));
+	*/
+	return buffer;
 }
 
 ZBuffer createBufferAndLoadFromImageFile (ZDevice device, add_cref<std::string> imageFileName,
@@ -128,7 +194,7 @@ ZBuffer createBufferAndLoadFromImageFile (ZDevice device, add_cref<std::string> 
 
 	ZBuffer		buffer = createBuffer(device,
 									  (forceFourComponentFormat ? VK_FORMAT_R8G8B8A8_UNORM : format),
-									  pixelCount, usage, ZMemoryPropertyHostFlags);
+									  pixelCount, usage, ZMemoryPropertyHostFlags, ZBufferCreateFlags());
 	buffer.setParam<type_index_with_default>(type_index_with_default::make<std::string>());
 	add_ref<VkExtent3D> extent = buffer.getParamRef<VkExtent3D>();
 	extent.width	= width;
@@ -186,7 +252,7 @@ VkDeviceSize bufferWriteData (ZBuffer buffer, const uint8_t* src, VkDeviceSize s
 VkDeviceSize bufferWriteData (ZBuffer buffer, const uint8_t* src, const VkBufferCopy& copy, bool flush)
 {
 	ZDevice					device		= buffer.getParam<ZDevice>();
-	ZDeviceMemory			memory		= buffer.getParam<ZDeviceMemory>();
+	ZDeviceMemory			memory		= bufferGetMemory(buffer, 0);
 	VkMemoryPropertyFlags	props		= memory.getParam<VkMemoryPropertyFlags>();
 	const VkDeviceSize		bufferSize	= buffer.getParam<VkDeviceSize>();
 
@@ -234,7 +300,7 @@ VkDeviceSize bufferReadData (ZBuffer buffer, uint8_t* dst, const VkBufferCopy& c
 {
 	if (copy.size == 0u) return copy.size;
 
-	ZDeviceMemory			memory		= buffer.getParam<ZDeviceMemory>();
+	ZDeviceMemory			memory		= bufferGetMemory(buffer, 0);
 	VkMemoryPropertyFlags	props		= memory.getParam<VkMemoryPropertyFlags>();
 	ZDevice					device		= buffer.getParam<ZDevice>();
 	const VkDeviceSize		bufferSize	= buffer.getParam<VkDeviceSize>();
@@ -264,7 +330,7 @@ VkDeviceSize bufferReadData (ZBuffer buffer, uint8_t* dst, const VkBufferCopy& c
 void bufferFlush (ZBuffer buffer)
 {
 	ZDevice					device		= buffer.getParam<ZDevice>();
-	ZDeviceMemory			memory		= buffer.getParam<ZDeviceMemory>();
+	ZDeviceMemory			memory		= bufferGetMemory(buffer, 0);
 	VkMemoryPropertyFlags	props		= memory.getParam<VkMemoryPropertyFlags>();
 	if (!(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT & props))
 	{
@@ -291,9 +357,9 @@ VkDeviceSize bufferGetSize (ZBuffer buffer)
 	return buffer.getParam<VkDeviceSize>();
 }
 
-VkDeviceSize bufferGetMemorySize	(ZBuffer buffer)
+VkDeviceSize bufferGetMemorySize	(ZBuffer buffer, uint32_t index)
 {
-	return buffer.getParam<ZDeviceMemory>().getParam<VkDeviceSize>();
+	return bufferGetMemory(buffer, index).getParam<VkDeviceSize>();
 }
 
 void bufferCopyToBuffer (ZCommandBuffer cmdBuffer, ZBuffer srcBuffer, ZBuffer dstBuffer,
@@ -412,12 +478,15 @@ BufferTexelAccess_::BufferTexelAccess_ (ZBuffer buffer, uint32_t elementSize, ui
 	ASSERTION(width != 0 && height != 0 && depth != 0 && (VkDeviceSize(elementSize) * width * height * depth) <= m_bufferSize);
 	const VkBufferUsageFlags	usage = buffer.getParamRef<VkBufferCreateInfo>().usage;
 	ASSERTION(usage & (VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT));
-	const VkMemoryPropertyFlags	flags = buffer.getParam<ZDeviceMemory>().getParam<VkMemoryPropertyFlags>();
+	const VkMemoryPropertyFlags	flags = bufferGetMemory(buffer, 0u).getParam<VkMemoryPropertyFlags>();
 	ASSERTION(flags & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
-	VKASSERT2(vkMapMemory(*buffer.getParam<ZDevice>(), *buffer.getParam<ZDeviceMemory>(),
+	VKASSERT2(vkMapMemory(*buffer.getParam<ZDevice>(), *buffer.getParam<std::vector<ZDeviceMemory>>().front(),
 						  0u, bufferGetMemorySize(buffer), (VkMemoryMapFlags)0, reinterpret_cast<void**>(&m_data)));
 }
-BufferTexelAccess_::~BufferTexelAccess_ () { vkUnmapMemory(*m_buffer.getParam<ZDevice>(), *m_buffer.getParam<ZDeviceMemory>()); }
+BufferTexelAccess_::~BufferTexelAccess_ ()
+{
+	vkUnmapMemory(*m_buffer.getParam<ZDevice>(), *m_buffer.getParam<std::vector<ZDeviceMemory>>().front());
+}
 add_ptr<void> BufferTexelAccess_::at (uint32_t x, uint32_t y, uint32_t z)
 {
 	const std::size_t address = static_cast<std::size_t>(m_elementSize * ((z * m_size.x() * m_size.y()) + (y * m_size.x()) + x));

@@ -17,9 +17,12 @@ namespace vtf
  * @param usage			is a bitmask of VkBufferUsageFlagBits specifying allowed usages of the buffer
  * @param size			is the size in bytes of the buffer to be created
  * @param properties	is a bitmask of VkMemoryPropertyFlagBits specifying memory of the buffer
+ * @param flags			is a bitmask of VkBufferCreateFlagBits specifying a creation of the buffer
  * @return				ZBuffer instance with Vulkan handle
  */
-ZBuffer			createBuffer	(ZDevice device, VkDeviceSize size, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties = ZMemoryPropertyHostFlags);
+ZBuffer			createBuffer	(ZDevice device, VkDeviceSize size, ZBufferUsageFlags usage,
+								ZMemoryPropertyFlags properties = ZMemoryPropertyHostFlags,
+								ZBufferCreateFlags flags = ZBufferCreateFlags());
 /**
  * @brief Create a underlying VkBuffer object and bind it to memory
  * @param device		is the logical device that creates the buffer object
@@ -27,9 +30,11 @@ ZBuffer			createBuffer	(ZDevice device, VkDeviceSize size, ZBufferUsageFlags usa
  * @param elements		is a number of the hypothetical texel blocks that will be contained in the buffer
  * @param usage			is a bitmask of VkBufferUsageFlagBits specifying allowed usages of the buffer
  * @param properties	is a bitmask of VkMemoryPropertyFlagBits specifying memory of the buffer
+ * @param flags			is a bitmask of VkBufferCreateFlagBits specifying a creation of the buffer
  * @return
  */
-ZBuffer			createBuffer	(ZDevice device, VkFormat format, uint32_t elements, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties);
+ZBuffer			createBuffer	(ZDevice device, VkFormat format, uint32_t elements,
+								ZBufferUsageFlags usage, ZMemoryPropertyFlags properties, ZBufferCreateFlags flags);
 
 VkDeviceSize	computeBufferSize (VkFormat format, uint32_t imageWidth, uint32_t imageHeight,
 								   uint32_t baseMipLevel = 0u, uint32_t mipLevelCount = 1u, uint32_t layerCount = 1u);
@@ -38,9 +43,10 @@ VkDeviceSize	computeBufferSize (VkFormat format, uint32_t imageWidth, uint32_t i
  * @param image			describes format, size, layers, mip levels, etc. on which the buffer will be created
  * @param usage			is a bitmask of VkBufferUsageFlagBits specifying allowed usages of the buffer
  * @param properties	is a bitmask of VkMemoryPropertyFlagBits specifying memory of the buffer
+ * @param flags			is a bitmask of VkBufferCreateFlagBits specifying a creation of the buffer
  * @return
  */
-ZBuffer			createBuffer	(ZImage image, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties);
+ZBuffer			createBuffer	(ZImage image, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties, ZBufferCreateFlags flags = ZBufferCreateFlags());
 
 /**
  * @brief   Create index buffer
@@ -63,7 +69,9 @@ VkDeviceSize	bufferReadData	(ZBuffer buffer, uint8_t* dst, const VkBufferCopy& c
 VkDeviceSize	bufferReadData	(ZBuffer buffer, uint8_t* dst, VkDeviceSize size = VK_WHOLE_SIZE);
 
 VkDeviceSize	bufferGetSize		(ZBuffer buffer);
-VkDeviceSize	bufferGetMemorySize	(ZBuffer buffer);
+ZDeviceMemory	bufferGetMemory		(ZBuffer buffer, uint32_t index);
+VkDeviceSize	bufferGetMemorySize	(ZBuffer buffer, uint32_t index = 0u);
+void			bufferBindMemory	(ZBuffer buffer, ZQueue sparseQueue);
 
 template<class X, class Cast = uint32_t> Cast bufferGetElementCount (ZBuffer buffer)
 {

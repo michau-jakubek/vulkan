@@ -430,7 +430,7 @@ ZBuffer createVertexBuffer (add_ref<VertexInput> input, add_cref<Params> params)
 	input.binding(0).declareAttributes<Fmt_<vertexType>>();
 	const uint32_t vertexCount = data_count(params.vertices) + 256u;
 	ZBuffer vertexBuffer = createBuffer(input.device, type_to_vk_format<Fmt_<vertexType>>, vertexCount,
-										ZBufferUsageFlags(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT), ZMemoryPropertyHostFlags);
+										ZBufferUsageFlags(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT), ZMemoryPropertyHostFlags, ZBufferCreateFlags());
 	BufferTexelAccess<vertexType> a(vertexBuffer, vertexCount, 1u, 1u);
 	for (uint32_t i = 0; i < data_count(params.vertices); ++i)
 	{

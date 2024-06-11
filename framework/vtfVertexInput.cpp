@@ -177,13 +177,13 @@ VertexBinding::Location VertexBinding::addAttributes_ (const AttrFwd* fwd, const
 	uint8_t*			bindingSource	= nullptr;
 	const uint8_t*		inputSource		= nullptr;
 
-	ZDeviceMemory	newMemory	= newBuffer.getParam<ZDeviceMemory>();
+	ZDeviceMemory	newMemory	= bufferGetMemory(newBuffer, 0u);
 	VKASSERT(vkMapMemory(*device, *newMemory, 0, newBufferSize, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&dst)), "");
 
 	if (oldStride)
 	{
 		const VkDeviceSize	oldBufferSize	= elementCount * oldStride;
-		ZDeviceMemory oldMemory = m_buffer.getParam<ZDeviceMemory>();
+		ZDeviceMemory oldMemory = bufferGetMemory(m_buffer, 0u);
 		VKASSERT(vkMapMemory(*device, *oldMemory, 0, oldBufferSize, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&bindingSource)), "");
 
 		/*
@@ -235,7 +235,7 @@ VertexBinding::Location VertexBinding::addAttributes_ (const AttrFwd* fwd, const
 
 	if (oldStride)
 	{
-		ZDeviceMemory oldMemory = m_buffer.getParam<ZDeviceMemory>();
+		ZDeviceMemory oldMemory = bufferGetMemory(m_buffer, 0u);
 		vkUnmapMemory(*device, *oldMemory);
 	}
 

@@ -236,7 +236,7 @@ ZDescriptorSetLayout LayoutManager::createDescriptorSetLayout (bool performUpdat
 										 descriptorSetLayout.setter()), "Failed to create descriptor set layout");
 
 	updateBuffersOffsets();
-	recreateUpdateBuffers(m_buffers);
+	recreateUpdateBuffers(m_buffers, performUpdateDescriptorSets);
 
 	ZDescriptorSet					descriptorSet(VK_NULL_HANDLE, device, descriptorPool);
 	VkDescriptorSetAllocateInfo		allocInfo{};
@@ -288,7 +288,7 @@ void LayoutManager::updateBuffersOffsets ()
 		}
 	}
 }
-void LayoutManager::recreateUpdateBuffers (std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers)
+void LayoutManager::recreateUpdateBuffers (std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers, bool performUpdateDescriptorSets)
 {
 	std::map<std::pair<VkDescriptorType, int>, VkDeviceSize>	sizes;
 
@@ -320,7 +320,11 @@ void LayoutManager::recreateUpdateBuffers (std::map<std::pair<VkDescriptorType, 
 		const ZBufferUsageFlags		usage	(usagePtr->second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 		const ZMemoryPropertyFlags	flags	(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-		ZBuffer buffer = createBuffer(device, size.second, usage, flags);
+		ZBuffer buffer;
+		if (performUpdateDescriptorSets)
+		{
+			buffer = createBuffer(device, size.second, usage, flags);
+		}
 
 		buffers.emplace(size.first, buffer);
 	}
@@ -330,13 +334,24 @@ void LayoutManager::updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZB
 	ASSERTMSG(ds.has_handle(), "Descriptor set must have a handle");
 	ASSERTMSG(buffer.has_handle(), "Buffer must have a handle");
 	auto ptr = std::find_if(m_extbindings.begin(), m_extbindings.end(), [&](const auto& b){ return b.binding == binding; });
-	ASSERTMSG(ptr != m_extbindings.end(), "Cannot find desired binding for vector");
-	ASSERTMSG(ptr->isVector, "Cannot find desired binding for vector");
+	ASSERTMSG(ptr != m_extbindings.end(), "Cannot find desired binding");
 	ZBuffer meBuffer = m_buffers.at({ptr->descriptorType, (ptr->shared ? UNIQUE_IBINDING : static_cast<int>(binding))});
-	const VkBufferUsageFlags meUsageFlags = meBuffer.getParamRef<VkBufferCreateInfo>().usage;
-	const VkBufferUsageFlags bufferUsageFlags = buffer.getParamRef<VkBufferCreateInfo>().usage;
-	ASSERTMSG((meUsageFlags & bufferUsageFlags), "Buffers usage flags must match");
-	ptr->elementCount = static_cast<uint32_t>(bufferGetSize(buffer) / ptr->size);
+	if (meBuffer.has_handle())
+	{
+		const VkBufferUsageFlags meUsageFlags = meBuffer.getParamRef<VkBufferCreateInfo>().usage;
+		const VkBufferUsageFlags bufferUsageFlags = buffer.getParamRef<VkBufferCreateInfo>().usage;
+		ASSERTMSG((meUsageFlags & bufferUsageFlags), "Buffers usage flags must match");
+	}
+	else
+	{
+		auto usagePtr = std::find_if(std::begin(DescriptorTypeToBufferUsage), std::end(DescriptorTypeToBufferUsage),
+			[&](const auto& x) { return x.first == ptr->descriptorType; });
+		ASSERTION(std::end(DescriptorTypeToBufferUsage) != usagePtr);
+		const ZBufferUsageFlags meUsageFlags(usagePtr->second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+		const VkBufferUsageFlags bufferUsageFlags = buffer.getParamRef<VkBufferCreateInfo>().usage;
+		ASSERTMSG((meUsageFlags() & bufferUsageFlags), "Buffers usage flags must match");
+	}
+	ptr->elementCount = ptr->isVector ? static_cast<uint32_t>(bufferGetSize(buffer) / ptr->size) : 1u;
 	m_buffers.at({ptr->descriptorType, (ptr->shared ? UNIQUE_IBINDING : static_cast<int>(binding))}) = buffer;
 	updateDescriptorSet_(ds, m_buffers);
 }

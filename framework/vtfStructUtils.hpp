@@ -2,6 +2,7 @@
 #define __VTF_STRUCT_UTILS_HPP_INCLUDED__
 
 #include "vulkan/vulkan.h"
+#include "vtfZDeletable.hpp"
 #include <typeinfo>
 
 namespace vtf
@@ -58,6 +59,8 @@ MKSTYPE(VkDebugReportCallbackCreateInfoEXT,			VK_STRUCTURE_TYPE_DEBUG_REPORT_CAL
 MKSTYPE(VkCommandBufferInheritanceInfo,				VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO);
 MKSTYPE(VkCommandBufferBeginInfo,					VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO);
 MKSTYPE(VkSubmitInfo,								VK_STRUCTURE_TYPE_SUBMIT_INFO);
+MKSTYPE(VkBindSparseInfo,							VK_STRUCTURE_TYPE_BIND_SPARSE_INFO);
+MKSTYPE(VkDeviceGroupBindSparseInfo,				VK_STRUCTURE_TYPE_DEVICE_GROUP_BIND_SPARSE_INFO);
 
 struct makeVkStruct
 {
@@ -79,6 +82,16 @@ auto makeVkStructT (void *pNext = nullptr) -> VKStructure
 	struct makeVkStruct maker(pNext);
 	return maker.operator VKStructure();
 }
+
+template<class VkStructName>
+struct VkStruct : public VkStructName
+{
+	inline constexpr VkStruct(add_ptr<void> pNext = nullptr)
+		: VkStructName()
+	{
+		add_ref<VkStructName>(*this) = makeVkStruct(pNext);
+	}
+};
 
 } // namespace vtf
 

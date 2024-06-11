@@ -196,9 +196,9 @@ private:
 	void									getBinding_					(uint32_t binding, std::optional<std::pair<ZImageView,ZSampler>>&) const;
 	VkDeviceSize							getDescriptorAlignment		(const VkDescriptorType type) const;
 	void									updateBuffersOffsets		();
-	void									recreateUpdateBuffers		(std::map<std::pair<VkDescriptorType, int>, ZBuffer>&	buffers);
+	void									recreateUpdateBuffers		(std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers, bool performUpdateDescriptorSets);
 	void									updateDescriptorSet_		(ZDescriptorSet	descriptorSet,
-																		 std::map<std::pair<VkDescriptorType, int>, ZBuffer>&	buffers) const;
+																		 std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers) const;
 	ZPipelineLayout							createPipelineLayout_		(std::initializer_list<ZDescriptorSetLayout> descriptorSetLayouts,
 																		 const VkPushConstantRange* pPushConstantRanges, type_index_with_default typeOfPushConstant);
 

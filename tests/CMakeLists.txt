@@ -39,6 +39,8 @@ set(tests_files
     demoteInvocationsTests.hpp
 	blendingTests.cpp
 	blendingTests.hpp
+	sparseBufferTests.cpp
+	sparseBufferTests.hpp
     )
 
 add_definitions(-DASSETS_PATH="${ASSETS_PATH}")

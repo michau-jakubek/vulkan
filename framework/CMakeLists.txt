@@ -31,6 +31,8 @@ set(framework_files
         vtfVector.hpp
         vtfMatrix.cpp
         vtfMatrix.hpp
+		vtfZDeviceMemory.cpp
+		vtfZDeviceMemory.hpp
         vtfThreadSafeLogger.cpp
         vtfThreadSafeLogger.hpp
         vtfZBarriers.cpp
