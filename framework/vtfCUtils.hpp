@@ -13,8 +13,21 @@
 #include "vtfFilesystem.hpp"
 #include "vtfZDeletable.hpp"
 
+#define ARRAY_LENGTH(a__) (std::extent<decltype(a__)>::value)
+#define ARRAY_LENGTH_CAST(a__, cast__) (static_cast<cast__>(ARRAY_LENGTH(a__)))
+
+#define UNREF(x__) static_cast<void>(x__)
+#define SIDE_EFFECT(x__) UNREF(x__)
+
+#ifdef _MSC_VER
+#define UNUSED [[maybe_unused]]
+#else
+#define UNUSED __attribute__((unused))
+#endif
+
 namespace vtf
 {
+
 typedef std::vector<std::string> strings;
 typedef std::map<std::string, std::string> string_to_string_map;
 
@@ -232,25 +245,58 @@ template<class T> bool between (const T& paramValue, const T& paramMin, const T&
 static const auto string_to_c_str = [](const std::string& s) -> const char* { return s.c_str(); };
 
 
+// Primary routine_signature_template
+template<class> struct routine_signature;
+// routine_template specialization for routine pointers
 template<class R, class... Args>
-struct routine_signature
+struct routine_signature<R(*)(Args...)>
 {
 	typedef R Result;
+	typedef void Behalf;
 	typedef std::tuple<Args...> ArgList;
+	typedef R(*Pointer)(Args...);
+	constexpr bool is_method() {
+		return false;
+	}
 };
-template<class R, class... Args> struct routine_t;
-template<class R, class... Args> struct routine_t<R(Args...)>
-	: routine_signature<R, Args...>
+// routine_template specialization for routine reference
+template<class R, class... Args>
+struct routine_signature<R(Args...)> : routine_signature<R(*)(Args...)>
 {
-	//typedef R(Args...) type;
+	// All the members are available from the base type
 };
-
+// routine_template specialization for method pointers
+template<class R, class C, class... Args>
+struct routine_signature<R(C::*)(Args...)>
+{
+	typedef R Result;
+	typedef C Behalf;
+	typedef std::tuple<Args...> ArgList;
+	typedef R(C::* Pointer)(Args...);
+	typedef std::remove_pointer_t<Pointer> Reference;
+	constexpr bool is_method() {
+		return true;
+	}
+};
+// routine_template specialization for const methodpointers
+template<class C, class R, class... Args>
+struct routine_signature<R(C::*)(Args...) const>
+{
+	typedef R Result;
+	typedef const C Behalf;
+	typedef std::tuple<Args...> ArgList;
+	typedef R(C::* Pointer)(Args...) const;
+	typedef std::remove_pointer_t<Pointer> Reference;
+	constexpr bool is_method() {
+		return true;
+	}
+};
 template<class routine_type__, std::size_t at__>
-using routine_arg_t = std::tuple_element_t<at__, typename routine_t<routine_type__>::ArgList>;
+using routine_arg_t = std::tuple_element_t<at__, typename routine_signature<routine_type__>::ArgList>;
 // Example: typedef routine_arg_t<decltype(std::setw), 0> sted_setw_param0_t;
 
 template<class routine_type__>
-using routine_res_t = typename routine_t<routine_type__>::Result;
+using routine_res_t = typename routine_signature<routine_type__>::Result;
 // Example: typedef routine_res_t<decltype(std::setw)> sted_setw_result_t;
 
 template<class T, class E> struct expander

@@ -85,6 +85,9 @@ TriLogicInt selfTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 
 	ZPipeline							pipeline			= createComputePipeline(pipelineLayout, shaderModule, UVec3(10,10,1));
 
+	Alloc								alloc				(buffer);
+	std::fill_n(alloc.begin<Item>(), count, Item{ 3u, {} });
+
 	OneShotCommandBuffer				shot				(ctx.device, queue);
 	ZCommandBuffer						cmd					= shot.commandBuffer;
 		commandBufferBindPipeline(cmd, pipeline);
@@ -93,16 +96,23 @@ TriLogicInt selfTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 
 	uint32_t i = 0u;
 	uint32_t e = 0u;
-	Alloc alloc(buffer);
-	auto end = alloc.end<Item>();
-	for (auto item = alloc.begin<Item>(); item != end; ++item)
+	for (auto item = alloc.begin<Item>(); item != alloc.end<Item>(); ++item)
 	{
-		if (item()().value != (i + 1u))
+		if (i == 3276)
+		{
+			i = 3276;
+		}
+
+		item->value -= 1u;
+		if (item->value != (i + 3u))
+		{
+			std::cout << i << std::endl;
 			++e;
+		}
 		++i;
 	}
-	std::cout << "e: got " << e << ", expected 0" << std::endl;
-	std::cout << "i: got " << i << ", expected " << count << std::endl;
+	std::cout << "e: expected 0, got " << e << std::endl;
+	std::cout << "i: expected " << count << ", got " << i << std::endl;
 
 	return (count == i && 0u == e) ? 0 : 1;
 }

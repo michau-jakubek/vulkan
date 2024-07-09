@@ -20,18 +20,6 @@ namespace vtf
 constexpr uint32_t INVALID_UINT32 = (~(static_cast<uint32_t>(0u)));
 constexpr uint64_t INVALID_UINT64 = (~(static_cast<uint64_t>(0u)));
 
-#define ARRAY_LENGTH(a__) (std::extent<decltype(a__)>::value)
-#define ARRAY_LENGTH_CAST(a__, cast__) (static_cast<cast__>(ARRAY_LENGTH(a__)))
-
-#define UNREF(x__) static_cast<void>(x__)
-#define SIDE_EFFECT(x__) UNREF(x__)
-
-#ifdef _MSC_VER
-	#define UNUSED [[maybe_unused]]
-#else
-	#define UNUSED __attribute__((unused))
-#endif
-
 #define MULTIPLERUP(x__, multipler__) (((x__)+((multipler__)-1))/(multipler__))
 #define ROUNDUP(x__, multipler__) (MULTIPLERUP((x__),(multipler__))*(multipler__))
 #define ROUNDDOWN(x__, multipler__) (((x__)/(multipler__))*(multipler__))

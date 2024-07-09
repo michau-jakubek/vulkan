@@ -109,9 +109,10 @@ void invalidateMemory (ZDeviceMemory memory)
 }
 
 Alloc::Alloc (add_cref<std::vector<ZDeviceMemory>> allocs)
-	: m_allocs	(allocs)
-	, m_count	(data_count(allocs))
-	, m_total	(0u)
+	: m_allocs		(allocs)
+	, m_count		(data_count(allocs))
+	, m_total		(0u)
+	, m_chunkSize	(m_count ? allocs.at(0).getParam<ZDistType<SizeSecond, VkDeviceSize>>()() : VkDeviceSize(0u))
 {
 	for (add_cref<ZDeviceMemory> mem : m_allocs)
 		m_total += mem.getParam<ZDistType<SizeSecond, VkDeviceSize>>();
@@ -158,6 +159,25 @@ void Alloc::Impl::inc() { m_pos += m_size; }
 void Alloc::Impl::dec() { m_pos -= m_size; }
 Alloc::Impl::Value Alloc::Impl::val ()
 {
+#if 1
+	const uint32_t pv = uint32_t(make_unsigned(m_pos));
+	if (m_pos >= 0 && (pv + m_size <= m_alloc.m_total))
+	{
+		Value v{};
+		const uint32_t chunk = pv / uint32_t(m_alloc.m_chunkSize);
+		const uint32_t offset = pv % uint32_t(m_alloc.m_chunkSize);
+		v.ptr1 = m_alloc.getMemory(chunk) + offset;
+		if (offset + m_size <= m_alloc.m_chunkSize)
+			v.len1 = m_size;
+		else
+		{
+			v.len1 = uint32_t(m_alloc.m_chunkSize - offset);
+			v.ptr2 = m_alloc.getMemory(chunk + 1u);
+			v.len2 = m_size - v.len1;
+		}
+		return v;
+	}
+#else
 	Value value{};
 	VkDeviceSize loAllocSize = 0u;
 
@@ -189,7 +209,7 @@ Alloc::Impl::Value Alloc::Impl::val ()
 
 		loAllocSize = hiAllocSize;
 	}
-
+#endif
 	ASSERTMSG(false, "Out of range");
 	return Value{};
 }

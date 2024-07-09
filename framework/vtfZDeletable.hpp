@@ -302,11 +302,13 @@ template<ZDistName, class CType_>
 struct ZDistType
 {
 	ZDistType () : data() {}
-	ZDistType (const CType_& v) : data(v) {}
-	operator add_ref<CType_> () { return data; }
-	operator add_cref<CType_> () const { return data; }
-	add_cref<CType_> get () const { return data; }
-	add_ref<CType_> get () { return data; }
+	ZDistType (const CType_& v) : data(v)	{}
+	operator add_cref<CType_>	() const	{ return data; }
+	add_cref<CType_> operator ()() const	{ return data; }
+	add_cref<CType_> get		() const	{ return data; }
+	operator add_ref<CType_>	()			{ return data; }
+	add_ref<CType_> operator ()	()			{ return data; }
+	add_ref<CType_> get			()			{ return data; }
 private:
 	CType_ data;
 };

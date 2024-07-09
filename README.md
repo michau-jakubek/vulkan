@@ -38,6 +38,14 @@ This test will take you to a land where you can admire the beauty of the Mandelb
 find any place where you would like to dive and then, by scrolling, go deeper and deeper. The test automatically detects if your machine
 supports Float64. If so, the journey will be even more interesting. Additionally you can run the test in animation mode then using a mice or a touchpad along with keyboard keys will cause the fractal will be zoomed in or out every millisecond you passed as a parameter.
 
+Demote invocation test
+----------------------
+
+![](demote_invocations.png)
+
+As you probably know, the fragment shader has absolutely different execution model from the other shaders. Additionally it has special invocations called helper invocations. More over, we can make the helper invocation from existing regular one by demoting it to the helper invocation. Since SPIR-V 1.3 we have a *demote*, new keyword in the GLSL language that exactly demotes invocation being processed. There are some implementations that don't support helper invocations at all but they also can demote any invocation. The single difference is that we cannot query about given invocation is helper or not and therefore whether it has been demoted - but it is small detail.  
+This test allows you to demote/disable arbitral invocation or quad. Additionally you can see online which subgroup the invocation belongs to and what happened with it after clicking it by right mouse button. Finally, you can provide your own values by changing the shader and see them on the console output.
+
 Panorma viewer test
 -------------------
 
@@ -45,5 +53,21 @@ In turn, this test acts as a simple image viewer that can process several well-k
 around inside the image. It turns out that the reading of the image from the storage is a serious bottle-neck, so don't
 worry if you will see a splash while the image is loading. Pictures are loaded exactly once, next time if selected, they are
 taken from a cache.
+
+Internal compute test
+---------------------
+
+There is often a need to check whether a given piece of the compute shader code works or whether it compiles without errors. This test allows you to quickly verify the above as well as execute the shader and capture the results in the storage buffer. Using this you can dispatch the shader with arbitral local groups or work groups. Your shader will compile every time it has been changed and input to the shader you can give in many ways i.e. as sequence of floats or random integer list.
+
+Internal graphics test
+----------------------
+
+Basically this test do the same things like _Internal compute test_ does with the small difference that it operates on graphics shaders which are vertex, tessellation control and evaluation, geometry and fragment shaders. You can use it with only vertex and fragment shaders pair or vertex, geometry and fragment. In the *assets* subdirectory there is a Python script that allows to run as many as you want the shaders that are organized in the pack of the shaders recognized by a name.
+
+Internal thread pool test
+-------------------------
+
+This test has nothing to do with the Vulkan. It simply runs the self test which is a part of the _ThreadPool_ class. You can use this class and its functionality everywhere you want. Additionally you may notice a difference in the scheduler between the operating systems where this test is run.
+
 
 # Enjoy!

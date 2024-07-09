@@ -29,6 +29,8 @@ set(tests_files
 	intGraphics.hpp
     intCipher.cpp
     intCipher.hpp
+	intThreadPool.cpp
+	intThreadPool.hpp
     daemonTests.cpp
     daemonTests.hpp
     subgroupMatrixTests.cpp

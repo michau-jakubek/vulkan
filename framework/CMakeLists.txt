@@ -35,6 +35,9 @@ set(framework_files
 		vtfZDeviceMemory.hpp
         vtfThreadSafeLogger.cpp
         vtfThreadSafeLogger.hpp
+		vtfThreadPool.cpp
+		vtfThreadPool.hpp
+		vtfThreadPoolHelpers.hpp
         vtfZBarriers.cpp
         vtfZBarriers.hpp
         vtfZBuffer.cpp
