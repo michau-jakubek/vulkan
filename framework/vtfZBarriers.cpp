@@ -27,6 +27,7 @@ VkSubpassDependency ZSubpassDependency::operator ()() const
 ZMemoryBarrier::ZMemoryBarrier ()
 {
 	add_ref<VkMemoryBarrier> barrier(*this);
+	barrier = {};
 	barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
 }
 
@@ -39,9 +40,9 @@ ZMemoryBarrier::ZMemoryBarrier (VkAccessFlags srcAccess, VkAccessFlags dstAccess
 	barrier.dstAccessMask = dstAccess;
 }
 
-VkMemoryBarrier ZMemoryBarrier::operator ()()
+VkMemoryBarrier ZMemoryBarrier::operator ()() const
 {
-	return static_cast<add_ref<VkMemoryBarrier>>(*this);
+	return static_cast<add_cref<VkMemoryBarrier>>(*this);
 }
 
 ZBufferMemoryBarrier::ZBufferMemoryBarrier ()
@@ -68,9 +69,9 @@ ZBufferMemoryBarrier::ZBufferMemoryBarrier (ZBuffer buffer, VkAccessFlags srcAcc
 	barrier.size				= buffer.getParam<VkDeviceSize>();
 }
 
-VkBufferMemoryBarrier ZBufferMemoryBarrier::operator ()()
+VkBufferMemoryBarrier ZBufferMemoryBarrier::operator ()() const
 {
-	return static_cast<add_ref<VkBufferMemoryBarrier>>(*this);
+	return static_cast<add_cref<VkBufferMemoryBarrier>>(*this);
 }
 
 ZBufferMemoryBarrier makeBufferMemoryBarrier (ZBuffer buffer, VkAccessFlags srcAccess, VkAccessFlags dstAccess)
@@ -124,12 +125,12 @@ ZImageMemoryBarrier makeImageMemoryBarrier (ZImage image, VkAccessFlags srcAcces
 }
 
 void pushBarriers (add_ref<BarriersInfo>) { }
-void pushKnownBarrier (add_ref<BarriersInfo> info, ZMemoryBarrier& barrier)
+void pushKnownBarrier (add_ref<BarriersInfo> info, add_cref<ZMemoryBarrier> barrier)
 {
 	info.pMemoryBarriers[info.memoryBarrierCount++] = barrier();
 }
 
-void pushKnownBarrier (add_ref<BarriersInfo> info, add_ref<ZBufferMemoryBarrier> barrier)
+void pushKnownBarrier (add_ref<BarriersInfo> info, add_cref<ZBufferMemoryBarrier> barrier)
 {
 	info.pBufferBarriers[info.bufferBarrierCount++] = barrier();
 	for (uint32_t i = 0; i < info.bufferBarrierCount; ++i)
@@ -148,31 +149,6 @@ void pushKnownBarrier (add_ref<BarriersInfo> info, add_ref<ZImageMemoryBarrier> 
 		ASSERTMSG(info.pImageBarriers[i].image != info.pImageBarriers[j].image,
 				  "Image barriers must have different image handles, try different layers or mip levels");
 	}
-}
-
-void commandBufferPipelineBarriers (ZCommandBuffer cmd,
-									VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask,
-									std::vector<ZMemoryBarrier>&		memoryBarriers,
-									std::vector<ZBufferMemoryBarrier>&	bufferBarriers,
-									std::vector<ZImageMemoryBarrier>&	imageBarriers)
-{
-	std::vector<VkMemoryBarrier>		memBarriers(memoryBarriers.size());
-	std::vector<VkBufferMemoryBarrier>	bufBarriers(bufferBarriers.size());
-	std::vector<VkImageMemoryBarrier>	imgBarriers(imageBarriers.size());
-
-	auto call = [](auto& b)
-	{
-		return b();
-	};
-
-	std::transform(memoryBarriers.begin(), memoryBarriers.end(), memBarriers.begin(), call);
-	std::transform(bufferBarriers.begin(), bufferBarriers.end(), bufBarriers.begin(), call);
-	std::transform(imageBarriers.begin(), imageBarriers.end(), imgBarriers.begin(), call);
-
-	vkCmdPipelineBarrier(*cmd, srcStageMask, dstStageMask, VK_DEPENDENCY_BY_REGION_BIT,
-						 data_count(memBarriers), data_or_null(memBarriers),
-						 data_count(bufBarriers), data_or_null(bufBarriers),
-						 data_count(imgBarriers), data_or_null(imgBarriers));
 }
 
 } // namespace vtf

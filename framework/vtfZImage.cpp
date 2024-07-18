@@ -7,6 +7,7 @@
 #include "vtfZImage.hpp"
 #include "vtfCopyUtils.hpp"
 #include "vtfFormatUtils.hpp"
+#include "vtfStructUtils.hpp"
 #include "vtfBacktrace.hpp"
 #include "stb_image.hpp"
 #include <algorithm>
@@ -662,8 +663,91 @@ void imageCopyToBuffer (ZCommandBuffer commandBuffer,
 	}
 
 	commandBufferPipelineBarriers(commandBuffer, srcStage, VK_PIPELINE_STAGE_TRANSFER_BIT, preBufferBarrier, preImageBarrier);
-	vkCmdCopyImageToBuffer(*commandBuffer, *image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, *buffer, uint32_t(regions.size()), regions.data());
+	vkCmdCopyImageToBuffer(*commandBuffer, *image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, *buffer, data_count(regions), data_or_null(regions));
 	commandBufferPipelineBarriers(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, dstStage, postImageBarrier, postBufferBarrier);
+}
+
+void imageCopyToBuffer2 (ZCommandBuffer commandBuffer,
+						 ZImage image, ZBuffer buffer,
+						 ZBarrierConstants::Access srcImageAccess,  ZBarrierConstants::Access dstImageAccess,
+						 ZBarrierConstants::Access srcBufferAccess, ZBarrierConstants::Access dstBufferAccess,
+						 ZBarrierConstants::Stage srcStage, ZBarrierConstants::Stage dstStage,
+						 VkImageLayout targetImageLayout,
+						 uint32_t baseLevel, uint32_t levelCount,
+						 uint32_t baseLayer, uint32_t layerCount)
+{
+	ASSERTMSG(image.has_handle() && buffer.has_handle(), "Both image and buffer must have a handle");
+	ASSERTMSG(!(getGlobalAppFlags().apiVer < Version(1,3)),
+			  "Improper Vulkan API version, expected >= 1.3. Try with -api 13");
+	add_cref<VkImageCreateInfo>	createInfo			= imageGetCreateInfo(image);
+	ASSERTMSG(baseLevel < createInfo.mipLevels, "Mip level must be less than available image mip levels");
+	ASSERTMSG(baseLayer < createInfo.arrayLayers, "Layer must be less than available image array layers");
+	if ((baseLevel + levelCount) > createInfo.mipLevels) levelCount = 0;
+	if ((baseLayer + layerCount) > createInfo.arrayLayers) layerCount = 0;
+	const VkDeviceSize			minBufferSize		= imageCalcMipLevelsSize(image, baseLevel, levelCount) * layerCount;
+	ASSERTMSG(minBufferSize <= bufferGetSize(buffer), "Buffer must accomodate image data");
+
+	const uint32_t				pixelSize			= make_unsigned(computePixelByteSize(createInfo.format));
+	const VkImageAspectFlags	aspect				= formatGetAspectMask(createInfo.format);
+	const VkImageLayout			imageSavedLayout	= imageGetLayout(image);
+
+	VkDeviceSize	bufferOffset	= 0;
+	std::vector<VkBufferImageCopy2>	regions(layerCount * levelCount);
+
+	for (uint32_t layer = 0; layer < layerCount; ++layer)
+	{
+		uint32_t	width	= 0u;
+		uint32_t	height	= 0u;
+		std::tie(width, height) = computeMipLevelWidthAndHeight(createInfo.extent.width, createInfo.extent.height, baseLevel);
+
+		for (uint32_t mipLevel = 0; mipLevel < levelCount; ++mipLevel)
+		{
+			VkBufferImageCopy2	rgn	= makeVkStruct();
+			rgn.bufferOffset		= bufferOffset;
+			/*
+			 * bufferRowLength and bufferImageHeight specify in texels a subregion
+			 * of a larger two- or three-dimensional image in buffer memory,
+			 * and control the addressing calculations. If either of these values is zero,
+			 * that aspect of the buffer memory is considered to be tightly packed according to the imageExtent
+			 */
+			rgn.bufferRowLength		= width;
+			rgn.bufferImageHeight	= height;
+			rgn.imageOffset			= { 0u, 0u, 0u };
+			rgn.imageExtent			= { width, height, 1u };
+			rgn.imageSubresource.aspectMask		= aspect;
+			rgn.imageSubresource.mipLevel		= baseLevel + mipLevel;
+			rgn.imageSubresource.baseArrayLayer	= baseLayer + layer;
+			rgn.imageSubresource.layerCount		= 1u;
+
+			regions[layer * levelCount + mipLevel] = rgn;
+
+			bufferOffset += (width * height * pixelSize);
+		}
+	}
+
+	VkCopyImageToBufferInfo2 info = makeVkStruct();
+	info.srcImage		= *image;
+	info.dstBuffer		= *buffer;
+	info.srcImageLayout	= VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+	info.regionCount	= data_count(regions);
+	info.pRegions		= data_or_null(regions);
+
+	using A = ZBarrierConstants::Access;
+	using S = ZBarrierConstants::Stage;
+
+	ZImageMemoryBarrier2	preImage(image, srcImageAccess, srcStage,
+											A::TRANSFER_READ_BIT, S::TRANSFER_BIT,
+											VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	ZImageMemoryBarrier2	postImage(image, A::TRANSFER_READ_BIT, S::TRANSFER_BIT,
+											 dstImageAccess, dstStage,
+											 (VK_IMAGE_LAYOUT_MAX_ENUM == targetImageLayout)
+												? imageSavedLayout : targetImageLayout);
+	ZBufferMemoryBarrier2	preBuffer(buffer, srcBufferAccess, srcStage, A::TRANSFER_WRITE_BIT, S::TRANSFER_BIT);
+	ZBufferMemoryBarrier2	postBuffer(buffer, A::TRANSFER_WRITE_BIT, S::TRANSFER_BIT, dstBufferAccess, dstStage);
+
+	commandBufferPipelineBarriers2(commandBuffer, preImage, preBuffer);
+	vkCmdCopyImageToBuffer2(*commandBuffer, &info);
+	commandBufferPipelineBarriers2(commandBuffer, postImage, postBuffer);
 }
 
 void imageCopyToImage (ZCommandBuffer cmdBuffer, ZImage srcImage, ZImage dstImage,
@@ -683,8 +767,6 @@ void imageCopyToImage (ZCommandBuffer cmdBuffer, ZImage srcImage, ZImage dstImag
 	const bool okDstLayers = (dstArrayLayer < dstInfo.arrayLayers) && ((dstArrayLayer + arrayLayers) <= dstInfo.arrayLayers);
 	const bool okSrcLevels = (srcMipLevel < srcInfo.mipLevels) && ((srcMipLevel + mipLevels) <= srcInfo.mipLevels);
 	const bool okDstLevels = (dstMipLevel < dstInfo.mipLevels) && ((dstMipLevel + mipLevels) <= dstInfo.mipLevels);
-
-	// cza sprawdzić, czy docelowy level pomieści źródłowy
 
 	auto [srcLevelWidth, srcLevelHeight] = computeMipLevelWidthAndHeight(srcInfo.extent.width, srcInfo.extent.height, srcMipLevel);
 	const auto [dstLevelWidth, dstLevelHeight] = computeMipLevelWidthAndHeight(dstInfo.extent.width, dstInfo.extent.height, dstMipLevel);

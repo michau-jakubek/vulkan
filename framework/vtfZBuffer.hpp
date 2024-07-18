@@ -5,6 +5,7 @@
 #include "vtfVkUtils.hpp"
 #include "vtfZDeviceMemory.hpp"
 #include "vtfZBarriers.hpp"
+#include "vtfZBarriers2.hpp"
 
 #include <algorithm>
 
@@ -23,6 +24,19 @@ namespace vtf
 ZBuffer			createBuffer	(ZDevice device, VkDeviceSize size, ZBufferUsageFlags usage,
 								ZMemoryPropertyFlags properties = ZMemoryPropertyHostFlags,
 								ZBufferCreateFlags flags = ZBufferCreateFlags());
+
+template<class X>
+ZBuffer			createBuffer	(ZDevice device,
+								 ZBufferUsageFlags usage = ZBufferUsageFlags(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT),
+								 ZMemoryPropertyFlags properties = ZMemoryPropertyHostFlags,
+								 ZBufferCreateFlags flags = ZBufferCreateFlags())
+{
+	extern ZBuffer createTypedBuffer (ZDevice, type_index_with_default, VkDeviceSize,
+									  ZBufferUsageFlags, ZMemoryPropertyFlags, ZBufferCreateFlags);
+
+	return createTypedBuffer(device, type_index_with_default::make<X>(), sizeof(X), usage, properties, flags);
+}
+
 /**
  * @brief Create a underlying VkBuffer object and bind it to memory
  * @param device		is the logical device that creates the buffer object
@@ -97,22 +111,29 @@ VkDeviceSize	bufferWrite (ZBuffer buffer, const T& data)
 						   std::min(dataSize, bufferSize));
 }
 
-template<class T, uint32_t N>
+template<class T>
+VkDeviceSize	bufferFill (ZBuffer buffer, add_cref<T> value)
+{
+	std::vector<T> data(bufferGetElementCount<T>(buffer), value);
+	return bufferWrite(buffer, data);
+}
+
+template<class T, std::size_t N>
 VkDeviceSize	bufferWrite (ZBuffer buffer, T const (&table)[N])
 {
 	const VkDeviceSize	dataSize	= N * sizeof(T);
 	const VkDeviceSize	bufferSize	= buffer.getParam<VkDeviceSize>();
-	return bufferWriteData(buffer, table, std::min(dataSize, bufferSize));
+	return bufferWriteData(buffer, reinterpret_cast<add_cptr<uint8_t>>(&table[0]), std::min(dataSize, bufferSize));
 }
 
-template<class T, uint32_t N>
+template<class T, std::size_t N>
 void bufferRead (ZBuffer buffer, T (&table)[N])
 {
 	const VkDeviceSize	bufferSize	= buffer.getParam<VkDeviceSize>();
 	const uint32_t		count		= bufferSize / sizeof(T);
 	ASSERTMSG(count <= N, "Array size must accomodate all buffer data");
-	const VkDeviceSize	readSize		= count * sizeof(T);
-	bufferReadData(buffer, reinterpret_cast<uint8_t*>(&table[0]), readSize);
+	const VkDeviceSize	readSize	= count * sizeof(T);
+	bufferReadData(buffer, reinterpret_cast<add_ptr<uint8_t>>(&table[0]), readSize);
 }
 
 template<class T>

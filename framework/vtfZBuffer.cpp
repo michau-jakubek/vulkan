@@ -1,3 +1,4 @@
+#include "vtfBacktrace.hpp"
 #include "vtfCUtils.hpp"
 #include "vtfZUtils.hpp"
 #include "vtfStructUtils.hpp"
@@ -113,6 +114,12 @@ void bufferBindMemory (ZBuffer buffer, ZQueue sparseQueue)
 
 	VKASSERT(vkQueueBindSparse(*sparseQueue, 1u, &bindInfo, *fence), error);
 	VKASSERT(vkWaitForFences(*device, 1u, fence.ptr(), VK_TRUE, INVALID_UINT64), error);
+}
+
+ZBuffer	createTypedBuffer (ZDevice device, type_index_with_default type, VkDeviceSize size,
+						   ZBufferUsageFlags usage, ZMemoryPropertyFlags properties, ZBufferCreateFlags flags)
+{
+	return createBuffer(device, size, type, VK_FORMAT_UNDEFINED, {}, usage, flags, properties);
 }
 
 ZBuffer	createBuffer (ZDevice device, VkDeviceSize size,
@@ -362,6 +369,44 @@ VkDeviceSize bufferGetMemorySize	(ZBuffer buffer, uint32_t index)
 	return bufferGetMemory(buffer, index).getParam<VkDeviceSize>();
 }
 
+void bufferCopyToBuffer2 (ZCommandBuffer cmdBuffer, ZBuffer srcBuffer, ZBuffer dstBuffer,
+						  ZBarrierConstants::Access srcBufferAccess, ZBarrierConstants::Access dstBufferAccess,
+						  ZBarrierConstants::Stage  srcStage,		 ZBarrierConstants::Stage  dstStage)
+{
+	const VkDeviceSize	srcSize = bufferGetSize(srcBuffer);
+	const VkDeviceSize	dstSize = bufferGetSize(dstBuffer);
+	ASSERTMSG(srcSize <= dstSize, "Destination buffer must accomodate all data from source buffer");
+	ASSERTMSG(!(getGlobalAppFlags().apiVer < Version(1,3)),
+			  "Improper Vulkan API version, expected >= 1.3. Try with -api 13");
+
+	VkBufferCopy2		region = makeVkStruct();
+	region.srcOffset	= 0u;
+	region.dstOffset	= 0u;
+	region.size			= srcSize;
+
+	VkCopyBufferInfo2	info = makeVkStruct();
+	info.srcBuffer		= *srcBuffer;
+	info.dstBuffer		= *dstBuffer;
+	info.regionCount	= 1u;
+	info.pRegions		= &region;
+
+	using A = ZBarrierConstants::Access;
+	using S = ZBarrierConstants::Stage;
+
+	ZBufferMemoryBarrier2	srcBefore(srcBuffer, A::NONE, srcStage,
+												 A::TRANSFER_READ_BIT, S::TRANSFER_BIT);
+	ZBufferMemoryBarrier2	dstBefore(dstBuffer, A::NONE, srcStage,
+												 A::TRANSFER_WRITE_BIT, S::TRANSFER_BIT);
+	ZBufferMemoryBarrier2	srcAfter(srcBuffer, A::TRANSFER_READ_BIT, S::TRANSFER_BIT,
+												srcBufferAccess, dstStage);
+	ZBufferMemoryBarrier2	dstAfter(dstBuffer, A::TRANSFER_WRITE_BIT, S::TRANSFER_BIT,
+												dstBufferAccess, dstStage);
+
+	commandBufferPipelineBarriers2(cmdBuffer, srcBefore, dstBefore);
+	vkCmdCopyBuffer2(*cmdBuffer, &info);
+	commandBufferPipelineBarriers2(cmdBuffer, srcAfter, dstAfter);
+}
+
 void bufferCopyToBuffer (ZCommandBuffer cmdBuffer, ZBuffer srcBuffer, ZBuffer dstBuffer,
 						 VkAccessFlags srcBufferAccess, VkAccessFlags dstBufferAccess,
 						 VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage)
@@ -372,7 +417,7 @@ void bufferCopyToBuffer (ZCommandBuffer cmdBuffer, ZBuffer srcBuffer, ZBuffer ds
 
 	VkBufferCopy region{};
 	region.srcOffset	= 0u;
-	region.dstOffset	= 0;
+	region.dstOffset	= 0u;
 	region.size			= srcSize;
 
 	ZBufferMemoryBarrier	srcBefore(srcBuffer, VK_ACCESS_NONE, VK_ACCESS_TRANSFER_READ_BIT);

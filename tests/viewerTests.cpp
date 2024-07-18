@@ -469,11 +469,11 @@ protected:
 	{
 		ZDevice					device				= pool.getParam<ZDevice>();
 		ZImageView				panView				= createImageView(tmpImage.has_handle() ? tmpImage : panImage);
-								panBinding			= layout.addBinding(panView, ZSampler(), VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+								panBinding			= layout.addBinding(panView, ZSampler());
 		ZImage					cubeImage			= createImage(device, format, VK_IMAGE_TYPE_2D, faceSize, faceSize,
 																  usage, VK_SAMPLE_COUNT_1_BIT, 1u, 6u);
 		ZImageView				cubeView			= createImageView(cubeImage, 0u, 1u, 0u, 6u);
-								cubeBinding			= layout.addBinding(cubeView, ZSampler(), VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+								cubeBinding			= layout.addBinding(cubeView, ZSampler());
 		ZDescriptorSetLayout	descriptorSetLayout	= layout.createDescriptorSetLayout();
 		ZPipelineLayout			pipelineLayout		= layout.createPipelineLayout<PushContant>(descriptorSetLayout);
 

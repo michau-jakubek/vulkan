@@ -45,14 +45,14 @@ struct ZMemoryBarrier : protected VkMemoryBarrier
 {
 	ZMemoryBarrier ();
 	ZMemoryBarrier (VkAccessFlags srcAccess, VkAccessFlags dstAccess);
-	VkMemoryBarrier operator ()();
+	VkMemoryBarrier operator ()() const;
 };
 
 struct ZBufferMemoryBarrier : protected VkBufferMemoryBarrier
 {
 	ZBufferMemoryBarrier ();
 	ZBufferMemoryBarrier (ZBuffer buffer, VkAccessFlags srcAccess, VkAccessFlags dstAccess);
-	VkBufferMemoryBarrier operator()();
+	VkBufferMemoryBarrier operator ()() const;
 protected:
 	ZBuffer	m_buffer;
 };
@@ -62,6 +62,7 @@ struct ZImageMemoryBarrier : protected VkImageMemoryBarrier
 	ZImageMemoryBarrier ();
 	ZImageMemoryBarrier (ZImage image, VkAccessFlags srcAccess, VkAccessFlags dstAccess, VkImageLayout targetLayout);
 	ZImageMemoryBarrier (ZImage image, VkAccessFlags srcAccess, VkAccessFlags dstAccess, VkImageLayout targetLayout, add_cref<VkImageSubresourceRange>);
+	// exchanges m_image layout according to barrier target layout
 	VkImageMemoryBarrier operator()();
 protected:
 	ZImage	m_image;
@@ -80,9 +81,9 @@ struct BarriersInfo
 	uint32_t						bufferBarrierCount;
 };
 
-void pushKnownBarrier (add_ref<BarriersInfo> info, ZMemoryBarrier& barrier);
-void pushKnownBarrier (add_ref<BarriersInfo> info, ZBufferMemoryBarrier& barrier);
-void pushKnownBarrier (add_ref<BarriersInfo> info, ZImageMemoryBarrier& barrier);
+void pushKnownBarrier (add_ref<BarriersInfo> info, add_cref<ZMemoryBarrier> barrier);
+void pushKnownBarrier (add_ref<BarriersInfo> info, add_cref<ZBufferMemoryBarrier> barrier);
+void pushKnownBarrier (add_ref<BarriersInfo> info, add_ref<ZImageMemoryBarrier> barrier);
 
 void pushBarriers (add_ref<BarriersInfo>);
 template<class Barrier, class... Barriers>

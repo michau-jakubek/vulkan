@@ -291,8 +291,35 @@ void commandBufferSetScissor (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> sw
 	vkCmdSetScissor(*cmd, 0u, 1u, &swapchain.scissor);
 }
 
+void commandBufferDrawIndirect (ZCommandBuffer cmd, ZBuffer buffer)
+{
+	const type_index_with_default type = buffer.getParam<type_index_with_default>();
+	ASSERTMSG((type == type_index_with_default::make<VkDrawIndirectCommand>()
+			   || type == type_index_with_default::make<VkDrawIndirectCommand[]>()),
+			  "Buffer must be of type VkDrawIndirectCommand or VkDrawIndirectCommand[]");
+	ASSERTMSG((buffer.getParamRef<VkBufferCreateInfo>().usage & VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT),
+			  "Buffer must created with usage bit VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT set");
+	const VkDeviceSize size	= buffer.getParam<VkDeviceSize>();
+	vkCmdDrawIndirect(*cmd, *buffer, 0u, uint32_t(size / sizeof(VkDrawIndirectCommand)),
+										uint32_t(sizeof(VkDrawIndirectCommand)));
+}
+
+void commandBufferDrawIndexedIndirect (ZCommandBuffer cmd, ZBuffer buffer)
+{
+	const type_index_with_default type = buffer.getParam<type_index_with_default>();
+	ASSERTMSG((type == type_index_with_default::make<VkDrawIndexedIndirectCommand>()
+			   || type == type_index_with_default::make<VkDrawIndexedIndirectCommand[]>()),
+			  "Buffer must be of type VkDrawIndexedIndirectCommand or VkDrawIndexedIndirectCommand[]");
+	ASSERTMSG((buffer.getParamRef<VkBufferCreateInfo>().usage & VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT),
+			  "Buffer must created with usage bit VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT set");
+	const VkDeviceSize size	= buffer.getParam<VkDeviceSize>();
+	vkCmdDrawIndexedIndirect(*cmd, *buffer, 0u, uint32_t(size / sizeof(VkDrawIndexedIndirectCommand)),
+												uint32_t(sizeof(VkDrawIndexedIndirectCommand)));
+}
+
 void commandBufferSetPolygonModeEXT (ZCommandBuffer commandBuffer, VkPolygonMode polygonMode)
 {
+	ASSERT_NOT_IMPLEMENTED();
 	// TODO: body
 	UNREF(commandBuffer);
 	UNREF(polygonMode);

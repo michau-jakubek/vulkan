@@ -815,6 +815,12 @@ void ProgramCollection::buildAndVerify (const Version& vulkanVer, const Version&
 	}
 }
 
+void ProgramCollection::buildAndVerify (bool buildAlways)
+{
+	add_cref<GlobalAppFlags>	gf = getGlobalAppFlags();
+	buildAndVerify(gf.vulkanVer, gf.spirvVer, gf.spirvValidate, gf.genSpirvDisassembly, buildAlways);
+}
+
 ZShaderModule ProgramCollection::getShader (VkShaderStageFlagBits stage, uint32_t index, bool verbose) const
 {
 	ZShaderModule module;

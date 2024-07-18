@@ -40,6 +40,8 @@ set(framework_files
 		vtfThreadPoolHelpers.hpp
         vtfZBarriers.cpp
         vtfZBarriers.hpp
+        vtfZBarriers2.cpp
+        vtfZBarriers2.hpp
         vtfZBuffer.cpp
         vtfZBuffer.hpp
         vtfZImage.cpp

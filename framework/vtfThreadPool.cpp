@@ -159,7 +159,7 @@ void test_fake_moveable ()
 		y.assign(std::move(x));
 		tph::FakeMoveable<X> z(std::move(y));
 	}
-};
+}
 
 typedef typename ThreadPool::ThreadIndex KK;
 std::ostream& operator<<(std::ostream& str, const KK& mm) { return str << "MMM:" << mm.index.first; }

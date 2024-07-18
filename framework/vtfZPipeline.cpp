@@ -60,8 +60,8 @@ VkPipelineMultisampleStateCreateInfo makeMultisampleStateCreateInfo ()
 VkPipelineDepthStencilStateCreateInfo makeDepthStencilStateCreateInfo ()
 {
 	VkPipelineDepthStencilStateCreateInfo	depthStencilState = makeVkStruct();
-	depthStencilState.depthTestEnable		= VK_TRUE;
-	depthStencilState.depthWriteEnable		= VK_TRUE;
+	depthStencilState.depthTestEnable		= VK_FALSE;
+	depthStencilState.depthWriteEnable		= VK_FALSE;
 	depthStencilState.depthCompareOp		= VK_COMPARE_OP_LESS_OR_EQUAL;
 	depthStencilState.depthBoundsTestEnable	= VK_FALSE;
 	depthStencilState.minDepthBounds		= 0.0f;

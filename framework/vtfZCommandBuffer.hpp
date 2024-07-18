@@ -73,6 +73,9 @@ void				 commandBufferEndRendering (ZCommandBuffer cmd);
 void				 commandBufferSetViewport (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain);
 void				 commandBufferSetScissor (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain);
 
+void				commandBufferDrawIndirect (ZCommandBuffer cmd, ZBuffer buffer);
+void				commandBufferDrawIndexedIndirect (ZCommandBuffer cmd, ZBuffer buffer);
+
 template<class PC__>
 void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout, const PC__& pc)
 {
@@ -118,6 +121,40 @@ void commandBufferPipelineBarriers (ZCommandBuffer cmd,
 						 info.memoryBarrierCount, (info.memoryBarrierCount ? memoryBarriers : nullptr),
 						 info.bufferBarrierCount, (info.bufferBarrierCount ? bufferBarriers : nullptr),
 						 info.imageBarrierCount, (info.imageBarrierCount ? imageBarriers : nullptr));
+}
+
+template<class Barrier, class... Barriers>
+void commandBufferPipelineBarriers2 (ZCommandBuffer		cmd,
+									 VkDependencyFlags	dependencyFlags,
+									 Barrier&& barrier, Barriers&&... barriers)
+{
+	VkMemoryBarrier2		memoryBarriers	[sizeof...(barriers) + 1];
+	VkImageMemoryBarrier2	imageBarriers	[sizeof...(barriers) + 1];
+	VkBufferMemoryBarrier2	bufferBarriers	[sizeof...(barriers) + 1];
+
+	BarriersInfo2 info
+	{
+		memoryBarriers,
+		imageBarriers,
+		bufferBarriers,
+		0u, 0u, 0u
+	};
+
+	pushBarriers(info, std::forward<Barrier>(barrier), std::forward<Barriers>(barriers)...);
+
+	extern void doCommandBufferPipelineBarriers2 (ZCommandBuffer			cmd,
+												  add_cref<BarriersInfo2>	info,
+												  VkDependencyFlags			dependencyFlags);
+
+	doCommandBufferPipelineBarriers2(cmd, info, dependencyFlags);
+}
+
+template<class Barrier, class... Barriers>
+void commandBufferPipelineBarriers2 (ZCommandBuffer	cmd,
+									 Barrier&& barrier, Barriers&&... barriers)
+{
+	commandBufferPipelineBarriers2<Barrier, Barriers...>(cmd, VK_DEPENDENCY_BY_REGION_BIT,
+								   std::forward<Barrier>(barrier), std::forward<Barriers>(barriers)...);
 }
 
 } // namespace vtf

@@ -45,11 +45,16 @@ LayoutManager::LayoutManager (ZDevice device)
 	, m_buffers				()
 {
 }
-uint32_t LayoutManager::joinBindings_ (std::type_index index, VkDeviceSize size, bool isVector,
-										VkDescriptorType type, VkShaderStageFlags stages, uint32_t count)
+uint32_t LayoutManager::joinBindings_ (std::type_index		index,
+									   VkDeviceSize			size,
+									   bool					isVector,
+									   VkDescriptorType		type,
+									   VkShaderStageFlags	stages,
+									   uint32_t				count)
 {
 	ASSERTMSG(0 != count, "Descriptor count must not be zero!");
-	ASSERTMSG(isBufferDescriptorType(type), "Wrong descriptor type");
+	ASSERTMSG(isBufferDescriptorType(type),
+			  "Descriptor type must not be image, sampler nor combined image sampler");
 	const uint32_t binding = data_count(m_extbindings);
 	VkDescriptorSetLayoutBindingAndType b;
 	for (uint32_t i = 0; i < count; ++i)
@@ -65,12 +70,17 @@ uint32_t LayoutManager::joinBindings_ (std::type_index index, VkDeviceSize size,
 		b.elementCount			= 1;
 		b.isVector				= isVector;
 		b.shared				= true;
+		b.imageLayout			= VK_IMAGE_LAYOUT_GENERAL;
 		m_extbindings.emplace_back(b);
 	}
 	return binding;
 }
-uint32_t LayoutManager::addBinding_ (std::type_index index, VkDeviceSize size, bool isVector,
-									  VkDescriptorType type, VkShaderStageFlags stages, uint32_t elementCount)
+uint32_t LayoutManager::addBinding_ (std::type_index	index,
+									 VkDeviceSize		size,
+									 bool				isVector,
+									 VkDescriptorType	type,
+									 VkShaderStageFlags	stages,
+									 uint32_t			elementCount)
 {
 	VkDescriptorSetLayoutBindingAndType b;
 	const uint32_t binding = data_count(m_extbindings);
@@ -85,11 +95,15 @@ uint32_t LayoutManager::addBinding_ (std::type_index index, VkDeviceSize size, b
 	b.elementCount			= elementCount;
 	b.isVector				= isVector;
 	b.shared				= false;
+	b.imageLayout			= VK_IMAGE_LAYOUT_UNDEFINED;
 	m_extbindings.emplace_back(b);
 	return binding;
 }
-uint32_t LayoutManager::addBinding (ZImageView view, ZSampler sampler,
-									 VkDescriptorType type, VkShaderStageFlags stages)
+uint32_t LayoutManager::addBinding (ZImageView			view,
+									ZSampler			sampler,
+									VkImageLayout		imageLayout,
+									VkDescriptorType	type,
+									VkShaderStageFlags	stages)
 {
 	VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_MAX_ENUM;
 	if (VK_DESCRIPTOR_TYPE_MAX_ENUM == type)
@@ -101,7 +115,11 @@ uint32_t LayoutManager::addBinding (ZImageView view, ZSampler sampler,
 			else descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
 		}
 		else if (view.has_handle())
-			descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		{
+			descriptorType = (view.getParam<ZImage>().getParamRef<VkImageCreateInfo>().usage & VK_IMAGE_USAGE_STORAGE_BIT)
+				? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+				: VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		}
 		else
 		{
 			ASSERTMSG(false, "At least of view and sampler must have a handle");
@@ -128,7 +146,7 @@ uint32_t LayoutManager::addBinding (ZImageView view, ZSampler sampler,
 		descriptorType = type;
 	}
 
-	const uint32_t binding = addBinding(descriptorType, stages);
+	const uint32_t binding = addBinding(descriptorType, imageLayout, stages);
 
 	switch (descriptorType)
 	{
@@ -150,7 +168,9 @@ uint32_t LayoutManager::addBinding (ZImageView view, ZSampler sampler,
 
 	return binding;
 }
-uint32_t LayoutManager::addBinding (VkDescriptorType type, VkShaderStageFlags stages)
+uint32_t LayoutManager::addBinding (VkDescriptorType	type,
+									VkImageLayout		imageLayout,
+									VkShaderStageFlags	stages)
 {
 	VkDescriptorSetLayoutBindingAndType b;
 	const uint32_t binding = data_count(m_extbindings);
@@ -160,6 +180,7 @@ uint32_t LayoutManager::addBinding (VkDescriptorType type, VkShaderStageFlags st
 	b.pImmutableSamplers	= nullptr;
 	b.stageFlags			= stages;
 	b.size					= 0;
+	b.imageLayout			= imageLayout;
 	switch (type)
 	{
 	case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
@@ -435,10 +456,8 @@ void LayoutManager::updateDescriptorSet_	(ZDescriptorSet	descriptorSet,
 			case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
 				{
 					ZImageView	view		= m_views[b.offset];
-					// TODO:
-					//ZImage		img			= view.getParam<ZImage>();
 					imageInfo.imageView		= *view;
-					imageInfo.imageLayout	= VK_IMAGE_LAYOUT_GENERAL; // ??? img.getParamRef<VkImageCreateInfo>().initialLayout;
+					imageInfo.imageLayout	= b.imageLayout;
 				}
 				break;
 			case VK_DESCRIPTOR_TYPE_SAMPLER:
@@ -450,9 +469,8 @@ void LayoutManager::updateDescriptorSet_	(ZDescriptorSet	descriptorSet,
 				{
 					ZImageView	view		= m_viewsAndSamplers[b.offset].first;
 					ZSampler	samp		= m_viewsAndSamplers[b.offset].second;
-					ZImage		img			= view.getParam<ZImage>();
 					imageInfo.imageView		= *view;
-					imageInfo.imageLayout	= VK_IMAGE_LAYOUT_GENERAL; // ??? img.getParamRef<VkImageCreateInfo>().initialLayout;
+					imageInfo.imageLayout	= b.imageLayout;
 					imageInfo.sampler		= *samp;
 				}
 				break;

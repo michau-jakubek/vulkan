@@ -16,7 +16,9 @@
 #define ARRAY_LENGTH(a__) (std::extent<decltype(a__)>::value)
 #define ARRAY_LENGTH_CAST(a__, cast__) (static_cast<cast__>(ARRAY_LENGTH(a__)))
 
+#ifndef UNREF
 #define UNREF(x__) static_cast<void>(x__)
+#endif
 #define SIDE_EFFECT(x__) UNREF(x__)
 
 #ifdef _MSC_VER

@@ -1,0 +1,6 @@
+#ifndef __INT_SYNCHRONIZATION_2_HPP_INCLUDED__
+#define __INT_SYNCHRONIZATION_2_HPP_INCLUDED__
+
+#include "allTests.hpp"
+
+#endif // __INT_SYNCHRONIZATION_2_HPP_INCLUDED__

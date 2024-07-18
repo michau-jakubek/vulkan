@@ -105,10 +105,13 @@ public:
 	 * Creates a descriptor set bind depending on parameters.
 	 * If both view and sampler have handles then descriptor be VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER.
 	 * If view has a handle and sampler don't then descriptor be VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE.
+	 * If an image connected to the view has VK_IMAGE_USAGE_STORAGE_BIT then VK_DESCRIPTOR_TYPE_STORAGE_IMAGE.
 	 * If view has no handle but sampler has then descriptor be VK_DESCRIPTOR_TYPE_SAMPLER.
 	 * Anyway you can specify descriptor type exactly by type parameter.
+	 * In the case of an image imageLayout parameter tells about a way how the descriptor will use that image.
 	 */
 	uint32_t								addBinding					(ZImageView view, ZSampler sampler,
+																		 VkImageLayout imageLayout = VK_IMAGE_LAYOUT_GENERAL,
 																		 VkDescriptorType type = VK_DESCRIPTOR_TYPE_MAX_ENUM,
 																		 VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
 	/**
@@ -116,6 +119,7 @@ public:
 	 * Remember to update this binding with updateDescriptorSet(...) with proper view and/or sampler.
 	 */
 	uint32_t								addBinding					(VkDescriptorType type,
+																		 VkImageLayout imageLayout = VK_IMAGE_LAYOUT_GENERAL,
 																		 VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
 	template<class X> std::optional<X>		getBinding					(uint32_t binding) const;
 	/**
@@ -145,8 +149,8 @@ public:
 	 * update it manually.
 	 */
 	ZDescriptorSetLayout					createDescriptorSetLayout	(bool performUpdateDescriptorSets = true);
-	ZDescriptorSetLayout					getDescriptorSetLayout		(ZPipelineLayout layout, uint32_t index = 0u);
-	ZDescriptorSet							getDescriptorSet			(ZDescriptorSetLayout dsLayout);
+	static ZDescriptorSetLayout				getDescriptorSetLayout		(ZPipelineLayout layout, uint32_t index = 0u);
+	static ZDescriptorSet					getDescriptorSet			(ZDescriptorSetLayout dsLayout);
 	/**
 	 * Updates descriptor set bindings. Descriptor set must match a descriptor
 	 * set achieved from this class along with the bindings being updated. Or
@@ -177,6 +181,7 @@ private:
 		VkDeviceSize	size;
 		VkDeviceSize	offset;
 		uint32_t		elementCount;
+		VkImageLayout	imageLayout;
 		bool			isVector;
 		bool			shared;
 	} ExtBinding;

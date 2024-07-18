@@ -15,10 +15,21 @@ void				imageCopyToBuffer	(ZCommandBuffer commandBuffer, ZImage image, ZBuffer b
 										 VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage,
 										 uint32_t baseLevel = 0u, uint32_t levelCount = 1u,
 										 uint32_t baseLayer = 0u, uint32_t layerCount = 1u);
+void				imageCopyToBuffer2 (ZCommandBuffer commandBuffer,
+										ZImage image, ZBuffer buffer,
+										ZBarrierConstants::Access srcImageAccess,  ZBarrierConstants::Access dstImageAccess,
+										ZBarrierConstants::Access srcBufferAccess, ZBarrierConstants::Access dstBufferAccess,
+										ZBarrierConstants::Stage srcStage, ZBarrierConstants::Stage dstStage,
+										VkImageLayout targetImageLayout = VK_IMAGE_LAYOUT_MAX_ENUM,
+										uint32_t baseLevel = 0u, uint32_t levelCount = 1u,
+										uint32_t baseLayer = 0u, uint32_t layerCount = 1u);
 void				bufferCopyToBuffer	(ZCommandPool commandPool, ZBuffer srcBuffer, ZBuffer dstBuffer);
 void				bufferCopyToBuffer	(ZCommandBuffer cmdBuffer, ZBuffer srcBuffer, ZBuffer dstBuffer,
 										 VkAccessFlags srcBufferAccess, VkAccessFlags dstBufferAccess,
 										 VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage);
+void				bufferCopyToBuffer2 (ZCommandBuffer cmdBuffer, ZBuffer srcBuffer, ZBuffer dstBuffer,
+										 ZBarrierConstants::Access srcBufferAccess, ZBarrierConstants::Access dstBufferAccess,
+										 ZBarrierConstants::Stage srcStage, ZBarrierConstants::Stage dstStage);
 void				bufferCopyToImage	(ZCommandBuffer cmdBuffer, ZBuffer buffer, ZImage image,
 										 VkAccessFlags srcBufferAccess, VkAccessFlags dstBufferAccess,
 										 VkAccessFlags srcImageAccess, VkAccessFlags dstImageAccess,

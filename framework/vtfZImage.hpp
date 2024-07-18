@@ -5,6 +5,7 @@
 #include "vtfVkUtils.hpp"
 #include "vtfZDeviceMemory.hpp"
 #include "vtfZBarriers.hpp"
+#include "vtfZBarriers2.hpp"
 
 #include <chrono>
 #include <ratio>

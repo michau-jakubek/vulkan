@@ -31,6 +31,8 @@ set(tests_files
     intCipher.hpp
 	intThreadPool.cpp
 	intThreadPool.hpp
+    intSynchronization2.cpp
+    intSynchronization2.hpp
     daemonTests.cpp
     daemonTests.hpp
     subgroupMatrixTests.cpp
