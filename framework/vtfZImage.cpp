@@ -816,4 +816,86 @@ void imageCopyToImage (ZCommandBuffer cmdBuffer, ZImage srcImage, ZImage dstImag
 	commandBufferPipelineBarriers(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, dstStage, postSrcBarrier, postDstBarrier);
 }
 
+void imageCopyToImage2 (ZCommandBuffer cmdBuffer, ZImage srcImage, ZImage dstImage,
+						ZBarrierConstants::Access inSrcAccess, ZBarrierConstants::Access outSrcAccess,
+						ZBarrierConstants::Access inDstAccess, ZBarrierConstants::Access outDstAccess,
+						ZBarrierConstants::Stage srcStage, ZBarrierConstants::Stage dstStage,
+						VkImageLayout finalSrcLayout, VkImageLayout finalDstLayout,
+						uint32_t srcArrayLayer, uint32_t arrayLayers, uint32_t dstArrayLayer,
+						uint32_t srcMipLevel, uint32_t mipLevels, uint32_t dstMipLevel)
+{
+	const VkImageCreateInfo&	srcInfo	= imageGetCreateInfo(srcImage);
+	const VkImageCreateInfo&	dstInfo	= imageGetCreateInfo(dstImage);
+
+	ASSERTMSG(srcInfo.samples == dstInfo.samples, "The sample count of srcImage and dstImage must match");
+
+	const bool okSrcLayers = (srcArrayLayer < srcInfo.arrayLayers) && ((srcArrayLayer + arrayLayers) <= srcInfo.arrayLayers);
+	const bool okDstLayers = (dstArrayLayer < dstInfo.arrayLayers) && ((dstArrayLayer + arrayLayers) <= dstInfo.arrayLayers);
+	const bool okSrcLevels = (srcMipLevel < srcInfo.mipLevels) && ((srcMipLevel + mipLevels) <= srcInfo.mipLevels);
+	const bool okDstLevels = (dstMipLevel < dstInfo.mipLevels) && ((dstMipLevel + mipLevels) <= dstInfo.mipLevels);
+
+	auto [srcLevelWidth, srcLevelHeight] = computeMipLevelWidthAndHeight(srcInfo.extent.width, srcInfo.extent.height, srcMipLevel);
+	const auto [dstLevelWidth, dstLevelHeight] = computeMipLevelWidthAndHeight(dstInfo.extent.width, dstInfo.extent.height, dstMipLevel);
+	const bool okDimmensions = (dstLevelWidth <= srcLevelWidth) && (dstLevelHeight <= srcLevelHeight);
+
+	ASSERTMSG(okSrcLayers && okDstLayers && okSrcLevels && okDstLevels && okDimmensions,
+			"Destination mip levels must accomodate at least source levels count or size");
+
+	if (finalSrcLayout == VK_IMAGE_LAYOUT_UNDEFINED) finalSrcLayout = srcInfo.initialLayout;
+	if (finalDstLayout == VK_IMAGE_LAYOUT_UNDEFINED) finalDstLayout = dstInfo.initialLayout;
+
+	using A = ZBarrierConstants::Access;
+	using S = ZBarrierConstants::Stage;
+
+	const auto srcSubresource = imageMakeSubresourceRange(srcImage, srcMipLevel, mipLevels, srcArrayLayer, arrayLayers);
+	const auto dstSubresource = imageMakeSubresourceRange(dstImage, dstMipLevel, mipLevels, dstArrayLayer, arrayLayers);
+
+	ZImageMemoryBarrier2	preSrcBarrier(srcImage, inSrcAccess, srcStage,
+											A::MEMORY_READ_BIT, S::TRANSFER_BIT,
+											VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcSubresource);
+	ZImageMemoryBarrier2	preDstBarrier(dstImage, inDstAccess, srcStage,
+											A::MEMORY_WRITE_BIT, S::TRANSFER_BIT,
+											VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, dstSubresource);
+	ZImageMemoryBarrier2	postSrcBarrier(srcImage, A::MEMORY_READ_BIT, S::TRANSFER_BIT,
+											outSrcAccess, dstStage,
+											finalSrcLayout, srcSubresource);
+	ZImageMemoryBarrier2	postDstBarrier(dstImage, A::MEMORY_WRITE_BIT, S::TRANSFER_BIT,
+											outDstAccess, dstStage,
+											finalDstLayout, dstSubresource);
+
+	std::vector<VkImageCopy2> regions;
+	regions.reserve(arrayLayers * mipLevels);
+
+	for (uint32_t layer = 0; layer < arrayLayers; ++layer)
+	{
+		for (uint32_t level = 0; level < mipLevels; ++level)
+		{
+			VkImageCopy2 region = makeVkStruct();
+			region.srcSubresource	= imageMakeSubresourceLayers(srcImage, (srcMipLevel + level),
+																(srcArrayLayer + layer), arrayLayers);
+			region.srcOffset		= makeOffset3D();
+			region.dstSubresource	= imageMakeSubresourceLayers(dstImage, (dstMipLevel + level),
+																(dstArrayLayer + layer), arrayLayers);
+			region.dstOffset		= makeOffset3D();
+			std::tie(srcLevelWidth, srcLevelHeight) = computeMipLevelWidthAndHeight(
+																srcInfo.extent.width, srcInfo.extent.height,
+																(srcMipLevel + level));
+			region.extent			= makeExtent3D(srcLevelWidth, srcLevelHeight, 1u);
+			regions.emplace_back(region);
+		}
+	}
+
+	VkCopyImageInfo2	copyInfo = makeVkStruct();
+	copyInfo.srcImage		= *srcImage;
+	copyInfo.srcImageLayout	= VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+	copyInfo.dstImage		= *dstImage;
+	copyInfo.dstImageLayout	= VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	copyInfo.regionCount	= data_count(regions);
+	copyInfo.pRegions		= data_or_null(regions);
+
+	commandBufferPipelineBarriers2(cmdBuffer, preSrcBarrier, preDstBarrier);
+	vkCmdCopyImage2(*cmdBuffer, &copyInfo);
+	commandBufferPipelineBarriers2(cmdBuffer, postSrcBarrier, postDstBarrier);
+}
+
 } // namespace vtf

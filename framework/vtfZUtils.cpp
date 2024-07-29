@@ -147,35 +147,35 @@ ZFramebuffer createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t
 	return ZFramebuffer::create(framebuffer, device, allocationCallbacks, width, height, renderPass, attachments);
 }
 
-ZRenderPassBeginInfo::ZRenderPassBeginInfo (ZCommandBuffer cmd, ZFramebuffer framebuffer, uint32_t subpass)
-	: m_cmdBuffer			(cmd)
-	, m_framebuffer			(framebuffer)
-	, m_renderPass			(framebuffer.getParam<ZRenderPass>())
-	, m_subpass				(subpass)
+ZRenderPassBeginInfo::ZRenderPassBeginInfo (ZCommandBuffer cmd, ZFramebuffer framebuffer,
+											uint32_t subpass, VkSubpassContents contents)
+	: ZRenderPassBeginInfo(cmd, framebuffer.getParam<ZRenderPass>(), framebuffer, subpass, contents)
 {
 }
-ZRenderPassBeginInfo::ZRenderPassBeginInfo (ZCommandBuffer cmd, ZRenderPass renderPass, ZFramebuffer framebuffer, uint32_t subpass)
+ZRenderPassBeginInfo::ZRenderPassBeginInfo (ZCommandBuffer cmd, ZRenderPass renderPass, ZFramebuffer framebuffer,
+											uint32_t subpass, VkSubpassContents contents)
 	: m_cmdBuffer			(cmd)
 	, m_framebuffer			(framebuffer)
 	, m_renderPass			(renderPass)
 	, m_subpass				(subpass)
+	, m_contents			(contents)
 {
 }
-const VkRenderPassBeginInfo ZRenderPassBeginInfo::operator ()() const
+VkRenderPassBeginInfo ZRenderPassBeginInfo::operator ()() const
 {
 	const uint32_t width = m_framebuffer.getParam<ZDistType<Width, uint32_t>>();
 	const uint32_t height = m_framebuffer.getParam<ZDistType<Height, uint32_t>>();
 	add_cref<std::vector<VkClearValue>> clearValues = m_renderPass.getParamRef<std::vector<VkClearValue>>();
 
 	VkRenderPassBeginInfo	info = makeVkStruct();
-	info.renderPass		= *m_renderPass;
-	info.framebuffer	= *m_framebuffer;
-	info.renderArea.offset.x	= 0u;
-	info.renderArea.offset.y	= 0u;
+	info.renderPass					= *m_renderPass;
+	info.framebuffer				= *m_framebuffer;
+	info.renderArea.offset.x		= 0u;
+	info.renderArea.offset.y		= 0u;
 	info.renderArea.extent.width	= width;
 	info.renderArea.extent.height	= height;
-	info.clearValueCount	= data_count(clearValues);
-	info.pClearValues		= data_or_null(clearValues);
+	info.clearValueCount			= data_count(clearValues);
+	info.pClearValues				= data_or_null(clearValues);
 
 	return info;
 }
@@ -243,7 +243,7 @@ ZRenderPass	createRenderPassImpl (ZDevice device, void* pNext,
 	subpassTemplate.flags					= VkSubpassDescriptionFlags(0);
 	subpassTemplate.pipelineBindPoint		= VK_PIPELINE_BIND_POINT_GRAPHICS;
 	subpassTemplate.colorAttachmentCount	= data_count(references);
-	subpassTemplate.pColorAttachments		= references.data();
+	subpassTemplate.pColorAttachments		= data_or_null(references);
 	subpassTemplate.pDepthStencilAttachment	= nullptr;
 	subpassTemplate.inputAttachmentCount	= 0;
 	subpassTemplate.pInputAttachments		= nullptr;
@@ -304,7 +304,7 @@ ZRenderPass	createRenderPassImpl (ZDevice device, void* pNext,
 	renderPassInfo.pNext			= pNext;
 	renderPassInfo.flags			= VkRenderPassCreateFlags(0);
 	renderPassInfo.attachmentCount	= attachmentCount;
-	renderPassInfo.pAttachments		= descriptions.data();
+	renderPassInfo.pAttachments		= data_or_null(descriptions);
 	renderPassInfo.subpassCount		= data_count(subpasses);
 	renderPassInfo.pSubpasses		= data_or_null(subpasses);
 	renderPassInfo.dependencyCount	= data_count(subpassDeps);
@@ -445,10 +445,11 @@ ZInstance		createInstance (const char*							appName,
 								uint32_t							apiVersion,
 								bool								enableDebugPrintf)
 {
-	Logger				logger				{};
-	ZInstance			instance			(VK_NULL_HANDLE, callbacks, apiVersion, {}, {}, logger);
-	add_ref<strings>	requiredLayers		= instance.getParamRef<ZDistType<RequiredLayers, strings>>();
-	add_ref<strings>	availableExtensions	= instance.getParamRef<ZDistType<AvailableLayerExtensions, strings>>();
+	Logger						logger				{};
+	ZInstance					instance			(VK_NULL_HANDLE, callbacks, apiVersion, {}, {}, logger);
+	add_ref<strings>			requiredLayers		= instance.getParamRef<ZDistType<RequiredLayers, strings>>();
+	add_ref<strings>			availableExtensions	= instance.getParamRef<ZDistType<AvailableLayerExtensions, strings>>();
+	add_cref<GlobalAppFlags>	gf					= getGlobalAppFlags();
 
 	requiredLayers = desiredLayers;
 	if (enableDebugPrintf)
@@ -462,7 +463,7 @@ ZInstance		createInstance (const char*							appName,
 			ASSERTMSG(false, "All required layer(s) must match to available instance layer(s)!!!");
 	}
 
-	availableExtensions	= enumerateInstanceExtensions(requiredLayers);
+	availableExtensions	= enumerateInstanceExtensions();
 
 	ASSERTMSG(containsAllStrings(availableExtensions, desiredExtensions),
 			  "All required extension(s) must match available instance extension(s)");
@@ -485,15 +486,21 @@ ZInstance		createInstance (const char*							appName,
 	UNREF(pMessengerUserData);
 	UNREF(pReportUserData);
 
+	strings requiredExtensions(desiredExtensions);
+
 	void* pNext = nullptr, **p2pNext = &pNext;
 
 	if (debugMessengerEnabled)
 	{
+		if (!containsString(debugUtilsExtName, desiredExtensions))
+			requiredExtensions.push_back(debugUtilsExtName);
 		makeDebugCreateInfo(debugMessengerInfo, &instance.getParamRef<Logger>(), nullptr, enableDebugPrintf);
 	}
 
 	if (debugReportEnabled)
 	{
+		if (!containsString(debugReportExtName, desiredExtensions))
+			requiredExtensions.push_back(debugReportExtName);
 		makeDebugCreateInfo(debugReportInfo, &instance.getParamRef<Logger>(), nullptr, enableDebugPrintf);
 	}
 
@@ -505,7 +512,7 @@ ZInstance		createInstance (const char*							appName,
 
 	VkApplicationInfo	appInfo			= makeVkStruct();
 	appInfo.pApplicationName			= appName;
-	appInfo.applicationVersion			= VK_MAKE_VERSION(1, 0, 0);
+	appInfo.applicationVersion			= VK_MAKE_VERSION(gf.vtfVer.nmajor, gf.vtfVer.nminor, gf.vtfVer.npatch);
 	appInfo.pEngineName					= nullptr;
 	appInfo.engineVersion				= VK_MAKE_VERSION(1, 0, 0);
 	appInfo.apiVersion					= apiVersion;	// default VK_API_VERSION_1_0

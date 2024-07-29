@@ -105,19 +105,21 @@ ZFramebuffer	createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t
 
 struct ZRenderPassBeginInfo : protected VkRenderPassBeginInfo
 {
-	ZRenderPassBeginInfo (ZCommandBuffer cmd, ZFramebuffer framebuffer, uint32_t subpass);
-	ZRenderPassBeginInfo (ZCommandBuffer cmd, ZRenderPass renderPass, ZFramebuffer framebuffer, uint32_t subpass);
-	const VkRenderPassBeginInfo operator ()() const;
-	ZCommandBuffer	getCommandBuffer	() const { return m_cmdBuffer; }
-	ZFramebuffer	getFramebuffer		() const { return m_framebuffer; }
-	ZRenderPass		getRenderPass		() const { return m_renderPass; }
-	uint32_t		consumeSubpass		() { return m_subpass++; }
-	uint32_t		getSubpass			() const { return m_subpass; }
+	ZRenderPassBeginInfo (ZCommandBuffer, ZFramebuffer, uint32_t subpass, VkSubpassContents);
+	ZRenderPassBeginInfo (ZCommandBuffer, ZRenderPass, ZFramebuffer, uint32_t subpass, VkSubpassContents);
+	VkRenderPassBeginInfo operator ()() const;
+	ZCommandBuffer		getCommandBuffer	() const { return m_cmdBuffer; }
+	ZFramebuffer		getFramebuffer		() const { return m_framebuffer; }
+	ZRenderPass			getRenderPass		() const { return m_renderPass; }
+	uint32_t			consumeSubpass		() { return m_subpass++; }
+	uint32_t			getSubpass			() const { return m_subpass; }
+	VkSubpassContents	getContents			() const { return m_contents; }
 protected:
-	ZCommandBuffer	m_cmdBuffer;
-	ZFramebuffer	m_framebuffer;
-	ZRenderPass		m_renderPass;
-	uint32_t		m_subpass;
+	ZCommandBuffer		m_cmdBuffer;
+	ZFramebuffer		m_framebuffer;
+	ZRenderPass			m_renderPass;
+	uint32_t			m_subpass;
+	VkSubpassContents	m_contents;
 };
 /**
 * @device			A device which render pass is created

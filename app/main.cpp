@@ -25,7 +25,8 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 
 	GlobalAppFlags globalAppFlags;
 
-	globalAppFlags.thisAppPath = argv[0];
+	globalAppFlags.thisAppPath	= argv[0];
+	globalAppFlags.vtfVer		= CurrentVtfVersion;
 
 	if (argc < 2)
 	{

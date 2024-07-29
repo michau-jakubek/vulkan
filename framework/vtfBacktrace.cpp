@@ -106,7 +106,8 @@ static GlobalAppFlags globalAppFlags;
 const GlobalAppFlags& getGlobalAppFlags () { return globalAppFlags; }
 void setGlobalAppFlags(const GlobalAppFlags& flags) { globalAppFlags = flags; }
 GlobalAppFlags::GlobalAppFlags()
-	: apiVer					(1, 1)
+	: vtfVer					(1, 0)
+	, apiVer					(1, 1)
 	, vulkanVer					(1, 0)
 	, spirvVer					(1, 0)
 	, layers					()

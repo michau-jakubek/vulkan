@@ -4,6 +4,8 @@
 #include "vtfThreadSafeLogger.hpp"
 #include "vtfStructUtils.hpp"
 
+#include <string_view>
+
 namespace vtf
 {
 
@@ -155,16 +157,18 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallback(
 	UNREF(messageCode);
 	UNREF(pUserData);
 
+	const std::string_view sv(pMessage);
+
 	if (getGlobalAppFlags().noWarning_VUID_Undefined
 		&& (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT)
-		&& (std::strstr(pMessage, VUID_Undefined) != nullptr))
+		&& (sv.find(VUID_Undefined) != std::string_view::npos))
 	{
 		return VK_FALSE;
 	}
 
 	for (add_cref<std::string> s : getGlobalAppFlags().suppressedVUIDs)
 	{
-		if (s.length() > 5 && std::strstr(s.c_str(), pMessage) != nullptr)
+		if (s.length() > 5 && sv.find(s.c_str()) != std::string_view::npos)
 			return VK_FALSE;
 	}
 

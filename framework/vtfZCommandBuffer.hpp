@@ -46,7 +46,7 @@ ZCommandBuffer	allocateCommandBuffer (ZCommandPool commandPool, bool primary = t
 ZCommandBuffer	createCommandBuffer (ZCommandPool commandPool, bool primary = true, const void* pNext = nullptr);
 ZCommandPool	commandBufferGetCommandPool (ZCommandBuffer commandBuffer);
 void			commandBufferEnd (ZCommandBuffer commandBuffer);
-void			commandBufferBegin (ZCommandBuffer commandBuffer);
+void			commandBufferBegin (ZCommandBuffer commandBuffer, ZFramebuffer fb = {}, ZRenderPass rp = {}, uint32_t subpass = 0);
 void			commandBufferExecuteCommands (ZCommandBuffer primary, std::initializer_list<ZCommandBuffer> secondaryCommands);
 void			commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFence = ZFence(), uint64_t timeout = INVALID_UINT64);
 /**
@@ -62,8 +62,10 @@ void			commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkDevic
 void			commandBufferDispatch (ZCommandBuffer cmd, const UVec3& workGroupCount = UVec3(1,1,1));
 void			commandBufferSetPolygonModeEXT (ZCommandBuffer commandBuffer, VkPolygonMode polygonMode);
 
-ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZFramebuffer framebuffer, uint32_t subpass);
-ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZRenderPass renderPass, ZFramebuffer framebuffer, uint32_t subpass);
+ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZFramebuffer framebuffer,
+												   uint32_t subpass, VkSubpassContents = VK_SUBPASS_CONTENTS_INLINE);
+ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZRenderPass renderPass, ZFramebuffer framebuffer,
+												   uint32_t subpass, VkSubpassContents = VK_SUBPASS_CONTENTS_INLINE);
 bool				 commandBufferNextSubpass (add_ref<ZRenderPassBeginInfo> beginInfo);
 void				 commandBufferEndRenderPass (add_cref<ZRenderPassBeginInfo> beginInfo);
 void				 commandBufferBeginRendering (ZCommandBuffer cmd, std::initializer_list<ZImageView> attachments,

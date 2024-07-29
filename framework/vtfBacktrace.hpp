@@ -29,6 +29,7 @@ void printBacktrace (std::ostream& ss, std::size_t skip = 0)
 
 struct GlobalAppFlags
 {
+	vtf::Version	vtfVer; // copy of main.hpp:CurrentVtfVersion
 	vtf::Version	apiVer;
 	vtf::Version	vulkanVer;
 	vtf::Version	spirvVer;

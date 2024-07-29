@@ -1,0 +1,14 @@
+#version 450
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(r32ui, set = 0, binding = 5) uniform uimage2D inColor;
+layout(set = 0, binding = 2) writeonly buffer outBuffer {
+	uint d[];
+};
+
+void main()
+{
+	const uvec4 color = imageLoad(inColor, ivec2(gl_WorkGroupID.xy));
+	d[gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x] = color.x;
+}
+

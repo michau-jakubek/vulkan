@@ -22,20 +22,20 @@ using Programs = ProgramCollection;
 struct Params
 {
 	add_cref<std::string>	assets;
-	bool					dummy;
+	bool					buildAlways;
 
 	Params (add_cref<std::string>	assets_)
-		: assets	(assets_)
-		, dummy		(false) {}
+		: assets		(assets_)
+		, buildAlways	(false) {}
 	OptionParser<Params> getParser ();
 };
-constexpr Option optionDummy { "--dummy", 0 };
+constexpr Option optionBuildAlways { "--build-always", 0 };
 OptionParser<Params> Params::getParser ()
 {
 	OptionFlags				flags	(OptionFlag::PrintDefault);
 	OptionParser<Params>	parser	(*this);
-	parser.addOption(&Params::dummy, optionDummy,
-					 "Reserved for future use", { dummy }, flags);
+	parser.addOption(&Params::buildAlways, optionBuildAlways,
+					 "Force to build the shaders always", { buildAlways }, flags);
 	return parser;
 }
 
@@ -187,21 +187,40 @@ UNUSED add_cptr<char> pipelineStage2ToString (VkFlags64 stage)
 	return nullptr;
 }
 
-template<class Draw, class... Args>
-ZCommandBuffer beginEndCommand (add_ref<VulkanContext> ctx, ZCommandPool cmdPool, Draw&& draw, Args&&... args)
+template<class Recorder, class Drawer>
+void beginEndCommand (add_ref<VulkanContext> ctx, ZCommandPool cmdPool, Recorder&& record, Drawer&& draw, ZFramebuffer fb, ZRenderPass rp)
 {
 	UNREF(ctx);
+	UNREF(draw);
+	UNREF(fb);
+	UNREF(rp);
+
 	ZCommandBuffer cmd = allocateCommandBuffer(cmdPool);
 	commandBufferBegin(cmd);
-		draw(cmd, std::forward<Args>(args)...);
+		record(cmd, ZCommandBuffer());
 	commandBufferEnd(cmd);
 	commandBufferSubmitAndWait(cmd);
-	return cmd;
 }
-template<class MakeCmd, class Draw, class... Args>
-void execute (add_ref<VulkanContext> ctx, ZCommandPool cmdPool, MakeCmd&& makeCmd, Draw& draw, Args&&... args)
+template<class Recorder, class Drawer>
+void beginEndCommand2 (add_ref<VulkanContext> ctx, ZCommandPool cmdPool, Recorder&& record, Drawer&& draw, ZFramebuffer fb, ZRenderPass rp)
 {
-	ZCommandBuffer cmd = makeCmd(ctx, cmdPool, std::forward<Draw>(draw), std::forward<Args>(args)...);
+	UNREF(ctx);
+	ZCommandBuffer primary = allocateCommandBuffer(cmdPool, true);
+	ZCommandBuffer secondary = allocateCommandBuffer(cmdPool, false);
+
+	commandBufferBegin(secondary, fb, rp);
+		draw(secondary);
+	commandBufferEnd(secondary);
+
+	commandBufferBegin(primary);
+		record(primary, secondary);
+	commandBufferEnd(primary);
+	commandBufferSubmitAndWait(primary);
+}
+template<class CmdMaker, class Recorder, class Drawer>
+void execute (add_ref<VulkanContext> ctx, ZCommandPool cmdPool, CmdMaker&& makeCmd, Recorder&& record, Drawer&& draw, ZFramebuffer fb, ZRenderPass rp = {})
+{
+	makeCmd(ctx, cmdPool, std::move(record), std::move(draw), fb, rp);
 }
 
 TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Params> params)
@@ -214,37 +233,44 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 	const uint32_t		height			= 256;
 	const VkExtent2D	extent			{ width, height };
 	const VkFormat		format			= VK_FORMAT_R32_UINT;
-	ZImage				colorImage		= ctx.createColorImage2D(format, width, height);
+	ZImage				colorImage		= createImage(ctx.device, format, VK_IMAGE_TYPE_2D, width, height,
+													  ZImageUsageFlags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_USAGE_STORAGE_BIT));
 	ZImageView			colorView		= createImageView(colorImage);
 	ZImage				storageImage	= createImage(ctx.device, format, VK_IMAGE_TYPE_2D, width, height,
-											ZImageUsageFlags(VK_IMAGE_USAGE_STORAGE_BIT, VK_IMAGE_USAGE_SAMPLED_BIT));
-	ZImageView			storageView		= createImageView(storageImage);
+														ZImageUsageFlags(VK_IMAGE_USAGE_STORAGE_BIT));
+	ZImageView			storageView	= createImageView(storageImage);
 
 	vertexInput.binding(0).addAttributes(std::vector<Vec4>{ { -1, +3.5 }, { -1, -1 }, { +3.5, -1 } });
 
-	const uint32_t		buffer0binding = lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (width * height));
-	const uint32_t		buffer1binding = lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (width * height));
-	const uint32_t		buffer2binding = lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (width * height));
-	const uint32_t		storageBinding = lm.addBinding(storageView, ZSampler());	UNREF(storageBinding);
+	const uint32_t		buffer0binding	= lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (width * height));
+	const uint32_t		buffer1binding	= lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (width * height));
+	const uint32_t		buffer2binding	= lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (width * height));
+	const uint32_t		buffer3binding	= lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (width * height));
+	const uint32_t		storageBinding	= lm.addBinding(storageView, ZSampler());
+	const uint32_t		colorBinding	= lm.addBinding(colorView, ZSampler());
 
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
-	programs.addFromFile(VK_SHADER_STAGE_COMPUTE_BIT, "shader.comp");
+	programs.addFromFile(VK_SHADER_STAGE_COMPUTE_BIT, "forward.comp");
+	programs.addFromFile(VK_SHADER_STAGE_COMPUTE_BIT, "backward.comp");
 	programs.buildAndVerify(true);
 	ZShaderModule		vertShader		= programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
 	ZShaderModule		fragShader		= programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);
-	ZShaderModule		compShader		= programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT);
+	ZShaderModule		forwardShader	= programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT, 0);
+	ZShaderModule		backwardShader	= programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT, 1);
 
 	ZRenderPass			renderPass		= createColorRenderPass(ctx.device, { format });
 	ZFramebuffer		framebuffer		= createFramebuffer(renderPass, extent, { colorView });	
 	ZPipelineLayout		pipelineLayout	= lm.createPipelineLayout(lm.createDescriptorSetLayout());
 	ZPipeline			graphPipeline	= createGraphicsPipeline(pipelineLayout, renderPass,
-											gpp::DepthWriteEnable(true), extent, vertexInput, vertShader, fragShader);
-	ZPipeline			compPipeline	= createComputePipeline(pipelineLayout, compShader, UVec3(1));
+											extent, vertexInput, vertShader, fragShader);
+	ZPipeline			forwardPipeline	= createComputePipeline(pipelineLayout, forwardShader, UVec3(1));
+	ZPipeline			backwardPipeline= createComputePipeline(pipelineLayout, backwardShader, UVec3(1));
 
 	ZBuffer				buffer0			= std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(buffer0binding)).buffer;
 	ZBuffer				buffer1			= std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(buffer1binding)).buffer;
 	ZBuffer				buffer2			= std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(buffer2binding)).buffer;
+	ZBuffer				buffer3			= std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(buffer3binding)).buffer;
 	ZBuffer				indirectBuffer	= createBuffer<VkDrawIndexedIndirectCommand>(
 												ctx.device, ZBufferUsageFlags(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT));
 	ZBuffer				indexBuffer		= createIndexBuffer(ctx.device, 3, VK_INDEX_TYPE_UINT32);
@@ -266,62 +292,86 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 		0u,												// firstInstance
 	});
 
-	std::cout << "Buffer0:        " << buffer0 << std::endl;
-	std::cout << "Buffer1:        " << buffer1 << std::endl;
-	std::cout << "Buffer2:        " << buffer2 << std::endl;
+	std::cout << "Binding: " << buffer0binding << " Buffer0: " << buffer0 << std::endl;
+	std::cout << "Binding: " << buffer1binding << " Buffer1: " << buffer1 << std::endl;
+	std::cout << "Binding: " << buffer2binding << " Buffer2: " << buffer2 << std::endl;
+	std::cout << "Binding: " << buffer3binding << " Buffer3: " << buffer3 << std::endl;
+	std::cout << "Binding: " << storageBinding << " Storage: " << storageImage << std::endl;
+	std::cout << "Binding: " << colorBinding   << " Color:   " << colorImage << std::endl;
 	std::cout << "indirectBuffer: " << indirectBuffer << std::endl;
 	std::cout << "indexBuffer:    " << indexBuffer << std::endl;
 	std::cout << "Vertex:         " << vertShader << std::endl;
 	std::cout << "Fragment:       " << fragShader << std::endl;
-	std::cout << "Compute:        " << compShader << std::endl;
-	std::cout << "Color:          " << colorImage << std::endl;
-	std::cout << "Storage:        " << storageImage << std::endl;
-
-	// 1. copy buffer0 to buffer1
-	// 2. compute copy buffer1 to image0
-	// 3. renderpass sample image0 to framebuffer
-	// 4. host copy framebuffer to buffer2
+	std::cout << "Forward:        " << forwardShader << std::endl;
+	std::cout << "Backward:       " << backwardShader << std::endl;
 
 	typedef ZBarrierConstants::Access	A;
 	typedef ZBarrierConstants::Stage	S;
 
-	ZImageMemoryBarrier2 b2(storageImage, A::NONE, S::TOP_OF_PIPE_BIT,
+	ZImageMemoryBarrier2 b1(storageImage, A::NONE, S::TOP_OF_PIPE_BIT,
 										A::SHADER_WRITE_BIT, S::COMPUTE_SHADER_BIT,
 										VK_IMAGE_LAYOUT_GENERAL);
-
-	ZImageMemoryBarrier2 b3(storageImage, A::SHADER_WRITE_BIT, S::COMPUTE_SHADER_BIT,
+	ZImageMemoryBarrier2 b2(storageImage, A::SHADER_WRITE_BIT, S::COMPUTE_SHADER_BIT,
 										A::SHADER_READ_BIT, S::FRAGMENT_SHADER_BIT,
+										VK_IMAGE_LAYOUT_GENERAL);
+	ZImageMemoryBarrier2 b3(colorImage, A::COLOR_ATTACHMENT_WRITE_BIT, S::COLOR_ATTACHMENT_OUTPUT_BIT,
+										A::SHADER_STORAGE_READ_BIT, S::COMPUTE_SHADER_BIT,
 										VK_IMAGE_LAYOUT_GENERAL);
 
 	auto draw = [&](ZCommandBuffer cmd) -> void
 	{
-		// assume that command buffer is in a recording state
-
-		commandBufferBindPipeline(cmd, compPipeline);
 		commandBufferBindPipeline(cmd, graphPipeline);
 		commandBufferBindVertexBuffers(cmd, vertexInput);
 		commandBufferBindIndexBuffer(cmd, indexBuffer);
+		commandBufferDrawIndexedIndirect(cmd, indirectBuffer);
+	};
 
-		bufferCopyToBuffer2(cmd, buffer0, buffer1,
+	auto record = [&](ZCommandBuffer primary, ZCommandBuffer secondary) -> void
+	{
+		// assume that command buffer is in a recording state
+
+		std::cout << "Primary command:   " << primary << std::endl;
+		std::cout << "Secondary command: " << secondary << std::endl;
+
+		bufferCopyToBuffer2(primary, buffer0, buffer1,
 							A::NONE, A::SHADER_READ_BIT,
 							S::TOP_OF_PIPE_BIT, S::COMPUTE_SHADER_BIT);
 
-		commandBufferPipelineBarriers2(cmd, b2);
-		commandBufferDispatch(cmd, UVec3(width, height, 1u));
-		commandBufferPipelineBarriers2(cmd, b3);
+		commandBufferBindPipeline(primary, forwardPipeline);
+		commandBufferPipelineBarriers2(primary, b1);
+		commandBufferDispatch(primary, UVec3(width, height, 1u));
+		commandBufferPipelineBarriers2(primary, b2);
 
-		auto rpbi = commandBufferBeginRenderPass(cmd, framebuffer, 0);
-			commandBufferDrawIndexedIndirect(cmd, indirectBuffer);
+		const VkSubpassContents contents = secondary.has_handle()
+				? VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS : VK_SUBPASS_CONTENTS_INLINE;
+		auto rpbi = commandBufferBeginRenderPass(primary, framebuffer, 0, contents);
+			if (secondary.has_handle())
+			{
+				commandBufferExecuteCommands(primary, { secondary });
+			}
+			else
+			{
+				draw(primary);
+			}
 		commandBufferEndRenderPass(rpbi);
 
-		imageCopyToBuffer2(cmd, colorImage, buffer2,
-								A::COLOR_ATTACHMENT_READ_BIT, A::NONE,
-								A::NONE, A::NONE,
-								S::COLOR_ATTACHMENT_OUTPUT_BIT, S::BOTTOM_OF_PIPE_BIT);
+		commandBufferBindPipeline(primary, backwardPipeline);
+		commandBufferPipelineBarriers2(primary, b3);
+		commandBufferDispatch(primary, UVec3(width, height, 1u));
+
+		bufferCopyToBuffer2(primary, buffer2, buffer3,
+							A::NONE, A::NONE,
+							S::COMPUTE_SHADER_BIT, S::BOTTOM_OF_PIPE_BIT);
 
 		// assume that command buffer recording will be finished and submitted
 	};
 
+	// 1. pipeline copies buffer0 to buffer1
+	// 2. compute copies buffer1 to storage image
+	// 3. renderpass samples storage image to framebuffer
+	// 4. compute copies framebuffer to buffer2
+	// 5: pipeline copies buffer2 to buffer3
+	/*
 	std::vector<uint32_t> buffer0data(lm.getBindingElementCount(buffer0binding));
 	std::iota(buffer0data.begin(), buffer0data.end(), 1u);
 	lm.writeBinding(buffer0binding, buffer0data);
@@ -330,19 +380,27 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 	std::iota(buffer1data.begin(), buffer1data.end(), 2u);
 	lm.writeBinding(buffer1binding, buffer1data);
 
+	std::vector<uint32_t> buffer2data(lm.getBindingElementCount(buffer2binding));
+	std::iota(buffer2data.begin(), buffer2data.end(), 3u);
+	lm.writeBinding(buffer2binding, buffer2data);
+
+	std::vector<uint32_t> buffer3data(lm.getBindingElementCount(buffer3binding));
+	std::iota(buffer3data.begin(), buffer3data.end(), 4u);
+	lm.writeBinding(buffer3binding, buffer3data);
+*/
 	ZCommandPool graphicsCommandPool = ctx.createGraphicsCommandPool();
 
-	execute(ctx, graphicsCommandPool, beginEndCommand<std::decay_t<decltype(draw)>>, draw);
-
-
-	std::vector<uint32_t> buffer2data(lm.getBindingElementCount(buffer2binding));
+	execute(ctx, graphicsCommandPool, beginEndCommand<decltype(record), decltype(draw)>, record, draw, framebuffer, renderPass);
+/*
 	lm.readBinding(buffer1binding, buffer1data);
 	lm.readBinding(buffer2binding, buffer2data);
+	lm.readBinding(buffer3binding, buffer3data);
 
 	uint32_t mismatchIndex = INVALID_UINT32;
 	for (uint32_t i = 0; i < data_count(buffer0data); ++i)
 	{
-		if (buffer2data.at(i) != buffer0data.at(i) ||
+		if (buffer3data.at(i) != buffer2data.at(i) ||
+			buffer2data.at(i) != buffer1data.at(i) ||
 			buffer1data.at(i) != buffer0data.at(i))
 		{
 			mismatchIndex = i;
@@ -356,9 +414,15 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 	}
 
 	std::cout << "First mismatch at index: " << mismatchIndex
-			  << ", expected: " << UVec2(buffer0data.at(mismatchIndex), buffer0data.at(mismatchIndex))
-			  << " got: " << UVec2(buffer1data.at(mismatchIndex), buffer2data.at(mismatchIndex)) << std::endl;
-
+			  << ", expected: " << UVec4(buffer0data.at(mismatchIndex),
+										 buffer0data.at(mismatchIndex),
+										 buffer0data.at(mismatchIndex),
+										 buffer0data.at(mismatchIndex))
+			  << " got: " << UVec4(buffer0data.at(mismatchIndex),
+								   buffer1data.at(mismatchIndex),
+								   buffer2data.at(mismatchIndex),
+								   buffer3data.at(mismatchIndex)) << std::endl;
+								   */
 	return 1;
 }
 

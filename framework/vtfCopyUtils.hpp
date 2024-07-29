@@ -44,6 +44,14 @@ void				imageCopyToImage	(ZCommandBuffer cmdBuffer, ZImage srcImage, ZImage dstI
 										 VkAccessFlags inDstAccess, VkAccessFlags outDstAccess,
 										 VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage,
 										 VkImageLayout finalSrcLayout, VkImageLayout finalDstLayout);
+void				imageCopyToImage2	(ZCommandBuffer cmdBuffer, ZImage srcImage, ZImage dstImage,
+										 ZBarrierConstants::Access inSrcAccess, ZBarrierConstants::Access outSrcAccess,
+										 ZBarrierConstants::Access inDstAccess, ZBarrierConstants::Access outDstAccess,
+										 ZBarrierConstants::Stage srcStage, ZBarrierConstants::Stage dstStage,
+										 VkImageLayout finalSrcLayout, VkImageLayout finalDstLayout,
+										 uint32_t srcArrayLayer = 0, uint32_t arrayLayers = 1, uint32_t dstArrayLayer = 0,
+										 uint32_t srcMipLevel = 0, uint32_t mipLevels = 1, uint32_t dstMipLevel = 0);
+
 
 } // namespace vtf
 
