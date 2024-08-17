@@ -71,6 +71,8 @@ set(framework_files
         vtfContext.hpp
         vtfCanvas.cpp
         vtfCanvas.hpp
+		vtfZSpecializationInfo.cpp
+		vtfZSpecializationInfo.hpp
 )
 
 add_library(framework STATIC ${framework_files})

@@ -190,12 +190,21 @@ template<class X> constexpr add_cref<X> add_const_ref (const X& x)
 	return add_cref<X>(x);
 }
 
-template<class T, class P = T(*)[1], class R = decltype(std::begin(*std::declval<P>()))>
-static auto makeStdBeginEnd (void* p, uint32_t n) -> std::pair<R, R>
+template<class T, class N, class P = T(*)[1], class R = decltype(std::begin(*std::declval<P>()))>
+static auto makeStdBeginEnd (add_ptr<void> p, N&& n) -> std::pair<R, R>
 {
 	auto tmp = std::begin(*P(p));
 	auto begin = tmp;
-	std::advance(tmp, n);
+	std::advance(tmp, std::forward<N>(n));
+	return { begin, tmp };
+}
+
+template<class T, class N, class P = const T(*)[1], class R = decltype(std::cbegin(*std::declval<const P>()))>
+static auto makeStdBeginEnd(add_cptr<void> p, N&& n) -> std::pair<R, R>
+{
+	auto tmp = std::cbegin(*P(p));
+	auto begin = tmp;
+	std::advance(tmp, std::forward<N>(n));
 	return { begin, tmp };
 }
 

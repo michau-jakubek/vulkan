@@ -5,6 +5,7 @@
 #include "vtfZUtils.hpp"
 #include "vtfLayoutManager.hpp"
 #include "vtfVertexInput.hpp"
+#include "vtfZSpecializationInfo.hpp"
 #include <memory>
 #include <tuple>
 
@@ -28,7 +29,6 @@ constexpr VkPipelineColorBlendAttachmentState defaultBlendAttachmentState = {
 	| VK_COLOR_COMPONENT_G_BIT
 	| VK_COLOR_COMPONENT_B_BIT
 	| VK_COLOR_COMPONENT_A_BIT)	// VkColorComponentFlags    colorWriteMask;
-
 };
 
 using PatchControlPoints	= ZDistType<PatchControlPoints, uint32_t>;
@@ -40,10 +40,10 @@ using SubpassIndex			= ZDistType<SubpassIndex, uint32_t>;
 using ViewportCount			= ZDistType<ViewportCount, uint32_t>;
 using ScissorCount			= ZDistType<ScissorCount, uint32_t>;
 using LineWidth				= ZDistType<LineWidth, float>;
-using MultiviewIndex		= ZDistType<MultiviewIndex, uint32_t>;
 using AttachmentCount		= ZDistType<AttachmentCount, uint32_t>;
 using BlendAttachmentState	= ZDistType<BlendAttachmentState, std::pair<uint32_t, VkPipelineColorBlendAttachmentState>>;
 using BlendConstants		= ZDistType<BlendConstants, Vec4>;
+using SpecConstants			= ZDistType<SpecConstants, std::pair<VkShaderStageFlagBits, add_ref<ZSpecializationInfo>>>;
 
 	// VkExtent2D	sets both viewport and scissor
 	// VkViewport	sets viewport only
@@ -71,11 +71,11 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::DepthT
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::DepthWriteEnable>		enableDepthMask);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::StencilTestEnable>	enableStencilTest);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::SubpassIndex>			subpassIndex);
-void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::MultiviewIndex>		multiviewIndex);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, ZRenderPass							renderPass);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::AttachmentCount>		attachmentCount);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::BlendAttachmentState>	blendAttachmentState);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::BlendConstants>		blendConstants);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::SpecConstants>		specConstants);
 
 // end of template recursion
 void updateSettings (add_ref<GraphicPipelineSettings>);
@@ -99,13 +99,37 @@ ZPipeline createGraphicsPipeline (ZPipelineLayout layout, X&&... params)
 	return createGraphicsPipeline(*settings);
 }
 
+bool computePipelineVerifyLimits (ZDevice device, add_cref<UVec3> wgSizes, bool raise = true);
+ZPipeline createComputePipeline (ZPipelineLayout layout, ZShaderModule computeShaderModule,
+								add_ref<ZSpecializationInfo> specInfo, bool enableFullGroups = false);
 // Please note that if any of localSize[?] is valid value and a layout of compute shader looks like
 // layout(local_size_x_ID = X, local_size_y_ID = Y, local_size_z_ID = Z), then X,Y,Z will refer to
 // the SpecID during compute pipeline creation. Be carefull to set them properly according to their
-// index in localSize vector or left as INVALID_UINT32.
+// index in localSize vector or left as negative value.
+template<class... EntryTypes>
 ZPipeline createComputePipeline (ZPipelineLayout layout, ZShaderModule computeShaderModule,
-								 add_cref<UVec3> workGroupSize = UVec3(INVALID_UINT32),
-								 add_cref<UVec3> specID = UVec3(0,1,2), bool enableFullGroups = false);
+								add_cref<UVec3> localSizes = UVec3(INVALID_UINT32), ZSpecEntry<EntryTypes>&&... entries)
+{
+	ZSpecializationInfo info;
+
+	// Is 'const uvec3 gl_WorkGroupSize' really unsigned?
+	// Validation layers and shader unfortunately see it as signed.
+	const bool autoLocalSizesIDs = make_signed(localSizes.x()) >= 0
+								|| make_signed(localSizes.y()) >= 0
+								|| make_signed(localSizes.z()) >= 0;
+	if (autoLocalSizesIDs)
+	{
+		info.addEntries(ZSpecEntry<int32_t>(make_signed(localSizes.x()), 0u),
+						ZSpecEntry<int32_t>(make_signed(localSizes.y()), 1u),
+						ZSpecEntry<int32_t>(make_signed(localSizes.z()), 2u));
+	}
+
+	info.addEntries(entries...);
+
+	extern ZPipeline createComputePipelineImpl(ZPipelineLayout layout, ZShaderModule computeShaderModule,
+		add_cref<UVec3>, bool autoLocalSizesIDs, bool enableFullGroups, add_ref<ZSpecializationInfo>);
+	return createComputePipelineImpl(layout, computeShaderModule, localSizes, autoLocalSizesIDs, false, info);
+}
 
 ZPipelineLayout	pipelineGetLayout (ZPipeline pipeline);
 

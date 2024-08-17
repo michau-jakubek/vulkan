@@ -18,6 +18,8 @@ Usage:
   -cm     <uint>            checkpoint count max, default ${CM}
   -cols   <uint>            column count used to printing output, default ${CC}
   -rows   <uint>            row count used to printing output, default ${RC}
+  -specid <uvec2>           define specialization constant, for an example '-specid 2,123'
+                              defines spec constant id=2 of type uint with value=123
   -am     <lteral>          addressing mode, default "${AM}"
                              * ${AddresingMode::local}: gl_LocalInvocationID
                              * ${AddresingMode::absolut}: gl_SubgroupID * gl_SubgroupSize + gl_SubgroupInvocationID

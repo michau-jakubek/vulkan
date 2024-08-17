@@ -94,80 +94,7 @@ VkGraphicsPipelineCreateInfo makePipelineCreateInfo ()
 	return makeVkStructT<VkGraphicsPipelineCreateInfo>();
 }
 
-struct SpecializationInfoWithEntries : VkSpecializationInfo
-{
-	VkSpecializationMapEntry	entries[4];
-	uint8_t						data[ARRAY_LENGTH(entries) * sizeof(VkDeviceSize)];
-	SpecializationInfoWithEntries ();
-	SpecializationInfoWithEntries (const SpecializationInfoWithEntries& other);
-	template<class T> void addEntry (uint32_t constantID, T value);
-	bool hasEntry (uint32_t constantID) const;
-	void print () const;
-};
-SpecializationInfoWithEntries::SpecializationInfoWithEntries ()
-	: entries	()
-	, data		()
-{
-	add_ref<VkSpecializationInfo>(*this) = {};
-}
-SpecializationInfoWithEntries::SpecializationInfoWithEntries (const SpecializationInfoWithEntries& other)
-	: entries	()
-	, data		()
-{
-	std::copy(std::begin(other.entries), std::end(other.entries), std::begin(this->entries));
-	std::copy(std::begin(other.data), std::end(other.data), std::begin(this->data));
-	add_ref<VkSpecializationInfo>(*this) = other;
-	if (mapEntryCount)
-	{
-		pMapEntries = entries;
-		pData = data;
-	}
-}
-bool SpecializationInfoWithEntries::hasEntry (uint32_t constantID) const
-{
-	for (uint32_t e = 0u; e < mapEntryCount; ++e)
-	{
-		if (entries[e].constantID == constantID)
-			return true;
-	}
-	return false;
-}
-template<class T> void SpecializationInfoWithEntries::addEntry (uint32_t constantID, T value)
-{
-	if (hasEntry(constantID)) {}
-	ASSERTION(sizeof(T) <= sizeof(VkDeviceSize));
-	ASSERTION(mapEntryCount < ARRAY_LENGTH(entries));
-	uint32_t offset = 0u;
-	for (uint32_t e = 0u; e < mapEntryCount; ++e)
-	{
-		offset += static_cast<uint32_t>(entries[e].size);
-	}
-	uint32_t valueSize = uint32_t(sizeof(T));
-	entries[mapEntryCount++] = { 0, offset, valueSize };
-	*reinterpret_cast<T*>(&data[dataSize]) = value;
-	pMapEntries = entries;
-	dataSize = dataSize + valueSize;
-	pData = data;
-}
-void SpecializationInfoWithEntries::print () const
-{
-	std::cout << "mapEntryCount: " << mapEntryCount << std::endl;
-	std::cout << "pMapEntries:   " << static_cast<const void*>(pMapEntries) << std::endl;
-	std::cout << "dataSize:      " << dataSize << std::endl;
-	std::cout << "pData:         " << static_cast<const void*>(pData) << std::endl;
-	for (uint32_t i = 0; pMapEntries && i < mapEntryCount; ++i)
-	{
-		std::cout << "Entry[" << i << "].contantID: " << entries[i].constantID << std::endl;
-		std::cout << "Entry[" << i << "].offset:    " << entries[i].offset << std::endl;
-		std::cout << "Entry[" << i << "].size:      " << entries[i].size << std::endl;
-	}
-	if (pData)
-	{
-		std::cout << "Data as float: " << *((float*)pData) << std::endl;
-		std::cout << "Data as uint:  " << *((uint32_t*)pData) << std::endl;
-	}
-}
-typedef std::map<VkShaderStageFlagBits, SpecializationInfoWithEntries> SpecializationInfoWithEntriesMap;
+typedef std::map<VkShaderStageFlagBits, add_ptr<ZSpecializationInfo>> SpecializationInfoPerStageMap;
 
 struct GraphicPipelineSettings
 {
@@ -175,14 +102,14 @@ struct GraphicPipelineSettings
 	ZRenderPass			m_renderPass;
 	uint32_t			m_attachmentCount;
 
-	SpecializationInfoWithEntriesMap					m_shaderPerStageSpecs;
+	SpecializationInfoPerStageMap						m_shaderPerStageSpecs;
 	std::vector<VkPipelineShaderStageCreateInfo>		m_shaderStages;
+	std::vector<VkSpecializationInfo>					m_shaderSpecs;
 	VkPipelineInputAssemblyStateCreateInfo				m_assemblyState;
 	ZPipelineVertexInputStateCreateInfo					m_zVertexInputState;
 	VkPipelineVertexInputStateCreateInfo				m_vertexInputState;
 	VkPipelineTessellationStateCreateInfo				m_tessellationState;
 
-	uint32_t											m_multiviewIndex;
 	VkViewport											m_viewport;
 	VkRect2D											m_scissor;
 	VkPipelineViewportStateCreateInfo					m_viewportState;
@@ -202,19 +129,20 @@ struct GraphicPipelineSettings
 	GraphicPipelineSettings (ZPipelineLayout layout);
 	auto findShader (VkShaderStageFlagBits stage) -> std::vector<VkPipelineShaderStageCreateInfo>::iterator;
 	uint32_t containsDynamicState (VkDynamicState dynamicState) const;
-	void updateMultiviewIndex ();
+	void updateShaderSpecs ();
 };
 
 GraphicPipelineSettings::GraphicPipelineSettings (ZPipelineLayout layout)
 	: m_layout				(layout)
 	, m_renderPass			()
 	, m_attachmentCount		(0)
+	, m_shaderPerStageSpecs	()
 	, m_shaderStages		()
+	, m_shaderSpecs			()
 	, m_assemblyState		(makeInputAssemblyStateCreateInfo())
 	, m_zVertexInputState	()
 	, m_vertexInputState	(makeVertexInputStateCreateInfo())
 	, m_tessellationState	(makeTessellationStateCreateInfo())
-	, m_multiviewIndex		(INVALID_UINT32)
 	, m_viewport			(makeViewport(0, 0))
 	, m_scissor				(makeRect2D(0, 0))
 	, m_viewportState		(makeViewportStateCreateInfo())
@@ -247,15 +175,22 @@ uint32_t GraphicPipelineSettings::containsDynamicState (VkDynamicState dynamicSt
 			: INVALID_UINT32;
 }
 
-void GraphicPipelineSettings::updateMultiviewIndex ()
+void GraphicPipelineSettings::updateShaderSpecs ()
 {
-	if (m_multiviewIndex != INVALID_UINT32)
+	uint32_t stageIndex = 0u;
+	m_shaderSpecs.resize(m_shaderStages.size());
+	for (add_ref<VkPipelineShaderStageCreateInfo> stage : m_shaderStages)
 	{
-		for (add_ref<VkPipelineShaderStageCreateInfo> stage : m_shaderStages)
+		auto spec = m_shaderPerStageSpecs.find(stage.stage);
+		if (spec != m_shaderPerStageSpecs.end() && spec->second != nullptr && !spec->second->empty())
 		{
-			add_ref<SpecializationInfoWithEntries> entry = m_shaderPerStageSpecs[stage.stage];
-			entry.addEntry(ZDistName::MultiviewIndex, m_multiviewIndex);
-			stage.pSpecializationInfo = &entry;
+			m_shaderSpecs.at(stageIndex) = spec->second->operator()();
+			stage.pSpecializationInfo = &m_shaderSpecs.data()[stageIndex];
+			stageIndex = stageIndex + 1u;
+		}
+		else
+		{
+			stage.pSpecializationInfo = nullptr;
 		}
 	}
 }
@@ -270,19 +205,9 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 
 	settings.m_vertexInputState	= settings.m_zVertexInputState();
 
-	settings.updateMultiviewIndex();
+	settings.updateShaderSpecs();
 	info.stageCount				= static_cast<uint32_t>(settings.m_shaderStages.size());
 	info.pStages				= settings.m_shaderStages.data();
-
-	/*
-	for (add_ref<VkPipelineShaderStageCreateInfo> stage : settings.m_shaderStages)
-	{
-		if (stage.pSpecializationInfo)
-		{
-			((SpecializationInfoWithEntries*)stage.pSpecializationInfo)->print();
-		}
-	}
-	*/
 
 	info.pVertexInputState		= &settings.m_vertexInputState;
 	info.pInputAssemblyState	= &settings.m_assemblyState;
@@ -385,6 +310,11 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gp
 	settings.m_blendState.blendConstants[1] = blendConstants.get()[1];
 	settings.m_blendState.blendConstants[2] = blendConstants.get()[2];
 	settings.m_blendState.blendConstants[3] = blendConstants.get()[3];
+}
+
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::SpecConstants> specConstants)
+{
+	settings.m_shaderPerStageSpecs[specConstants.get().first] = &specConstants.get().second;
 }
 
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZRenderPass renderPass)
@@ -496,127 +426,86 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gp
 	settings.m_createInfo.subpass = subpassIndex;
 }
 
-void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::MultiviewIndex> multiviewIndex)
+bool computePipelineVerifyLimits (ZDevice device, add_cref<UVec3> wgSizes, bool raise)
 {
-	settings.m_multiviewIndex = multiviewIndex;
+	bool result = true;
+	uint64_t product = 1u;
+	add_cref<VkPhysicalDeviceLimits> limits = deviceGetPhysicalLimits(device);
+
+	for (uint32_t i = 0; result && i < 4; ++i)
+	{
+		if (i < 3)
+		{
+			product *= make_unsigned(wgSizes[i]);
+			if (make_unsigned(wgSizes[i]) > limits.maxComputeWorkGroupSize[i])
+			{
+				result = false;
+				if (raise)
+				{
+					std::stringstream ss;
+					ss << "workGroupSize[" << i << "] of " << wgSizes[i]
+						<< " is greater than available " << limits.maxComputeWorkGroupSize[i];
+					ASSERTMSG(false, ss.str());
+				}
+			}
+			/*
+			 * Validation Error: [ VUID-RuntimeSpirv-x-06432 ] type = VK_OBJECT_TYPE_SHADER_MODULE;
+			 * local_size (32, 32, 32) exceeds device limit maxComputeWorkGroupInvocations (1536).
+			 * The Vulkan spec states: The product of x size, y size, and z size in LocalSize or LocalSizeId
+			 * must be less than or equal to VkPhysicalDeviceLimits::maxComputeWorkGroupInvocations
+			 * (https://vulkan.lunarg.com/doc/view/1.3.243.0/linux/1.3-extensions/vkspec.html#VUID-RuntimeSpirv-x-06432)
+			 */
+			 /*
+			  * uint32_t maxComputeWorkGroupCount[3];	is the maximum number of local workgroups that can be dispatched by a single dispatching command
+			  * uint32_t maxComputeWorkGroupInvocations;	is the maximum total number of compute shader invocations in a single local workgroup. The product of the X, Y, and Z sizes.
+			  * uint32_t maxComputeWorkGroupSize[3];		is the maximum size of a local compute workgroup, per dimension.
+			  */
+			if (i == 3 && product > limits.maxComputeWorkGroupInvocations)
+			{
+				result = false;
+				if (raise)
+				{
+					std::stringstream ss;
+					ss << "localSize product of " << product << " is grater than available " << limits.maxComputeWorkGroupInvocations;
+					ASSERTMSG(false, ss.str());
+				}
+			}
+		}
+	}
+
+	return result;
 }
 
-ZPipeline createComputePipeline (ZPipelineLayout layout, ZShaderModule computeShaderModule,
-								 add_cref<UVec3> workGroupSize, add_cref<UVec3> specID, bool enableFullGroups)
+ZPipeline createComputePipelineImpl (ZPipelineLayout layout, ZShaderModule computeShaderModule,
+									add_cref<UVec3> localSizes, bool autoLocalSizesIDs,
+									bool enableFullGroups, add_ref<ZSpecializationInfo> info)
 {
 	ZDevice									aDevice		= layout.getParam<ZDevice>();
 	const VkAllocationCallbacksPtr			callbacks	= aDevice.getParam<VkAllocationCallbacksPtr>();
 	ZPhysicalDevice							aPhysDevice	= aDevice.getParam<ZPhysicalDevice>();
-	add_cref<VkPhysicalDeviceProperties>	properties	= aPhysDevice.getParamRef<VkPhysicalDeviceProperties>();
 
-	VkPhysicalDeviceSubgroupSizeControlFeatures			sizeCtrlFeatures{};
-	sizeCtrlFeatures.sType				= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES;
-	sizeCtrlFeatures.pNext				= nullptr;
-
-	VkPhysicalDeviceFeatures2							features2{};
-	features2.sType	= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-	features2.pNext = &sizeCtrlFeatures;
-
-	VkPhysicalDeviceSubgroupProperties					subgroupProperties{};
-	subgroupProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
-
-	VkPhysicalDeviceProperties2							physicalDeviceProperties2{};
-	physicalDeviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-	physicalDeviceProperties2.pNext = &subgroupProperties;
-
-	VkPipelineShaderStageRequiredSubgroupSizeCreateInfo	subgroupCreateInfo{};
-	subgroupCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-
-	VkPipelineShaderStageCreateFlags	shaderStageCreateFlags	= 0;
-	void*								shaderStagePNext		= nullptr;
-
-	if (enableFullGroups)
-	{
-		vkGetPhysicalDeviceFeatures2(*aPhysDevice, &features2);
-		if (sizeCtrlFeatures.computeFullSubgroups)
-		{
-			vkGetPhysicalDeviceProperties2(*aPhysDevice, &physicalDeviceProperties2);
-			subgroupCreateInfo.requiredSubgroupSize = subgroupProperties.subgroupSize;
-			shaderStageCreateFlags = VK_PIPELINE_SHADER_STAGE_CREATE_REQUIRE_FULL_SUBGROUPS_BIT_EXT;
-			shaderStagePNext = &subgroupCreateInfo;
-		}
-	}
-
-	UVec3 workGroupSizeLimit;
-	uint32_t maxComputeWorkGroupInvocations = 0;
-	{
-		workGroupSizeLimit.x(properties.limits.maxComputeWorkGroupSize[0]);
-		workGroupSizeLimit.y(properties.limits.maxComputeWorkGroupSize[1]);
-		workGroupSizeLimit.z(properties.limits.maxComputeWorkGroupSize[2]);
-		maxComputeWorkGroupInvocations = properties.limits.maxComputeWorkGroupInvocations;
-	}
-
-	const VkSpecializationMapEntry entryTemplates[3]
-	{
-		{ specID[0], (uint32_t)(sizeof(uint32_t) * 0), sizeof(uint32_t) },
-		{ specID[1], (uint32_t)(sizeof(uint32_t) * 1), sizeof(uint32_t) },
-		{ specID[2], (uint32_t)(sizeof(uint32_t) * 2), sizeof(uint32_t) }
-	};
-
-	VkSpecializationMapEntry	entries[3];
-	uint32_t					specData[3];
-	uint32_t					entryCount	= 0u;
-	uint32_t					product		= 1u;
-
-	for (size_t i = 0; i < 3; ++i)
-	{
-		if (workGroupSize[i] != INVALID_UINT32)
-		{
-			ASSERTMSG(specID[i] != INVALID_UINT32, "invalid SpecID");
-			entries[entryCount]		= entryTemplates[i];
-			specData[entryCount]	= workGroupSize[i];
-			product					*= workGroupSize[i];
-			if (workGroupSize[i] > workGroupSizeLimit[i])
-			{
-				std::stringstream ss;
-				ss << "workGroupSize[" << i << "] of " << workGroupSize[i]
-					  << " is greaten than available " << workGroupSizeLimit;
-				ASSERTMSG(false, ss.str());
-			}
-			entryCount += 1;
-		}
-	}
-
+	UNREF(enableFullGroups);
 	/*
-	 * Validation Error: [ VUID-RuntimeSpirv-x-06432 ] type = VK_OBJECT_TYPE_SHADER_MODULE;
-	 * local_size (32, 32, 32) exceeds device limit maxComputeWorkGroupInvocations (1536).
-	 * The Vulkan spec states: The product of x size, y size, and z size in LocalSize or LocalSizeId
-	 * must be less than or equal to VkPhysicalDeviceLimits::maxComputeWorkGroupInvocations
-	 * (https://vulkan.lunarg.com/doc/view/1.3.243.0/linux/1.3-extensions/vkspec.html#VUID-RuntimeSpirv-x-06432)
-	 */
-	/*
-	 * uint32_t maxComputeWorkGroupCount[3];	is the maximum number of local workgroups that can be dispatched by a single dispatching command
-	 * uint32_t maxComputeWorkGroupInvocations;	is the maximum total number of compute shader invocations in a single local workgroup. The product of the X, Y, and Z sizes.
-	 * uint32_t maxComputeWorkGroupSize[3];		is the maximum size of a local compute workgroup, per dimension.
-	 */
-	if (product >  maxComputeWorkGroupInvocations)
-	{
-		std::stringstream ss;
-		ss << "localSize product of " << product << " is grater than available " << maxComputeWorkGroupInvocations;
-		ASSERTMSG(false, ss.str());
-	}
+	VkPhysicalDeviceSubgroupSizeControlFeatures			sizeCtrlFeatures = makeVkStruct();
+	deviceGetPhysicalFeatures2(aPhysDevice, &sizeCtrlFeatures);
 
-	const VkSpecializationInfo specInfo
-	{
-		entryCount,										// mapEntryCount
-		entries,										// pMapEntries
-		(uint32_t)(entryCount * sizeof(specData[0])),	// dataSize
-		&specData[0]									// pData
-	};
+	VkPhysicalDeviceSubgroupProperties					subgroupProperties = makeVkStruct();
+
+	VkPipelineShaderStageRequiredSubgroupSizeCreateInfo	subgroupCreateInfo = makeVkStruct();
+	*/
+
+	if (autoLocalSizesIDs) computePipelineVerifyLimits(aDevice, localSizes, true);
+
+	const VkSpecializationInfo specInfo = info();
 
 	VkPipelineShaderStageCreateInfo	sci{};
 	sci.sType	= VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	sci.pNext	= shaderStagePNext;
-	sci.flags	= shaderStageCreateFlags;
+	sci.pNext = nullptr;
+	sci.flags	= VkPipelineShaderStageCreateFlags(0);
 	sci.stage	= VK_SHADER_STAGE_COMPUTE_BIT;
 	sci.module	= *computeShaderModule;
 	sci.pName	= "main";
-	sci.pSpecializationInfo	= entryCount ? &specInfo : nullptr;
+	sci.pSpecializationInfo	= info.empty() ? nullptr : &specInfo;
 
 	VkComputePipelineCreateInfo	ci{};
 	ci.sType	= VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -631,6 +520,12 @@ ZPipeline createComputePipeline (ZPipelineLayout layout, ZShaderModule computeSh
 	VKASSERT2(vkCreateComputePipelines(*aDevice, VkPipelineCache(VK_NULL_HANDLE), 1u, &ci, callbacks, computePipeline.setter()));
 
 	return computePipeline;
+}
+
+ZPipeline createComputePipeline (ZPipelineLayout layout, ZShaderModule computeShaderModule,
+								add_ref<ZSpecializationInfo> specInfo, bool enableFullGroups)
+{
+	return createComputePipelineImpl(layout, computeShaderModule, UVec3(INVALID_UINT32), false, enableFullGroups, specInfo);
 }
 
 ZPipelineLayout	pipelineGetLayout (ZPipeline pipeline)

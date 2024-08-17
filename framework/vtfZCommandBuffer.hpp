@@ -46,9 +46,16 @@ ZCommandBuffer	allocateCommandBuffer (ZCommandPool commandPool, bool primary = t
 ZCommandBuffer	createCommandBuffer (ZCommandPool commandPool, bool primary = true, const void* pNext = nullptr);
 ZCommandPool	commandBufferGetCommandPool (ZCommandBuffer commandBuffer);
 void			commandBufferEnd (ZCommandBuffer commandBuffer);
-void			commandBufferBegin (ZCommandBuffer commandBuffer, ZFramebuffer fb = {}, ZRenderPass rp = {}, uint32_t subpass = 0);
+void			commandBufferBegin	(ZCommandBuffer commandBuffer,
+									VkCommandBufferUsageFlags usage = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+									add_ptr<void> pNext = nullptr);
+// If commandBuffer is secondary command buffer then VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT will be automatically added
+void			commandBufferBegin (ZCommandBuffer commandBuffer, ZFramebuffer fb, ZRenderPass rp, uint32_t subpass = 0u,
+									VkCommandBufferUsageFlags usage = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+									add_ptr<void> pNext = nullptr, add_ptr<void> pInhNext = nullptr);
 void			commandBufferExecuteCommands (ZCommandBuffer primary, std::initializer_list<ZCommandBuffer> secondaryCommands);
-void			commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFence = ZFence(), uint64_t timeout = INVALID_UINT64);
+VkResult		commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFence = ZFence(), uint64_t timeout = INVALID_UINT64,
+											bool assertWaitResult = true);
 /**
  * Binds a pipeline to a command buffer.
  * Implicitly binds any descritor sets if these

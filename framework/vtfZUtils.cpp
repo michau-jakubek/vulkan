@@ -799,6 +799,14 @@ add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (add_cref<ZDevi
 	return device.getParam<ZPhysicalDevice>().getParamRef<VkPhysicalDeviceProperties>();
 }
 
+VkPhysicalDeviceProperties2 deviceGetPhysicalProperties2 (add_cref<ZDevice> device, add_ptr<void> pNext)
+{
+	ASSERTMSG(device.has_handle(), "Device must have handle");
+	VkPhysicalDeviceProperties2 props = makeVkStruct(pNext);
+	vkGetPhysicalDeviceProperties2(*device.getParam<ZPhysicalDevice>(), &props);
+	return props;
+}
+
 add_cref<VkPhysicalDeviceLimits> deviceGetPhysicalLimits (add_cref<ZDevice> device)
 {
 	ASSERTMSG(device.has_handle(), "Device must have handle");

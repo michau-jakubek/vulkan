@@ -17,6 +17,8 @@
 #include <string_view>
 #include <stdio.h>
 
+#include "vtfZSpecializationInfo.hpp"
+
 namespace
 {
 using namespace vtf;
@@ -88,6 +90,7 @@ struct Params
 	mutable std::vector<uint32_t>	inputIvalues;
 	mutable std::vector<uint32_t>	inputJvalues;
 	mutable std::vector<uint32_t>	inputTypes;
+	std::vector<UVec2>				specConstants;
 	struct {
 		uint32_t printParams	: 1;	// print params from cmdLine and continue
 		uint32_t printDesc		: 1;	// print description and exits
@@ -434,10 +437,11 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine(ZDevice
 		Option optPrintInHex	{ "--hex", 0 };
 		Option optPrintCapital	{ "--HEX", 0 };
 		Option optPrintZero		{ "--print-zero", 0 };
+		Option optSpecConstant	{ "-specid", 1 };
 		container_push_back_more(options, { optWorkGroupX, optWorkGroupY, optWorkGroupZ });
 		container_push_back_more(options, { optLocalSizeX, optLocalSizeY, optLocalSizeZ });
 		container_push_back_more(options, { optCheckpointMax, optPrintColCnt, optAddressMode });
-		container_push_back_more(options, { optPrintParams, optPrintDesc, optPrintZero });
+		container_push_back_more(options, { optPrintParams, optPrintDesc, optPrintZero, optSpecConstant });
 
 		resultParams.flags.printDesc = (consumeOptions(optPrintDesc, options, args, sink) > 0) ? 1 : 0;
 		resultParams.flags.printParams = (consumeOptions(optPrintParams, options, args, sink) > 0) ? 1 : 0;
@@ -455,27 +459,32 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine(ZDevice
 		// localSize, workGroup, checkpointMax, printColCount, printRowCount
 		if (true)
 		{
-			add_ptr<uint32_t>	const sizeAccess[]{ &resultParams.localSize.x(),
-													  &resultParams.localSize.y(),
-													  &resultParams.localSize.z(),
-													  &resultParams.workGroup.x(),
-													  &resultParams.workGroup.y(),
-													  &resultParams.workGroup.z(),
-													  &resultParams.printColCount,
-													  &resultParams.printRowCount,
-													  &resultParams.checkpointMax };
-			add_cptr<Option>	const sizeOptions[ARRAY_LENGTH(sizeAccess)]
-			{ &optLocalSizeX, &optLocalSizeY, &optLocalSizeZ,
-			  &optWorkGroupX, &optWorkGroupY, &optWorkGroupZ,
-			  &optPrintColCnt, &optPrintRowCnt, &optCheckpointMax };
+			add_ptr<uint32_t> const sizeAccess[]
+			{
+				&resultParams.localSize.x(),
+				&resultParams.localSize.y(),
+				&resultParams.localSize.z(),
+				&resultParams.workGroup.x(),
+				&resultParams.workGroup.y(),
+				&resultParams.workGroup.z(),
+				&resultParams.printColCount,
+				&resultParams.printRowCount,
+				&resultParams.checkpointMax
+			};
+			add_cptr<Option> const sizeOptions[ARRAY_LENGTH(sizeAccess)]
+			{
+				&optLocalSizeX, &optLocalSizeY, &optLocalSizeZ,
+				&optWorkGroupX, &optWorkGroupY, &optWorkGroupZ,
+				&optPrintColCnt, &optPrintRowCnt, &optCheckpointMax
+			};
 			for (uint32_t i = 0; i < ARRAY_LENGTH_CAST(sizeOptions, uint32_t); ++i)
 			{
 				if (consumeOptions(*sizeOptions[i], options, args, sink) > 0)
 				{
-					uint32_t k = fromText(sink.back(), *sizeAccess[i], status);
-					if (status && (k != 0u))
+					int32_t k = fromText(sink.back(), make_signed(*sizeAccess[i]), status);
+					if (status && (k > 0))
 					{
-						*sizeAccess[i] = k;
+						*sizeAccess[i] = make_unsigned(k);
 					}
 					else if (!status)
 					{
@@ -483,9 +492,31 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine(ZDevice
 					}
 					else
 					{
-						errorMessage << "{WARNING] \'" << sizeOptions[i]->name << "\' must not be 0,"
+						errorMessage << "{WARNING] \'" << sizeOptions[i]->name << "\' must be greater than 0,"
 							<< " default \'" << *sizeAccess[i] << "\' was used." << std::endl;
 					}
+				}
+			}
+		}
+
+		if (const int specConstantCount = consumeOptions(optSpecConstant, options, args, sink);
+			specConstantCount > 0)
+		{
+			for (int k = 0; k < specConstantCount; ++k)
+			{
+				UVec2 specConstantDef;
+				bool specConstantsStatus = false;
+				std::array<bool, 2> specConstantsStatuses;
+				add_cref<std::string> specText(sink.at(sink.size() - make_unsigned(specConstantCount) + make_unsigned(k)));
+				specConstantDef = UVec2::fromText(specText, specConstantDef, specConstantsStatuses, &specConstantsStatus);
+				if (specConstantsStatus)
+				{
+					resultParams.specConstants.push_back(specConstantDef);
+				}
+				else
+				{
+					errorMessage << "[WARNING] Unable to parse \'" << optSpecConstant.name
+						<< " from \'" << specText << "\' - ignored." << std::endl;
 				}
 			}
 		}
@@ -893,6 +924,7 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 		printDeviceLimits(ctx.device, std::cout);
 		return 0;
 	}
+	computePipelineVerifyLimits(ctx.device, params.localSize, true);
 	if (status == Params::Status::Help)
 	{
 		params.usage(ctx.device, std::cout, record.assets);
@@ -944,7 +976,17 @@ TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, const std::string& as
 	const uint32_t				bindingJinput	= lm.addBinding<std::vector<uint32_t>>(descType, data_count(params.inputJvalues), stage);
 	const uint32_t				bindingResult	= lm.addBinding<std::vector<uint32_t>>(descType, data_count(params.inputTypes), stage);
 	ZPipelineLayout				pipelineLayout	= lm.createPipelineLayout<PushConstant>(lm.createDescriptorSetLayout(), stage);
-	ZPipeline					pipeline		= createComputePipeline(pipelineLayout, computeShader, params.localSize);
+
+	ZSpecializationInfo	specInfo;
+	specInfo.addEntries(ZSpecEntry<int32_t>(make_signed(params.localSize.x()), std::numeric_limits<int32_t>::max() - 3),	// 2147483644
+						ZSpecEntry<int32_t>(make_signed(params.localSize.y()), std::numeric_limits<int32_t>::max() - 2),	// 2147483645
+						ZSpecEntry<int32_t>(make_signed(params.localSize.z()), std::numeric_limits<int32_t>::max() - 1));	// 2147483646
+	for (add_cref<UVec2> entry : params.specConstants)
+	{
+		specInfo.addEntry<uint32_t>(entry.y(),	 entry.	x());
+	}
+
+	ZPipeline					pipeline		= createComputePipeline(pipelineLayout, computeShader, specInfo);
 	ZCommandPool				commandPool		= ctx.createComputeCommandPool();
 
 	lm.fillBinding(bindingParams, 0u);
@@ -961,7 +1003,7 @@ TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, const std::string& as
 		ZCommandBuffer shotCmd = shot.commandBuffer;
 		commandBufferPushConstants<PushConstant>(shotCmd, pipelineLayout, pc);
 		commandBufferBindPipeline(shotCmd, pipeline);
-		commandBufferDispatch(shotCmd, params.workGroup);
+		commandBufferDispatch(shotCmd, UVec3(params.workGroup));
 	}
 
 	if (params.flags.noPrintResult == 0u)

@@ -397,14 +397,14 @@ public:
 	T& b()	{ verifyIndex(2); return (*this)[2]; }
 	T& a()	{ verifyIndex(3); return (*this)[3]; }
 
-	const T& x() const  { verifyIndex(0); return (*this)[0]; }
-	const T& y() const  { verifyIndex(1); return (*this)[1]; }
-	const T& z() const  { verifyIndex(2); return (*this)[2]; }
-	const T& w() const  { verifyIndex(3); return (*this)[3]; }
-	const T& r() const  { verifyIndex(0); return (*this)[0]; }
-	const T& g() const  { verifyIndex(1); return (*this)[1]; }
-	const T& b() const  { verifyIndex(2); return (*this)[2]; }
-	const T& a() const  { verifyIndex(3); return (*this)[3]; }
+	const T& x() const  { return (*this)[0]; }
+	const T& y() const  { return (*this)[1]; }
+	const T& z() const  { return (*this)[2]; }
+	const T& w() const  { return (*this)[3]; }
+	const T& r() const  { return (*this)[0]; }
+	const T& g() const  { return (*this)[1]; }
+	const T& b() const  { return (*this)[2]; }
+	const T& a() const  { return (*this)[3]; }
 
 	VecX& x(const T& v)    { verifyIndex(0); (*this)[0] = v; return *this; }
 	VecX& y(const T& v)    { verifyIndex(1); (*this)[1] = v; return *this; }

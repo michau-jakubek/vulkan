@@ -57,7 +57,13 @@ void commandBufferEnd (ZCommandBuffer commandBuffer)
 	VKASSERT2(vkEndCommandBuffer(*commandBuffer));
 }
 
-void commandBufferBegin (ZCommandBuffer commandBuffer, ZFramebuffer fb, ZRenderPass rp, uint32_t subpass)
+void commandBufferBegin (ZCommandBuffer commandBuffer, VkCommandBufferUsageFlags usage, add_ptr<void> pNext)
+{
+	commandBufferBegin(commandBuffer, {}, {}, 0u, usage, pNext);
+}
+
+void commandBufferBegin (ZCommandBuffer commandBuffer, ZFramebuffer fb, ZRenderPass rp, uint32_t subpass,
+						 VkCommandBufferUsageFlags usage, add_ptr<void> pNext, add_ptr<void> pInhNext)
 {
 	VkCommandBufferInheritanceInfo	inheritInfo = makeVkStruct();
 	inheritInfo.renderPass				= rp.has_handle()
@@ -68,11 +74,13 @@ void commandBufferBegin (ZCommandBuffer commandBuffer, ZFramebuffer fb, ZRenderP
 	inheritInfo.subpass					= subpass;
 	inheritInfo.framebuffer				= fb.has_handle() ? *fb : VK_NULL_HANDLE;
 	inheritInfo.occlusionQueryEnable	= VK_FALSE;
+	inheritInfo.pNext					= pInhNext;
 	inheritInfo.queryFlags				= 0;
 	inheritInfo.pipelineStatistics		= 0;
 
 	VkCommandBufferBeginInfo	beginInfo = makeVkStruct();
-	beginInfo.flags				= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	beginInfo.flags	= usage; // by default VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+	beginInfo.pNext = pNext;
 	if (false == commandBuffer.getParam<bool>())
 	{
 		beginInfo.flags |= VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
@@ -98,7 +106,7 @@ void commandBufferExecuteCommands (ZCommandBuffer primary, std::initializer_list
 	vkCmdExecuteCommands(*primary, static_cast<uint32_t>(secondaryCommands.size()), commands);
 }
 
-void commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFence, uint64_t timeout)
+VkResult commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFence, uint64_t timeout, bool assertWaitResult)
 {
 	ZDevice			device		= commandBuffer.getParam<ZDevice>();
 	ZQueue			queue		= commandBuffer.getParam<ZCommandPool>().getParam<ZQueue>();
@@ -109,8 +117,14 @@ void commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFence,
 	submitInfo.pCommandBuffers		= commandBuffer.ptr();
 
 	VKASSERT2(vkQueueSubmit(*queue, 1u, &submitInfo, *fence));
-	VKASSERT2(vkWaitForFences(*device, 1u, fence.ptr(), VK_TRUE, timeout));
-	resetFence(fence);
+	const VkResult waitResult = vkWaitForFences(*device, 1u, fence.ptr(), VK_TRUE, timeout);
+	if (assertWaitResult) VKASSERT2(waitResult);
+	if (hintFence.has_handle() == false)
+	{
+		resetFence(fence);
+	}
+
+	return waitResult;
 }
 
 void commandBufferBindPipeline (ZCommandBuffer cmd, ZPipeline pipeline)

@@ -25,12 +25,12 @@ set(tests_files
     intMatrixTests.hpp
     intCompute.cpp
     intCompute.hpp
-	intGraphics.cpp
-	intGraphics.hpp
+    intGraphics.cpp
+    intGraphics.hpp
     intCipher.cpp
     intCipher.hpp
-	intThreadPool.cpp
-	intThreadPool.hpp
+    intThreadPool.cpp
+    intThreadPool.hpp
     intSynchronization2.cpp
     intSynchronization2.hpp
     daemonTests.cpp
@@ -41,10 +41,12 @@ set(tests_files
     topologyTests.hpp
     demoteInvocationsTests.cpp
     demoteInvocationsTests.hpp
-	blendingTests.cpp
-	blendingTests.hpp
-	sparseBufferTests.cpp
-	sparseBufferTests.hpp
+    blendingTests.cpp
+    blendingTests.hpp
+    sparseBufferTests.cpp
+    sparseBufferTests.hpp
+    deviceTimeoutTests.cpp
+    deviceTimeoutTests.hpp
     )
 
 add_definitions(-DASSETS_PATH="${ASSETS_PATH}")

@@ -73,6 +73,8 @@ ZDevice			createLogicalDevice	(ZPhysicalDevice		physDevice,
 									 bool					enableDebugPrintf = false);
 add_cref<VkPhysicalDeviceProperties>
 				deviceGetPhysicalProperties	(add_cref<ZDevice> device);
+VkPhysicalDeviceProperties2
+				deviceGetPhysicalProperties2 (add_cref<ZDevice> device, add_ptr<void> pNext = nullptr);
 add_cref<VkPhysicalDeviceLimits>
 				deviceGetPhysicalLimits (add_cref<ZDevice> device);
 add_cref<VkPhysicalDeviceLimits>
