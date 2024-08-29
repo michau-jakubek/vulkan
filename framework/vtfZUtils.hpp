@@ -83,6 +83,10 @@ VkPhysicalDeviceFeatures2
 				deviceGetPhysicalFeatures2 (ZPhysicalDevice device, void* pNext = nullptr);
 ZPhysicalDevice	deviceGetPhysicalDevice (ZDevice device);
 ZQueue			deviceGetNextQueue			(ZDevice device, VkQueueFlags queueFlags, bool mustSupportSurface);
+
+add_cref<ZDeviceInterface>		deviceGetInterface (ZDevice device);
+add_cref<ZInstanceInterface>	instanceGetInerface(ZInstance instance);
+
 uint32_t		queueGetFamilyIndex			(ZQueue queue);
 uint32_t		queueGetIndex				(ZQueue queue);
 VkQueueFlags	queueGetFlags				(ZQueue queue);

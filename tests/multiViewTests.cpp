@@ -267,7 +267,7 @@ TriLogicInt runMultiViewSingleThread (Canvas& cs, const std::string& assets, con
 			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, multiFramebuffer, 0);
 				commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
 				commandBufferBindPipeline(cmdBuffer, pipelineFirstView);
-				vkCmdDraw(*cmdBuffer, vertexInput.getAttributeCount(0), 1, 0, 0);
+				vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1, 0, 0);
 			commandBufferEndRenderPass(rpbi);
 			commandBufferPipelineBarriers(cmdBuffer,
 										  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,

@@ -11,48 +11,71 @@
 namespace vtf
 {
 
-struct VerifyShaderCodeInfo
+struct _GlSpvProgramCollection
 {
-	const std::string			code_;
-	const VkShaderStageFlagBits	stage_;
-	VerifyShaderCodeInfo (const std::string& code, VkShaderStageFlagBits stage)
-		: code_(code), stage_(stage) {}
-};
-bool verifyShaderCodeGL (const VerifyShaderCodeInfo* infos, uint32_t infoCount, std::string& error, int majorVersion=4, int minorVersion=5, void* glWindow = nullptr);
+	enum StageToCode
+	{
+		shaderCode = 0,
+		entryName,
+		fileName,
+		includePaths
+	};
 
-class ProgramCollection
-{
+	typedef std::pair<VkShaderStageFlagBits, uint32_t> StageAndIndex;
+
+	class ShaderLink
+	{
+		friend struct ShaderObjectCollection;
+		VkShaderStageFlagBits	stage = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
+		uint32_t				index = INVALID_UINT32;
+		add_ptr<ShaderLink>		prev = nullptr;
+		add_ptr<ShaderLink>		next = nullptr;
+		StageAndIndex		key () const { return { stage, index }; }
+		add_ptr<ShaderLink>	head() const;
+		uint32_t			count() const;
+	};
+
+	virtual ~_GlSpvProgramCollection () = default;
+	_GlSpvProgramCollection (ZDevice device, add_cref<std::string> basePath = std::string());
+
+	void addFromText (VkShaderStageFlagBits type, add_cref<std::string> code,
+					  add_cref<strings> includePaths = {}, add_cref<std::string> entryName = "main");
+	bool addFromFile (VkShaderStageFlagBits type,
+					  add_cref<std::string> fileName, add_cref<strings> includePaths = {},
+					  add_cref<std::string> entryName = "main", bool verbose = true);
+	// availailable after build
+	auto getShaderCode (VkShaderStageFlagBits stage, uint32_t index, bool binORasm = true) const -> add_cref<std::vector<uint8_t>>;
+	auto getShaderFile (VkShaderStageFlagBits stage, uint32_t index, bool inOrout = false) const -> add_cref<std::string>;
+	auto getShaderEntry (VkShaderStageFlagBits stage, uint32_t index) const -> add_cref<std::string>;
+
+protected:
 	ZDevice				m_device;
 	const std::string	m_basePath;
 	const std::string	m_tempDir;
 	std::map<VkShaderStageFlagBits, uint32_t> m_stageToCount;
 	// [0]: glsl code, [1]: entry name, [2] file name, [3...]: include path(s)
-	std::map<std::pair<VkShaderStageFlagBits, uint32_t>, strings> m_stageToCode;
-	std::map<std::pair<VkShaderStageFlagBits, uint32_t>, std::vector<unsigned char>> m_stageToBinary;
-public:
-	enum StageToCode
-	{
-		shaderCode,
-		entryName,
-		fileName,
-		includePaths
-	};
-	ProgramCollection (ZDevice device, const std::string& basePath = std::string());
-	void addFromText (VkShaderStageFlagBits type, const std::string& code, const strings& includePaths = {}, const std::string& entryName = "main");
-	bool addFromFile (VkShaderStageFlagBits type,
-					 const std::string& fileName, const strings& includePaths = {},
-					 const std::string& entryName = "main", bool verbose = true);
-	void buildAndVerify (const Version& vulkanVer = Version(1,0), const Version& spirvVer = Version(1,0),
+	std::map<StageAndIndex, strings> m_stageToCode;
+	std::map<StageAndIndex, std::string> m_stageToFileName;
+	std::map<StageAndIndex, std::vector<uint8_t>> m_stageToAssembly;
+	std::map<StageAndIndex, std::vector<uint8_t>> m_stageToBinary;
+
+private:
+	virtual auto addFromText (VkShaderStageFlagBits, add_cref<std::string>, add_cref<ShaderLink>,
+							  add_cref<strings>, add_cref<std::string>) -> ShaderLink { return {}; }
+	virtual auto addFromFile (VkShaderStageFlagBits, add_cref<std::string>, add_cref<ShaderLink>,
+							  add_cref<strings>, add_cref<std::string>, bool) -> ShaderLink { return {}; };
+};
+
+struct ProgramCollection : _GlSpvProgramCollection
+{
+	ProgramCollection (ZDevice device, add_cref<std::string> basePath = std::string());
+	void buildAndVerify (add_cref<Version> vulkanVer = Version(1,0), add_cref<Version> spirvVer = Version(1,0),
 						 bool enableValidation = false, bool genDisassembly = false, bool buildAlways = false);
 	// Uses information from GlobalAppFlags
 	void buildAndVerify (bool buildAlways);
 	auto getShader (VkShaderStageFlagBits stage, uint32_t index = 0u, bool verbose = true) const -> ZShaderModule;
+	auto getShaderModule (VkShaderStageFlagBits stage, uint32_t index = 0u, bool verbose = true) const -> VkShaderModule;
 };
-
-void addProgram (ProgramCollection& programCollection,	const std::string& programName,		VkShaderStageFlagBits programType,
-				 const std::string& glslFileName,		const std::string& spirvFileName,
-				 const std::string& glslSource,			const std::string& spirvSource,
-				 bool				verbose = true);
 
 } // namespace vtf
 

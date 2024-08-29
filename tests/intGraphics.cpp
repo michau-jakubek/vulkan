@@ -69,12 +69,7 @@ struct Tolerance
 protected:
 	const Vec4 m_tol;
 };
-struct Boolean { bool value; };
-ostream_ref operator<< (ostream_ref str, add_cref<Boolean> value)
-{
-	return (str << std::boolalpha << value.value << std::noboolalpha);
-}
-Boolean boolean (bool value) { return Boolean{ value }; }
+
 void TestParams::print (ostream_ref str) const
 {
 	const char newLine = '\n';
@@ -581,7 +576,7 @@ TriLogicInt runTests (std::shared_ptr<VulkanContext> ctx, add_cref<TestParams> p
 		commandBufferBindPipeline(renderCmd, renderPipeline);
 		commandBufferBindVertexBuffers(renderCmd, vertexInput);
 		auto rpbi = commandBufferBeginRenderPass(renderCmd, renderFramebuffer, 0);
-			vkCmdDraw(*renderCmd, vertexInput.getAttributeCount(0), 1, 0, 0);
+			vkCmdDraw(*renderCmd, vertexInput.getVertexCount(0), 1, 0, 0);
 		commandBufferEndRenderPass(rpbi);
 		commandBufferPipelineBarriers(renderCmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_HOST_BIT, storeBarrier);
 		imageCopyToBuffer(renderCmd, renderImage, buffer, VK_ACCESS_HOST_READ_BIT, VK_ACCESS_NONE,

@@ -33,6 +33,10 @@ namespace vtf
 typedef std::vector<std::string> strings;
 typedef std::map<std::string, std::string> string_to_string_map;
 
+struct Boolean { bool value, yesno; };
+Boolean boolean (bool value, bool yesno = false);
+std::ostream& operator<< (std::ostream& str, const Boolean& value);
+
 // template string variables must be in the form ${VARIABLE}
 // map of variables must contain key-value pair in the form { "VARIABLE", "value" }
 std::string	subst_variables (const std::string& templateStr, const vtf::string_to_string_map& variables,
@@ -41,7 +45,8 @@ std::string	subst_variables (const std::string& templateStr, const vtf::string_t
 std::string getRealPath (const char* path, bool& status);
 // if status is null or points to false then throw on error, otherwise opening status is returned
 std::string	readFile (const std::string& filename, bool* status = nullptr);
-uint32_t	readFile(const fs::path& path, std::vector<unsigned char>& buffer);
+uint32_t	readFile (add_cref<fs::path> path, add_ref<std::vector<uint32_t>> buffer);
+uint32_t	readFile (add_cref<fs::path> path, add_ref<std::vector<uint8_t>> buffer);
 std::string captureSystemCommandResult (const char* cmd, bool& status, const char LF = '\0');
 
 bool		containsString (const std::string& s, const vtf::strings& list);
@@ -59,7 +64,7 @@ void		toUpper (add_ref<std::string> inplace);
 void		toLower (add_ref<std::string> out, add_cref<std::string> src);
 void		toUpper (add_ref<std::string> out, add_cref<std::string> src);
 bool		startswith (add_cptr<char> s, char c);
-template<class CharType> bool startswith(std::basic_string<CharType> s, CharType c);
+template<class CharType> bool startswith (std::basic_string<CharType> s, CharType c);
 
 // Be careful, source strings must be alive after to_strings() is invoked.
 template<template<class T, class... U> class C, class T, class... U>
@@ -156,6 +161,16 @@ concise_convert (const convFrom_&, const convTo_& to)
 	return static_cast<convTo_>(to);
 }
 
+// used in conjunction with std::transform()
+// for expressions such as constructor or identity transformation
+struct transform_identity
+{
+	template<class U> auto&& operator ()(U&& u)
+	{
+		return std::forward<U>(u);
+	}
+};
+
 template<class X, class SX = typename std::make_signed<X>::type>
 constexpr const SX make_signed (X& x)
 {
@@ -175,7 +190,7 @@ constexpr UX make_unsigned (const X& x)
 }
 
 template<class X, class NCX = add_ref<typename std::remove_const<X>::type>>
-constexpr NCX remove_const_ref (X& x)
+constexpr NCX remove_const (X& x)
 {
 	return const_cast<NCX>(x);
 }
@@ -326,6 +341,11 @@ template<class T, class E> struct expander
 		return *self();
 	}
 };
+
+template<class Y> add_cptr<Y> makeQuickPtr(Y&& y)
+{
+	return &static_cast<add_cref<Y>>(std::forward<Y>(y));
+}
 
 struct TriLogicInt
 {

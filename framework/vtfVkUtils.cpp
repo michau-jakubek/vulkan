@@ -1,16 +1,20 @@
-#include <functional>
 #include "vtfVkUtils.hpp"
 #include "vtfZUtils.hpp"
 #include "vtfFormatUtils.hpp"
 
+#include <functional>
+#include <inttypes.h>
+
 #define MKN(enumConstant) #enumConstant
 #define MKP(enumConstant) { enumConstant, MKN(enumConstant) }
+#define MKPT(enumType, enumConstant, enumName) { enumType(enumConstant), enumName }
 #define MK_CASE_RETURN_STRING(enumConstant) case enumConstant: return MKN(enumConstant)
 
 namespace vtf
 {
 
-
+// Unfortunately not thread-safe
+static char vkResultToStringBuffer[64];
 const char* vkResultToString (VkResult res)
 {
 	struct { VkResult v; const char* s; }
@@ -54,6 +58,12 @@ const char* vkResultToString (VkResult res)
 		MKP(VK_THREAD_DONE_KHR),
 		MKP(VK_OPERATION_DEFERRED_KHR),
 		MKP(VK_OPERATION_NOT_DEFERRED_KHR),
+		MKP(VK_ERROR_COMPRESSION_EXHAUSTED_EXT),
+
+		// Ugly, but I have not any idea how to exclude this enum from compilation
+		// MKP(VK_INCOMPATIBLE_SHADER_BINARY_EXT),
+		MKPT(VkResult, 1000482000, "VK_INCOMPATIBLE_SHADER_BINARY_EXT"),
+
 		MKP(VK_ERROR_OUT_OF_POOL_MEMORY_KHR),				// = VK_ERROR_OUT_OF_POOL_MEMORY,
 		MKP(VK_ERROR_INVALID_EXTERNAL_HANDLE_KHR),			// = VK_ERROR_INVALID_EXTERNAL_HANDLE,
 		MKP(VK_ERROR_FRAGMENTATION_EXT),					// = VK_ERROR_FRAGMENTATION,
@@ -62,12 +72,21 @@ const char* vkResultToString (VkResult res)
 		MKP(VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR),	// = VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS,
 		MKP(VK_PIPELINE_COMPILE_REQUIRED_EXT),				// = VK_PIPELINE_COMPILE_REQUIRED,
 		MKP(VK_ERROR_PIPELINE_COMPILE_REQUIRED_EXT),		// = VK_PIPELINE_COMPILE_REQUIRED,
+
+		// Ugly, but I have not any idea how to exclude this enum from compilation
+		// MKP(VK_ERROR_INCOMPATIBLE_SHADER_BINARY_EXT),	// = VK_INCOMPATIBLE_SHADER_BINARY_EXT,
+		MKPT(VkResult, 1000482000, "VK_ERROR_INCOMPATIBLE_SHADER_BINARY_EXT"),
 	};
 	for (auto& r : results)
 	{
 		if (r.v == res) return r.s;
 	}
-	return "<VkResult UNDEFINED ERROR>";
+#ifdef _MSC_VER
+	sprintf_s(vkResultToStringBuffer, "<VkResult UNDEFINED ERROR %" PRId64 ">", int64_t(res));
+#else
+	sprintf(vkResultToStringBuffer, "<VkResult UNDEFINED ERROR %" PRId64 ">", int64_t(res));
+#endif
+	return vkResultToStringBuffer;
 }
 
 static const char* queueFlagBitsToString (VkQueueFlagBits bits)

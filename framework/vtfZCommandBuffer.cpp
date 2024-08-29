@@ -153,7 +153,7 @@ void commandBufferBindPipeline (ZCommandBuffer cmd, ZPipeline pipeline)
 	}
 }
 
-void commandBufferBindVertexBuffers (ZCommandBuffer cmd, const VertexInput& input,
+void commandBufferBindVertexBuffers (ZCommandBuffer cmd, add_cref<VertexInput> input,
 									std::initializer_list<ZBuffer> externalBuffers,
 									std::initializer_list<VkDeviceSize> offsets)
 {
@@ -168,6 +168,19 @@ void commandBufferBindVertexBuffers (ZCommandBuffer cmd, const VertexInput& inpu
 		else break;
 	}
 	vkCmdBindVertexBuffers(*cmd, 0, static_cast<uint32_t>(count), vertexBuffers.data(), vertexOffsets.data());
+}
+
+void commandBufferSetVertexInputEXT (ZCommandBuffer cmd, add_cref<VertexInput> input)
+{
+	add_cref<ZDeviceInterface> di = deviceGetInterface(cmd.getParam<ZDevice>());
+	ASSERTMSG(di.shaderObject(), "ERROR: \"" VK_EXT_SHADER_OBJECT_EXTENSION_NAME "\" not supported");
+
+	ZVertexInput2EXT ext(input);
+	di.vkCmdSetVertexInputEXT(*cmd,
+							data_count(ext.bindingDescriptions),
+							data_or_null(ext.bindingDescriptions),
+							data_count(ext.attributeDescriptions),
+							data_or_null(ext.attributeDescriptions));
 }
 
 void commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkDeviceSize offset)
@@ -297,12 +310,14 @@ void commandBufferBeginRendering (ZCommandBuffer cmd, std::initializer_list<ZIma
 	rInfo.pDepthAttachment		= nullptr;
 	rInfo.pStencilAttachment	= nullptr;
 
-	vkCmdBeginRendering(*cmd, &rInfo);
+	add_cref<ZDeviceInterface> di = deviceGetInterface(cmd.getParam<ZDevice>());
+	di.vkCmdBeginRendering(*cmd, &rInfo);
 }
 
 void commandBufferEndRendering (ZCommandBuffer cmd)
+
 {
-	vkCmdEndRendering(*cmd);
+	deviceGetInterface(cmd.getParam<ZDevice>()).vkCmdEndRendering(*cmd);
 }
 
 void commandBufferSetViewport (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain)
@@ -339,21 +354,6 @@ void commandBufferDrawIndexedIndirect (ZCommandBuffer cmd, ZBuffer buffer)
 	const VkDeviceSize size	= buffer.getParam<VkDeviceSize>();
 	vkCmdDrawIndexedIndirect(*cmd, *buffer, 0u, uint32_t(size / sizeof(VkDrawIndexedIndirectCommand)),
 												uint32_t(sizeof(VkDrawIndexedIndirectCommand)));
-}
-
-void commandBufferSetPolygonModeEXT (ZCommandBuffer commandBuffer, VkPolygonMode polygonMode)
-{
-	ASSERT_NOT_IMPLEMENTED();
-	// TODO: body
-	UNREF(commandBuffer);
-	UNREF(polygonMode);
-//	static PFN_vkCmdSetPolygonModeEXT cmdSetPolygonModeEXT;
-//	if (nullptr == cmdSetPolygonModeEXT)
-//	{
-//		ZInstance instance = commandBuffer.getParam<ZDevice>().getParam<ZPhysicalDevice>().getParam<ZInstance>();
-//		cmdSetPolygonModeEXT = (PFN_vkCmdSetPolygonModeEXT) vkGetInstanceProcAddr(*instance, "vkCmdSetPolygonModeEXT");
-//	}
-//	(*cmdSetPolygonModeEXT)(*commandBuffer, polygonMode);
 }
 
 void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image, add_cref<VkClearColorValue> clearValue)

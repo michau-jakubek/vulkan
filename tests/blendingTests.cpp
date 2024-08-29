@@ -88,12 +88,6 @@ struct TestParams
 };
 typedef std::tuple<TestParams, OptionParserState, std::string> TestParamsState;
 
-struct Boolean { bool value; };
-ostream_ref operator<< (ostream_ref str, add_cref<Boolean> value)
-{
-	return (str << std::boolalpha << value.value << std::noboolalpha);
-}
-Boolean boolean(bool value) { return Boolean{ value }; }
 TestParams::TestParams (add_cref<std::string> assets_)
 	: assets				(assets_)
 	, file					()
@@ -501,7 +495,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 
 	VertexInput					vertices	(ctx.device);
 	genVertices(vertices);
-	const uint32_t				vertexCount = vertices.getAttributeCount(0);
+	const uint32_t				vertexCount = vertices.getVertexCount(0);
 
 	const VkFormat				colorFormat		= VK_FORMAT_R32G32B32A32_SFLOAT;
 	struct PushConstant

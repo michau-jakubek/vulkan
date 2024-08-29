@@ -26,13 +26,6 @@ ostream_ref operator<< (ostream_ref str, ostream_ref)
 	return str;
 }
 
-struct Boolean { bool value; };
-ostream_ref operator<< (ostream_ref str, add_cref<Boolean> value)
-{
-	return (str << std::boolalpha << value.value << std::noboolalpha);
-}
-Boolean boolean(bool value) { return Boolean{ value }; }
-
 struct Params
 {
 	enum Status
@@ -1101,7 +1094,7 @@ TriLogicInt runDemoteInvocationsSingleThread (Canvas& cs, const std::string& ass
 		if (!params.singleTriangle()) vertices.insert(vertices.end(), triangle2.begin(), triangle2.end());
 		vertexInput.binding(0).addAttributes(vertices);
 	}
-	const uint32_t				primitiveStride		= vertexInput.getAttributeCount(0) / 3;
+	const uint32_t				primitiveStride		= vertexInput.getVertexCount(0) / 3;
 
 	const VkFormat				format				= cs.surfaceFormat;
 	const VkClearValue			clearColor			{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
@@ -1152,7 +1145,7 @@ TriLogicInt runDemoteInvocationsSingleThread (Canvas& cs, const std::string& ass
 			commandBufferPushConstants(cmdBuffer, pipelineLayout, userData.mPushConstant);
 			commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
 			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, srcFramebuffer, 0);
-				vkCmdDraw(*cmdBuffer, vertexInput.getAttributeCount(0), 1, 0, 0);
+				vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1, 0, 0);
 			commandBufferEndRenderPass(rpbi);
 			commandBufferPipelineBarriers(cmdBuffer,
 										  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,

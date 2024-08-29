@@ -17,6 +17,7 @@
 #include <utility>
 
 #include "vulkan/vulkan.h"
+#include "vtfZInstanceDeviceInterface.hpp"
 #include "vtfThreadSafeLogger.hpp"
 #include "vtfStrictTemplates.hpp"
 #include "demangle.hpp"
@@ -163,13 +164,14 @@ struct ZObject
 	}
 };
 
-template<class Z, class F, F Ptr, class Tr, class... X> struct ZDeletable
-	: protected std::shared_ptr<ZObject<Z, F, std::tuple<X...>>>, public ZDeletableMark
+struct ZDeletableBase { };
+template<class Z, class F, F Ptr, class Tr, class Inh, class... X> struct ZDeletable
+	: protected std::shared_ptr<ZObject<Z, F, std::tuple<X...>>>, public Inh, public ZDeletableMark
 {
 	static_assert(std::is_pointer<Z>::value, "Z must be of pointer type");
 
 	typedef Z											handle_type;
-	typedef ZDeletable<Z,F,Ptr,Tr,X...>					deletable_type;
+	typedef ZDeletable<Z,F,Ptr,Tr,Inh,X...>				deletable_type;
 	typedef ZObject<Z,F,std::tuple<X...>>				AnObject;
 	typedef std::shared_ptr<AnObject>					super;
 	typedef typename ZDeleterTraits<AnObject, deletable_type, Tr>::type	ADeleter;
@@ -317,7 +319,8 @@ typedef add_ptr<VkAllocationCallbacks> VkAllocationCallbacksPtr;
 
 typedef ZDeletable<VkInstance,
 	decltype(&vkDestroyInstance), &vkDestroyInstance,
-	swizzle_two_param, VkAllocationCallbacksPtr, /*apiVersion*/ uint32_t,
+	swizzle_two_param, vtf::ZInstanceSingleton,
+	VkAllocationCallbacksPtr, /*apiVersion*/ uint32_t,
 	ZDistType<RequiredLayers, std::vector<std::string>>,
 	ZDistType<AvailableLayerExtensions, std::vector<std::string>>,
 	vtf::Logger>
@@ -326,6 +329,7 @@ ZInstance;
 typedef ZDeletable<VkPhysicalDevice,
 	void(*)(void), nullptr
 	, swizzle_no_param
+	, ZDeletableBase
 	, VkAllocationCallbacksPtr
 	, ZInstance
 	, uint32_t /*Physical device index across the system*/
@@ -338,12 +342,13 @@ void freeWindow(add_ptr<GLFWwindow>);
 typedef typename std::add_pointer<GLFWwindow>::type GLFWwindowPtr;
 typedef ZDeletable<GLFWwindowPtr,
 	decltype(&freeWindow), &freeWindow,
-	swizzle_one_param>
+	swizzle_one_param, ZDeletableBase>
 ZGLFWwindowPtr;
 
 typedef ZDeletable<VkSurfaceKHR,
 	decltype(&vkDestroySurfaceKHR), &vkDestroySurfaceKHR,
-	swizzle_three_params, ZInstance, VkAllocationCallbacksPtr,
+	swizzle_three_params, ZDeletableBase,
+	ZInstance, VkAllocationCallbacksPtr,
 	std::weak_ptr<ZGLFWwindowPtr::AnObject>>
 ZSurfaceKHR;
 
@@ -352,10 +357,13 @@ struct ZDeviceQueueCreateInfo : VkDeviceQueueCreateInfo
 	std::bitset<32>	queues;
 	VkQueueFlags	queueFlags;
 	bool			surfaceSupport;
+	ZDeviceQueueCreateInfo () = default;
 };
 typedef ZDeletable<VkDevice,
 	decltype(&vkDestroyDevice), &vkDestroyDevice,
-	swizzle_two_param, VkAllocationCallbacksPtr,
+	swizzle_two_param,
+	vtf::ZDeviceSingleton,
+	VkAllocationCallbacksPtr,
 	ZPhysicalDevice,
 	std::vector<ZDeviceQueueCreateInfo>
 > ZDevice;
@@ -371,6 +379,7 @@ void releaseQueue(const QueueParams&);
 typedef ZDeletable<VkQueue,
 	decltype(&releaseQueue), &releaseQueue
 	, std::integer_sequence<int, -2>
+	, ZDeletableBase
 	, ZDistType<QueueFamilyIndex, uint32_t>
 	, ZDistType<QueueIndex, uint32_t>
 	, ZDistType<QueueFlags, VkQueueFlags>
@@ -380,18 +389,18 @@ typedef ZDeletable<VkQueue,
 
 typedef ZDeletable<VkSwapchainKHR,
 	decltype(&vkDestroySwapchainKHR),	&vkDestroySwapchainKHR,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr>
+	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr>
 ZSwapchainKHR;
 
 typedef ZDeletable<VkShaderModule,
 	decltype(&vkDestroyShaderModule), &vkDestroyShaderModule,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr,
+	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
 	VkShaderStageFlagBits>
 ZShaderModule;
 
 typedef ZDeletable<VkCommandPool,
 	decltype(&vkDestroyCommandPool), &vkDestroyCommandPool,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr,
+	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
 	ZQueue>
 ZCommandPool;
 
@@ -399,22 +408,25 @@ inline void freeCommandBuffer (VkDevice device, VkCommandBuffer buff, VkCommandP
 	vkFreeCommandBuffers(device, pool, 1, &buff); }
 typedef ZDeletable<VkCommandBuffer,
 	decltype(&freeCommandBuffer), &freeCommandBuffer,
-	swizzle_three_params, ZDevice, ZCommandPool, bool>
+	swizzle_three_params, ZDeletableBase, ZDevice, ZCommandPool, bool>
 ZCommandBuffer;
 
 typedef ZDeletable<VkFence,
 	decltype(&vkDestroyFence), &vkDestroyFence,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr>
+	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr>
 ZFence;
 
 typedef ZDeletable<VkSemaphore,
 	decltype(&vkDestroySemaphore), &vkDestroySemaphore,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr>
+	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr>
 ZSemaphore;
 
 typedef ZDeletable<VkDeviceMemory,
 	decltype(&vkFreeMemory), &vkFreeMemory,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr,
+	swizzle_three_params,
+	ZDeletableBase,
+	ZDevice,
+	VkAllocationCallbacksPtr,
 	VkMemoryPropertyFlags, 
 	VkDeviceSize,							// VkMemoryRequirements::size
 	ZDistType<SizeSecond, VkDeviceSize>,	// requested size (buffer|image)
@@ -423,24 +435,27 @@ ZDeviceMemory;
 
 typedef ZDeletable<VkImage,
 	decltype(&vkDestroyImage), &vkDestroyImage,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr,
+	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
 	VkImageCreateInfo, ZDeviceMemory, VkDeviceSize>
 ZImage;
 
 typedef ZDeletable<VkImageView,
 	decltype(&vkDestroyImageView), &vkDestroyImageView,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr,
+	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
 	VkImageViewCreateInfo, ZImage>
 ZImageView;
 
 typedef ZDeletable<VkImageView,
 	decltype(&vkDestroyImageView), &vkDestroyImageView,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr>
+	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr>
 ZUnboundImageView;
 
 typedef ZDeletable<VkRenderPass,
 	decltype(&vkDestroyRenderPass), &vkDestroyRenderPass,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr,
+	swizzle_three_params,
+	ZDeletableBase,
+	ZDevice,
+	VkAllocationCallbacksPtr,
 	ZDistType<AttachmentCount, uint32_t>,
 	ZDistType<SubpassCount, uint32_t>,
 	std::vector<VkClearValue>,
@@ -450,14 +465,14 @@ ZRenderPass;
 
 typedef ZDeletable<VkFramebuffer,
 	decltype(&vkDestroyFramebuffer), &vkDestroyFramebuffer,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr,
+	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
 	ZDistType<Width, uint32_t>, ZDistType<Height, uint32_t>,
 	ZRenderPass, std::vector<ZImageView>>
 ZFramebuffer;
 
 typedef ZDeletable<VkSampler,
 	decltype(&vkDestroySampler), &vkDestroySampler,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr,
+	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
 	VkSamplerCreateInfo>
 ZSampler;
 
@@ -472,39 +487,39 @@ struct type_index_with_default : public std::type_index
 
 typedef ZDeletable<VkBuffer,
 	decltype(&vkDestroyBuffer), &vkDestroyBuffer,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr,
+	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
 	VkBufferCreateInfo, std::vector<ZDeviceMemory>, VkDeviceSize,
 	type_index_with_default, VkExtent3D, VkFormat>
 ZBuffer;
 
 typedef ZDeletable<VkDescriptorPool,
 	decltype(&vkDestroyDescriptorPool), &vkDestroyDescriptorPool,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr>
+	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr>
 ZDescriptorPool;
 
 inline void freeDescriptorSet (VkDevice device, VkDescriptorSet set, VkDescriptorPool pool) {
 	vkFreeDescriptorSets(device, pool, 1, &set); }
 typedef ZDeletable<VkDescriptorSet,
 	decltype(&freeDescriptorSet), &freeDescriptorSet,
-	swizzle_three_params, ZDevice, ZDescriptorPool>
+	swizzle_three_params, ZDeletableBase, ZDevice, ZDescriptorPool>
 ZDescriptorSet;
 
 typedef ZDeletable<VkDescriptorSetLayout,
 	decltype(&vkDestroyDescriptorSetLayout), &vkDestroyDescriptorSetLayout,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr,
+	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
 	ZDescriptorSet>
 ZDescriptorSetLayout;
 
 typedef ZDeletable<VkPipelineLayout,
 	decltype(&vkDestroyPipelineLayout), &vkDestroyPipelineLayout,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr,
+	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
 	std::vector<ZDescriptorSetLayout>,
 	VkPushConstantRange, type_index_with_default>
 ZPipelineLayout;
 
 typedef ZDeletable<VkPipeline,
 	decltype(&vkDestroyPipeline), &vkDestroyPipeline,
-	swizzle_three_params, ZDevice, VkAllocationCallbacksPtr,
+	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
 	ZPipelineLayout, ZRenderPass, VkPipelineBindPoint>
 ZPipeline;
 

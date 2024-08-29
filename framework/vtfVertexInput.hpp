@@ -26,10 +26,17 @@ struct ZPipelineVertexInputStateCreateInfo : VkPipelineVertexInputStateCreateInf
 	ZPipelineVertexInputStateCreateInfo (add_cref<VertexInput> vertexInput);
 	VkPipelineVertexInputStateCreateInfo operator ()() const;
 	virtual ~ZPipelineVertexInputStateCreateInfo () = default;
-	void swap(ZPipelineVertexInputStateCreateInfo&& other);
+	void swap (ZPipelineVertexInputStateCreateInfo&& other);
 protected:
 	std::vector<VkVertexInputBindingDescription>	m_pipeBindings;
 	std::vector<VkVertexInputAttributeDescription>	m_pipeDescriptions;
+};
+
+struct ZVertexInput2EXT
+{
+	ZVertexInput2EXT (add_cref<VertexInput> vertexInput);
+	std::vector<VkVertexInputBindingDescription2EXT>	bindingDescriptions;
+	std::vector<VkVertexInputAttributeDescription2EXT>	attributeDescriptions;
 };
 
 struct VertexBinding : public VkVertexInputBindingDescription
@@ -45,8 +52,9 @@ struct VertexBinding : public VkVertexInputBindingDescription
 
 	VertexBinding (add_cref<VertexInput> vertexInput);
 	VertexBinding (add_cref<VertexBinding>) = delete;
-	VertexBinding (VertexBinding&& other);
+	VertexBinding (VertexBinding&& other) noexcept;
 	friend struct ZPipelineVertexInputStateCreateInfo;
+	friend struct ZVertexInput2EXT;
 
 	add_cref<VertexInput>	vertexInput;
 	add_cref<BufferType>	bufferType;
@@ -62,6 +70,8 @@ struct VertexBinding : public VkVertexInputBindingDescription
 		uint32_t	addAttributes		(const std::vector<Attr>& attr, const std::vector<OtherAttrs>&... others);
 
 	ZBuffer			getBuffer			() const;
+
+	VkVertexInputBindingDescription2EXT asVkVertexInputBindingDescription2EXT () const;
 
 	struct AttrFwd
 	{
@@ -82,6 +92,8 @@ private:
 	{
 		uint32_t	sizeOf;
 		uint32_t	count;
+		VkVertexInputAttributeDescription asVkVertexInputAttributeDescription () const;
+		VkVertexInputAttributeDescription2EXT asVkVertexInputAttributeDescription2EXT () const;
 	};
 
 	BufferType					m_bufferType;
@@ -98,6 +110,7 @@ public:
 	VertexInput (add_cref<VertexInput>) = delete;
 	VertexInput (VertexInput&&) = delete;
 	friend struct ZPipelineVertexInputStateCreateInfo;
+	friend struct ZVertexInput2EXT;
 
 	ZDevice						device;
 
@@ -106,7 +119,9 @@ public:
 	std::vector<VkBuffer>		getVertexBuffers	(std::initializer_list<ZBuffer> externalBuffers = {}) const;
 	std::vector<VkDeviceSize>	getVertexOffsets	() const;
 	uint32_t					getBindingCount		() const;
+	uint32_t					getVertexCount		(uint32_t binding) const;
 	uint32_t					getAttributeCount	(uint32_t binding) const;
+	uint32_t					getAttributeCount	() const;
 	void						clear				();
 
 protected:

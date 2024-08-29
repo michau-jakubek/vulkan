@@ -27,7 +27,7 @@ VertexBinding::VertexBinding (add_cref<VertexInput> vertexInput)
 	inputRate	= VK_VERTEX_INPUT_RATE_MAX_ENUM;
 }
 
-VertexBinding::VertexBinding (VertexBinding&& other)
+VertexBinding::VertexBinding (VertexBinding&& other) noexcept
 	: VkVertexInputBindingDescription	(other)
 	, vertexInput						(other.vertexInput)
 	, bufferType						(m_bufferType)
@@ -41,6 +41,16 @@ ZBuffer VertexBinding::getBuffer () const
 {
 	ASSERTION(BufferType::Internal == m_bufferType);
 	return m_buffer;
+}
+
+VkVertexInputBindingDescription2EXT VertexBinding::asVkVertexInputBindingDescription2EXT () const
+{
+	VkVertexInputBindingDescription2EXT ext = makeVkStruct();
+	ext.binding		= binding;
+	ext.stride		= stride;
+	ext.inputRate	= inputRate;
+	ext.divisor		= 1u;
+	return ext;
 }
 
 VertexBinding::Location VertexBinding::declareAttributes_ (const AttrFwd* fwd, const uint32_t count)
@@ -262,6 +272,22 @@ VertexBinding& VertexInput::binding (uint32_t binding, uint32_t stride, VkVertex
 	return *b;
 }
 
+VkVertexInputAttributeDescription VertexBinding::Description::asVkVertexInputAttributeDescription () const
+{
+	add_cref<VkVertexInputAttributeDescription> result(*this);
+	return result;
+}
+
+VkVertexInputAttributeDescription2EXT VertexBinding::Description::asVkVertexInputAttributeDescription2EXT () const
+{
+	VkVertexInputAttributeDescription2EXT ext = makeVkStruct();
+	ext.location	= location;
+	ext.binding		= binding;
+	ext.format		= format;
+	ext.offset		= offset;
+	return ext;
+}
+
 ZPipelineVertexInputStateCreateInfo::ZPipelineVertexInputStateCreateInfo ()
 	: m_pipeBindings(), m_pipeDescriptions()
 {
@@ -318,14 +344,29 @@ VkPipelineVertexInputStateCreateInfo ZPipelineVertexInputStateCreateInfo::operat
 	return pisc;
 }
 
+ZVertexInput2EXT::ZVertexInput2EXT (add_cref<VertexInput> vertexInput)
+	: bindingDescriptions	(vertexInput.getBindingCount())
+	, attributeDescriptions	(vertexInput.getAttributeCount())
+{
+	for (uint32_t b = 0u, c = 0u; b < bindingDescriptions.size(); ++b)
+	{
+		add_cref<VertexBinding> vb = vertexInput.m_freeBindings.at(b);
+		bindingDescriptions.at(b) = vb.asVkVertexInputBindingDescription2EXT();
+		for (add_cref<VertexBinding::Description> a : vb.m_descriptions)
+		{
+			attributeDescriptions.at(c++) = a.asVkVertexInputAttributeDescription2EXT();
+		}
+	}
+}
+
 uint32_t VertexInput::getBindingCount () const
 {
 	return static_cast<uint32_t>(m_freeBindings.size());
 }
 
-uint32_t VertexInput::getAttributeCount (uint32_t binding) const
+uint32_t VertexInput::getVertexCount (uint32_t binding) const
 {
-	for (const VertexBinding& bind : m_freeBindings)
+	for (add_cref<VertexBinding> bind : m_freeBindings)
 	{
 		if (bind.binding == binding && bind.m_descriptions.size())
 		{
@@ -334,6 +375,27 @@ uint32_t VertexInput::getAttributeCount (uint32_t binding) const
 		}
 	}
 	return INVALID_UINT32;
+}
+
+uint32_t VertexInput::getAttributeCount (uint32_t binding) const
+{
+	for (add_cref<VertexBinding> bind : m_freeBindings)
+	{
+		if (bind.binding == binding && bind.m_descriptions.size())
+		{
+			const uint32_t count = data_count(bind.m_descriptions);
+			return count;
+		}
+	}
+	return INVALID_UINT32;
+}
+
+uint32_t VertexInput::getAttributeCount () const
+{
+	uint32_t count = 0;
+	for (const VertexBinding& bind : m_freeBindings)
+		count += data_count(bind.m_descriptions);
+	return count;
 }
 
 std::vector<VkBuffer> VertexInput::getVertexBuffers (std::initializer_list<ZBuffer> externalBuffers) const

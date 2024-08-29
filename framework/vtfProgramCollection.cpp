@@ -11,7 +11,6 @@
 #include <sstream>
 #include <iostream>
 #include "vtfFilesystem.hpp"
-
 #endif
 
 #include <iterator>
@@ -26,6 +25,7 @@
 #include "vtfProgramCollection.hpp"
 #include "vtfFilesystem.hpp"
 #include "vtfBacktrace.hpp"
+#include "vtfStructUtils.hpp"
 
 #ifdef ENABLE_GL
 
@@ -99,6 +99,14 @@ static bool checkProgramLinkStatus(GLuint program, std::string& info)
 	return (GL_TRUE == ok);
 }
 
+struct VerifyShaderCodeInfo
+{
+	const std::string			code_;
+	const VkShaderStageFlagBits	stage_;
+	VerifyShaderCodeInfo(const std::string& code, VkShaderStageFlagBits stage)
+		: code_(code), stage_(stage) {}
+};
+bool verifyShaderCodeGL(const VerifyShaderCodeInfo* infos, uint32_t infoCount, std::string& error, int majorVersion = 4, int minorVersion = 5, void* glWindow = nullptr);
 bool verifyShaderCodeGL (const VerifyShaderCodeInfo* infos, uint32_t infoCount, std::string& error, int majorVersion, int minorVersion)
 {
 	constexpr size_t maxHandles = 10;
@@ -278,7 +286,7 @@ static const char* shaderStageToCommand (VkShaderStageFlagBits stage)
 	return 0;
 }
 
-static std::string makeFileName (uint32_t index, VkShaderStageFlagBits stage,
+static std::string makeFileName (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 								 const strings& codeAndEntryAndIncludes,
 								 const Version& vulkanVer, const Version& spirvVer,
 								 const bool enableValidation, const bool genDisassembly, const bool buildAlways,
@@ -291,7 +299,7 @@ static std::string makeFileName (uint32_t index, VkShaderStageFlagBits stage,
 	size_t hash = 0;
 	{
 		std::ostringstream ss;
-		ss << index;
+		ss << shaderIndex;
 		ss << (codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName).empty()
 			   ? codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::shaderCode)
 			   : codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName));
@@ -518,7 +526,7 @@ static auto makeCompileSpvCommand (const Version& vulkanVer, const Version& spir
 	return cmd.str();
 }
 
-static auto makeBuildSpvAsm (const std::string& compilerExecutable, const fs::path& input, const fs::path& output) -> std::string
+static auto makeBuildSpvDis (const std::string& compilerExecutable, const fs::path& input, const fs::path& output) -> std::string
 {
 	std::stringstream cmd;
 	cmd << maybe_quoted((fs::path(compilerExecutable).parent_path() / "spirv-dis").string());
@@ -547,21 +555,29 @@ static auto makeValidateCommand (const Version& vulkanVer, const Version& spirvV
 	return cmd.str();
 }
 
-static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
-							   const Version& vulkanVer, const Version& spirvVer,
-							   bool enableValidation, bool genDisassmebly, bool buildAlways,
-							   const strings& codeAndEntryAndIncludes, std::vector<unsigned char>& binary,
-							   std::string& errors)
+bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
+					   add_cref<Version> vulkanVer, add_cref<Version> spirvVer,
+					   add_cref<strings> codeAndEntryAndIncludes,
+					   add_ref<std::string> shaderFileName,
+					   add_ref<std::vector<uint8_t>> binary,
+					   add_ref<std::vector<uint8_t>> assembly,
+					   add_ref<std::string> errors,
+					   bool enableValidation,
+					   bool genDisassmebly,
+					   bool buildAlways,
+					   bool genBinary)
 {
-	const bool isGlsl = codeAndEntryAndIncludes[ProgramCollection::StageToCode::shaderCode]
-							.find("#version") != std::string::npos;
+	add_cref<std::string> shaderCode = codeAndEntryAndIncludes[ProgramCollection::StageToCode::shaderCode];
+	const bool isGlsl = shaderCode.find("#version") != std::string::npos;
 
 	bool status = false;
 	std::stringstream errorCollection;
-	const char* tmpDir = getGlobalAppFlags().tmpDir;
+	add_cref<GlobalAppFlags> gf(getGlobalAppFlags());
+	const char* tmpDir = gf.tmpDir;
 	const fs::path tmpPath = std::strlen(tmpDir) ? fs::path(tmpDir) : fs::temp_directory_path();
-	const std::string fileName(makeFileName(index, stage, codeAndEntryAndIncludes, vulkanVer, spirvVer,
-											enableValidation, genDisassmebly, buildAlways));
+	shaderFileName = makeFileName(shaderIndex, stage, codeAndEntryAndIncludes, vulkanVer, spirvVer,
+								  enableValidation, genDisassmebly, buildAlways);
+	add_cref<std::string> fileName(shaderFileName);
 	const std::string pathName((tmpPath / fileName).string());
 	const fs::path textPath(pathName + (isGlsl ? ".glsl" : ".spvasm"));
 	const fs::path binPath(pathName + ".spvbin");
@@ -571,9 +587,9 @@ static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
 	{
 		std::ofstream textFile(textPath.c_str());
 		ASSERTMSG(textFile.is_open(), textPath.string());
-		textFile << codeAndEntryAndIncludes[ProgramCollection::StageToCode::shaderCode];
+		textFile << shaderCode;
 	}
-	if (getGlobalAppFlags().verbose)
+	if (gf.verbose)
 	{
 		std::string versionLine;
 		auto compilers = makeCompilerSignature(true);
@@ -590,29 +606,45 @@ static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
 			}
 		}
 	}
-	if (!buildAlways && fs::exists(binPath))
+	auto assemblyShaderCode = [&]() -> void
 	{
-		uint32_t readed = readFile(binPath, binary); UNREF(readed);
-		if (getGlobalAppFlags().verbose)
+		assembly.resize(shaderCode.length());
+		std::transform(shaderCode.begin(), shaderCode.end(),
+			assembly.begin(), [](const char c) { return uint8_t(c); });
+	};
+	if (!buildAlways && (!genBinary || fs::exists(binPath)))
+	{
+		if (readFile(asmPath, assembly) == INVALID_UINT32)
+		{
+			assemblyShaderCode();
+		}
+		const uint32_t readBin = readFile(binPath, binary);
+		if (gf.verbose)
 		{
 			const std::string compileCmd = isGlsl
 				? makeCompileGlslCommand(stage, codeAndEntryAndIncludes, vulkanVer, spirvVer, enableValidation,
 										compilerExecutable, textPath, binPath)
 				: makeCompileSpvCommand(vulkanVer, spirvVer, compilerExecutable, textPath, binPath);
 			std::cout << "[APP] Compile command: \"" << compileCmd << "\"" << std::endl;
-			std::cout << "      File exists: \"" << binPath << "\"" << std::endl;
+			std::cout << "      File: \"" << binPath << "\" exists: "
+										<< boolean(fs::exists(binPath)) << std::endl;
 
-			if (isGlsl && genDisassmebly)
+			if (genDisassmebly)
 			{
-				const std::string buildAsmCmd = makeBuildSpvAsm(compilerExecutable, binPath, asmPath);
-				std::cout << "[APP] Build assembly command: \"" << buildAsmCmd << "\"" << std::endl;
-				std::cout << "      File exists: \"" << asmPath << "\"" << std::endl;
+				const std::string buildDisasmCmd = makeBuildSpvDis(compilerExecutable, binPath, asmPath);
+				std::cout << "[APP] Build assembly command: \"" << buildDisasmCmd << "\"" << std::endl;
+				std::cout << "      File \"" << asmPath << "\" exists: "
+											<< boolean(fs::exists(asmPath)) << std::endl;
 			}
-
 		}
-		ASSERTION(readed != INVALID_UINT32);
-		ASSERTION(readed % 4 == 0);
+		ASSERTION(readBin != INVALID_UINT32);
+		ASSERTION(readBin % 4 == 0);
 		status = true;
+	}
+	else if (!genBinary && !enableValidation)
+	{
+		ASSERTMSG(!isGlsl, "Cannot disable binaries generation for GLSL shaders");
+		assemblyShaderCode();
 	}
 	else
 	{
@@ -624,120 +656,87 @@ static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
 		std::string result = captureSystemCommandResult(compileCmd.c_str(), status, '\n');
 		bool areErrors = containsErrorString(result);
 		bool areWarnings = containsWarningString(result);
-		if (getGlobalAppFlags().verbose)
+		const bool binFileExists = fs::exists(binPath);
+		if (gf.verbose)
 		{
-			std::cout << "[APP] Compile command: \"" << compileCmd << "\", "
-					  << "Errors: " << (areErrors ? "Yes" : "No") << ", "
-					  << "Warnings: " << (areWarnings ? "Yes" : "No") << ", "
-					  << "Status: " << std::boolalpha << status << std::noboolalpha
+			std::cout << "[APP] Compile command: \"" << compileCmd << "\"\n"
+					  << "      Command result: " << std::quoted(result) << std::endl
+					  << "      File \"" << binPath << "\" created: " << boolean(binFileExists, true) << std::endl
+					  << "      Errors: " << boolean(areErrors, true) << ", "
+					  << "      Warnings: " << boolean(areWarnings, true) << ", "
+					  << "      Status: " << boolean(status)
 					  << std::endl;
 			std::cout << "[SYS] Command result: " << std::quoted(result) << std::endl;
 		}
-		if (isGlsl && genDisassmebly)
+		if (status |= !areErrors && (!areWarnings || gf.nowerror) && binFileExists; status)
 		{
-			bool sinkStatus = true;
-			//const std::string buildAsmCmd = makeBuildSpvAsm(stage, codeAndEntryAndIncludes, vulkanVer, spirvVer, textPath, asmPath);
-			const std::string buildAsmCmd = makeBuildSpvAsm(compilerExecutable, binPath, asmPath);
-			const std::string asmCmdResult = captureSystemCommandResult(buildAsmCmd.c_str(), sinkStatus, '\n');
-			if (!sinkStatus)
+			const uint32_t readBin = readFile(binPath, binary);
+			ASSERTION(readBin != INVALID_UINT32);
+			ASSERTION(readBin % 4 == 0);
+
+			if (enableValidation)
 			{
-				errorCollection << asmCmdResult << std::endl;
-			}
-			if (getGlobalAppFlags().verbose)
-			{
-				std::cout << "[APP] Build assembly comand: " << buildAsmCmd << ", "
-						  << "Warnings: " << (containsWarningString(asmCmdResult) ? "Yes" : "No") << ", "
-						  << "Errors: " << (containsErrorString(asmCmdResult) ? "Yes" : "No") << ", "
-						  << "Status: " << std::boolalpha << sinkStatus << std::noboolalpha
-						  << std::endl;
-				std::cout << "[SYS] Command result: " << std::quoted(asmCmdResult) << std::endl;
-			}
-		}
-		if (status)
-		{
-			if (areErrors || (getGlobalAppFlags().nowerror == false && areWarnings))
-			{
-				if (enableValidation && fs::exists(binPath))
+				const std::string validateCmd = makeValidateCommand(vulkanVer, spirvVer, binPath);
+				result = captureSystemCommandResult(validateCmd.c_str(), status, '\n');
+				areErrors = containsErrorString(result);
+				areWarnings = containsWarningString(result);
+				if (gf.verbose)
 				{
+					std::cout << "[APP] Validate command: \"" << validateCmd << "\"\n"
+							  << "      Command result: " << std::quoted(result) << std::endl
+							  << "      Warnings: " << boolean(areWarnings, true) << ", "
+							  << "      Errors: " << boolean(areErrors, true) << ", "
+							  << "      Status: " << boolean(status)
+							  << std::endl;
+				}
+				if (areErrors || !status)
+				{
+					status = false;
+					errorCollection << result << std::endl;
+
 					std::error_code error_code;
 					const fs::path invalidBinFile(pathName + ".invalid.spvbin");
 					fs::rename(binPath, invalidBinFile, error_code);
 					ASSERTION(error_code.value() == 0);
-					if (getGlobalAppFlags().verbose)
+					if (gf.verbose)
 					{
 						std::cout << "[APP] " << binPath << " has been renamed with " << invalidBinFile << std::endl;
 					}
 				}
-				errorCollection << result << std::endl;
-				status = false;
-			}
-			else if (fs::exists(binPath))
+			} // fi (enableValidation)
+
+			if (status && genDisassmebly)
 			{
-				uint32_t readed = readFile(binPath, binary); UNREF(readed);
-				ASSERTION(readed != INVALID_UINT32);
-				ASSERTION(readed % 4 == 0);
-
-				if (isGlsl && genDisassmebly)
+				bool disassmStatus = true;
+				const std::string buildDisasmCmd = makeBuildSpvDis(compilerExecutable, binPath, asmPath);
+				result  = captureSystemCommandResult(buildDisasmCmd.c_str(), disassmStatus, '\n');
+				areErrors = containsErrorString(result);
+				areWarnings = containsWarningString(result);
+				const bool asmFileExists = fs::exists(asmPath);
+				if (gf.verbose)
 				{
-					bool sinkStatus = true;
-					const std::string buildAsmCmd = makeBuildSpvAsm(compilerExecutable, binPath, asmPath);
-					const std::string asmCmdResult = captureSystemCommandResult(buildAsmCmd.c_str(), sinkStatus, '\n');
-					if (getGlobalAppFlags().verbose)
-					{
-						std::cout << "[APP] Second build assembly command: " << buildAsmCmd << ", "
-								  << "Warnings: " << (containsWarningString(asmCmdResult) ? "Yes" : "No") << ", "
-								  << "Errors: " << (containsErrorString(asmCmdResult) ? "Yes" : "No") << ", "
-								  << "Status: " << std::boolalpha << sinkStatus << std::noboolalpha
-								  << std::endl;
-					}
-					if (!sinkStatus)
-					{
-						errorCollection << asmCmdResult << std::endl;
-					}
+					std::cout << "[APP] Build assembly comand: \"" << buildDisasmCmd << "\"\n"
+							  << "      Command result: \"" << result << "\"\n"
+							  << "      Warnings: " << boolean(areWarnings, true) << ", "
+							  << "      Errors: " << boolean(areErrors, true) << ", "
+							  << "      Status: " << boolean(disassmStatus)
+							  << "      File \"" << asmPath << "\" created: " << boolean(asmFileExists, true)
+							  << std::endl;
 				}
-
-				if (enableValidation)
+				if (disassmStatus && asmFileExists)
 				{
-					const std::string validateCmd = makeValidateCommand(vulkanVer, spirvVer, binPath);
-					result = captureSystemCommandResult(validateCmd.c_str(), status, '\n');
-					areErrors = containsErrorString(result);
-					areWarnings = containsWarningString(result);
-					if (getGlobalAppFlags().verbose)
-					{
-						std::cout << "[APP] Validate command: \"" << validateCmd << "\", "
-								  << "Warnings: " << (containsWarningString(result) ? "Yes" : "No") << ", "
-								  << "Errors: " << (containsErrorString(result) ? "Yes" : "No") << ", "
-								  << "Status: " << std::boolalpha << status << std::noboolalpha
-								  << std::endl;
-					}
-					if (areErrors || !status)
-					{
-						status = false;
-						errorCollection << result << std::endl;
-
-						std::error_code error_code;
-						const fs::path invalidBinFile(pathName + ".invalid.spvbin");
-						fs::rename(binPath, invalidBinFile, error_code);
-						ASSERTION(error_code.value() == 0);
-						if (getGlobalAppFlags().verbose)
-						{
-							std::cout << "[APP] " << binPath << " has been renamed with " << invalidBinFile << std::endl;
-						}
-					}
+					const uint32_t readAsm = readFile(asmPath, assembly);
+					ASSERTION(readAsm != INVALID_UINT32);
 				}
 			}
-			else
+			else if (!isGlsl)
 			{
-				errorCollection << binPath << " does not exist" << std::endl;
-				status = false;
+				assemblyShaderCode();
 			}
 		}
 		else
 		{
-			if (fs::exists(binPath))
-			{
-				fs::remove(binPath);
-			}
+			errorCollection << result << std::endl;
 		}
 	}
 
@@ -747,12 +746,20 @@ static	bool verifyShaderCode (uint32_t index, VkShaderStageFlagBits stage,
 	return status;
 }
 
-ProgramCollection::ProgramCollection (ZDevice device, const std::string& basePath)
-		: m_device(device), m_basePath(basePath)
+_GlSpvProgramCollection::_GlSpvProgramCollection (ZDevice device, add_cref<std::string> basePath)
+	: m_device			(device)
+	, m_basePath		(basePath)
+	, m_tempDir			()
+	, m_stageToCount	()
+	, m_stageToCode		()
+	, m_stageToFileName	()
+	, m_stageToAssembly	()
+	, m_stageToBinary	()
 {
 }
 
-void ProgramCollection::addFromText (VkShaderStageFlagBits type, const std::string& code, const strings& includePaths, const std::string& entryName)
+void _GlSpvProgramCollection::addFromText (VkShaderStageFlagBits type, add_cref<std::string> code,
+										   add_cref<strings> includePaths, add_cref<std::string> entryName)
 {
 	const auto key = std::make_pair(type, m_stageToCount[type]++);
 	// [0]: glsl code, [1]: entry name, [2] file name, [3...]: include path(s)
@@ -763,9 +770,9 @@ void ProgramCollection::addFromText (VkShaderStageFlagBits type, const std::stri
 		m_stageToCode[key].push_back(m_basePath + includePaths[p]);
 }
 
-bool ProgramCollection::addFromFile(VkShaderStageFlagBits type,
-									const std::string& fileName, const strings& includePaths,
-									const std::string& entryName, bool verbose)
+bool _GlSpvProgramCollection::addFromFile (VkShaderStageFlagBits type,
+										   add_cref<std::string> fileName, add_cref<strings> includePaths,
+										   add_cref<std::string> entryName, bool verbose)
 {
 	bool				result			(false);
 	const fs::path		basePath		(m_basePath);
@@ -793,10 +800,56 @@ bool ProgramCollection::addFromFile(VkShaderStageFlagBits type,
 	return result;
 }
 
-void ProgramCollection::buildAndVerify (const Version& vulkanVer, const Version& spirvVer,
+auto _GlSpvProgramCollection::getShaderCode (VkShaderStageFlagBits stage,
+											 uint32_t index,
+											 bool binORasm) const -> add_cref<std::vector<uint8_t>>
+{
+	if (binORasm)
+		return m_stageToBinary.at({ stage, index });
+	return m_stageToAssembly.at({ stage, index });
+}
+
+add_cref<std::string> _GlSpvProgramCollection::getShaderEntry (VkShaderStageFlagBits stage, uint32_t index) const
+{
+	return m_stageToCode.at({ stage, index }).at(entryName);
+}
+
+add_cref<std::string> _GlSpvProgramCollection::getShaderFile (VkShaderStageFlagBits stage, uint32_t index, bool inORout) const
+{
+	if (inORout)
+		return m_stageToCode.at({ stage, index }).at(fileName);
+	return m_stageToFileName.at({ stage, index });
+}
+
+add_ptr<_GlSpvProgramCollection::ShaderLink> _GlSpvProgramCollection::ShaderLink::head () const
+{
+	add_ptr<ShaderLink> link = const_cast<add_ptr<ShaderLink>>(this);
+	while (link->prev) link = link->prev;
+	return link;
+}
+
+uint32_t _GlSpvProgramCollection::ShaderLink::count () const
+{
+	uint32_t n = 1u;
+	add_ptr<ShaderLink> link = const_cast<add_ptr<ShaderLink>>(this);
+	while (link->next)
+	{
+		link = link->next;
+		n = n + 1u;
+	}
+	return n;
+}
+
+ProgramCollection::ProgramCollection (ZDevice device, add_cref<std::string> basePath)
+	: _GlSpvProgramCollection(device, basePath)
+{
+}
+
+void ProgramCollection::buildAndVerify (add_cref<Version> vulkanVer, add_cref<Version> spirvVer,
 										bool enableValidation, bool genDisassembly, bool buildAlways)
 {
-	std::string error;
+	std::string errors;
+	const bool genBinary = true;
 	for (auto stage : availableShaderStages)
 	{
 		if (mapHasKey(stage, m_stageToCount))
@@ -804,12 +857,17 @@ void ProgramCollection::buildAndVerify (const Version& vulkanVer, const Version&
 			for (uint32_t k = 0; k < add_const_ref(m_stageToCount).at(stage); ++k)
 			{
 				const auto key = std::make_pair(stage, k);
-				std::vector<unsigned char> binary;
+				std::string shaderFileName;
+				std::vector<uint8_t> binary, assembly;
 				if (verifyShaderCode(k, stage, vulkanVer, spirvVer,
-									 enableValidation, genDisassembly, buildAlways,
-									 m_stageToCode[key], binary, error))
-					m_stageToBinary[key] = binary;
-				else ASSERTMSG(false, error);
+									 m_stageToCode[key], shaderFileName, binary, assembly, errors,
+									 enableValidation, genDisassembly, buildAlways, genBinary))
+				{
+					m_stageToFileName[key]	= std::move(shaderFileName);
+					m_stageToAssembly[key]	= std::move(assembly);
+					m_stageToBinary[key]	= std::move(binary);
+				}
+				else ASSERTMSG(false, errors);
 			}
 		}
 	}
@@ -834,6 +892,28 @@ ZShaderModule ProgramCollection::getShader (VkShaderStageFlagBits stage, uint32_
 		ASSERTION(false);
 	}
 	return module;
+}
+
+VkShaderModule ProgramCollection::getShaderModule (VkShaderStageFlagBits stage, uint32_t index, bool verbose) const
+{
+	VkShaderModule shaderModule = VK_NULL_HANDLE;
+	auto search = m_stageToBinary.find(std::make_pair(stage, index));
+	if (m_stageToBinary.end() != search)
+	{
+		VkAllocationCallbacksPtr	callbacks	= m_device.getParam<VkAllocationCallbacksPtr>();
+		VkShaderModuleCreateInfo	createInfo	= makeVkStruct();
+
+		createInfo.codeSize = search->second.size();
+		createInfo.pCode = reinterpret_cast<const uint32_t*>(search->second.data());
+
+		VKASSERT2(vkCreateShaderModule(*m_device, &createInfo, callbacks, &shaderModule));
+	}
+	else if (verbose)
+	{
+		ASSERTION(false);
+	}
+
+	return shaderModule;
 }
 
 } // namespace vtf

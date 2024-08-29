@@ -47,6 +47,8 @@ set(tests_files
     sparseBufferTests.hpp
     deviceTimeoutTests.cpp
     deviceTimeoutTests.hpp
+    shaderObjectTriangleTests.cpp
+    shaderObjectTriangleTests.hpp
     )
 
 add_definitions(-DASSETS_PATH="${ASSETS_PATH}")

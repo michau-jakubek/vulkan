@@ -42,7 +42,7 @@ OptionParser<Params> Params::getParser ()
 TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams);
 TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Params> params);
 
-TriLogicInt prepareTests(const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
 {
 	Params					params	(record.assets);
 	OptionParser<Params>	parser	= params.getParser();

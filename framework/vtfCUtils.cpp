@@ -1,3 +1,4 @@
+#include <iomanip>
 #include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +19,14 @@
 
 namespace vtf
 {
+
+Boolean boolean (bool value, bool yesno) { return Boolean{ value, yesno }; }
+std::ostream& operator<< (std::ostream& str, const Boolean& value)
+{
+	if (value.yesno)
+		return (str << (value.value ? "Yes": "No"));
+	return (str << std::boolalpha << value.value << std::noboolalpha);
+}
 
 template<class T> T fromText (const std::string& text, const T& defResult, bool& status)
 {
@@ -137,14 +146,26 @@ std::string readFile (const std::string& filename, bool* status)
 	return buffer;
 }
 
-uint32_t readFile (const fs::path& path, std::vector<unsigned char>& buffer)
+uint32_t readFile(add_cref<fs::path> path, add_ref<std::vector<uint32_t>> buffer)
 {
 	if (!fs::exists(path)) return INVALID_UINT32;
 	const uint32_t length = (uint32_t)fs::file_size(path);
-	std::ifstream s(path.c_str(), std::ios::binary);
+	std::basic_ifstream<uint8_t> s(path.c_str(), std::ios::binary);
 	if (!s.is_open()) return INVALID_UINT32;
 	buffer.resize(length);
-	std::copy(std::istreambuf_iterator<char>(s), std::istreambuf_iterator<char>(), buffer.begin());
+	std::copy(std::istreambuf_iterator<uint8_t>(s), std::istreambuf_iterator<uint8_t>(), buffer.begin());
+	s.close();
+	return length;
+}
+
+uint32_t readFile (add_cref<fs::path> path, add_ref<std::vector<uint8_t>> buffer)
+{
+	if (!fs::exists(path)) return INVALID_UINT32;
+	const uint32_t length = (uint32_t)fs::file_size(path);
+	std::basic_ifstream<uint8_t> s(path.c_str(), std::ios::binary);
+	if (!s.is_open()) return INVALID_UINT32;
+	buffer.resize(length);
+	std::copy(std::istreambuf_iterator<uint8_t>(s), std::istreambuf_iterator<uint8_t>(), buffer.begin());
 	s.close();
 	return length;
 }

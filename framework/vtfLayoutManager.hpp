@@ -170,11 +170,12 @@ public:
 private:	
 	typedef struct VkDescriptorSetLayoutBindingAndType : VkDescriptorSetLayoutBinding
 	{
-		VkDescriptorSetLayoutBindingAndType()
+		VkDescriptorSetLayoutBindingAndType ()
 			: index			(typeid(void))
 			, size			(0)
 			, offset		(0)
 			, elementCount	(1)
+			, imageLayout	(VK_IMAGE_LAYOUT_UNDEFINED)
 			, isVector		(false)
 			, shared		(false) {}
 		std::type_index index;

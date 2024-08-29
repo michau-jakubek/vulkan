@@ -12,7 +12,7 @@
 #include "vtfBacktrace.hpp"
 #include "vtfThreadSafeLogger.hpp"
 
-void releaseQueue(const QueueParams& params)
+void releaseQueue (const QueueParams& params)
 {
 	const uint32_t	queueFamilyIndex	= std::get<ZDistType<QueueFamilyIndex, uint32_t>>(params);
 	const uint32_t	queueIndex			= std::get<ZDistType<QueueIndex, uint32_t>>(params);
@@ -52,7 +52,7 @@ std::ostream& operator<<(std::ostream& str, const VtfVersion& v)
 				<< v.get().nvariant;
 }
 
-ZShaderModule createShaderModule(ZDevice device, VkShaderStageFlagBits stage, const std::string& code)
+ZShaderModule createShaderModule (ZDevice device, VkShaderStageFlagBits stage, const std::string& code)
 {
 	VkShaderModuleCreateInfo createInfo = makeVkStruct();
 	createInfo.codeSize	= code.length();
@@ -69,7 +69,7 @@ ZShaderModule createShaderModule(ZDevice device, VkShaderStageFlagBits stage, co
 	return ZShaderModule::create(shaderModule, device, callbacks, stage);
 }
 
-ZShaderModule createShaderModule(ZDevice device, VkShaderStageFlagBits stage, const std::vector<unsigned char>& code)
+ZShaderModule createShaderModule (ZDevice device, VkShaderStageFlagBits stage, const std::vector<unsigned char>& code)
 {
 	auto readMagicNumber = [](const std::vector<unsigned char>& s) -> uint32_t
 	{
@@ -529,6 +529,9 @@ ZInstance		createInstance (const char*							appName,
 
 	VKASSERT3(vkCreateInstance(&createInfo, callbacks, instance.setter()), "Failed to create instance!");
 
+	add_cref<ZInstanceInterface> ii = instance.getInterface(*instance);
+	UNREF(ii);
+
 	if (debugMessengerEnabled) createDebugMessenger(instance, callbacks, debugMessengerInfo, *pMessenger);
 	if (debugReportEnabled) createDebugReport(instance, callbacks, debugReportInfo, *pReport);
 
@@ -563,10 +566,10 @@ ZPhysicalDevice	getPhysicalDeviceByIndex (ZInstance instance, uint32_t physicalD
 	return dev;
 }
 
-ZPhysicalDevice selectPhysicalDevice(const int								proposedDeviceIndex,
-									 ZInstance								instance,
-									 add_cref<strings>						requiredExtensions,
-									 ZSurfaceKHR							surface)
+ZPhysicalDevice selectPhysicalDevice (const int				proposedDeviceIndex,
+									  ZInstance				instance,
+									  add_cref<strings>		requiredExtensions,
+									  ZSurfaceKHR			surface)
 {	
 	std::vector<VkPhysicalDevice> devices;
 	const uint32_t deviceCount = enumeratePhysicalDevices(*instance, devices);
@@ -751,6 +754,9 @@ ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
 	VKASSERT2(vkCreateDevice(*physDevice, &createInfo, callbacks, logicalDevice.setter()));
 	logicalDevice.verbose(getGlobalAppFlags().verbose != 0);
 
+	add_cref<ZDeviceInterface> di = logicalDevice.getInterface(*instance, *logicalDevice);
+	UNREF(di);
+
 	return logicalDevice;
 }
 
@@ -824,6 +830,18 @@ VkPhysicalDeviceFeatures2 deviceGetPhysicalFeatures2 (ZPhysicalDevice device, vo
 	VkPhysicalDeviceFeatures2 features = makeVkStruct(pNext);
 	vkGetPhysicalDeviceFeatures2(*device, &features);
 	return features;
+}
+
+add_cref<ZDeviceInterface> deviceGetInterface (ZDevice device)
+{
+	return device.getInterface(
+		*device.getParam<ZPhysicalDevice>().getParam<ZInstance>(),
+		*device);
+}
+
+add_cref<ZInstanceInterface> instanceGetInerface (ZInstance instance)
+{
+	return instance.getInterface(*instance);
 }
 
 uint32_t queueGetFamilyIndex (ZQueue queue)

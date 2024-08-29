@@ -63,8 +63,8 @@ struct OptionInterface : public Option
 	struct ValueWriter				{ add_cref<OptionInterface> intf; };
 	auto			defaultWriter	() const -> DefaultWriter { return DefaultWriter{ *this }; }
 	auto			valueWriter		() const -> ValueWriter { return ValueWriter{ *this }; }
-	virtual auto	writeDefault	(add_ref<std::ostream> stream) const-> add_ref<std::ostream> = 0;
-	virtual auto	writeValue		(add_ref<std::ostream> stream) const-> add_ref<std::ostream> = 0;
+	virtual auto	writeDefault	(add_ref<std::ostream> stream) const -> add_ref<std::ostream> = 0;
+	virtual auto	writeValue		(add_ref<std::ostream> stream) const -> add_ref<std::ostream> = 0;
 	virtual	bool	parse			(add_cref<std::string> text, add_ref<OptionParserState> state) = 0;
 private:
 	std::string	m_desc;

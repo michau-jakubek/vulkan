@@ -6,6 +6,7 @@
 #include "vtfZBuffer.hpp"
 #include "vtfZImage.hpp"
 #include "vtfCanvas.hpp"
+#include "vtfZShaderObjectDef.hpp"
 
 namespace vtf
 {
@@ -41,7 +42,7 @@ public:
 };
 std::unique_ptr<OneShotCommandBuffer> createOneShotCommandBuffer (ZCommandPool commandPool);
 
-ZCommandPool	createCommandPool(ZDevice device, ZQueue queue, VkCommandPoolCreateFlags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+ZCommandPool	createCommandPool (ZDevice device, ZQueue queue, VkCommandPoolCreateFlags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 ZCommandBuffer	allocateCommandBuffer (ZCommandPool commandPool, bool primary = true, const void* pNext = nullptr);
 ZCommandBuffer	createCommandBuffer (ZCommandPool commandPool, bool primary = true, const void* pNext = nullptr);
 ZCommandPool	commandBufferGetCommandPool (ZCommandBuffer commandBuffer);
@@ -62,12 +63,12 @@ VkResult		commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintF
  * have been created when pipeline layout was created.
  */
 void			commandBufferBindPipeline(ZCommandBuffer cmd, ZPipeline pipeline);
-void			commandBufferBindVertexBuffers (ZCommandBuffer cmd, const VertexInput& input,
+void			commandBufferBindVertexBuffers (ZCommandBuffer cmd, add_cref<VertexInput> input,
 												std::initializer_list<ZBuffer> externalBuffers = {},
 												std::initializer_list<VkDeviceSize> offsets = {});
+void			commandBufferSetVertexInputEXT (ZCommandBuffer cmd, add_cref<VertexInput> input);
 void			commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkDeviceSize offset = 0);
 void			commandBufferDispatch (ZCommandBuffer cmd, const UVec3& workGroupCount = UVec3(1,1,1));
-void			commandBufferSetPolygonModeEXT (ZCommandBuffer commandBuffer, VkPolygonMode polygonMode);
 
 ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZFramebuffer framebuffer,
 												   uint32_t subpass, VkSubpassContents = VK_SUBPASS_CONTENTS_INLINE);
@@ -96,6 +97,7 @@ void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout, con
 	commandBufferPushConstants(cmd, layout, range.stageFlags, range.offset, range.size, &pc);
 }
 
+void commandBufferBindShaders (ZCommandBuffer cmd, std::initializer_list<ZShaderObject> shaders);
 void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image, add_cref<VkClearColorValue> clearValue);
 void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image,
 								   add_cref<VkClearColorValue> clearValue, add_cref<VkImageSubresourceRange> range);

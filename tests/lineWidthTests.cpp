@@ -248,13 +248,13 @@ TriLogicInt runTestSingleThread (add_ref<Canvas> cs, add_cref<std::string> asset
 			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, srcFramebuffer, 0);
 
 				commandBufferBindPipeline(cmdBuffer, vertPipeline);
-				vkCmdDraw(*cmdBuffer, vertexInput.getAttributeCount(0), 1, 0, 0);
+				vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1, 0, 0);
 
 				commandBufferNextSubpass(rpbi);
 
 				vkCmdSetLineWidth(*cmdBuffer, float(params.horizontalWidth));
 				commandBufferBindPipeline(cmdBuffer, horzPipeline);
-				vkCmdDraw(*cmdBuffer, vertexInput.getAttributeCount(1), 1, 0, 0);
+				vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(1), 1, 0, 0);
 
 			commandBufferEndRenderPass(rpbi);
 
