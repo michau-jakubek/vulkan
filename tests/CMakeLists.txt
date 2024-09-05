@@ -49,6 +49,8 @@ set(tests_files
     deviceTimeoutTests.hpp
     shaderObjectTriangleTests.cpp
     shaderObjectTriangleTests.hpp
+    linkedComputeTests.cpp
+    linkedComputeTests.hpp
     )
 
 add_definitions(-DASSETS_PATH="${ASSETS_PATH}")

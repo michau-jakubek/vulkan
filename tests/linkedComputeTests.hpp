@@ -1,0 +1,6 @@
+#ifndef __LINKED_COMPUTE_TESTS_HPP_INCLUDED__
+#define __LINKED_COMPUTE_TESTS_HPP_INCLUDED__
+
+#include "allTests.hpp"
+
+#endif // __LINKED_COMPUTE_TESTS_HPP_INCLUDED__

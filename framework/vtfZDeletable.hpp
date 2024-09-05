@@ -480,6 +480,7 @@ struct type_index_with_default : public std::type_index
 {
 	type_index_with_default () : std::type_index(typeid(void)) {}
 	type_index_with_default (add_cref<std::type_info> info) : std::type_index(info) {}
+	type_index_with_default (add_cref<std::type_index> index) : std::type_index(index) {}
 	template<class X> static type_index_with_default make () {
 		return type_index_with_default(typeid(X));
 	}
@@ -514,7 +515,8 @@ typedef ZDeletable<VkPipelineLayout,
 	decltype(&vkDestroyPipelineLayout), &vkDestroyPipelineLayout,
 	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
 	std::vector<ZDescriptorSetLayout>,
-	VkPushConstantRange, type_index_with_default>
+	std::vector<VkPushConstantRange>,
+	std::vector<type_index_with_default>>
 ZPipelineLayout;
 
 typedef ZDeletable<VkPipeline,

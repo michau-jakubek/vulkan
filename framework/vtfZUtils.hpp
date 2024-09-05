@@ -64,7 +64,7 @@ ZPhysicalDevice selectPhysicalDevice		(const int									proposedDeviceIndex,
 // {
 // 		VkPhysicalDeviceFeatures2 availableFatures = deviceGetPhysicalFeatures2(physicalDevice);
 //		requiredfeatures.features.tessellationShader = availableFatures.features.tessellationShader;
-//		return availableFeatures;
+//		return requiredFeatures;
 // };
 typedef std::function<VkPhysicalDeviceFeatures2(ZPhysicalDevice, add_ref<strings> deviceExtensions)> OnEnablingFeatures;
 ZDevice			createLogicalDevice	(ZPhysicalDevice		physDevice,

@@ -6,7 +6,7 @@
 #include "vtfZBuffer.hpp"
 #include "vtfZImage.hpp"
 #include "vtfCanvas.hpp"
-#include "vtfZShaderObjectDef.hpp"
+#include "vtfZShaderObject.hpp"
 
 namespace vtf
 {
@@ -62,7 +62,9 @@ VkResult		commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintF
  * Implicitly binds any descritor sets if these
  * have been created when pipeline layout was created.
  */
-void			commandBufferBindPipeline(ZCommandBuffer cmd, ZPipeline pipeline);
+void			commandBufferBindPipeline (ZCommandBuffer cmd, ZPipeline pipeline);
+void			commandBufferBinDescriptorSets (ZCommandBuffer cmd, ZPipelineLayout layout,
+												VkPipelineBindPoint bindingPoint);
 void			commandBufferBindVertexBuffers (ZCommandBuffer cmd, add_cref<VertexInput> input,
 												std::initializer_list<ZBuffer> externalBuffers = {},
 												std::initializer_list<VkDeviceSize> offsets = {});
@@ -86,18 +88,71 @@ void				 commandBufferSetScissor (ZCommandBuffer cmd, add_cref<Canvas::Swapchain
 void				commandBufferDrawIndirect (ZCommandBuffer cmd, ZBuffer buffer);
 void				commandBufferDrawIndexedIndirect (ZCommandBuffer cmd, ZBuffer buffer);
 
-template<class PC__>
-void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout, const PC__& pc)
+template<std::size_t I>
+bool __verifyPushConstants (add_cref<std::vector<type_index_with_default>>,
+							add_cref<std::vector<VkPushConstantRange>>)
 {
-	std::type_index typePushConstant = layout.getParam<type_index_with_default>();
-	const VkPushConstantRange& range = layout.getParamRef<VkPushConstantRange>();
-	ASSERTMSG(std::type_index(typeid(PC__)) == typePushConstant, "Push constant type not declared for pipeline layout");
-	ASSERTMSG(range.size == sizeof(PC__), "Push constant size differs from declared for pipeline layout");
-	extern void commandBufferPushConstants(ZCommandBuffer, ZPipelineLayout, VkShaderStageFlags, uint32_t, uint32_t, const void*);
-	commandBufferPushConstants(cmd, layout, range.stageFlags, range.offset, range.size, &pc);
+	return true;
+}
+template<std::size_t I, class PC__>
+bool __verifyPushConstants (add_cref<std::vector<type_index_with_default>> types,
+							add_cref<std::vector<VkPushConstantRange>> ranges,
+							add_cref<PC__>)
+{
+	return (ranges.at(I).size == sizeof(PC__))
+		&& (types.at(I) == type_index_with_default::make<PC__>());
+}
+template<std::size_t I, class PC__, class... OtherPCS>
+bool __verifyPushConstants (add_cref<std::vector<type_index_with_default>> types,
+							add_cref<std::vector<VkPushConstantRange>> ranges,
+							const PC__& pc, const OtherPCS&... pcs)
+{
+	return (I < types.size() ? __verifyPushConstants<I, PC__>(types, ranges, pc) : true)
+		&& (((I + 1u) < types.size()) ? __verifyPushConstants<I + 1u, OtherPCS...>(types, ranges, pcs...) : true);
+}
+
+template<class... PC__>
+void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout,
+								 std::initializer_list<ZShaderObject> shaders, const PC__&... pc)
+{
+	std::array<add_cptr<void>, sizeof...(PC__)> pValues{ &pc... };
+	std::array<std::size_t, sizeof...(PC__)> sizes{ sizeof(PC__)... };
+	std::array<type_index_with_default, sizeof...(PC__)> types{ type_index_with_default::make<PC__>()... };
+
+	extern bool verifyPushConstants (std::initializer_list<ZShaderObject> shaders,
+									 std::size_t count,
+									 add_cptr<std::size_t> sizes,
+									 add_cptr<type_index_with_default> types);
+	ASSERTMSG(verifyPushConstants(shaders, sizeof...(PC__), sizes.data(), types.data()),
+									"Push constant types must match all the shaders types");
+
+	extern void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout,
+											std::initializer_list<ZShaderObject> shaders,
+											std::size_t count, add_cptr<add_cptr<void>> pValues);
+	commandBufferPushConstants(cmd, layout, shaders, sizeof...(PC__), pValues.data());
+}
+
+template<class... PC__>
+void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout, const PC__&... pc)
+{
+	std::array<add_cptr<void>, sizeof...(PC__)> pValues{ &pc... };
+	std::array<std::size_t, sizeof...(PC__)> sizes{ sizeof(PC__)... };
+	std::array<type_index_with_default, sizeof...(PC__)> types{ type_index_with_default::make<PC__>()... };
+
+	extern bool verifyPushConstants (ZPipelineLayout layout,
+									 std::size_t count,
+									 add_cptr<std::size_t> sizes,
+									 add_cptr<type_index_with_default> types);
+	ASSERTMSG(verifyPushConstants(layout, sizeof...(PC__), sizes.data(), types.data()),
+									"Push constant types do not match pieline layout");
+
+	extern void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout,
+											std::size_t count, add_cptr<add_cptr<void>> pValues);
+	commandBufferPushConstants(cmd, layout, sizeof...(PC__), pValues.data());
 }
 
 void commandBufferBindShaders (ZCommandBuffer cmd, std::initializer_list<ZShaderObject> shaders);
+void commandBufferUnbindShaders (ZCommandBuffer cmd, std::initializer_list<ZShaderObject> shaders);
 void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image, add_cref<VkClearColorValue> clearValue);
 void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image,
 								   add_cref<VkClearColorValue> clearValue, add_cref<VkImageSubresourceRange> range);

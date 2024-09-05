@@ -3,6 +3,7 @@
 #include "vtfZImage.hpp"
 #include "vtfZBuffer.hpp"
 #include "vtfCUtils.hpp"
+#include "vtfStructUtils.hpp"
 
 static std::pair<VkDescriptorType, VkBufferUsageFlagBits>
 const DescriptorTypeToBufferUsage[]
@@ -214,7 +215,10 @@ ZDescriptorSetLayout LayoutManager::getDescriptorSetLayout (ZPipelineLayout layo
 			= layout.getParamRef<std::vector<ZDescriptorSetLayout>>();
 	return dsLayouts[index];
 }
-ZDescriptorSetLayout LayoutManager::createDescriptorSetLayout (bool performUpdateDescriptorSets)
+ZDescriptorSetLayout LayoutManager::createDescriptorSetLayout (
+	bool								performUpdateDescriptorSets,
+	VkDescriptorSetLayoutCreateFlags	layoutCreateFlags,
+	VkDescriptorPoolCreateFlags			poolCreateFlags)
 {
 	VkAllocationCallbacksPtr					callbacks			= device.getParam<VkAllocationCallbacksPtr>();
 	ZDescriptorPool								descriptorPool		(VK_NULL_HANDLE, device, callbacks);
@@ -236,10 +240,8 @@ ZDescriptorSetLayout LayoutManager::createDescriptorSetLayout (bool performUpdat
 		for (const auto& typeNsize : typesNsizes)
 			poolSizes.push_back({typeNsize.first, typeNsize.second});
 
-		VkDescriptorPoolCreateInfo		poolCreateInfo{};
-		poolCreateInfo.sType			= VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		poolCreateInfo.pNext			= nullptr;
-		poolCreateInfo.flags			= VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+		VkDescriptorPoolCreateInfo		poolCreateInfo = makeVkStruct();
+		poolCreateInfo.flags			= poolCreateFlags;
 		poolCreateInfo.maxSets			= 1;
 		poolCreateInfo.poolSizeCount	= data_count(poolSizes);
 		poolCreateInfo.pPoolSizes		= data_or_null(poolSizes);
@@ -247,10 +249,8 @@ ZDescriptorSetLayout LayoutManager::createDescriptorSetLayout (bool performUpdat
 										descriptorPool.setter()), "Unable to create descriptor pool");
 	}
 
-	VkDescriptorSetLayoutCreateInfo		setLayoutCreateInfo{};
-	setLayoutCreateInfo.sType			= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	setLayoutCreateInfo.pNext			= nullptr;
-	setLayoutCreateInfo.flags			= 0;
+	VkDescriptorSetLayoutCreateInfo		setLayoutCreateInfo = makeVkStruct();
+	setLayoutCreateInfo.flags			= layoutCreateFlags;
 	setLayoutCreateInfo.bindingCount	= data_count(bindings);
 	setLayoutCreateInfo.pBindings		= data_or_null(bindings);
 	VKASSERT(vkCreateDescriptorSetLayout(*device, &setLayoutCreateInfo, callbacks,
@@ -260,9 +260,7 @@ ZDescriptorSetLayout LayoutManager::createDescriptorSetLayout (bool performUpdat
 	recreateUpdateBuffers(m_buffers, performUpdateDescriptorSets);
 
 	ZDescriptorSet					descriptorSet(VK_NULL_HANDLE, device, descriptorPool);
-	VkDescriptorSetAllocateInfo		allocInfo{};
-	allocInfo.sType					= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	allocInfo.pNext					= nullptr;
+	VkDescriptorSetAllocateInfo		allocInfo = makeVkStruct();
 	allocInfo.descriptorPool		= *descriptorPool;
 	allocInfo.descriptorSetCount	= 1;
 	allocInfo.pSetLayouts			= descriptorSetLayout.ptr();
@@ -435,9 +433,7 @@ void LayoutManager::updateDescriptorSet_	(ZDescriptorSet	descriptorSet,
 		VkDescriptorBufferInfo	bufferInfo{};	UNREF(bufferInfo);
 		VkBufferView			bufferView{};	UNREF(bufferView);
 
-		VkWriteDescriptorSet	writeParams{};
-		writeParams.sType				= VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		writeParams.pNext				= nullptr;
+		VkWriteDescriptorSet	writeParams = makeVkStruct();
 		writeParams.dstSet				= *descriptorSet;
 		writeParams.dstBinding			= b.binding;
 		writeParams.dstArrayElement		= 0;
@@ -516,42 +512,47 @@ void assertPushConstantSizeMax (ZDevice dev, const uint32_t size)
 }
 ZPipelineLayout LayoutManager::createPipelineLayout ()
 {
-	return createPipelineLayout_({}, nullptr, type_index_with_default());
+	return createPipelineLayout_(ZPushConstants(), {});
 }
-ZPipelineLayout LayoutManager::createPipelineLayout (ZDescriptorSetLayout dsLayout)
+ZPipelineLayout	LayoutManager::createPipelineLayout (add_cref<ZPushConstants> pushConstants)
 {
-	return createPipelineLayout_({dsLayout}, nullptr, type_index_with_default());
+	return createPipelineLayout_(pushConstants, {});
 }
-ZPipelineLayout LayoutManager::createPipelineLayout_ (std::initializer_list<ZDescriptorSetLayout> descriptorSetLayouts,
-													   const VkPushConstantRange* pPushConstantRanges, type_index_with_default typeOfPushConstant)
+ZPipelineLayout LayoutManager::createPipelineLayout (ZDescriptorSetLayout dsLayout,
+													 add_cref<ZPushConstants> pushConstants)
 {
-	VkPushConstantRange			emptyRange		{};
+	return createPipelineLayout_(pushConstants, { dsLayout });
+}
+ZPipelineLayout LayoutManager::createPipelineLayout_ (add_cref<ZPushConstants> pushConstants,
+													  std::initializer_list<ZDescriptorSetLayout> dsLayouts)
+{
+	assertPushConstantSizeMax(device, pushConstants.size());
+
 	VkAllocationCallbacksPtr	callbacks		= device.getParam<VkAllocationCallbacksPtr>();
-	ZPipelineLayout				pipelineLayout	(VK_NULL_HANDLE, device, callbacks, {},
-												 (pPushConstantRanges ? *pPushConstantRanges : emptyRange), typeOfPushConstant);
+	ZPipelineLayout				pipelineLayout	(VK_NULL_HANDLE, device, callbacks,
+												 std::vector<ZDescriptorSetLayout>(dsLayouts.size()),
+												 pushConstants.ranges(),
+												 pushConstants.types());
 
 	add_ref<std::vector<ZDescriptorSetLayout>>	zLayouts	= pipelineLayout.getParamRef<std::vector<ZDescriptorSetLayout>>();
-	std::vector<VkDescriptorSetLayout>			vkLayouts	(descriptorSetLayouts.size());
+	std::vector<VkDescriptorSetLayout>			vkLayouts	(dsLayouts.size());
 
-	for (auto i = descriptorSetLayouts.begin(); i != descriptorSetLayouts.end(); ++i)
+	for (auto i = dsLayouts.begin(); i != dsLayouts.end(); ++i)
 	{
-		zLayouts.emplace_back(*i);
-		vkLayouts[make_unsigned(std::distance(descriptorSetLayouts.begin(), i))] = **i;
+		const auto j = make_unsigned(std::distance(dsLayouts.begin(), i));
+		zLayouts[j] = *i;
+		vkLayouts[j] = **i;
 	}
 
-	if (pPushConstantRanges)
-	{
-		assertPushConstantSizeMax(device, pPushConstantRanges[0].offset + pPushConstantRanges[0].size);
-	}
+	add_cref<std::vector<VkPushConstantRange>> ranges =
+		pipelineLayout.getParamRef<std::vector<VkPushConstantRange>>();
 
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-	pipelineLayoutInfo.sType					= VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.pNext					= nullptr;
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo = makeVkStruct();
 	pipelineLayoutInfo.flags					= 0;
 	pipelineLayoutInfo.setLayoutCount			= data_count(vkLayouts);
 	pipelineLayoutInfo.pSetLayouts				= data_or_null(vkLayouts);
-	pipelineLayoutInfo.pushConstantRangeCount	= pPushConstantRanges ? 1 : 0;
-	pipelineLayoutInfo.pPushConstantRanges		= pPushConstantRanges;
+	pipelineLayoutInfo.pushConstantRangeCount	= data_count(ranges);
+	pipelineLayoutInfo.pPushConstantRanges		= data_or_null(ranges);
 
 	VKASSERT(vkCreatePipelineLayout(*device, &pipelineLayoutInfo, callbacks, pipelineLayout.setter()),
 										"failed to create pipeline layout!");

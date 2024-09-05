@@ -29,7 +29,7 @@ struct ZSpecializationInfo : protected VkSpecializationInfo
 		ZSpecializationInfo (const ZSpecEntry<X>& entry, const ZSpecEntry<Y>&... entries)
 			: ZSpecializationInfo(entries...)
 	{
-		appendEntries(entry);
+		insertEntry(entry, &entry.m_data);
 	}
 
 	template<class X> void addEntry (add_cref<X> data, uint32_t id = INVALID_UINT32)
@@ -51,7 +51,9 @@ struct ZSpecializationInfo : protected VkSpecializationInfo
 			void print (add_ref<std::ostream> stream) const;
 
 protected:
+	void pushEntry		(VkSpecializationMapEntry newEntry, add_cptr<void> data, bool);
 	void appendEntry	(VkSpecializationMapEntry newEntry, add_cptr<void> data);
+	void insertEntry	(VkSpecializationMapEntry newEntry, add_cptr<void> data);
 	void appendEntries	()	{ }
 	template<class X, class... Y> void appendEntries (const ZSpecEntry<X>& entry, const ZSpecEntry<Y>&... others)
 	{

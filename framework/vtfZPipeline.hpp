@@ -100,15 +100,21 @@ ZPipeline createGraphicsPipeline (ZPipelineLayout layout, X&&... params)
 }
 
 bool computePipelineVerifyLimits (ZDevice device, add_cref<UVec3> wgSizes, bool raise = true);
-ZPipeline createComputePipeline (ZPipelineLayout layout, ZShaderModule computeShaderModule,
-								add_ref<ZSpecializationInfo> specInfo, bool enableFullGroups = false);
+ZPipeline createComputePipeline (
+	ZPipelineLayout					layout,
+	ZShaderModule					computeShaderModule,
+	add_ref<ZSpecializationInfo>	specInfo,
+	bool							enableFullGroups		= false);
 // Please note that if any of localSize[?] is valid value and a layout of compute shader looks like
 // layout(local_size_x_ID = X, local_size_y_ID = Y, local_size_z_ID = Z), then X,Y,Z will refer to
 // the SpecID during compute pipeline creation. Be carefull to set them properly according to their
 // index in localSize vector or left as negative value.
 template<class... EntryTypes>
-ZPipeline createComputePipeline (ZPipelineLayout layout, ZShaderModule computeShaderModule,
-								add_cref<UVec3> localSizes = UVec3(INVALID_UINT32), ZSpecEntry<EntryTypes>&&... entries)
+ZPipeline createComputePipeline (
+	ZPipelineLayout				layout,
+	ZShaderModule				computeShaderModule,
+	add_cref<UVec3>				localSizes = UVec3(INVALID_UINT32),
+	ZSpecEntry<EntryTypes>&&... entries)
 {
 	ZSpecializationInfo info;
 

@@ -58,6 +58,9 @@ set(framework_files
 	vtfZDeviceMemory.hpp
 	vtfProgramCollection.cpp
 	vtfProgramCollection.hpp
+	vtfZShaderObject.hpp
+	vtfShaderObjectCollection.cpp
+	vtfShaderObjectCollection.hpp
 	vtfDebugMessenger.cpp
 	vtfDebugMessenger.hpp
 	vtfLayoutManager.cpp
@@ -78,9 +81,6 @@ set(framework_files
 	vtfZSpecializationInfo.hpp
 	vtfZPushConstants.cpp
 	vtfZPushConstants.hpp
-	vtfZShaderObjectDef.hpp
-	vtfZShaderObject.cpp
-	vtfZShaderObject.hpp
 )
 
 add_library(framework STATIC ${framework_files})

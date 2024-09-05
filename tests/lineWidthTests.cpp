@@ -36,9 +36,11 @@ void printUsage (add_ref<std::ostream> log)
 		<< "  * accessing variables in draw callback\n"
 		<< "  * using window events\n"
 		<< "Parameters:\n"
-		<< "  [-v <veritical_line_width>], default 15\n"
-		<< "  [-h <horizontal_line_width>], default 5\n"
-		<< "  [-s], submit within loop and test, default false\n"
+		<< "  --h         print help\n"
+		<< "  --help      print help\n"
+		<< "  [-vert      <veritical_line_width>], default 15\n"
+		<< "  [-horz      <horizontal_line_width>], default 5\n"
+		<< "  [-s]        submit within loop and test, default false\n"
 		<< "Navigation keys:\n"
 		<< "  R:          redraw window content\n"
 		<< "  Escape:     quit this app"
@@ -47,21 +49,32 @@ void printUsage (add_ref<std::ostream> log)
 
 struct TestParams
 {
-	uint32_t	verticalWidth;
-	uint32_t	horizontalWidth;
-	bool		submitWithinLoop;
+	float	verticalWidth;
+	float	horizontalWidth;
+	bool	submitWithinLoop;
 };
 
-TestParams userReadParams (const strings& params, add_ref<std::ostream> log)
+TestParams userReadParams (const strings& params, add_ref<std::ostream> log, add_ref<int> ok)
 {
+	TestParams			p{};
 	strings				sink;
 	strings				args(params);
-	Option				optVerticalWidth	{ "-v", 1 };
-	Option				optHorizontalWidth	{ "-h", 1 };
+	Option				optVerticalWidth	{ "-vert", 1 };
+	Option				optHorizontalWidth	{ "-horz", 1 };
+	Option				optHelpShort		{ "-h", 0 };
+	Option				optHelpLong			{ "--help", 0 };
 	Option				optSubmitWithinLoop	{ "-s", 0 };
-	std::vector<Option>	options { optVerticalWidth, optHorizontalWidth, optSubmitWithinLoop };
+	std::vector<Option>	options { optVerticalWidth, optHorizontalWidth, optSubmitWithinLoop,
+									optHelpShort, optHelpLong };
 
-	uint32_t verticalWidth = 15;
+	if (consumeOptions(optHelpShort, options, args, sink) > 0
+		|| consumeOptions(optHelpLong, options, args, sink) > 0)
+	{
+		ok = 2 - 3;
+		return p;
+	}
+
+	float verticalWidth = 15;
 	if (consumeOptions(optVerticalWidth, options, args, sink) > 0)
 	{
 		bool status = false;
@@ -71,7 +84,7 @@ TestParams userReadParams (const strings& params, add_ref<std::ostream> log)
 		}
 	}
 
-	uint32_t horizontalWidth = 5;
+	float horizontalWidth = 5;
 	if (consumeOptions(optHorizontalWidth, options, args, sink) > 0)
 	{
 		bool status = false;
@@ -83,10 +96,14 @@ TestParams userReadParams (const strings& params, add_ref<std::ostream> log)
 
 	bool submitWithinLoop = (consumeOptions(optSubmitWithinLoop, options, args, sink) > 0);
 
-	TestParams p;
 	p.verticalWidth		= verticalWidth;
 	p.horizontalWidth	= horizontalWidth;
 	p.submitWithinLoop	= submitWithinLoop;
+
+	if (ok = args.empty() ? 1 : 0; ok == 0)
+	{
+		log << "[ERROR] Unrecognized parameter " << std::quoted(args.at(0)) << std::endl;
+	}
 
 	return p;
 }
@@ -95,25 +112,57 @@ TriLogicInt runTestSingleThread (add_ref<Canvas> cs, add_cref<std::string> asset
 
 TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
 {
-	UNREF(cmdLineParams);
-	printUsage(std::cout);
+	int ok = 0;
+	const TestParams params = userReadParams(cmdLineParams, std::cout, ok);
+	if (ok == 0)
+	{
+		return 1;
+	}
+	else if (ok < 0)
+	{
+		printUsage(std::cout);
+		return {};
+	}
 
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	CanvasStyle canvasStyle = Canvas::DefaultStyle;
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
 
-	auto onEnablingFeatures = [](ZPhysicalDevice dev, add_ref<strings>)
+	VkPhysicalDeviceProperties	properties{};
+	VkPhysicalDeviceFeatures	availableFeatures{};
+	auto onEnablingFeatures = [&](ZPhysicalDevice dev, add_ref<strings>)
 	{
-		VkPhysicalDeviceFeatures	availableFeatures{};
+		vkGetPhysicalDeviceProperties(*dev, &properties);
 		vkGetPhysicalDeviceFeatures(*dev, &availableFeatures);
-		ASSERTMSG(availableFeatures.wideLines, "VkPhysicalDeviceFeatures::wideLines not supported");
-		VkPhysicalDeviceFeatures2	enabledFeatures{};
-		enabledFeatures.features.wideLines = availableFeatures.wideLines;
+		const VkPhysicalDeviceFeatures2	enabledFeatures
+		{
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+			nullptr,
+			availableFeatures
+		};
 		return enabledFeatures;
 	};
-	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFeatures, gf.vulkanVer);
 
-	const TestParams params = userReadParams(cmdLineParams, std::cout);
+	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFeatures, gf.apiVer);
+
+	if (availableFeatures.wideLines != VK_TRUE)
+	{
+		std::cout << "VkPhysicalDeviceFeatures::wideLines not supported" << std::endl;
+		return {};
+	}
+
+	if (!(params.verticalWidth >= properties.limits.lineWidthRange[0])
+		&& (params.verticalWidth <= properties.limits.lineWidthRange[1])
+		&& (params.horizontalWidth >= properties.limits.lineWidthRange[0])
+		&& (params.horizontalWidth <= properties.limits.lineWidthRange[1]))
+	{
+		std::cout << "[ERROR] Declared vertical line width " << params.verticalWidth
+			<< " or horizontal line width " << params.horizontalWidth << std::endl
+			<< "        don't match VkPhysicalDeviceLinimits::lineWidthRange"
+			<< Vec2(properties.limits.lineWidthRange) << std::endl
+			<< "        Try to change -vert or/and -horz params" << std::endl;
+		return {};
+	}
 
 	return runTestSingleThread(cs, record.assets, params);
 }
@@ -169,21 +218,14 @@ int verifyImage (ZCommandPool commandPool, ZImage image, add_cref<TestParams> pa
 
 	std::cout << "Vertical: " << verticalWidth << ", Horizontal: " << horizontalWidth << std::endl;
 
-	return (verticalWidth == params.verticalWidth && horizontalWidth == params.horizontalWidth)
+	return (verticalWidth == uint32_t(params.verticalWidth)
+		&& horizontalWidth == uint32_t(params.horizontalWidth))
 			? 0
 			: 1;
 }
 
 TriLogicInt runTestSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets, add_cref<TestParams> params)
 {
-	add_cref<VkPhysicalDeviceLimits> limits = deviceGetPhysicalLimits(cs.device);
-	ASSERTMSG(params.verticalWidth >= uint32_t(limits.lineWidthRange[0])
-			  && params.verticalWidth <= uint32_t(limits.lineWidthRange[1]),
-			  "Vertical line width doesn't meet device limits");
-	ASSERTMSG(params.horizontalWidth >= uint32_t(limits.lineWidthRange[0])
-			  && params.horizontalWidth <= uint32_t(limits.lineWidthRange[1]),
-			  "Horizontal line width doesn't meet device limits");
-
 	ProgramCollection			programs(cs.device, assets);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");

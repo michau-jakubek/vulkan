@@ -10,6 +10,7 @@
 #include <variant>
 #include "vtfZDeletable.hpp"
 #include "vtfContext.hpp"
+#include "vtfZPushConstants.hpp"
 
 /*
  * +===========================================+=====================+==============================+
@@ -144,11 +145,13 @@ public:
 	 * Creates descriptor set layout object based on bindings collected
 	 * via addBinding*(...) methods. Automatically creates descriptor set
 	 * object and bind it to newly created descriptor set layout.
-	 * Additionaly performs an update on newly created descriptor set.
+	 * Additionaly performs an update on demand with newly created descriptor set.
 	 * Any time you can this descriptor with getDescriptorSet(...) and
 	 * update it manually.
 	 */
-	ZDescriptorSetLayout					createDescriptorSetLayout	(bool performUpdateDescriptorSets = true);
+	ZDescriptorSetLayout					createDescriptorSetLayout	(bool performUpdateDescriptorSets = true,
+																		 VkDescriptorSetLayoutCreateFlags = VkDescriptorSetLayoutCreateFlags(0),
+																		 VkDescriptorPoolCreateFlags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 	static ZDescriptorSetLayout				getDescriptorSetLayout		(ZPipelineLayout layout, uint32_t index = 0u);
 	static ZDescriptorSet					getDescriptorSet			(ZDescriptorSetLayout dsLayout);
 	/**
@@ -158,14 +161,20 @@ public:
 	 * If the binding is view+sampler type only one of them is updated in the
 	 * case single view/sampler parameter, otherwise both if given.
 	 */
-	void									updateDescriptorSet			(ZDescriptorSet ds, uint32_t binding, ZImageView view);
-	void									updateDescriptorSet			(ZDescriptorSet ds, uint32_t binding, ZSampler sampler);
-	void									updateDescriptorSet			(ZDescriptorSet ds, uint32_t binding, ZImageView view, ZSampler sampler);
-	void									updateDescriptorSet			(ZDescriptorSet ds, uint32_t binding, ZBuffer buffer);
-	ZPipelineLayout							createPipelineLayout		();
-	ZPipelineLayout							createPipelineLayout		(ZDescriptorSetLayout dsLayout);
-	template<class PC__> ZPipelineLayout	createPipelineLayout		(VkShaderStageFlags pcStageFlags = VK_SHADER_STAGE_ALL);
-	template<class PC__> ZPipelineLayout	createPipelineLayout		(ZDescriptorSetLayout dsLayout, VkShaderStageFlags pcStageFlags = VK_SHADER_STAGE_ALL);	
+	void						 updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZImageView view);
+	void						 updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZSampler sampler);
+	void						 updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZImageView view, ZSampler sampler);
+	void						 updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZBuffer buffer);
+	ZPipelineLayout				 createPipelineLayout ();
+	ZPipelineLayout				 createPipelineLayout (add_cref<ZPushConstants> pushConstants);
+	ZPipelineLayout				 createPipelineLayout (ZDescriptorSetLayout, add_cref<ZPushConstants>);
+	//template<class... K> using apc = std::disjunction<std::is_same<ZPushConstants, K>...>;
+	//template<class... PC__, std::enable_if_t<!apc<PC__...>::value, bool> = false>
+	template<class... PC__>
+	auto createPipelineLayout (const ZPushRange<PC__>&...) -> ZPipelineLayout;
+	//template<class... PC__, std::enable_if_t<!apc<PC__...>::value, bool> = false>
+	template<class... PC__>
+	auto createPipelineLayout (ZDescriptorSetLayout, const ZPushRange<PC__>&...) -> ZPipelineLayout;
 
 private:	
 	typedef struct VkDescriptorSetLayoutBindingAndType : VkDescriptorSetLayoutBinding
@@ -188,25 +197,25 @@ private:
 	} ExtBinding;
 	typedef std::vector<ExtBinding>	ExtBindings;
 
-	uint32_t								joinBindings_				(std::type_index index, VkDeviceSize size, bool isVector,
-																		 VkDescriptorType type, VkShaderStageFlags stages, uint32_t count);
-	uint32_t								addBinding_					(std::type_index index, VkDeviceSize size, bool isVector,
-																		 VkDescriptorType type, VkShaderStageFlags stages, uint32_t elementCount);
-	const ExtBinding&						verifyGetExtBinding			(uint32_t binding) const;
-	const ExtBinding&						verifyGetExtBinding			(std::type_index index, uint32_t binding) const;
-	void									writeBinding_				(std::type_index index, uint32_t binding, const uint8_t* data, VkDeviceSize bytes);
-	void									readBinding_				(std::type_index index, uint32_t binding, uint8_t* data, VkDeviceSize bytes) const;
-	void									getBinding_					(uint32_t binding, std::optional<ZBuffer>&) const;
-	void									getBinding_					(uint32_t binding, std::optional<ZImageView>&) const;
-	void									getBinding_					(uint32_t binding, std::optional<ZSampler>&) const;
-	void									getBinding_					(uint32_t binding, std::optional<std::pair<ZImageView,ZSampler>>&) const;
-	VkDeviceSize							getDescriptorAlignment		(const VkDescriptorType type) const;
-	void									updateBuffersOffsets		();
-	void									recreateUpdateBuffers		(std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers, bool performUpdateDescriptorSets);
-	void									updateDescriptorSet_		(ZDescriptorSet	descriptorSet,
+	uint32_t			joinBindings_			(std::type_index index, VkDeviceSize size, bool isVector,
+												 VkDescriptorType type, VkShaderStageFlags stages, uint32_t count);
+	uint32_t			addBinding_				(std::type_index index, VkDeviceSize size, bool isVector,
+												 VkDescriptorType type, VkShaderStageFlags stages, uint32_t elementCount);
+	const ExtBinding&	verifyGetExtBinding		(uint32_t binding) const;
+	const ExtBinding&	verifyGetExtBinding		(std::type_index index, uint32_t binding) const;
+	void				writeBinding_			(std::type_index index, uint32_t binding, const uint8_t* data, VkDeviceSize bytes);
+	void				readBinding_			(std::type_index index, uint32_t binding, uint8_t* data, VkDeviceSize bytes) const;
+	void				getBinding_				(uint32_t binding, std::optional<ZBuffer>&) const;
+	void				getBinding_				(uint32_t binding, std::optional<ZImageView>&) const;
+	void				getBinding_				(uint32_t binding, std::optional<ZSampler>&) const;
+	void				getBinding_				(uint32_t binding, std::optional<std::pair<ZImageView,ZSampler>>&) const;
+	VkDeviceSize		getDescriptorAlignment	(const VkDescriptorType type) const;
+	void				updateBuffersOffsets	();
+	void				recreateUpdateBuffers	(std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers, bool performUpdateDescriptorSets);
+	void				updateDescriptorSet_	(ZDescriptorSet	descriptorSet,
 																		 std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers) const;
-	ZPipelineLayout							createPipelineLayout_		(std::initializer_list<ZDescriptorSetLayout> descriptorSetLayouts,
-																		 const VkPushConstantRange* pPushConstantRanges, type_index_with_default typeOfPushConstant);
+	ZPipelineLayout		createPipelineLayout_	(add_cref<ZPushConstants> pushConstants,
+												 std::initializer_list<ZDescriptorSetLayout> dsLayouts);
 
 private:
 	ExtBindings													m_extbindings;
@@ -280,25 +289,19 @@ template<class X> std::optional<X> LayoutManager::getBinding (uint32_t binding) 
 	getBinding_(binding, result);
 	return result;
 }
-template<class PC__> ZPipelineLayout LayoutManager::createPipelineLayout (VkShaderStageFlags pcStageFlags)
+//template<class... PC__, std::enable_if_t<!LayoutManager::apc<PC__...>::value, bool>>
+template<class... PC__>
+ZPipelineLayout
+LayoutManager::createPipelineLayout (const ZPushRange<PC__>&... ranges)
 {
-	const VkPushConstantRange pcr
-	{
-		pcStageFlags,	// stageFlags
-		0,				// offset
-		sizeof(PC__)	// size
-	};
-	return createPipelineLayout_({}, &pcr, type_index_with_default(typeid(PC__)));
+	return createPipelineLayout_(ZPushConstants(ranges...), {});
 }
-template<class PC__> ZPipelineLayout LayoutManager::createPipelineLayout (ZDescriptorSetLayout dsLayout, VkShaderStageFlags pcStageFlags)
+//template<class... PC__, std::enable_if_t<!LayoutManager::apc<PC__...>::value, bool>>
+template<class... PC__>
+ZPipelineLayout
+LayoutManager::createPipelineLayout (ZDescriptorSetLayout dsLayout, const ZPushRange<PC__>&... ranges)
 {
-	const VkPushConstantRange pcr
-	{
-		pcStageFlags,	// stageFlags
-		0,				// offset
-		sizeof(PC__)	// size
-	};
-	return createPipelineLayout_({dsLayout}, &pcr, type_index_with_default(typeid(PC__)));
+	return createPipelineLayout_(ZPushConstants(ranges...), { dsLayout });
 }
 
 } // namespace vtf

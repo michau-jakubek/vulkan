@@ -172,7 +172,7 @@ protected:
 template<class UserParamsType>
 struct OptionParser : public _OptionParserImpl
 {
-	OptionParser (OptionParser&& other);
+	OptionParser (OptionParser&& other) noexcept;
 	OptionParser (add_ref<UserParamsType> params, bool includeHelp = true);
 	template<class X> _OptIPtr	addOption	(X UserParamsType::* storage, add_cref<Option> opt,
 											add_cref<std::string> desc = {}, std::optional<X> defaultValue = {}, OptionFlags flags = {},
@@ -190,7 +190,7 @@ OptionParser<UserParamsType>::OptionParser (add_ref<UserParamsType> params, bool
 {
 }
 template<class UserParamsType>
-OptionParser<UserParamsType>::OptionParser (OptionParser&& other)
+OptionParser<UserParamsType>::OptionParser (OptionParser&& other) noexcept
 	: _OptionParserImpl	(std::move(other))
 	, m_params			(other.m_params)
 {

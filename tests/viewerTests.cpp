@@ -111,7 +111,7 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	CanvasStyle canvasStyle = Canvas::DefaultStyle;
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
-	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, nullptr, gf.vulkanVer);
+	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, nullptr, gf.apiVer);
 
 	TriLogicInt	result			(1);
 	int32_t		regularCount	= 0;
@@ -475,7 +475,8 @@ protected:
 		ZImageView				cubeView			= createImageView(cubeImage, 0u, 1u, 0u, 6u);
 								cubeBinding			= layout.addBinding(cubeView, ZSampler());
 		ZDescriptorSetLayout	descriptorSetLayout	= layout.createDescriptorSetLayout();
-		ZPipelineLayout			pipelineLayout		= layout.createPipelineLayout<PushContant>(descriptorSetLayout);
+		ZPipelineLayout			pipelineLayout		= layout.createPipelineLayout(descriptorSetLayout,
+																					ZPushRange<PushContant>());
 
 		if (getGlobalAppFlags().verbose)
 		{
@@ -635,7 +636,7 @@ TriLogicInt runViewerSingleThread (add_ref<Canvas> cs, add_cref<std::string> ass
 		sampler	= createSampler(cs.device);
 		layoutMgr.addBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		ZDescriptorSetLayout	dsLayout	= layoutMgr.createDescriptorSetLayout(false);
-		ZPipelineLayout			panLayout	= layoutMgr.createPipelineLayout<PushConstant>(dsLayout);
+		ZPipelineLayout			panLayout	= layoutMgr.createPipelineLayout(dsLayout, ZPushRange<PushConstant>());
 		panPipeline = createGraphicsPipeline(panLayout, renderPass, vertShader, fragShader, vertexInput,
 											 VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
 	};

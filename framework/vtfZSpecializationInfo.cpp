@@ -5,7 +5,17 @@
 namespace vtf
 {
 
+void ZSpecializationInfo::insertEntry (VkSpecializationMapEntry newEntry, add_cptr<void> data)
+{
+	pushEntry(newEntry, data, true);
+}
+
 void ZSpecializationInfo::appendEntry (VkSpecializationMapEntry newEntry, add_cptr<void> data)
+{
+	pushEntry(newEntry, data, false);
+}
+
+void ZSpecializationInfo::pushEntry (VkSpecializationMapEntry newEntry, add_cptr<void> data, bool insert)
 {
 	for (add_cref<VkSpecializationMapEntry> entry : m_entries)
 	{
@@ -19,7 +29,7 @@ void ZSpecializationInfo::appendEntry (VkSpecializationMapEntry newEntry, add_cp
 	}
 
 	newEntry.offset = data_count(m_data);
-	m_entries.push_back(newEntry);
+	m_entries.insert(insert ? m_entries.begin() : m_entries.end(), newEntry);
 
 	const auto entrySize = ROUNDUP(newEntry.size, 4);
 
@@ -41,7 +51,7 @@ VkSpecializationInfo ZSpecializationInfo::operator ()()
 	{
 		m_modified = false;
 
-		std::sort(m_entries.begin(), m_entries.end(),
+		std::stable_sort(m_entries.begin(), m_entries.end(),
 			[](add_cref<VkSpecializationMapEntry> a, add_cref<VkSpecializationMapEntry> b)
 			{ return a.constantID < b.constantID; });
 
@@ -52,6 +62,28 @@ VkSpecializationInfo ZSpecializationInfo::operator ()()
 			if (INVALID_UINT32 != entry.constantID)
 				id = entry.constantID;
 			else entry.constantID = id++;
+
+#if 0
+			uint32_t	v{};
+			UVec2		v2;
+			UVec3		v3;
+			UVec4		v4;
+			switch (entry.size / 4)
+			{
+			case 1:
+				std::memcpy(&v, &m_data.at(entry.offset), entry.size);
+				break;
+			case 2:
+				std::memcpy(&v2, &m_data.at(entry.offset), entry.size);
+				break;
+			case 3:
+				std::memcpy(&v3, &m_data.at(entry.offset), entry.size);
+				break;
+			case 4:
+				std::memcpy(&v4, &m_data.at(entry.offset), entry.size);
+				break;
+			}
+#endif
 		}
 	}
 

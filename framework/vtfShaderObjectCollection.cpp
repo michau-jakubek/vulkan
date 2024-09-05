@@ -1,4 +1,4 @@
-#include "vtfZShaderObject.hpp"
+#include "vtfShaderObjectCollection.hpp"
 #include "vtfStructUtils.hpp"
 #include "vtfZUtils.hpp"
 
@@ -16,9 +16,11 @@ ShaderObjectCollection::ShaderObjectCollection (ZDevice device, add_cref<std::st
 
 struct ShaderBuildOptions
 {
-	bool enableValidation = false;
-	bool buildAlways = false;
-	bool genAssembly = false;
+	bool enableValidation	= false;
+	bool buildAlways		= false;
+	bool genAssembly		= false;
+	Version vulkanVer		= Version(0u, 0u);
+	Version spirvVer		= Version(0u, 0u);
 };
 
 struct ShaderObjectCollection::ShaderData
@@ -111,8 +113,20 @@ auto ShaderObjectCollection::addFromFile (VkShaderStageFlagBits type, add_cref<s
 	return {};
 }
 
+void ShaderObjectCollection::updateShaders(std::initializer_list<ShaderLink> links,
+										   bool buildAlways, bool enableValidation, bool genAssembly,
+										   add_cref<Version> vulkanVer,
+										   add_cref<Version> spirvVer)
+{
+	for (add_cref<ShaderLink> link : links)
+	{
+		updateShader(link, buildAlways, enableValidation, genAssembly, vulkanVer, spirvVer);
+	}
+}
+
 void ShaderObjectCollection::updateShader (add_cref<ShaderLink> link, bool buildAlways,
-										   bool enableValidation, bool genAssembly)
+										   bool enableValidation, bool genAssembly,
+										   add_cref<Version> vulkanVer, add_cref<Version> spirvVer)
 {
 	add_ptr<IntShaderLink> update =
 		static_cast<add_ptr<IntShaderLink>>(find(link.stage, link.index, m_links));
@@ -121,7 +135,18 @@ void ShaderObjectCollection::updateShader (add_cref<ShaderLink> link, bool build
 	buildOptions.enableValidation	= enableValidation;
 	buildOptions.buildAlways		= buildAlways;
 	buildOptions.genAssembly		= genAssembly;
+	buildOptions.vulkanVer			= vulkanVer;
+	buildOptions.spirvVer			=spirvVer;
 	update->data->options = buildOptions;
+}
+
+void ShaderObjectCollection::updateShaders (std::initializer_list<ShaderLink> links,
+											std::initializer_list<ZDescriptorSetLayout> layouts)
+{
+	for (add_cref<ShaderLink> link : links)
+	{
+		updateShader(link, layouts);
+	}
 }
 
 void ShaderObjectCollection::updateShader (add_cref<ShaderLink> link,
@@ -133,7 +158,7 @@ void ShaderObjectCollection::updateShader (add_cref<ShaderLink> link,
 	add_ref<std::vector<ZDescriptorSetLayout>> shaderLayouts =
 		update->data->shader.getParamRef<std::vector<ZDescriptorSetLayout>>();
 	shaderLayouts.clear();
-	shaderLayouts.resize(layouts.size());
+	shaderLayouts.reserve(layouts.size());
 	for (ZDescriptorSetLayout layout : layouts)
 	{
 		shaderLayouts.push_back(layout);
@@ -185,21 +210,26 @@ extern	bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 							   bool buildAlways,
 							   bool genBinary);
 
+extern void assertPushConstantSizeMax (ZDevice dev, const uint32_t size);
+
 struct ShaderObjectCollection::ZShaderCreateInfoEXT : VkShaderCreateInfoEXT
 {
 	const bool							emptySpecInfo;
 	const VkSpecializationInfo			specInfo;
 	std::vector<VkPushConstantRange>	userRanges;
+	std::vector<VkDescriptorSetLayout>	setLayouts;
 	ZShaderCreateInfoEXT () = delete;
-	ZShaderCreateInfoEXT (add_ref<IntShaderLink> link,
+	ZShaderCreateInfoEXT (ZDevice device, add_ref<IntShaderLink> link,
 						  VkShaderStageFlagBits nextStage, VkShaderCreateFlagsEXT flags)
 		: emptySpecInfo	(link.collection.spec(link).empty())
 		, specInfo		(emptySpecInfo ? VkSpecializationInfo() : link.collection.spec(link)())
 		, userRanges	(link.collection.pushc(link).ranges())
+		, setLayouts	()
 	{
+		assertPushConstantSizeMax(device, link.collection.pushc(link).size());
+
 		add_cref<std::vector<ZDescriptorSetLayout>> shaderSetLayouts =
 			link.data->shader.getParamRef<std::vector<ZDescriptorSetLayout>>();
-		std::vector<VkDescriptorSetLayout> setLayouts;
 		if (!shaderSetLayouts.empty())
 		{
 			setLayouts.resize(shaderSetLayouts.size());
@@ -267,7 +297,7 @@ int ShaderObjectCollection::create (add_cref<Version> vulkanVer, add_cref<Versio
 		const StageAndIndex key = link.key();
 		add_ptr<ShaderData> data = link.data;
 
-		if (verifyShaderCode(link.index, link.stage, vulkanVer, spirvVer,
+		if (verifyShaderCode((link.index + 1024u), link.stage, vulkanVer, spirvVer,
 			me.m_stageToCode.at(key), shaderFileName, binary, assembly, errors,
 			data->options.enableValidation, data->options.genAssembly, data->options.buildAlways, true))
 		{
@@ -278,8 +308,9 @@ int ShaderObjectCollection::create (add_cref<Version> vulkanVer, add_cref<Versio
 		else ASSERTMSG(false, errors);
 
 		data->shader.setParam<VkShaderStageFlagBits>(link.stage);
+		data->shader.getParamRef<std::vector<type_index_with_default>>() = data->pushConstants.types();
 
-		zInfos.emplace_back(link, VkShaderStageFlagBits(0), VkShaderCreateFlagsEXT(0));
+		zInfos.emplace_back(m_device, link, VkShaderStageFlagBits(0), VkShaderCreateFlagsEXT(0));
 	}
 
 	std::vector<VkShaderCreateInfoEXT> createInfos(zInfos.size());
@@ -337,13 +368,17 @@ bool ShaderObjectCollection::create (add_cref<Version> vulkanVer, add_cref<Versi
 		const StageAndIndex key = next->key();
 		add_ptr<IntShaderLink> pLink = static_cast<add_ptr<IntShaderLink>>(next);
 		add_ptr<ShaderData> data = pLink->data;
+		add_cref<ShaderBuildOptions> options = data->options;
 
 		ASSERTMSG(false == data->shader.has_handle(),
 			"Shader already created. Don't add shader(s) after build, currently unsupported.");
 
-		if (verifyShaderCode(next->index, next->stage, vulkanVer, spirvVer,
+		const Version buildVulkanVer = options.vulkanVer ? options.vulkanVer : vulkanVer;
+		const Version buildSpirvVer  = options.spirvVer ? options.spirvVer : spirvVer;
+
+		if (verifyShaderCode((next->index + 1024u), next->stage, buildVulkanVer, buildSpirvVer,
 			me.m_stageToCode.at(key), shaderFileName, binary, assembly, errors,
-			data->options.enableValidation, data->options.genAssembly, data->options.buildAlways, true))
+			options.enableValidation, options.genAssembly, options.buildAlways, true))
 		{
 			m_stageToFileName[key] = std::move(shaderFileName);
 			m_stageToAssembly[key] = std::move(assembly);
@@ -355,10 +390,11 @@ bool ShaderObjectCollection::create (add_cref<Version> vulkanVer, add_cref<Versi
 		UNREF(oldStage);
 
 		data->shader.setParam<VkShaderStageFlagBits>(next->stage);
+		data->shader.getParamRef<std::vector<type_index_with_default>>() = data->pushConstants.types();
 
 		next = next->next;
 
-		zInfos.emplace_back(*pLink, (next ? next->stage : VkShaderStageFlagBits(0)), VK_SHADER_CREATE_LINK_STAGE_BIT_EXT);
+		zInfos.emplace_back(m_device, *pLink, (next ? next->stage : VkShaderStageFlagBits(0)), VK_SHADER_CREATE_LINK_STAGE_BIT_EXT);
 	}
 
 	std::vector<VkShaderCreateInfoEXT> createInfos(zInfos.size());
@@ -424,7 +460,10 @@ ZShaderObject ShaderObjectCollection::getShader (VkShaderStageFlagBits stage, ui
 	return update->data->shader;
 }
 
-void commandBufferBindShaders (ZCommandBuffer cmdBuffer, std::initializer_list<ZShaderObject> shaders)
+static void commandBufferBindShaders (
+	ZCommandBuffer cmdBuffer,
+	std::initializer_list<ZShaderObject> shaders,
+	bool unbind)
 {
 	const uint32_t shaderCount = uint32_t(shaders.size());
 
@@ -439,10 +478,24 @@ void commandBufferBindShaders (ZCommandBuffer cmdBuffer, std::initializer_list<Z
 	for (auto beg = shaders.begin(), i = beg; i != shaders.end(); ++i)
 	{
 		const auto j = std::distance(beg, i);
-		list[j]	= **i;
+		list[j]	= unbind ? VK_NULL_HANDLE : **i;
 		stages[j] = i->getParam<VkShaderStageFlagBits>();
 	}
 	di.vkCmdBindShadersEXT(*cmdBuffer, shaderCount, stages, list);
+}
+
+void commandBufferBindShaders (
+	ZCommandBuffer cmd,
+	std::initializer_list<ZShaderObject> shaders)
+{
+	commandBufferBindShaders(cmd, shaders, false);
+}
+
+void commandBufferUnbindShaders (
+	ZCommandBuffer cmd,
+	std::initializer_list<ZShaderObject> shaders)
+{
+	commandBufferBindShaders(cmd, shaders, true);
 }
 
 } // namespace vtf

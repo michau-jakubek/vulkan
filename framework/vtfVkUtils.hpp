@@ -90,6 +90,14 @@ struct Version
 	{
 		return VK_MAKE_API_VERSION(nvariant, nmajor, nminor, npatch);
 	}
+	bool isValid () const
+	{
+		return nmajor != 0u;
+	}
+	explicit operator bool () const
+	{
+		return isValid();
+	}
 	static uint32_t make (uint32_t major, uint32_t minor, uint32_t variant = 0, uint32_t patch = 0)
 	{
 		return VK_MAKE_API_VERSION(variant, major, minor, patch);

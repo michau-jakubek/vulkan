@@ -1118,7 +1118,8 @@ TriLogicInt runDemoteInvocationsSingleThread (Canvas& cs, const std::string& ass
 						/* testH */					lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 														make_unsigned(params.width * params.height)),
 	};
-	ZPipelineLayout				pipelineLayout		= lm.createPipelineLayout<UserData::PushConstant>(lm.createDescriptorSetLayout());
+	ZPipelineLayout				pipelineLayout		= lm.createPipelineLayout(lm.createDescriptorSetLayout(),
+																			ZPushRange<UserData::PushConstant>());
 	ZPipeline					mainThreadPipeline	= createGraphicsPipeline(pipelineLayout, renderPass,
 															vertexInput, vertShaderModule, fragShaderModule, srcImageSize);	
 	Buffers	buffers(lm, bindings);

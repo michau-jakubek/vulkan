@@ -6,7 +6,7 @@
 #include "vtfZImage.hpp"
 #include "vtfLayoutManager.hpp"
 #include "vtfProgramCollection.hpp"
-#include "vtfZShaderObject.hpp"
+#include "vtfShaderObjectCollection.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfBacktrace.hpp"
@@ -100,7 +100,6 @@ constexpr Option optionIgnoreGlobalSpvVer	{ "--ignore-spirv-param", 0 };
 constexpr Option optionEnableSoLayer		{ "--enable-so-layer", 0 };
 constexpr Option optionBuildAlways			{ "--build-always", 0 };
 constexpr Option optionUseLinkedShaders		{ "--linked-shaders", 0 };
-#define VK_LAYER_KHRONOS_SHADER_OBJECT_NAME "VK_LAYER_KHRONOS_shader_object"
 OptionParser<TestParams> TestParams::getParser ()
 {
 	OptionFlags					flags	(OptionFlag::PrintDefault);
@@ -252,7 +251,6 @@ void TestParams::print (add_ref<std::ostream> str) const
 	str << "Effective Api version: " << params.effectiveApiVersion << std::endl;
 	str << "Effective Vulkan version: " << params.effectiveVkVersion << std::endl;
 	str << "Effective SPIR-V version: " << params.effectiveSpvVersion << std::endl;
-
 }
 
 void onResize (Canvas& cs, void* userData, int width, int height)

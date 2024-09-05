@@ -127,30 +127,36 @@ VkResult commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFe
 	return waitResult;
 }
 
+void commandBufferBinDescriptorSets (ZCommandBuffer cmd, ZPipelineLayout layout,
+									 VkPipelineBindPoint bindingPoint)
+{
+	add_ref<std::vector<ZDescriptorSetLayout>> descriptorLayouts
+		= layout.getParamRef<std::vector<ZDescriptorSetLayout>>();
+	if (uint32_t setCount = data_count(descriptorLayouts); setCount)
+	{
+		std::vector<VkDescriptorSet> sets(setCount, VK_NULL_HANDLE);
+		std::transform(descriptorLayouts.begin(), descriptorLayouts.end(), sets.begin(),
+			[](const ZDescriptorSetLayout& dsl) { return *dsl.getParam<ZDescriptorSet>(); });
+
+		vkCmdBindDescriptorSets(*cmd,
+			bindingPoint,
+			*layout,
+			0,			//firstSet
+			setCount,
+			sets.data(),
+			0,			//dynamicOffsetCount
+			nullptr);	//pDynamicOffsets
+	}
+}
+
 void commandBufferBindPipeline (ZCommandBuffer cmd, ZPipeline pipeline)
 {
 	auto bindingPoint		= pipeline.getParam<VkPipelineBindPoint>();
 	auto pipelineLayout		= pipeline.getParam<ZPipelineLayout>();
-	add_ref<std::vector<ZDescriptorSetLayout>> descriptorLayouts
-			= pipelineLayout.getParamRef<std::vector<ZDescriptorSetLayout>>();
-
-	std::vector<VkDescriptorSet> sets(descriptorLayouts.size());
-	std::transform(descriptorLayouts.begin(), descriptorLayouts.end(), sets.begin(),
-				   [](const ZDescriptorSetLayout& dsl) { return *dsl.getParam<ZDescriptorSet>(); });
 
 	vkCmdBindPipeline(*cmd, bindingPoint, *pipeline);
 
-	if (sets.size())
-	{
-		vkCmdBindDescriptorSets(*cmd,
-								bindingPoint,
-								*pipelineLayout,
-								0,				//firstSet
-								data_count(sets),
-								data_or_null(sets),
-								0,				//dynamicOffsetCount
-								nullptr);		//pDynamicOffsets
-	}
+	commandBufferBinDescriptorSets(cmd, pipelineLayout, bindingPoint);
 }
 
 void commandBufferBindVertexBuffers (ZCommandBuffer cmd, add_cref<VertexInput> input,
@@ -197,13 +203,155 @@ void commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkDeviceS
 	vkCmdBindIndexBuffer(*cmd, *buffer, offset, indexType);
 }
 
-void commandBufferPushConstants (ZCommandBuffer cmd , ZPipelineLayout layout, VkShaderStageFlags flags,
-								 uint32_t offset, uint32_t size, const void* p)
+static bool verifyPushConstants (
+	std::size_t										count,
+	add_cptr<std::size_t>							sizes,
+	add_cptr<type_index_with_default>				types,
+	add_cref<std::vector<VkPushConstantRange>>		ranges,
+	add_cref<std::vector<type_index_with_default>>	pcTypes)
 {
-	ZDevice device = cmd.getParam<ZDevice>();
-	ASSERTMSG((offset + size) <= deviceGetPhysicalLimits(device).maxPushConstantsSize,
-			  "Push constant size exceeds device limit");
-	vkCmdPushConstants(*cmd, *layout, flags, offset, size, p);
+	if (ranges.size() == count)
+	{
+		uint32_t offset = 0u;
+
+		for (std::size_t i = 0u; i < count; ++i)
+		{
+			add_cref<VkPushConstantRange> r(ranges.at(i));
+			if (r.offset != offset || r.size != sizes[i] || pcTypes.at(i) != types[i])
+				return false;
+			offset = ROUNDUP(offset + r.size, 4u);
+		}
+		return true;
+	}
+	return false;
+}
+
+bool verifyPushConstants (
+	ZPipelineLayout						layout,
+	std::size_t							count,
+	add_cptr<std::size_t>				sizes,
+	add_cptr<type_index_with_default>	types)
+{
+	add_cref<std::vector<VkPushConstantRange>> ranges =
+		layout.getParamRef<std::vector<VkPushConstantRange>>();
+	add_cref<std::vector<type_index_with_default>> pcTypes =
+		layout.getParamRef<std::vector<type_index_with_default>>();
+	return verifyPushConstants(count, sizes, types, ranges, pcTypes);
+}
+
+bool verifyPushConstants (
+	std::initializer_list<ZShaderObject>	shaders,
+	std::size_t								count,
+	add_cptr<std::size_t>					sizes,
+	add_cptr<type_index_with_default>		types)
+{
+	if (shaders.size() == 0u && 0u != count)
+	{
+		// there is nothing to verify
+		return false;
+	}
+
+	auto byOffset = [](add_cref<VkPushConstantRange> lhs, add_cref<VkPushConstantRange> rhs) -> bool
+	{
+		return (lhs.offset < rhs.offset);
+	};
+	auto equals = [](add_cref<VkPushConstantRange> lhs, add_cref<VkPushConstantRange> rhs) -> bool
+	{
+		return (std::memcmp(&lhs, &rhs, sizeof(VkPushConstantRange)) == 0);
+	};
+
+	for (auto beg = shaders.begin(), i = beg; i != shaders.end(); ++i)
+	{
+		for (auto j = std::next(i); j != shaders.end(); ++j)
+		{
+			std::vector<VkPushConstantRange> lhs(i->getParamRef<std::vector<VkPushConstantRange>>());
+			std::vector<VkPushConstantRange> rhs(j->getParamRef<std::vector<VkPushConstantRange>>());
+
+			if (lhs.size() != rhs.size() || rhs.size() != count)
+				return false;
+			else
+			{
+				std::sort(lhs.begin(), lhs.end(), byOffset);
+				std::sort(rhs.begin(), rhs.end(), byOffset);
+
+				if (!std::equal(lhs.begin(), lhs.end(), rhs.begin(), equals)) return false;
+			}
+		}
+	}
+
+	for (auto i = shaders.begin(); i != shaders.end(); ++i)
+	{
+		if (false == verifyPushConstants(count, sizes, types,
+							i->getParamRef<std::vector<VkPushConstantRange>>(),
+							i->getParamRef<std::vector<type_index_with_default>>()))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+static void commandBufferPushConstants (
+	ZCommandBuffer		cmd,
+	ZPipelineLayout		layout,
+	std::size_t			count,
+	add_cptr<add_cptr<void>>	pValues,
+	add_cref<std::vector<VkPushConstantRange>>	ranges)
+{
+	if (ranges.size() == count)
+	{
+		for (uint32_t i = 0u; i < data_count(ranges); ++i)
+		{
+			add_cref<VkPushConstantRange> r(ranges.at(i));
+#if 0
+			uint32_t	v{};
+			UVec2		v2;
+			UVec3		v3;
+			UVec4		v4;
+			switch (r.size / 4)
+			{
+			case 1:
+				std::memcpy(&v, pValues[i], r.size);
+				break;
+			case 2:
+				std::memcpy(&v2, pValues[i], r.size);
+				break;
+			case 3:
+				std::memcpy(&v3, pValues[i], r.size);
+				break;
+			case 4:
+				std::memcpy(&v4, pValues[i], r.size);
+				break;
+			}
+#endif
+			vkCmdPushConstants(*cmd, *layout, r.stageFlags, r.offset, r.size, pValues[i]);
+		}
+	}
+}
+
+void commandBufferPushConstants (
+	ZCommandBuffer				cmd,
+	ZPipelineLayout				layout,
+	std::size_t					count,
+	add_cptr<add_cptr<void>>	pValues)
+{
+	commandBufferPushConstants(cmd, layout, count, pValues,
+								layout.getParamRef<std::vector<VkPushConstantRange>>());
+}
+
+void commandBufferPushConstants (
+	ZCommandBuffer							cmd,
+	ZPipelineLayout							layout,
+	std::initializer_list<ZShaderObject>	shaders,
+	std::size_t								count,
+	add_cptr<add_cptr<void>>				pValues)
+{
+	if (auto shader = shaders.begin(); shader != shaders.end())
+	{
+		commandBufferPushConstants(cmd, layout, count, pValues,
+			shader->getParamRef<std::vector<VkPushConstantRange>>());
+	}
 }
 
 void commandBufferDispatch (ZCommandBuffer cmd, const UVec3& workGroupCount)

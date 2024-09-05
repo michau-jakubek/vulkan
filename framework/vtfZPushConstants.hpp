@@ -22,7 +22,7 @@ struct ZPushConstants
 		ZPushConstants (const ZPushRange<X>& range, const ZPushRange<Y>&... others)
 			: ZPushConstants(others...)
 	{
-		appendRanges(range);
+		insertRange(range, range.m_type);
 	}
 
 	template<class X, class... Y> void addRanges (
@@ -35,6 +35,8 @@ struct ZPushConstants
 
 	auto empty  () const -> bool { return m_ranges.empty(); }
 	auto ranges () const -> std::vector<VkPushConstantRange>;
+	auto types	() const -> std::vector<type_index_with_default>;
+	auto size	() const -> uint32_t;
 
 	void clear	() { m_ranges.clear(); }
 
@@ -55,6 +57,7 @@ protected:
 	};
 
 	void appendRange	(VkPushConstantRange, std::type_index);
+	void insertRange	(VkPushConstantRange, std::type_index);
 	void appendRanges	() {}
 	template<class X, class... Y> void appendRanges (const ZPushRange<X>& range, const ZPushRange<Y>&... others)
 	{

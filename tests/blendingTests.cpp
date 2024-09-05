@@ -512,7 +512,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 	ZFramebuffer				colorFB			= createFramebuffer(colorRenderPass, TestParams::defaultExtent, { colorView });
 
 	LayoutManager				lm				(ctx.device);
-	ZPipelineLayout				colorLayout		= lm.createPipelineLayout<PushConstant>();
+	ZPipelineLayout				colorLayout		= lm.createPipelineLayout(ZPushRange<PushConstant>());
 	ZPipeline					colorPipeline	= createGraphicsPipeline(colorLayout, colorRenderPass,
 																		TestParams::defaultExtent, vertices,
 																		commonVert, bkgFrag);

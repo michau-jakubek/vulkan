@@ -476,9 +476,13 @@ bool computePipelineVerifyLimits (ZDevice device, add_cref<UVec3> wgSizes, bool 
 	return result;
 }
 
-ZPipeline createComputePipelineImpl (ZPipelineLayout layout, ZShaderModule computeShaderModule,
-									add_cref<UVec3> localSizes, bool autoLocalSizesIDs,
-									bool enableFullGroups, add_ref<ZSpecializationInfo> info)
+ZPipeline createComputePipelineImpl (
+	ZPipelineLayout					layout,
+	ZShaderModule					computeShaderModule,
+	add_cref<UVec3>					localSizes,
+	bool							autoLocalSizesIDs,
+	bool							enableFullGroups,
+	add_ref<ZSpecializationInfo>	info)
 {
 	ZDevice									aDevice		= layout.getParam<ZDevice>();
 	const VkAllocationCallbacksPtr			callbacks	= aDevice.getParam<VkAllocationCallbacksPtr>();
@@ -498,18 +502,14 @@ ZPipeline createComputePipelineImpl (ZPipelineLayout layout, ZShaderModule compu
 
 	const VkSpecializationInfo specInfo = info();
 
-	VkPipelineShaderStageCreateInfo	sci{};
-	sci.sType	= VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	sci.pNext = nullptr;
+	VkPipelineShaderStageCreateInfo	sci = makeVkStruct();
 	sci.flags	= VkPipelineShaderStageCreateFlags(0);
 	sci.stage	= VK_SHADER_STAGE_COMPUTE_BIT;
 	sci.module	= *computeShaderModule;
 	sci.pName	= "main";
 	sci.pSpecializationInfo	= info.empty() ? nullptr : &specInfo;
 
-	VkComputePipelineCreateInfo	ci{};
-	ci.sType	= VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	ci.pNext	= nullptr;
+	VkComputePipelineCreateInfo	ci = makeVkStruct();
 	ci.flags	= VkPipelineCreateFlags(0);
 	ci.stage	= sci;
 	ci.layout	= *layout;

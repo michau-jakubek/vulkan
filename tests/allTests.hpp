@@ -68,6 +68,7 @@ enum TestIdentifier
 	SPARSE_BUFFER,
 	DEVICE_TIMEOUT,
 	SHADER_OBJECT_TRIANGLE,
+	LINKED_COMPUTE,
 	FRACTALS,
 
 	ALL_TESTS_END = FRACTALS
@@ -76,6 +77,44 @@ enum TestIdentifier
 static uint32_t globalTestIdentifier;
 constexpr uint32_t nextTestIdentifier() { return ++globalTestIdentifier; }
 #endif // USE_TEST_IDENTIFIER
+
+/*************************************************
+* ****** A template for creating a new test ******
+* ************************************************
+*
+*  Include below excerpt in your source file in the global scope.
+*  No need to declare forward declaration of TestRecorder<> content,
+*  it is enough that you include "allTests.hpp" file in your heeder
+*  file and thet include your header file in you source test file.
+
+template<> struct TestRecorder<YOUR_TEST_ENUM>
+{
+	static bool record (TestRecord&);
+};
+bool TestRecorder<YOUR_TEST_ENUM>::record (TestRecord& record)
+{
+	record.name = "your_test_name";
+	record.call = &prepareTests;
+	return true;
+}
+
+*  Assume that YOUR_TEST_ENUM has been already added to above TestIdentifier enums.
+*  A prepareTests() function is something kind of the main function of the tests
+*  being created. It has not to be in the global scope, more over it would be the
+*  best that you would put in an unnamed namespace or just any namespace to avoid
+*  the conflicts with existing sources. Its signature is following:
+
+TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams);
+
+*  Both "TriLigic" and "string" are in "vtf" namespace so enable its visiblity
+*  by "using namespace vtf;" or use fully qualified namea like "vtf::TriLogicInt"
+*  and "vtf::strings". The "strings" is an alias for "std::vector<std::string>".
+*  The "add_cref<X>" is a helper template which is expanded to "const X&".
+*  I decided to define this because I worked with an editor that liked to remove
+*  the "&" and "*" characters. I strongly use the references every time it is
+*  necessay from an optimization point if view and the editor behaviour was
+*  iritating to much. The "add_cref<>" and similar you can find in "vtfZDeletable.hpp" file.
+**/
 
 // externals defined for int, float & std::string
 template<class T> T parseParam(const vtf::strings& params, uint32_t index, const T& defResult);

@@ -292,6 +292,7 @@ static std::string makeFileName (uint32_t shaderIndex, VkShaderStageFlagBits sta
 								 const bool enableValidation, const bool genDisassembly, const bool buildAlways,
 								 const char* prefix = nullptr, const char* suffix = nullptr)
 {
+	const std::string entryName = codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::entryName);
 	const std::string fileName = codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName).empty()
 			? shaderStageToCommand(stage)
 			: fs::path(codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName)).filename().string();
@@ -300,6 +301,8 @@ static std::string makeFileName (uint32_t shaderIndex, VkShaderStageFlagBits sta
 	{
 		std::ostringstream ss;
 		ss << shaderIndex;
+		UNREF(entryName);
+		//ss << entryName;
 		ss << (codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName).empty()
 			   ? codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::shaderCode)
 			   : codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName));
@@ -335,17 +338,36 @@ static bool verifyIncludes (const strings& codeAndEntryAndIncludes)
 	return exists;
 }
 
-static bool containsErrorString (const std::string& text)
-{	
-	return std::regex_search(text, std::regex("error:", std::regex_constants::icase));
+static bool containsErrorString (add_cref<std::string> text, bool ignoreEntryPointMain = true)
+{
+	std::istringstream iss(text);
+	const std::regex rError("(error:.*)", std::regex_constants::icase);
+	const std::regex rEntryPoint("must.*main", std::regex_constants::icase);
+
+	std::string line;
+	int matches = 0;
+
+	while (std::getline(iss, line))
+	{
+		std::smatch sm;
+		if (std::regex_search(line, sm, rError))
+		{
+			if (ignoreEntryPointMain && std::regex_search(sm.str(), rEntryPoint))
+			{
+				continue;
+			}
+			matches = matches + 1;
+		}
+	}
+	return (0 < matches);
 }
 
-static bool containsWarningString(const std::string& text)
+static bool containsWarningString (const std::string& text)
 {
 	return std::regex_search(text, std::regex("warning:", std::regex_constants::icase));
 }
 
-static std::string makeCompilerListFromPATH(const char* compiler)
+static std::string makeCompilerListFromPATH (const char* compiler)
 {
 #if SYSTEM_OS_WINDOWS == 1
 	const char pathSep = ';';
@@ -383,7 +405,7 @@ static std::string makeCompilerListFromPATH(const char* compiler)
 	return compilerWithExt;
 }
 
-static std::vector<std::pair<std::string, std::string>> makeCompilerSignature(bool glslangValidator)
+static std::vector<std::pair<std::string, std::string>> makeCompilerSignature (bool glslangValidator)
 {
 	bool status = false;
 	// As far I know glslangValidator is an alias to glslang utility
@@ -414,7 +436,7 @@ static std::vector<std::pair<std::string, std::string>> makeCompilerSignature(bo
 	return compilers;
 }
 
-static std::string getCompilerExecutable()
+static std::string getCompilerExecutable ()
 {
 	const auto compilers = makeCompilerSignature(true);
 	ASSERTMSG(data_count(compilers) > 0u,
@@ -477,7 +499,6 @@ static auto makeCompileGlslCommand (VkShaderStageFlagBits stage,
 	const char* space = " ";
 
 	const std::string entryName = codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::entryName);
-	UNREF(entryName);
 
 	std::stringstream cmd;
 	cmd << maybe_quoted(compilerExecutable) << space;
@@ -492,7 +513,8 @@ static auto makeCompileGlslCommand (VkShaderStageFlagBits stage,
 		cmd << "--spirv-val ";
 	}
 	cmd << "-S" << space << shaderStageToCommand(stage) << space
-		<< "-e " << std::quoted(entryName) << space
+		<< "-e " << entryName << space
+		<< "--source-entrypoint " << entryName << space
 		<< input << space
 		<< "-o " << output << space
 #if SYSTEM_OS_LINUX
@@ -668,7 +690,7 @@ bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 					  << std::endl;
 			std::cout << "[SYS] Command result: " << std::quoted(result) << std::endl;
 		}
-		if (status |= !areErrors && (!areWarnings || gf.nowerror) && binFileExists; status)
+		if (status &= (!areErrors && (!areWarnings || gf.nowerror) && binFileExists); status)
 		{
 			const uint32_t readBin = readFile(binPath, binary);
 			ASSERTION(readBin != INVALID_UINT32);

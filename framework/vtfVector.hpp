@@ -42,12 +42,12 @@ T ftrunc (T v, uint32_t digits)
 template<class T, size_t N>
 class VecX
 {
+	T data[N];
+
     struct tag {
         size_t x;
         explicit tag(size_t x) : x(x) {}
     };
-
-    T data[N];
 
     VecX(tag z) {
         for (size_t i = z.x; i < N; ++i) data[i] = T{};

@@ -503,8 +503,8 @@ TriLogicInt performTest (add_ref<Canvas> cs, add_cref<std::string> assets,
 	const VkFormat			format				= cs.surfaceFormat;
 	ZRenderPass				renderPass			= createColorRenderPass(cs.device, {format}, {{clearColor}});
 	ZPipelineLayout			pipelineLayout		= config.float32
-													? pm.createPipelineLayout<PushConstant<float>>()
-													: pm.createPipelineLayout<PushConstant<double>>();
+													? pm.createPipelineLayout(ZPushRange<PushConstant<float>>())
+													: pm.createPipelineLayout(ZPushRange<PushConstant<double>>());
 	ZPipeline				pipeline			= createGraphicsPipeline(pipelineLayout, renderPass,
 																		 vertexInput, vertShaderModule, fragShaderModule,
 																		 VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
