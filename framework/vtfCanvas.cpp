@@ -87,12 +87,10 @@ CanvasContext::CanvasContext (add_cptr<char>		appName,
 							  add_cref<CanvasStyle>	style,
 							  add_ptr<Canvas>		canvas)
 	: cc_callbacks		(getAllocationCallbacks())
-	, cc_debugMessenger	(VK_NULL_HANDLE)
-	, cc_debugReport	(VK_NULL_HANDLE)
 	, cc_instance		(getSharedInstance() | ([&,this]() -> ZInstance {
 							return createInstance(appName, cc_callbacks, instanceLayers,
 												  mergeStringsDistinct(getGlfwRequiredInstanceExtensions(), instanceExtensions),
-												  &cc_debugMessenger, this, &cc_debugReport, this, apiVersion, enableDebugPrintf);
+												  apiVersion, enableDebugPrintf);
 							 }))
 	, cc_window			(createWindow(style, appName, canvas))
 	, cc_surface		(createSurface(cc_instance, cc_callbacks, cc_window))
@@ -116,7 +114,7 @@ Canvas::Canvas	(add_cptr<char>			appName,
 				 bool					enableDebugPrintf)
 	: GlfwInitializerFinalizer()
 	, CanvasContext(appName, apiVersion, instanceLayers, instanceExtensions, deviceExtensions, onEnablingFeatures, enableDebugPrintf, canvasStyle, this)
-	, VulkanContext	(cc_callbacks, cc_debugMessenger, cc_debugReport, cc_instance, cc_physicalDevice, cc_device)
+	, VulkanContext	(cc_instance, cc_physicalDevice, cc_device)
 	// beginning references initialization
 	, window					(cc_window)
 	, surface					(cc_surface)

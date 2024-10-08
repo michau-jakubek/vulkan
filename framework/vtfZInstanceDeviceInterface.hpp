@@ -41,10 +41,11 @@ protected:
 
 struct ZInstanceSingleton
 {
+	virtual ~ZInstanceSingleton ();
 	const ZInstanceInterface& getInterface (VkInstance instance);
 
 protected:
-	static ZInstanceInterface intf;
+	static ZInstanceInterface	m_interface;
 };
 
 struct ZDeviceSingleton
@@ -52,7 +53,7 @@ struct ZDeviceSingleton
 	const ZDeviceInterface& getInterface (VkInstance instance, VkDevice device);
 
 protected:
-	static ZDeviceInterface intf;
+	static ZDeviceInterface m_interface;
 };
 
 

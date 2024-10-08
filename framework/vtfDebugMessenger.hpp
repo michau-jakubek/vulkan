@@ -11,6 +11,8 @@ void			createDebugMessenger	(ZInstance, VkAllocationCallbacksPtr, const VkDebugU
 void			destroyDebugMessenger	(ZInstance, VkAllocationCallbacksPtr, VkDebugUtilsMessengerEXT&);
 void			createDebugReport		(ZInstance, VkAllocationCallbacksPtr, const VkDebugReportCallbackCreateInfoEXT&, VkDebugReportCallbackEXT&);
 void			destroyDebugReport		(ZInstance, VkAllocationCallbacksPtr, VkDebugReportCallbackEXT&);
+void			destroyDebugMessenger	(ZInstance);
+void			destroyDebugReport		(ZInstance);
 
 } // namespace vtf
 

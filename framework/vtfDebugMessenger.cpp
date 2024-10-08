@@ -74,6 +74,11 @@ void destroyDebugMessenger (ZInstance instance, VkAllocationCallbacksPtr callbac
 	messenger = VK_NULL_HANDLE;
 }
 
+void destroyDebugMessenger (ZInstance i)
+{
+	destroyDebugMessenger(i, i.getParam<VkAllocationCallbacksPtr>(), i.getParamRef<VkDebugUtilsMessengerEXT>());
+}
+
 void makeDebugCreateInfo (VkDebugReportCallbackCreateInfoEXT& result, void* pUserData, void* pNext, bool enableDebugPrintf)
 {
 	const VkDebugReportFlagsEXT debugPrintfBit = enableDebugPrintf ? VK_DEBUG_REPORT_INFORMATION_BIT_EXT : 0;
@@ -113,6 +118,11 @@ void destroyDebugReport (ZInstance instance, VkAllocationCallbacksPtr callbacks,
 		}
 	}
 	report = VK_NULL_HANDLE;
+}
+
+void destroyDebugReport (ZInstance i)
+{
+	destroyDebugReport(i, i.getParam<VkAllocationCallbacksPtr>(), i.getParamRef<VkDebugReportCallbackEXT>());
 }
 
 static const char* VUID_Undefined = "VUID_Undefined";

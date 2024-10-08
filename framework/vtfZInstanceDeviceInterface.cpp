@@ -1,4 +1,5 @@
 #include "vtfZInstanceDeviceInterface.hpp"
+#include "vtfDebugMessenger.hpp"
 #include "vtfCUtils.hpp"
 
 #include <iostream>
@@ -6,18 +7,28 @@
 namespace vtf
 {
 
-ZInstanceInterface ZInstanceSingleton::intf;
-const ZInstanceInterface& ZInstanceSingleton::getInterface (VkInstance instance)
+ZInstanceInterface ZInstanceSingleton::m_interface;
+ZInstanceSingleton::~ZInstanceSingleton ()
 {
-	intf.initialize(instance);
-	return intf;
+	add_ptr<ZInstance> me = static_cast<add_ptr<ZInstance>>(this);
+	if (me->use_count() == 1 && me->has_handle())
+	{
+		destroyDebugMessenger(*me);
+		destroyDebugReport(*me);
+	}
 }
 
-ZDeviceInterface ZDeviceSingleton::intf;
+const ZInstanceInterface& ZInstanceSingleton::getInterface (VkInstance instance)
+{
+	m_interface.initialize(instance);
+	return m_interface;
+}
+
+ZDeviceInterface ZDeviceSingleton::m_interface;
 const ZDeviceInterface& ZDeviceSingleton::getInterface (VkInstance instance, VkDevice device)
 {
-	intf.initialize(instance, device);
-	return intf;
+	m_interface.initialize(instance, device);
+	return m_interface;
 }
 
 void ZInstanceInterface::initialize (VkInstance instance)

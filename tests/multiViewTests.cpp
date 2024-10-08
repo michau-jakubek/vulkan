@@ -88,7 +88,7 @@ std::pair<uint32_t, uint32_t> printUsage (std::ostream& log)
 	return { defaultLayers, defaultIndexType };
 }
 
-uint32_t printMultiDrawProperties (ZPhysicalDevice device, std::ostream& log)
+uint32_t printMultiviewProperties (ZPhysicalDevice device, std::ostream& log)
 {
 	VkPhysicalDeviceMultiviewProperties	multiviewProps	= makeVkStruct();
 	VkPhysicalDeviceProperties2			deviceProps		= makeVkStruct(&multiviewProps);
@@ -114,7 +114,7 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 	{
 		VkPhysicalDeviceFeatures2 resultFeatures = makeVkStruct();
 
-		if (containsString(VK_EXT_MULTI_DRAW_EXTENSION_NAME, extensions))
+		if (containsString(VK_KHR_MULTIVIEW_EXTENSION_NAME, extensions))
 		{
 			resultFeatures.pNext = &multiviewFeatures;
 			vkGetPhysicalDeviceFeatures2(*physicalDevice, &resultFeatures);
@@ -125,13 +125,13 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFeatures, gf.apiVer, gf.debugPrintfEnabled);
 	if (!multiviewFeatures.multiview)
 	{
-		std::cout << "[ERROR] VK_EXT_multi_draw not supported by device" << std::endl;
+		std::cout << "[ERROR] " VK_KHR_MULTIVIEW_EXTENSION_NAME " not supported by device" << std::endl;
 		return 1;
 	}
 
 	std::ostream& log = std::cout;
 	const auto defaults = printUsage(log);
-	const uint32_t maxLayers = printMultiDrawProperties(cs.physicalDevice, log);
+	const uint32_t maxLayers = printMultiviewProperties(cs.physicalDevice, log);
 	const auto params = paramGetLayersAndIndexType(cmdLineParams, log, defaults.first, maxLayers, defaults.second);
 	if (!std::get<0>(params)) return 1;
 	return runMultiViewSingleThread(cs, record.assets, std::get<1>(params), (std::get<2>(params) != 0u));
@@ -234,10 +234,10 @@ TriLogicInt runMultiViewSingleThread (Canvas& cs, const std::string& assets, con
 															vertexInput, vertShaderModule, fragShaderModule,
 															makeExtent2D(multiImageWidth, multiImageHeight),
 															pipelineCreateFlags);
-
-	uint32_t d = 0;
 	auto updateRotationMatrices = [&]()
 	{
+		static uint32_t d = 0;
+
 		for (uint32_t l = 0; l < multiLayerCount; ++l)
 		{
 			binding0Data.rotateMatrix[l] = Mat4::rotate(
@@ -257,6 +257,12 @@ TriLogicInt runMultiViewSingleThread (Canvas& cs, const std::string& assets, con
 	cs.events().cbWindowSize.set(onResize, &drawTrigger);
 
 	uint32_t layerIndex = 0u;
+	auto onAfterRecording = [&](add_ref<Canvas>)
+	{
+		updateRotationMatrices();
+		layerIndex = (layerIndex + 1) % multiLayerCount;
+		drawTrigger = 1;
+	};
 
 	auto onCommandRecording = [&](add_ref<Canvas>, add_cref<Canvas::Swapchain>, ZCommandBuffer cmdBuffer, ZFramebuffer framebuffer)
 	{
@@ -278,13 +284,10 @@ TriLogicInt runMultiViewSingleThread (Canvas& cs, const std::string& assets, con
 								   imageMakeSubresourceLayers(renderImage));
 			commandBufferMakeImagePresentationReady(cmdBuffer, renderImage);
 		commandBufferEnd(cmdBuffer);
-
-		updateRotationMatrices();
-		layerIndex = (layerIndex + 1) % multiLayerCount;
-		drawTrigger = 1;
 	};
 
-	return cs.run(onCommandRecording, renderPass, std::ref(drawTrigger));
+	return cs.run(onCommandRecording, renderPass, std::ref(drawTrigger),
+					Canvas::OnIdle(), std::bind(onAfterRecording, std::ref(cs)));
 }
 
 } // unnamed namespace

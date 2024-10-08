@@ -1,0 +1,35 @@
+#version 450
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(set = 0, binding = 0) buffer Buffer { uint data[]; };
+layout(push_constant) uniform PC { uvec2 v; };
+
+void main()
+{
+    data[0] = v.x + 1u;
+    data[1] = v.y + 1u;
+
+    for (uint x = 0; x < gl_NumWorkGroups.x; ++x)
+    {
+        for (uint y = 0; y < gl_NumWorkGroups.y; ++y)
+        {
+            for (uint z = 0; z < gl_NumWorkGroups.z; ++z)
+            {
+                if (gl_WorkGroupID.x == x
+                    && gl_WorkGroupID.y == y
+                    && gl_WorkGroupID.z == z)
+                {
+                    memoryBarrierBuffer();
+                    uint k = z * gl_NumWorkGroups.y * gl_NumWorkGroups.x
+                            + y * gl_NumWorkGroups.x + x;
+                    uint u = data.length();
+                    data[4 + (k % (data.length() - 4))] = data[4 + (k % (data.length() - 4))] + 1;
+                    barrier();
+                }
+            }
+        }
+    }
+
+    data[2] = data[2] + 1u;
+    atomicAdd(data[3], 1);
+}

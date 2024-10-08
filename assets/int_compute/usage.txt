@@ -7,6 +7,7 @@ Usage:
   --no-always-build         disable automatic shaders building
   --no-print-result         prevent from printing result
   --print-device-limits     print device limits and exit
+  --use-global-spirv-ver    use global SPIR-V version from app params, otherwise 1.3 will be applied
   --hex                     print result in hexadecimal format
   --HEX                     print result using capital characters
   -wx     <uint>            work group count X, default ${WX}

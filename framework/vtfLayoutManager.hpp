@@ -168,13 +168,8 @@ public:
 	ZPipelineLayout				 createPipelineLayout ();
 	ZPipelineLayout				 createPipelineLayout (add_cref<ZPushConstants> pushConstants);
 	ZPipelineLayout				 createPipelineLayout (ZDescriptorSetLayout, add_cref<ZPushConstants>);
-	//template<class... K> using apc = std::disjunction<std::is_same<ZPushConstants, K>...>;
-	//template<class... PC__, std::enable_if_t<!apc<PC__...>::value, bool> = false>
-	template<class... PC__>
-	auto createPipelineLayout (const ZPushRange<PC__>&...) -> ZPipelineLayout;
-	//template<class... PC__, std::enable_if_t<!apc<PC__...>::value, bool> = false>
-	template<class... PC__>
-	auto createPipelineLayout (ZDescriptorSetLayout, const ZPushRange<PC__>&...) -> ZPipelineLayout;
+	template<class... PC__>	auto createPipelineLayout (const ZPushRange<PC__>&...) -> ZPipelineLayout;
+	template<class... PC__>	auto createPipelineLayout (ZDescriptorSetLayout, const ZPushRange<PC__>&...) -> ZPipelineLayout;
 
 private:	
 	typedef struct VkDescriptorSetLayoutBindingAndType : VkDescriptorSetLayoutBinding
@@ -289,16 +284,13 @@ template<class X> std::optional<X> LayoutManager::getBinding (uint32_t binding) 
 	getBinding_(binding, result);
 	return result;
 }
-//template<class... PC__, std::enable_if_t<!LayoutManager::apc<PC__...>::value, bool>>
-template<class... PC__>
-ZPipelineLayout
+template<class... PC__> ZPipelineLayout
 LayoutManager::createPipelineLayout (const ZPushRange<PC__>&... ranges)
 {
 	return createPipelineLayout_(ZPushConstants(ranges...), {});
 }
-//template<class... PC__, std::enable_if_t<!LayoutManager::apc<PC__...>::value, bool>>
-template<class... PC__>
-ZPipelineLayout
+
+template<class... PC__> ZPipelineLayout
 LayoutManager::createPipelineLayout (ZDescriptorSetLayout dsLayout, const ZPushRange<PC__>&... ranges)
 {
 	return createPipelineLayout_(ZPushConstants(ranges...), { dsLayout });

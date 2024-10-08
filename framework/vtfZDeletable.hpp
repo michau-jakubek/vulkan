@@ -323,7 +323,7 @@ typedef ZDeletable<VkInstance,
 	VkAllocationCallbacksPtr, /*apiVersion*/ uint32_t,
 	ZDistType<RequiredLayers, std::vector<std::string>>,
 	ZDistType<AvailableLayerExtensions, std::vector<std::string>>,
-	vtf::Logger>
+	vtf::Logger, VkDebugUtilsMessengerEXT, VkDebugReportCallbackEXT>
 ZInstance;
 
 typedef ZDeletable<VkPhysicalDevice,
@@ -395,7 +395,7 @@ ZSwapchainKHR;
 typedef ZDeletable<VkShaderModule,
 	decltype(&vkDestroyShaderModule), &vkDestroyShaderModule,
 	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
-	VkShaderStageFlagBits>
+	VkShaderStageFlagBits, std::string>
 ZShaderModule;
 
 typedef ZDeletable<VkCommandPool,

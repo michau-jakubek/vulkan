@@ -113,11 +113,12 @@ bool __verifyPushConstants (add_cref<std::vector<type_index_with_default>> types
 
 template<class... PC__>
 void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout,
-								 std::initializer_list<ZShaderObject> shaders, const PC__&... pc)
+								 std::initializer_list<ZShaderObject> shaders, PC__&&... pc)
 {
 	std::array<add_cptr<void>, sizeof...(PC__)> pValues{ &pc... };
 	std::array<std::size_t, sizeof...(PC__)> sizes{ sizeof(PC__)... };
-	std::array<type_index_with_default, sizeof...(PC__)> types{ type_index_with_default::make<PC__>()... };
+	std::array<type_index_with_default, sizeof...(PC__)>
+		types{ type_index_with_default::make<std::remove_reference_t<PC__>>()... };
 
 	extern bool verifyPushConstants (std::initializer_list<ZShaderObject> shaders,
 									 std::size_t count,
@@ -133,11 +134,12 @@ void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout,
 }
 
 template<class... PC__>
-void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout, const PC__&... pc)
+void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout, PC__&&... pc)
 {
 	std::array<add_cptr<void>, sizeof...(PC__)> pValues{ &pc... };
 	std::array<std::size_t, sizeof...(PC__)> sizes{ sizeof(PC__)... };
-	std::array<type_index_with_default, sizeof...(PC__)> types{ type_index_with_default::make<PC__>()... };
+	std::array<type_index_with_default, sizeof...(PC__)>
+		types{ type_index_with_default::make<std::remove_reference_t<PC__>>()... };
 
 	extern bool verifyPushConstants (ZPipelineLayout layout,
 									 std::size_t count,

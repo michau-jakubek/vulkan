@@ -2,19 +2,21 @@
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 layout(set = 0, binding = 0) buffer Buffer { uint data[]; };
+layout(push_constant) uniform PC { uvec2 v; };
 
 void main()
 {
-    data[2] = data[2] + 1u;
-    int x = int(data[0]);
-    while (x != 0)
+    data[0] = v.x + 1u;
+    data[1] = v.y + 1u;
+    uint x = v.x;
+    while (x > v.y)
     {
         x = x + 1;
         if (x == 1048576)
         {
-            x = 1;
+            x = v.x;
         }
     }
-    data[1] = data[1] + 1u;
-    data[0] = uint(x);
+    data[2] = data[2] + 1u;
+    data[3] = uint(x);
 }

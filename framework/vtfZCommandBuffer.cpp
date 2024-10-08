@@ -293,8 +293,8 @@ bool verifyPushConstants (
 }
 
 static void commandBufferPushConstants (
-	ZCommandBuffer		cmd,
 	ZPipelineLayout		layout,
+	ZCommandBuffer		cmd,
 	std::size_t			count,
 	add_cptr<add_cptr<void>>	pValues,
 	add_cref<std::vector<VkPushConstantRange>>	ranges)
@@ -336,7 +336,7 @@ void commandBufferPushConstants (
 	std::size_t					count,
 	add_cptr<add_cptr<void>>	pValues)
 {
-	commandBufferPushConstants(cmd, layout, count, pValues,
+	commandBufferPushConstants(layout, cmd, count, pValues,
 								layout.getParamRef<std::vector<VkPushConstantRange>>());
 }
 
@@ -349,7 +349,7 @@ void commandBufferPushConstants (
 {
 	if (auto shader = shaders.begin(); shader != shaders.end())
 	{
-		commandBufferPushConstants(cmd, layout, count, pValues,
+		commandBufferPushConstants(layout, cmd, count, pValues,
 			shader->getParamRef<std::vector<VkPushConstantRange>>());
 	}
 }

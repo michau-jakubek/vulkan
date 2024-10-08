@@ -522,7 +522,7 @@ protected:
 			commandBufferPipelineBarriers(cmdBuffer, stageTransfer, stageCompute, postImageBarrier);
 		}
 		commandBufferPipelineBarriers(cmdBuffer, stageCompute, stageCompute, preCubeBarrier);
-		commandBufferPushConstants<PushContant>(cmdBuffer, pipelineLayout, pc);
+		commandBufferPushConstants(cmdBuffer, pipelineLayout, pc);
 		commandBufferDispatch(cmdBuffer, UVec3((faceSize / local_size_xy), (faceSize / local_size_xy), 6u));
 		commandBufferPipelineBarriers(cmdBuffer, stageCompute, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, postCubeBarrier);
 		commandBufferEnd(cmdBuffer);

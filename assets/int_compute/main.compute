@@ -5,7 +5,7 @@
 /*
     *************************************
     ***** Defined in compute.shader *****
-	*************************************
+    *************************************
 
 layout(push_constant) uniform PushConstant
 {
@@ -39,9 +39,10 @@ void forceStoreUint  (uint  x, uint at);
 */
 
 
-void main()
+void xmain()
 {
-	storeInt(loadIntI(gl_LocalInvocationIndex), gl_LocalInvocationIndex);
+    /* PUT YOUR CODE HERE */
+    storeInt(loadIntI(gl_LocalInvocationIndex), gl_LocalInvocationIndex);
 }
 
 

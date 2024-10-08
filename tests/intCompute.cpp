@@ -92,14 +92,15 @@ struct Params
 	mutable std::vector<uint32_t>	inputTypes;
 	std::vector<UVec2>				specConstants;
 	struct {
-		uint32_t printParams	: 1;	// print params from cmdLine and continue
-		uint32_t printDesc		: 1;	// print description and exits
-		uint32_t printInHex		: 1;	// print numbers in hexadecimal format
-		uint32_t printCapital	: 1;	// print capital characters
-		uint32_t printZero		: 1;	// print zero in result
-		uint32_t noPrintResult	: 1;	// don't print result
-		uint32_t enableSUCF		: 1;	// enable subgroup_uniform_control_flow extension
-		uint32_t noBuildAlways	: 1;	// disable automatic shader builing
+		uint32_t printParams		: 1;	// print params from cmdLine and continue
+		uint32_t printDesc			: 1;	// print description and exits
+		uint32_t printInHex			: 1;	// print numbers in hexadecimal format
+		uint32_t printCapital		: 1;	// print capital characters
+		uint32_t printZero			: 1;	// print zero in result
+		uint32_t noPrintResult		: 1;	// don't print result
+		uint32_t enableSUCF			: 1;	// enable subgroup_uniform_control_flow extension
+		uint32_t noBuildAlways		: 1;	// disable automatic shader builing
+		uint32_t useGlobalSpirvVer	: 1;	// otherwise 1.3 will be applied
 	}
 	flags {
 		// designated initializers are a C++20 extension [-Werror,-Wc++20-designator]
@@ -111,6 +112,7 @@ struct Params
 		0, // noPrintResult
 		0, // enableSUCF
 		0, // noAlwaysBuild
+		0, // useGlobalSpirvVer
 	};
 	void		print (add_ref<std::ostream> log) const;
 	bool		verify (ZDevice device, add_ref<std::ostream> log) const;
@@ -432,6 +434,7 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine(ZDevice
 		Option optPrintParams	{ "--print-params", 0 };
 		Option optNoPrintRes	{ "--no-print-result", 0 };
 		Option optNoBuildAlways	{ "--no-build-always", 0 };
+		Option optUseGlobalSpirvVer{ "--use-global-spirv-ver", 0 };
 		Option optPrintDesc		{ "--print-desc", 0 };
 		Option optSUCF			{ "--enable-sucf", 0 };
 		Option optPrintInHex	{ "--hex", 0 };
@@ -448,6 +451,7 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine(ZDevice
 		resultParams.flags.enableSUCF = (consumeOptions(optSUCF, options, args, sink)) > 0 ? 1 : 0u;
 		resultParams.flags.noPrintResult = (consumeOptions(optNoPrintRes, options, args, sink) > 0) ? 1 : 0;
 		resultParams.flags.noBuildAlways = (consumeOptions(optNoBuildAlways, options, args, sink) > 0) ? 1 : 0;
+		resultParams.flags.useGlobalSpirvVer = (consumeOptions(optUseGlobalSpirvVer, options, args, sink) > 0) ? 1 : 0;
 		resultParams.flags.printZero = (consumeOptions(optPrintZero, options, args, sink) > 0) ? 1 : 0;
 		{
 			const uint32_t printInHex = (consumeOptions(optPrintInHex, options, args, sink) > 0) ? 1 : 0;
@@ -631,6 +635,12 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine(ZDevice
 						}
 						arg = args.erase(arg);
 					}
+					else
+					{
+						hasErrors = true;
+						errorMessage << "[ERROR] Option " << name << " needs a parameter" << std::endl;
+						return;
+					}
 				}
 				else if (optionKind == OptionKinds::Const && tail == "-const")
 				{
@@ -671,6 +681,12 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine(ZDevice
 							resultParams.setInput(std::get<0>(it1), k, k);
 						}
 						arg = args.erase(arg);
+					}
+					else
+					{
+						hasErrors = true;
+						errorMessage << "[ERROR] Option " << name << " needs a parameter" << std::endl;
+						return;
 					}
 				}
 				else if (invStatus && (optionKind == OptionKinds::Single) && (inv < invocationCount))
@@ -715,6 +731,12 @@ std::tuple<Params::Status, Params, std::string> Params::parseCommandLine(ZDevice
 						}
 
 						arg = args.erase(arg);
+					}
+					else
+					{
+						hasErrors = true;
+						errorMessage << "[ERROR] Option " << name << " needs a parameter" << std::endl;
+						return;
 					}
 				}
 				else
@@ -945,22 +967,27 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 	return runIntComputeSingleThread(ctx, record.assets, params);
 }
 
-ZShaderModule createShader (ZDevice device, add_cref<std::string> assets, bool buildAlways)
+ZShaderModule createShader (ZDevice device, add_cref<std::string> assets, add_cref<Params> params)
 {
 	const GlobalAppFlags	flags(getGlobalAppFlags());
 	ProgramCollection		programs(device, assets);
 
 	programs.addFromFile(VK_SHADER_STAGE_COMPUTE_BIT, "main.compute", {"."}, "main_entry");
-	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, flags.genSpirvDisassembly, buildAlways);
+	programs.buildAndVerify(
+				flags.vulkanVer,
+				params.flags.useGlobalSpirvVer ? flags.spirvVer : Version(1, 3),
+				flags.spirvValidate,
+				flags.genSpirvDisassembly,
+				params.flags.noBuildAlways ? false : true);
 
 	return programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT);
 }
 
-TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, const std::string& assets, const Params& params)
+TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, add_cref<std::string> assets, add_cref<Params> params)
 {
 	const VkShaderStageFlagBits	stage			(VK_SHADER_STAGE_COMPUTE_BIT);
 	const VkDescriptorType		descType		(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-	ZShaderModule				computeShader	= createShader(ctx.device, assets, (params.flags.noBuildAlways ? false : true));
+	ZShaderModule				computeShader	= createShader(ctx.device, assets, params);
 	struct PushConstant
 	{
 		Params::AddresingMode	addressingMode;
@@ -1001,7 +1028,7 @@ TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, const std::string& as
 	{
 		OneShotCommandBuffer shot(commandPool);
 		ZCommandBuffer shotCmd = shot.commandBuffer;
-		commandBufferPushConstants<PushConstant>(shotCmd, pipelineLayout, pc);
+		commandBufferPushConstants(shotCmd, pipelineLayout, pc);
 		commandBufferBindPipeline(shotCmd, pipeline);
 		commandBufferDispatch(shotCmd, UVec3(params.workGroup));
 	}

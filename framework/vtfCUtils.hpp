@@ -347,6 +347,11 @@ template<class Y> add_cptr<Y> makeQuickPtr(Y&& y)
 	return &static_cast<add_cref<Y>>(std::forward<Y>(y));
 }
 
+template<class Y> add_cref<Y> makeQuickRef(Y&& y)
+{
+	return static_cast<add_cref<Y>>(std::forward<Y>(y));
+}
+
 struct TriLogicInt
 {
 				TriLogicInt	() : m_value{}, m_hasValue(false) {}

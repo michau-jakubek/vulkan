@@ -284,7 +284,8 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZShaderModu
 	auto i = settings.findShader(stage);
 	if (i != settings.m_shaderStages.end())
 	{
-		i->module = *shaderModule;
+		i->module	= *shaderModule;
+		i->pName	= shaderModule.getParamRef<std::string>().c_str();
 	}
 	else
 	{
@@ -292,7 +293,7 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZShaderModu
 		shaderStageInfo.sType	= VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 		shaderStageInfo.stage	= stage;
 		shaderStageInfo.module	= *shaderModule;
-		shaderStageInfo.pName	= "main";
+		shaderStageInfo.pName	= shaderModule.getParamRef<std::string>().c_str();
 		settings.m_shaderStages.emplace_back(shaderStageInfo);
 	}
 }
@@ -506,7 +507,7 @@ ZPipeline createComputePipelineImpl (
 	sci.flags	= VkPipelineShaderStageCreateFlags(0);
 	sci.stage	= VK_SHADER_STAGE_COMPUTE_BIT;
 	sci.module	= *computeShaderModule;
-	sci.pName	= "main";
+	sci.pName	= computeShaderModule.getParamRef<std::string>().c_str();
 	sci.pSpecializationInfo	= info.empty() ? nullptr : &specInfo;
 
 	VkComputePipelineCreateInfo	ci = makeVkStruct();

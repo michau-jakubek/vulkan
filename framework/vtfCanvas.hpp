@@ -40,8 +40,6 @@ struct CanvasStyle
 struct CanvasContext
 {
 	VkAllocationCallbacksPtr	cc_callbacks;
-	VkDebugUtilsMessengerEXT	cc_debugMessenger;
-	VkDebugReportCallbackEXT	cc_debugReport;
 	ZInstance					cc_instance;
 	ZGLFWwindowPtr				cc_window;
 	ZSurfaceKHR					cc_surface;

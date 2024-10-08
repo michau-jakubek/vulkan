@@ -37,10 +37,6 @@ ZInstance		createInstance (const char*							appName,
 								VkAllocationCallbacksPtr			callbacks,
 								const strings&						desiredLayers = {},
 								const strings&						desiredExtensions = {},
-								add_ptr<VkDebugUtilsMessengerEXT>	pMessenger = nullptr,
-								void*								pMessengerUserData = nullptr,
-								add_ptr<VkDebugReportCallbackEXT>	pReport = nullptr,
-								void*								pReportUserData = nullptr,
 								uint32_t							apiVersion = VK_API_VERSION_1_0,
 								bool								enableDebugPrintf = false);
 ZPhysicalDevice	getPhysicalDeviceByIndex	(ZInstance									instance,
@@ -93,7 +89,7 @@ VkQueueFlags	queueGetFlags				(ZQueue queue);
 bool			queueSupportSwapchain		(ZQueue queue);
 
 ZFence			createFence		(ZDevice device, bool signaled = false);
-void			waitForFence	(ZFence fence, uint64_t timeout = UINT64_MAX);
+VkResult		waitForFence	(ZFence fence, uint64_t timeout = UINT64_MAX, bool assertOnFail = true);
 void			resetFence		(ZFence fence);
 bool			fenceStatus		(ZFence fence);
 void			waitForFences	(std::initializer_list<ZFence> fences, uint64_t timeout = UINT64_MAX);
@@ -103,8 +99,8 @@ void			resetFences		(std::vector<ZFence> fences);
 bool			fenceStatus		(ZFence fence);
 ZSemaphore		createSemaphore	(ZDevice device);
 
-ZShaderModule	createShaderModule(ZDevice device, VkShaderStageFlagBits stage, const std::string& code);
-ZShaderModule	createShaderModule(ZDevice device, VkShaderStageFlagBits stage, const std::vector<unsigned char>& code);
+ZShaderModule	createShaderModule (ZDevice device, VkShaderStageFlagBits stage,
+								    add_cref<std::vector<uint8_t>> code, add_cref<std::string> entryName);
 
 ZFramebuffer	createFramebuffer (ZRenderPass renderPass, add_cref<VkExtent2D> size, const std::vector<ZImageView>& attachments);
 ZFramebuffer	createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t height, const std::vector<ZImageView>& attachments);

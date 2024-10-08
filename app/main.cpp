@@ -2,6 +2,7 @@
 #include <cstring>
 #include <sstream>
 #include <string_view>
+#include <cstdlib>
 
 #include "main.hpp"
 #include "vtfBacktrace.hpp"
@@ -14,6 +15,8 @@
 #include "vtfOptionParser.hpp"
 
 using namespace vtf;
+
+#define VK_INSTANCE_LAYERS "VK_INSTANCE_LAYERS"
 
 static void printUsage (std::ostream& str);
 static void printVtfVersion (std::ostream& str, uint32_t level);
@@ -96,6 +99,25 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	Option optVtfVersion1{ "-vv", 0 };			options.push_back(optVtfVersion1);
 	Option optVtfVersion0{ "-vvv", 0 };			options.push_back(optVtfVersion0);
 	Option optVtfVersion22{ "--version", 0 };	options.push_back(optVtfVersion22);
+
+#if SYSTEM_OS_WINDOWS
+	const char listSeparator = ';';
+#else
+	const char listSeparator = ':';
+#endif
+	auto getenv = [](add_cptr<char> var) -> std::string
+	{
+#ifdef _MSC_VER
+		char val[256]{};
+		size_t cnt = 0;
+		getenv_s(&cnt, val, ARRAY_LENGTH(val) - 1, var);
+		return std::string(val);
+#else
+		if (char* val = std::getenv(var); val != nullptr)
+			return std::string(val);
+		return std::string();
+#endif
+	};
 
 	if ((consumeOptions(optVtfVersion21, options, appArgs, sink) > 0)
 		|| (consumeOptions(optVtfVersion22, options, appArgs, sink) > 0))
@@ -217,15 +239,16 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 		}
 
 		consumeOptions(layer, options, appArgs, globalAppFlags.layers);
+		if (const std::string envLayers = getenv(VK_INSTANCE_LAYERS); envLayers.length())
+		{
+			const auto envLayerList = splitString(envLayers, listSeparator);
+			globalAppFlags.layers.insert(globalAppFlags.layers.end(), envLayerList.begin(), envLayerList.end());
+		}
 
 		ZInstance			instance = createInstance(THIS_EXECUTABLE_NAME
 													  , getAllocationCallbacks()
 													  , globalAppFlags.layers	// const strings&	desiredLayers
 													  , {}						// const strings&	desiredExtension
-													  , nullptr					// pMessenger
-													  , nullptr					// pMessengerUserData
-													  , nullptr					// pReport
-													  , nullptr					// pReportUserData
 													  , apiVer					// apiVersion
 													  , false					// enableDebugPrintf
 													  );
@@ -325,7 +348,13 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	globalAppFlags.noWarning_VUID_Undefined = (consumeOptions(optLayNoVuid, options, appArgs, sink) > 0);
 	consumeOptions(excludeDevExt, options, appArgs, globalAppFlags.excludedDevExtensions);
 	consumeOptions(optSuppressVUID, options, appArgs, globalAppFlags.suppressedVUIDs);
+
 	consumeOptions(layer, options, appArgs, globalAppFlags.layers);
+	if (const std::string envLayers = getenv(VK_INSTANCE_LAYERS); envLayers.length())
+	{
+		const auto envLayerList = splitString(envLayers, listSeparator);
+		globalAppFlags.layers.insert(globalAppFlags.layers.end(), envLayerList.begin(), envLayerList.end());
+	}
 
 	setGlobalAppFlags(globalAppFlags);
 
@@ -441,6 +470,7 @@ void printUsage (std::ostream& str)
 	str << "  -ede <ext> [-ede <ext>]:  don't load extension during device creation" << std::endl;
 	str << "  -ll:                      prints available instance layer names" << std::endl;
 	str << "  -l <layer> [-l <layer>]:  enable layer(s)" << std::endl;
+	str << "                            also respects " VK_INSTANCE_LAYERS " environment variable" << std::endl;
 	str << "  -l-no-vuid-undefined:     suppress layers(s) VUID_Undefined warning" << std::endl;
 	str << "  -l-suppress <VUID>:       suppress layers(s) specific VUID message: warning, error, etc.," << std::endl;
 	str << "                            that match at least first 5 characters. No wildcard is applied." << std::endl;

@@ -28,7 +28,6 @@ SharedDevice::SharedDevice (add_cptr<char> name, bool graphical)
 {
 	ZInstance instance = createInstance(name, m_callbacks,
 									m_globalAppFlags.layers, {/*instanceExtensions*/},
-									&m_debugMessenger, this, &m_debugReport, this,
 									m_globalAppFlags.apiVer, m_globalAppFlags.debugPrintfEnabled);
 	ZPhysicalDevice physDev = selectPhysicalDevice(make_signed(m_globalAppFlags.physicalDeviceIndex), instance, {/*deviceExtensions*/});
 	VkPhysicalDeviceFeatures2 resultFeatures = makeVkStruct();

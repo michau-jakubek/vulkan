@@ -904,38 +904,17 @@ void ProgramCollection::buildAndVerify (bool buildAlways)
 ZShaderModule ProgramCollection::getShader (VkShaderStageFlagBits stage, uint32_t index, bool verbose) const
 {
 	ZShaderModule module;
-	auto search = m_stageToBinary.find(std::make_pair(stage, index));
+	const auto stageAndIndex = StageAndIndex(stage, index);
+	auto search = m_stageToBinary.find(stageAndIndex);
 	if (m_stageToBinary.end() != search)
 	{
-		module = createShaderModule(m_device, stage, search->second);
+		module = createShaderModule(m_device, stage, search->second, m_stageToCode.at(stageAndIndex).at(entryName));
 	}
 	else if (verbose)
 	{
 		ASSERTION(false);
 	}
 	return module;
-}
-
-VkShaderModule ProgramCollection::getShaderModule (VkShaderStageFlagBits stage, uint32_t index, bool verbose) const
-{
-	VkShaderModule shaderModule = VK_NULL_HANDLE;
-	auto search = m_stageToBinary.find(std::make_pair(stage, index));
-	if (m_stageToBinary.end() != search)
-	{
-		VkAllocationCallbacksPtr	callbacks	= m_device.getParam<VkAllocationCallbacksPtr>();
-		VkShaderModuleCreateInfo	createInfo	= makeVkStruct();
-
-		createInfo.codeSize = search->second.size();
-		createInfo.pCode = reinterpret_cast<const uint32_t*>(search->second.data());
-
-		VKASSERT2(vkCreateShaderModule(*m_device, &createInfo, callbacks, &shaderModule));
-	}
-	else if (verbose)
-	{
-		ASSERTION(false);
-	}
-
-	return shaderModule;
 }
 
 } // namespace vtf

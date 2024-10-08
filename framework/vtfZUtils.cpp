@@ -52,30 +52,17 @@ std::ostream& operator<<(std::ostream& str, const VtfVersion& v)
 				<< v.get().nvariant;
 }
 
-ZShaderModule createShaderModule (ZDevice device, VkShaderStageFlagBits stage, const std::string& code)
+ZShaderModule createShaderModule (
+	ZDevice							device,
+	VkShaderStageFlagBits			stage,
+	add_cref<std::vector<uint8_t>>	code,
+	add_cref<std::string>			entryName)
 {
-	VkShaderModuleCreateInfo createInfo = makeVkStruct();
-	createInfo.codeSize	= code.length();
-	createInfo.pCode	= reinterpret_cast<const uint32_t*>(code.data());
-
-	VkShaderModule				shaderModule	= VK_NULL_HANDLE;
-	VkAllocationCallbacksPtr	callbacks		= device.getParam<VkAllocationCallbacksPtr>();
-
-	if (vkCreateShaderModule(*device, &createInfo, callbacks, &shaderModule) != VK_SUCCESS)
-	{
-		throw std::runtime_error("failed to create shader module!");
-	}
-
-	return ZShaderModule::create(shaderModule, device, callbacks, stage);
-}
-
-ZShaderModule createShaderModule (ZDevice device, VkShaderStageFlagBits stage, const std::vector<unsigned char>& code)
-{
-	auto readMagicNumber = [](const std::vector<unsigned char>& s) -> uint32_t
+	auto readMagicNumber = [](add_cref<std::vector<uint8_t>> s) -> uint32_t
 	{
 		return *(const uint32_t*)(s.data());
 	};
-	auto changeMagicNumber = [](uint32_t magic, std::vector<unsigned char>& s) -> void
+	auto changeMagicNumber = [](uint32_t magic, add_ref<std::vector<uint8_t>>  s) -> void
 	{
 		*(uint32_t*)(s.data()) = magic;
 	};
@@ -106,7 +93,7 @@ ZShaderModule createShaderModule (ZDevice device, VkShaderStageFlagBits stage, c
 
 	VKASSERT2(vkCreateShaderModule(*device, &createInfo, callbacks, &shaderModule));
 
-	return ZShaderModule::create(shaderModule, device, callbacks, stage);
+	return ZShaderModule::create(shaderModule, device, callbacks, stage, entryName);
 }
 
 ZFramebuffer createFramebuffer (ZRenderPass renderPass, add_cref<VkExtent2D> size, const std::vector<ZImageView>& attachments)
@@ -438,15 +425,11 @@ ZInstance		createInstance (const char*							appName,
 								VkAllocationCallbacksPtr			callbacks,
 								const strings&						desiredLayers,
 								const strings&						desiredExtensions,
-								VkDebugUtilsMessengerEXT*			pMessenger,
-								void*								pMessengerUserData,
-								add_ptr<VkDebugReportCallbackEXT>	pReport,
-								void*								pReportUserData,
 								uint32_t							apiVersion,
 								bool								enableDebugPrintf)
 {
 	Logger						logger				{};
-	ZInstance					instance			(VK_NULL_HANDLE, callbacks, apiVersion, {}, {}, logger);
+	ZInstance					instance			(VK_NULL_HANDLE, callbacks, apiVersion, {}, {}, logger, VK_NULL_HANDLE, VK_NULL_HANDLE);
 	add_ref<strings>			requiredLayers		= instance.getParamRef<ZDistType<RequiredLayers, strings>>();
 	add_ref<strings>			availableExtensions	= instance.getParamRef<ZDistType<AvailableLayerExtensions, strings>>();
 	add_cref<GlobalAppFlags>	gf					= getGlobalAppFlags();
@@ -468,23 +451,22 @@ ZInstance		createInstance (const char*							appName,
 	ASSERTMSG(containsAllStrings(availableExtensions, desiredExtensions),
 			  "All required extension(s) must match available instance extension(s)");
 
-	VkValidationFeatureEnableEXT						enabledValidationFeature = VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT;
+	const VkValidationFeatureEnableEXT					enabledValidationFeature = VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT;
 	VkValidationFeaturesEXT								validationFeatures = makeVkStruct();
 	validationFeatures.pEnabledValidationFeatures		= &enabledValidationFeature;
-	validationFeatures.enabledValidationFeatureCount	= 1;
+	validationFeatures.enabledValidationFeatureCount	= 1u;
 	validationFeatures.pDisabledValidationFeatures		= nullptr;
-	validationFeatures.disabledValidationFeatureCount	= 0;
+	validationFeatures.disabledValidationFeatureCount	= 0u;
 
 	VkDebugUtilsMessengerCreateInfoEXT debugMessengerInfo{};
 	VkDebugReportCallbackCreateInfoEXT debugReportInfo{};
 	const std::string debugUtilsExtName(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);		// "VK_EXT_debug_utils"
 	const std::string debugReportExtName(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);	// "VK_EXT_debug_report"
-	const bool debugReportEnabled		= ((containsString(debugReportExtName, desiredExtensions) || pReport != nullptr)
-										&& containsString(debugReportExtName, availableExtensions));
-	const bool debugMessengerEnabled	= ((containsString(debugUtilsExtName, desiredExtensions) || pMessenger != nullptr)
-										&& containsString(debugUtilsExtName, availableExtensions)) && (!debugReportEnabled);
-	UNREF(pMessengerUserData);
-	UNREF(pReportUserData);
+	const bool debugReportEnabled		= containsString(debugReportExtName, desiredExtensions)
+										|| containsString(debugReportExtName, availableExtensions);
+	const bool debugMessengerEnabled	= (containsString(debugUtilsExtName, desiredExtensions)
+										|| containsString(debugUtilsExtName, availableExtensions))
+										&& (debugReportEnabled == false);
 
 	strings requiredExtensions(desiredExtensions);
 
@@ -532,8 +514,14 @@ ZInstance		createInstance (const char*							appName,
 	add_cref<ZInstanceInterface> ii = instance.getInterface(*instance);
 	UNREF(ii);
 
-	if (debugMessengerEnabled) createDebugMessenger(instance, callbacks, debugMessengerInfo, *pMessenger);
-	if (debugReportEnabled) createDebugReport(instance, callbacks, debugReportInfo, *pReport);
+	if (debugMessengerEnabled)
+	{
+		createDebugMessenger(instance, callbacks, debugMessengerInfo, instance.getParamRef<VkDebugUtilsMessengerEXT>());
+	}
+	if (debugReportEnabled)
+	{
+		createDebugReport(instance, callbacks, debugReportInfo, instance.getParamRef<VkDebugReportCallbackEXT>());
+	}
 
 	if (getGlobalAppFlags().verbose)
 	{
@@ -876,10 +864,12 @@ ZFence createFence (ZDevice device, bool signaled)
 	return ZFence::create(handle, device, callbacks);
 }
 
-void waitForFence (ZFence fence, uint64_t timeout)
+VkResult waitForFence (ZFence fence, uint64_t timeout, bool assertOnFail)
 {
 	VkDevice device = *fence.getParam<ZDevice>();
-	VKASSERT2(vkWaitForFences(device, 1, fence.ptr(), VK_TRUE, timeout));
+	const VkResult res = vkWaitForFences(device, 1, fence.ptr(), VK_TRUE, timeout);
+	if (assertOnFail) VKASSERT2(res);
+	return res;
 }
 
 void waitForFences (std::initializer_list<ZFence> fences, uint64_t timeout)

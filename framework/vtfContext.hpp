@@ -30,10 +30,7 @@ public:
 					 add_cref<Version>		apiVersion				= Version(1, 0),
 					 bool					enableDebugPrintf		= false);
 
-	VulkanContext	(VkAllocationCallbacksPtr	allocationCallbacks,
-					 VkDebugUtilsMessengerEXT	debugMessengerHandle,
-					 VkDebugReportCallbackEXT	debugReportHandle,
-					 ZInstance					anInstance,
+	VulkanContext	(ZInstance					anInstance,
 					 ZPhysicalDevice			aPhysicalDevice,
 					 ZDevice					aLogicalDevice);
 
@@ -56,8 +53,6 @@ public:
 
 protected:
 	VkAllocationCallbacksPtr			m_callbacks;
-	VkDebugUtilsMessengerEXT			m_debugMessenger;
-	VkDebugReportCallbackEXT			m_debugReport;
 	ZInstance							m_instance;
 	ZPhysicalDevice						m_physicalDevice;
 	ZDevice								m_device;

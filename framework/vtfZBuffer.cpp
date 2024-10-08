@@ -173,17 +173,21 @@ ZBuffer createBuffer (ZImage image, ZBufferUsageFlags usage, ZMemoryPropertyFlag
 
 ZBuffer bufferDuplicate (ZBuffer buffer)
 {
-	ASSERT_NOT_IMPLEMENTED();
-	/*
-	ASSERTMSG(buffer.has_handle(), "Buffer handle must not be VK_NULL_HANDLE");
+	add_cref<std::vector<ZDeviceMemory>>	ms		= buffer.getParamRef<std::vector<ZDeviceMemory>>();
+	const uint32_t							mc		= data_count(ms);
+	ASSERTMSG(mc == 1u, "Duplicate of sparse buffers not implemented yet");
 
-	ZDevice							dev		= buffer.getParam<ZDevice>();
-	add_cref<VkBufferCreateInfo>	cinfo	= buffer.getParamRef<VkBufferCreateInfo>();
-	VkMemoryPropertyFlags			mprop	= buffer.getParam<ZDeviceMemory>().getParam<VkMemoryPropertyFlags>();
+	add_cref<VkBufferCreateInfo>			cinfo	= buffer.getParamRef<VkBufferCreateInfo>();
+	VkMemoryPropertyFlags					mprop	= ms.at(0).getParam<VkMemoryPropertyFlags>();
 
-	return createBuffer(dev, cinfo.size, ZBufferUsageFlags::fromFlags(cinfo.usage), ZMemoryPropertyFlags::fromFlags(mprop));
-	*/
-	return buffer;
+	return createBuffer(buffer.getParam<ZDevice>(),
+						cinfo.size,
+						buffer.getParamRef< type_index_with_default>(),
+						buffer.getParamRef<VkFormat>(),
+						buffer.getParamRef<VkExtent3D>(),
+						ZBufferUsageFlags::fromFlags(cinfo.usage),
+						ZBufferCreateFlags::fromFlags(cinfo.flags),
+						ZMemoryPropertyFlags::fromFlags(mprop));
 }
 
 ZBuffer createBufferAndLoadFromImageFile (ZDevice device, add_cref<std::string> imageFileName,

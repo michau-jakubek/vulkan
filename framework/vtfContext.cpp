@@ -12,10 +12,7 @@
 namespace vtf
 {
 
-VulkanContext::VulkanContext (VkAllocationCallbacksPtr	allocationCallbacks,
-							  VkDebugUtilsMessengerEXT	debugMessengerHandle,
-							  VkDebugReportCallbackEXT	debugReportHandle,
-							  ZInstance					anInstance,
+VulkanContext::VulkanContext (ZInstance					anInstance,
 							  ZPhysicalDevice			aPhysicalDevice,
 							  ZDevice					aLogicalDevice)
 	// begining references initialization
@@ -27,9 +24,7 @@ VulkanContext::VulkanContext (VkAllocationCallbacksPtr	allocationCallbacks,
 	, computeQueue					(m_computeQueue)
 	, logger						(m_logger)
 	// end of references initialization
-	, m_callbacks					(allocationCallbacks)
-	, m_debugMessenger				(debugMessengerHandle)
-	, m_debugReport					(debugReportHandle)
+	, m_callbacks					(anInstance.getParam<VkAllocationCallbacksPtr>())
 	, m_instance					(anInstance)
 	, m_physicalDevice				(aPhysicalDevice)
 	, m_device						(aLogicalDevice)
@@ -58,16 +53,14 @@ VulkanContext::VulkanContext (add_cptr<char>		appName,
 	, logger						(m_logger)
 	// end of initialization of references
 	, m_callbacks					(getAllocationCallbacks())
-	, m_debugMessenger				(VK_NULL_HANDLE)
-	, m_debugReport					(VK_NULL_HANDLE)
 	, m_instance					(getSharedInstance()
 									 | ([&,this]() -> ZInstance
 										{
 									 return createInstance(appName, m_callbacks, instanceLayers, instanceExtensions,
-													  &m_debugMessenger, this, &m_debugReport, this, apiVersion, enableDebugPrintf);}))
+															apiVersion, enableDebugPrintf);}))
 	, m_physicalDevice				(getSharedPhysicalDevice()
 									 | selectPhysicalDevice(make_signed(getGlobalAppFlags().physicalDeviceIndex), m_instance, deviceExtensions))
-	, m_device						(getSharedDevice() |createLogicalDevice(
+	, m_device						(getSharedDevice() | createLogicalDevice(
 										 m_physicalDevice, onEnablingFeatures, ZSurfaceKHR(), enableDebugPrintf))
 	, m_graphicsQueue				(deviceGetNextQueue(m_device, VK_QUEUE_GRAPHICS_BIT, false))
 	, m_computeQueue				((queueGetFlags(m_graphicsQueue) & VK_QUEUE_COMPUTE_BIT)
@@ -79,8 +72,6 @@ VulkanContext::VulkanContext (add_cptr<char>		appName,
 
 VulkanContext::~VulkanContext ()
 {
-	destroyDebugMessenger(m_instance, m_callbacks, m_debugMessenger);
-	destroyDebugReport(m_instance, m_callbacks, m_debugReport);
 	if (getGlobalAppFlags().verbose)
 	{
 		std::cout << "[INFO] Destructor " << __func__ << ' '

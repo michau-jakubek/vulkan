@@ -154,9 +154,12 @@ void storeInt(int x, uint at) {
 						: uint(x);
 }
 
+void xmain();
+
 void main_entry()
 {
 	writeParams();
+	xmain();
 }
 
 

@@ -74,7 +74,6 @@ struct ProgramCollection : _GlSpvProgramCollection
 	// Uses information from GlobalAppFlags
 	void buildAndVerify (bool buildAlways);
 	auto getShader (VkShaderStageFlagBits stage, uint32_t index = 0u, bool verbose = true) const -> ZShaderModule;
-	auto getShaderModule (VkShaderStageFlagBits stage, uint32_t index = 0u, bool verbose = true) const -> VkShaderModule;
 };
 
 } // namespace vtf
