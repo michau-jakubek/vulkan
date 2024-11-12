@@ -13,10 +13,12 @@
 #include <array>
 #include <variant>
 
-using namespace vtf;
+
 
 namespace
 {
+using namespace vtf;
+using namespace std::placeholders;
 
 #define METH0 "0: z_0 = seed; z_n+1 = z_n^2 + point"
 #define METH1 "1: z_0 = point; z_n+1 = z_n^2 + seed"
@@ -463,9 +465,11 @@ void initEvents (Canvas& cs, VarUserInput& vui, bool forceFloat32)
 	}
 }
 
-using namespace std::placeholders;
-UNUSED void commandBufferPushConstants (ZCommandBuffer cmdBuffer, ZPipelineLayout pipelineLayout,
-										const VarUserInput& vui, add_cref<TestConfig> config)
+void commandBufferPushConstants (
+	add_cref<TestConfig>	config,
+	ZCommandBuffer			cmdBuffer,
+	ZPipelineLayout			pipelineLayout,
+	add_cref<VarUserInput>	vui)
 {
 	if (config.float32)
 		::vtf::commandBufferPushConstants(cmdBuffer, pipelineLayout, std::get<UserInput<float>>(vui).pc);
@@ -542,11 +546,12 @@ TriLogicInt performTest (add_ref<Canvas> cs, add_cref<std::string> assets,
 	auto onCommandRecording = [&](add_ref<Canvas>, add_cref<Canvas::Swapchain> swapchain, ZCommandBuffer cmdBuffer, ZFramebuffer framebuffer)
 	{
 		ui.updateDim(swapchain);
+		//std::get_if<UserInput<float>>(&vui);
 
 		commandBufferBegin(cmdBuffer);
 			commandBufferBindPipeline(cmdBuffer, pipeline);
 			commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
-			commandBufferPushConstants(cmdBuffer, pipelineLayout, vui, config);
+			commandBufferPushConstants(config, cmdBuffer, pipelineLayout, vui);
 			vkCmdSetViewport(*cmdBuffer, 0, 1, &swapchain.viewport);
 			vkCmdSetScissor(*cmdBuffer, 0, 1, &swapchain.scissor);
 			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer, 0);

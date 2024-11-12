@@ -11,6 +11,7 @@
 #include "vtfDebugMessenger.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfThreadSafeLogger.hpp"
+#include "driver.hpp"
 
 void releaseQueue (const QueueParams& params)
 {
@@ -53,16 +54,16 @@ std::ostream& operator<<(std::ostream& str, const VtfVersion& v)
 }
 
 ZShaderModule createShaderModule (
-	ZDevice							device,
-	VkShaderStageFlagBits			stage,
-	add_cref<std::vector<uint8_t>>	code,
-	add_cref<std::string>			entryName)
+    ZDevice						device,
+    VkShaderStageFlagBits		stage,
+    add_cref<std::vector<char>>	code,
+    add_cref<std::string>		entryName)
 {
-	auto readMagicNumber = [](add_cref<std::vector<uint8_t>> s) -> uint32_t
+    auto readMagicNumber = [](add_cref<std::vector<char>> s) -> uint32_t
 	{
 		return *(const uint32_t*)(s.data());
 	};
-	auto changeMagicNumber = [](uint32_t magic, add_ref<std::vector<uint8_t>>  s) -> void
+    auto changeMagicNumber = [](uint32_t magic, add_ref<std::vector<char>>  s) -> void
 	{
 		*(uint32_t*)(s.data()) = magic;
 	};
@@ -74,7 +75,7 @@ ZShaderModule createShaderModule (
 	VkShaderModule				shaderModule	= VK_NULL_HANDLE;
 	VkAllocationCallbacksPtr	callbacks		= device.getParam<VkAllocationCallbacksPtr>();
 
-	std::vector<unsigned char> code2;
+    std::vector<char> code2;
 	if (readMagicNumber(code) == 0)
 	{
 		add_ref<Logger> logger = device.getParam<ZPhysicalDevice>().getParam<ZInstance>().getParamRef<Logger>();
@@ -421,15 +422,17 @@ ZInstance getSharedInstance ()
 	return {};
 }
 
-ZInstance		createInstance (const char*							appName,
-								VkAllocationCallbacksPtr			callbacks,
-								const strings&						desiredLayers,
-								const strings&						desiredExtensions,
-								uint32_t							apiVersion,
-								bool								enableDebugPrintf)
+ZInstance createInstance (
+	const char*					appName,
+	VkAllocationCallbacksPtr	callbacks,
+	const strings&				desiredLayers,
+	const strings&				desiredExtensions,
+	uint32_t					apiVersion,
+	bool						enableDebugPrintf)
 {
 	Logger						logger				{};
-	ZInstance					instance			(VK_NULL_HANDLE, callbacks, apiVersion, {}, {}, logger, VK_NULL_HANDLE, VK_NULL_HANDLE);
+	ZInstance					instance			(VK_NULL_HANDLE, callbacks, (appName ? appName : ""), apiVersion,
+														{}, {}, logger, VK_NULL_HANDLE, VK_NULL_HANDLE);
 	add_ref<strings>			requiredLayers		= instance.getParamRef<ZDistType<RequiredLayers, strings>>();
 	add_ref<strings>			availableExtensions	= instance.getParamRef<ZDistType<AvailableLayerExtensions, strings>>();
 	add_cref<GlobalAppFlags>	gf					= getGlobalAppFlags();
@@ -493,9 +496,9 @@ ZInstance		createInstance (const char*							appName,
 	}
 
 	VkApplicationInfo	appInfo			= makeVkStruct();
-	appInfo.pApplicationName			= appName;
+	appInfo.pApplicationName			= instance.getParamRef<std::string>().c_str();
 	appInfo.applicationVersion			= VK_MAKE_VERSION(gf.vtfVer.nmajor, gf.vtfVer.nminor, gf.vtfVer.npatch);
-	appInfo.pEngineName					= nullptr;
+	appInfo.pEngineName					= "<unknown>";
 	appInfo.engineVersion				= VK_MAKE_VERSION(1, 0, 0);
 	appInfo.apiVersion					= apiVersion;	// default VK_API_VERSION_1_0
 
@@ -509,7 +512,29 @@ ZInstance		createInstance (const char*							appName,
 	createInfo.enabledLayerCount		= data_count(v_layerNames);
 	createInfo.ppEnabledLayerNames		= data_or_null(v_layerNames);
 
+	if (gf.verbose)
+	{
+		std::cout << "[APP] Trying to create Vulkan instance:\n"
+				  << "       pApplicationName:   " << std::quoted(appInfo.pApplicationName) << std::endl
+				  << "       applicationVersion: " << gf.vtfVer << std::endl
+				  << "       pEngineName:        " << std::quoted(appInfo.pEngineName) << std::endl
+				  << "       engineVersion:      " << Version::fromUint(appInfo.engineVersion) << std::endl
+				  << "       apiVersion:         " << Version::fromUint(apiVersion) << std::endl;
+	}
 	VKASSERT3(vkCreateInstance(&createInfo, callbacks, instance.setter()), "Failed to create instance!");
+
+	if (getGlobalAppFlags().verbose)
+	{
+		bool driverLoadedStatus = false;
+		std::string driverFileName = getDriverFileName(driverLoadedStatus);
+		UNREF(driverLoadedStatus);
+
+		Version nullApiVersion = getVulkanImplVersion();
+		Version vulkanApiVersion = getVulkanImplVersion(instance);
+		logger << "[app] Vulkan driver file name:       " << driverFileName << std::endl;
+		logger << "[APP] Vulkan Null Instance Version:  " << nullApiVersion << std::endl;
+		logger << "[APP] Vulkan Implementation Version: " << vulkanApiVersion << std::endl;
+	}
 
 	add_cref<ZInstanceInterface> ii = instance.getInterface(*instance);
 	UNREF(ii);
@@ -521,16 +546,6 @@ ZInstance		createInstance (const char*							appName,
 	if (debugReportEnabled)
 	{
 		createDebugReport(instance, callbacks, debugReportInfo, instance.getParamRef<VkDebugReportCallbackEXT>());
-	}
-
-	if (getGlobalAppFlags().verbose)
-	{
-		Version nullApiVersion = getVulkanImplVersion();
-		Version clientApiVersion = Version::fromUint(apiVersion);
-		Version vulkanApiVersion = getVulkanImplVersion(instance);
-		logger << "[APP] Trying to create versioned instance: " << clientApiVersion << std::endl;
-		logger << "[APP] Vulkan Null Instance Version:        " << nullApiVersion << std::endl;
-		logger << "[APP] Vulkan Implementation Version:       " << vulkanApiVersion << std::endl;
 	}
 
 	instance.verbose(getGlobalAppFlags().verbose != 0);
@@ -554,14 +569,24 @@ ZPhysicalDevice	getPhysicalDeviceByIndex (ZInstance instance, uint32_t physicalD
 	return dev;
 }
 
-ZPhysicalDevice selectPhysicalDevice (const int				proposedDeviceIndex,
-									  ZInstance				instance,
-									  add_cref<strings>		requiredExtensions,
-									  ZSurfaceKHR			surface)
+ZPhysicalDevice selectPhysicalDevice (
+    const int			proposedDeviceIndex,
+    ZInstance			instance,
+    add_cref<strings>   requiredExtensions,
+    ZSurfaceKHR			surface)
 {	
 	std::vector<VkPhysicalDevice> devices;
 	const uint32_t deviceCount = enumeratePhysicalDevices(*instance, devices);
 	ASSERTMSG(deviceCount != 0, "Failed to find GPUs that suppors Vulkan!");
+
+    if (getGlobalAppFlags().verbose)
+    {
+        std::cout << "[INFO] Found " << deviceCount << " available device(s)" << std::endl;
+        for (uint32_t i = 0; i < deviceCount; ++i)
+        {
+            printPhysicalDevice(devices.at(i), std::cout, i);
+        }
+    }
 
 	uint32_t					physicalDeviceIndex	= INVALID_UINT32;
 	add_cref<strings>			layers				= instance.getParamRef<ZDistType<RequiredLayers, strings>>();
@@ -581,6 +606,14 @@ ZPhysicalDevice selectPhysicalDevice (const int				proposedDeviceIndex,
 		const bool effectiveSurfaceSupport = surface.has_handle() ? (surfaceSupportQueueIndices.size() != 0) : true;
 		return (containsAllStrings(availableExtensions, requiredExtensions) && effectiveSurfaceSupport);
 	};
+
+    if (getGlobalAppFlags().verbose)
+    {
+        std::cout << "[INFO] Trying to select device with index "
+                  << proposedDeviceIndex
+                  << ", surface needed: " << boolean(surface.has_handle(), true)
+                  << std::endl;
+    }
 
 	VkPhysicalDevice result = VK_NULL_HANDLE;
 	if (proposedDeviceIndex < 0)
@@ -623,6 +656,13 @@ ZPhysicalDevice selectPhysicalDevice (const int				proposedDeviceIndex,
 	}
 
 	vkGetPhysicalDeviceProperties(result, &deviceProperties);
+
+    if (getGlobalAppFlags().verbose)
+    {
+        std::cout << "[INFO] Successfully selected device with index :"
+                  << physicalDeviceIndex << std::endl;
+        printPhysicalDevice(deviceProperties, std::cout, physicalDeviceIndex);
+    }
 
 	auto dev = ZPhysicalDevice(result,
 						   instance.getParam<VkAllocationCallbacksPtr>(), instance,
@@ -698,6 +738,7 @@ ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
 		{
 			//::vtf::operator<<(logger, queueCreateExInfo) << std::endl;
 			// TODO logger << queueCreateExInfo << std::endl;
+            ::vtf::operator<< (std::cout, queueCreateExInfo);
 		}
 	}
 
@@ -820,14 +861,14 @@ VkPhysicalDeviceFeatures2 deviceGetPhysicalFeatures2 (ZPhysicalDevice device, vo
 	return features;
 }
 
-add_cref<ZDeviceInterface> deviceGetInterface (ZDevice device)
+add_cref<ZDeviceInterface> deviceGetInterfaceImpl (ZDevice device)
 {
 	return device.getInterface(
 		*device.getParam<ZPhysicalDevice>().getParam<ZInstance>(),
 		*device);
 }
 
-add_cref<ZInstanceInterface> instanceGetInerface (ZInstance instance)
+add_cref<ZInstanceInterface> instanceGetInterfaceImpl (ZInstance instance)
 {
 	return instance.getInterface(*instance);
 }

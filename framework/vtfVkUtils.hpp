@@ -159,6 +159,9 @@ strings			enumerateDeviceExtensions (VkPhysicalDevice device, const strings& lay
 uint32_t		enumeratePhysicalDevices (VkInstance instance, std::vector<VkPhysicalDevice>& devices);
 uint32_t		enumerateSwapchainImages (VkDevice device, VkSwapchainKHR swapchain, std::vector<VkImage>& images);
 std::ostream&	printPhysicalDevices (VkInstance instance, std::ostream& str);
+std::ostream&	printPhysicalDevice (VkPhysicalDevice device, std::ostream& str, uint32_t deviceIndex = INVALID_UINT32);
+std::ostream&   printPhysicalDevice (add_cref<VkPhysicalDeviceProperties> props, std::ostream& str, uint32_t deviceIndex = INVALID_UINT32);
+
 uint32_t		computePixelByteSize (VkFormat format);
 uint32_t		computePixelChannelCount (VkFormat format);
 

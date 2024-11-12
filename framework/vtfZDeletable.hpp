@@ -320,7 +320,7 @@ typedef add_ptr<VkAllocationCallbacks> VkAllocationCallbacksPtr;
 typedef ZDeletable<VkInstance,
 	decltype(&vkDestroyInstance), &vkDestroyInstance,
 	swizzle_two_param, vtf::ZInstanceSingleton,
-	VkAllocationCallbacksPtr, /*apiVersion*/ uint32_t,
+	VkAllocationCallbacksPtr, std::string, /*apiVersion*/ uint32_t,
 	ZDistType<RequiredLayers, std::vector<std::string>>,
 	ZDistType<AvailableLayerExtensions, std::vector<std::string>>,
 	vtf::Logger, VkDebugUtilsMessengerEXT, VkDebugReportCallbackEXT>

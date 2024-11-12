@@ -86,5 +86,6 @@ set(framework_files
 add_library(framework STATIC ${framework_files})
 target_include_directories(framework BEFORE PRIVATE ${GLFW3_INCLUDE_DIR})
 target_include_directories(framework BEFORE PRIVATE ${VULKAN_INCLUDE_DIR})
-target_link_libraries(framework ${COMMON_LIBS})
+target_link_libraries(framework driver)
+add_definitions(-DVULKAN_DRIVER="${VULKAN_DRIVER}")
 

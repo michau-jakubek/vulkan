@@ -22,7 +22,7 @@ if(SYSTEM_OS_LINUX OR SYSTEM_OS_WINDOWS)
   add_library(console STATIC ${console_files})
   target_include_directories(console BEFORE PRIVATE ${VULKAN_INCLUDE_DIR})
   target_include_directories(console BEFORE PRIVATE ${GLFW3_INCLUDE_DIR})
-  link_libraries(framework)
+  link_libraries(framework driver)
 else()
   project(app CXX)
 
@@ -45,3 +45,4 @@ else()
   add_executable(app ${shell_files})
   set_property(TARGET app PROPERTY CXX_STANDARD 17)
 endif()
+

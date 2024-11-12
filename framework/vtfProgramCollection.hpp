@@ -44,7 +44,7 @@ struct _GlSpvProgramCollection
 					  add_cref<std::string> fileName, add_cref<strings> includePaths = {},
 					  add_cref<std::string> entryName = "main", bool verbose = true);
 	// availailable after build
-	auto getShaderCode (VkShaderStageFlagBits stage, uint32_t index, bool binORasm = true) const -> add_cref<std::vector<uint8_t>>;
+    auto getShaderCode (VkShaderStageFlagBits stage, uint32_t index, bool binORasm = true) const -> add_cref<std::vector<char>>;
 	auto getShaderFile (VkShaderStageFlagBits stage, uint32_t index, bool inOrout = false) const -> add_cref<std::string>;
 	auto getShaderEntry (VkShaderStageFlagBits stage, uint32_t index) const -> add_cref<std::string>;
 
@@ -56,8 +56,8 @@ protected:
 	// [0]: glsl code, [1]: entry name, [2] file name, [3...]: include path(s)
 	std::map<StageAndIndex, strings> m_stageToCode;
 	std::map<StageAndIndex, std::string> m_stageToFileName;
-	std::map<StageAndIndex, std::vector<uint8_t>> m_stageToAssembly;
-	std::map<StageAndIndex, std::vector<uint8_t>> m_stageToBinary;
+    std::map<StageAndIndex, std::vector<char>> m_stageToAssembly;
+    std::map<StageAndIndex, std::vector<char>> m_stageToBinary;
 
 private:
 	virtual auto addFromText (VkShaderStageFlagBits, add_cref<std::string>, add_cref<ShaderLink>,

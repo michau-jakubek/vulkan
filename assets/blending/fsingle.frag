@@ -2,14 +2,15 @@
 
 layout(push_constant) uniform PC
 {
-	vec4 background;
-	vec4 inColor0;
-	vec4 inColor1;
+	vec4 fColor0;
+	vec4 fColor1;
+	uvec4 uColor0;
+	uvec4 uColor1;
 };
 layout(location = 0) out vec4 outColor;
 
 void main()
 {
-	outColor = inColor0;
+	outColor = fColor1;
 }
 

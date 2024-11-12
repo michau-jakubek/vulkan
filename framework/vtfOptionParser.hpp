@@ -18,7 +18,9 @@ struct Option
 {
 	const char* name;
 	uint32_t follows;
-	constexpr Option (const char* name_, uint32_t follows_) : name(name_), follows(follows_) {}
+	uint32_t id;
+	constexpr Option (const char* name_, uint32_t follows_, uint32_t id_ = 0u)
+		: name(name_), follows(follows_), id(id_) {}
 	bool operator== (const Option& other) const;
 };
 int consumeOptions (add_cref<Option> opt, add_cref<std::vector<Option>> opts, add_ref<strings> args, add_ref<strings> values);

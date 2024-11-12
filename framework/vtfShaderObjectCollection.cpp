@@ -198,17 +198,20 @@ add_ref<ZPushConstants> ShaderObjectCollection::pushc (add_cref<ShaderLink> link
 	return update->data->pushConstants;
 }
 
-extern	bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
-							   add_cref<Version> vulkanVer, add_cref<Version> spirvVer,
-							   add_cref<strings> codeAndEntryAndIncludes,
-							   add_ref<std::string> shaderFileName,
-							   add_ref<std::vector<uint8_t>> binary,
-							   add_ref<std::vector<uint8_t>> assembly,
-							   add_ref<std::string> errors,
-							   bool enableValidation,
-							   bool genDisassmebly,
-							   bool buildAlways,
-							   bool genBinary);
+extern	bool verifyShaderCode (
+    uint32_t                    shaderIndex,
+    VkShaderStageFlagBits       stage,
+    add_cref<Version>           vulkanVer,
+    add_cref<Version>           spirvVer,
+    add_cref<strings>           codeAndEntryAndIncludes,
+    add_ref<std::string>        shaderFileName,
+    add_ref<std::vector<char>>  binary,
+    add_ref<std::vector<char>>  assembly,
+    add_ref<std::string>        errors,
+    bool enableValidation,
+    bool genDisassmebly,
+    bool buildAlways,
+    bool genBinary);
 
 extern void assertPushConstantSizeMax (ZDevice dev, const uint32_t size);
 
@@ -293,7 +296,7 @@ int ShaderObjectCollection::create (add_cref<Version> vulkanVer, add_cref<Versio
 			continue;
 
 		std::string errors, shaderFileName;
-		std::vector<uint8_t> binary, assembly;
+        std::vector<char> binary, assembly;
 		const StageAndIndex key = link.key();
 		add_ptr<ShaderData> data = link.data;
 
@@ -364,7 +367,7 @@ bool ShaderObjectCollection::create (add_cref<Version> vulkanVer, add_cref<Versi
 	while (next)
 	{
 		std::string errors, shaderFileName;
-		std::vector<uint8_t> binary, assembly;
+        std::vector<char> binary, assembly;
 		const StageAndIndex key = next->key();
 		add_ptr<IntShaderLink> pLink = static_cast<add_ptr<IntShaderLink>>(next);
 		add_ptr<ShaderData> data = pLink->data;

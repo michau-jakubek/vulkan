@@ -179,6 +179,7 @@ void commandBufferBindVertexBuffers (ZCommandBuffer cmd, add_cref<VertexInput> i
 void commandBufferSetVertexInputEXT (ZCommandBuffer cmd, add_cref<VertexInput> input)
 {
 	add_cref<ZDeviceInterface> di = deviceGetInterface(cmd.getParam<ZDevice>());
+
 	ASSERTMSG(di.shaderObject(), "ERROR: \"" VK_EXT_SHADER_OBJECT_EXTENSION_NAME "\" not supported");
 
 	ZVertexInput2EXT ext(input);

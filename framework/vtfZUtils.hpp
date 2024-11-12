@@ -80,8 +80,18 @@ VkPhysicalDeviceFeatures2
 ZPhysicalDevice	deviceGetPhysicalDevice (ZDevice device);
 ZQueue			deviceGetNextQueue			(ZDevice device, VkQueueFlags queueFlags, bool mustSupportSurface);
 
-add_cref<ZDeviceInterface>		deviceGetInterface (ZDevice device);
-add_cref<ZInstanceInterface>	instanceGetInerface(ZInstance instance);
+extern add_cref<ZDeviceInterface> deviceGetInterfaceImpl(ZDevice device);
+extern add_cref<ZInstanceInterface> instanceGetInterfaceImpl(ZInstance instance);
+// Supress an annoying GCC warning: possibly dangling reference to a temporary [-Wdangling-reference]
+inline auto deviceGetInterface = [](ZDevice device) -> add_cref<ZDeviceInterface>
+{
+	return deviceGetInterfaceImpl(device);
+};
+// Supress an annoying GCC warning: possibly dangling reference to a temporary [-Wdangling-reference]
+inline auto instanceGetInterface = [](ZInstance instance) -> add_cref<ZInstanceInterface>
+{
+	return instanceGetInterfaceImpl(instance);
+};
 
 uint32_t		queueGetFamilyIndex			(ZQueue queue);
 uint32_t		queueGetIndex				(ZQueue queue);
@@ -100,7 +110,7 @@ bool			fenceStatus		(ZFence fence);
 ZSemaphore		createSemaphore	(ZDevice device);
 
 ZShaderModule	createShaderModule (ZDevice device, VkShaderStageFlagBits stage,
-								    add_cref<std::vector<uint8_t>> code, add_cref<std::string> entryName);
+                                    add_cref<std::vector<char>> code, add_cref<std::string> entryName);
 
 ZFramebuffer	createFramebuffer (ZRenderPass renderPass, add_cref<VkExtent2D> size, const std::vector<ZImageView>& attachments);
 ZFramebuffer	createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t height, const std::vector<ZImageView>& attachments);

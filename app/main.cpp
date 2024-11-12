@@ -13,6 +13,7 @@
 #include "vtfLocale.hpp"
 #include "allTests.hpp"
 #include "vtfOptionParser.hpp"
+#include "driver.hpp"
 
 using namespace vtf;
 
@@ -21,6 +22,8 @@ using namespace vtf;
 static void printUsage (std::ostream& str);
 static void printVtfVersion (std::ostream& str, uint32_t level);
 static std::string constructCompleteCommand (const char* appPath);
+
+static DriverInitializer mainDriverInitlializer;
 
 int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref<strings> testArgs, add_ref<bool> performTest)
 {
@@ -84,6 +87,7 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	Option optLayNoVuid{ "-l-no-vuid-undefined", 0 };	options.push_back(optLayNoVuid);
 	Option optSuppressVUID{ "-l-suppress", 1 };	options.push_back(optSuppressVUID);
 	Option optAssets{ "-assets", 1 };			options.push_back(optAssets);
+	Option optVulkanDriver{ "-driver", 1 };		options.push_back(optVulkanDriver);
 	Option optTempDir{ "-tmp", 1 };             options.push_back(optTempDir);
 	Option btrace{ "-bt", 0 };					options.push_back(btrace);
 	Option optApi{ "-api", 1 };					options.push_back(optApi);
@@ -99,6 +103,32 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	Option optVtfVersion1{ "-vv", 0 };			options.push_back(optVtfVersion1);
 	Option optVtfVersion0{ "-vvv", 0 };			options.push_back(optVtfVersion0);
 	Option optVtfVersion22{ "--version", 0 };	options.push_back(optVtfVersion22);
+
+	if (consumeOptions(verbose, options, appArgs, sink) > 0)
+	{
+		globalAppFlags.verbose = fromText(sink.back(), 0u, status);
+		if (!status)
+		{
+			std::cout << "ERROR: Unable to parse verbose level" << std::endl;
+			return 1;
+		}
+		else
+		{
+			setGlobalAppFlags(globalAppFlags);
+		}
+	}
+
+	consumeRes = consumeOptions(optVulkanDriver, options, appArgs, sink);
+	if (consumeRes < 0)
+	{
+		std::cout << "ERROR: Missing \"" << optVulkanDriver.name << "\" option param" << std::endl;
+	}
+	else if (consumeRes > 0)
+	{
+		ASSERTMSG(fs::exists(sink.back()) && fs::is_regular_file(sink.back()), "Given Vulkan driver file doesn't exist");
+		globalAppFlags.vulkanDriver = sink.back();
+		setGlobalAppFlags(globalAppFlags);
+	}
 
 #if SYSTEM_OS_WINDOWS
 	const char listSeparator = ';';
@@ -186,16 +216,6 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 		if (!status)
 		{
 			std::cout << "WARNING: Unable to parse compiler index, default 0 value will be used" << std::endl;
-		}
-	}
-
-	if (consumeOptions(verbose, options, appArgs, sink) > 0)
-	{
-		globalAppFlags.verbose = fromText(sink.back(), 0u, status);
-		if (!status)
-		{
-			std::cout << "ERROR: Unable to parse verbose level" << std::endl;
-			return 1;
 		}
 	}
 
@@ -483,6 +503,9 @@ void printUsage (std::ostream& str)
 	str << "  -dprintf:                 enable Debug Printf feature" << std::endl;
 	str << "                            #extension GL_EXT_debug_printf : enable and debugPrintfEXT(...)" << std::endl;
 	str << "  -bt:                      enable backtrace" << std::endl;
+	str << "  -driver <file>            change Vulkan driver. Defaultly for Windows it is vulkan-1.dll and\n"
+		   "                            for Linux is a library which you built this app. To enable this functionality\n"
+		   "                            remeber to define VULKAN_DRIVER." << std::endl;
 	str << "Compiler options:" << std::endl;
 	str << "  -vulkan <version>:        (major * 10 + minor), default is 10 aka vulkan1.0" << std::endl;
 	str << "  -spirv <version>:         (major * 10 + minor), default is 10 aka spirv1.0" << std::endl;

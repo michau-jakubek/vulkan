@@ -581,8 +581,8 @@ bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 					   add_cref<Version> vulkanVer, add_cref<Version> spirvVer,
 					   add_cref<strings> codeAndEntryAndIncludes,
 					   add_ref<std::string> shaderFileName,
-					   add_ref<std::vector<uint8_t>> binary,
-					   add_ref<std::vector<uint8_t>> assembly,
+                       add_ref<std::vector<char>> binary,
+                       add_ref<std::vector<char>> assembly,
 					   add_ref<std::string> errors,
 					   bool enableValidation,
 					   bool genDisassmebly,
@@ -824,7 +824,7 @@ bool _GlSpvProgramCollection::addFromFile (VkShaderStageFlagBits type,
 
 auto _GlSpvProgramCollection::getShaderCode (VkShaderStageFlagBits stage,
 											 uint32_t index,
-											 bool binORasm) const -> add_cref<std::vector<uint8_t>>
+                                             bool binORasm) const -> add_cref<std::vector<char>>
 {
 	if (binORasm)
 		return m_stageToBinary.at({ stage, index });
@@ -880,7 +880,7 @@ void ProgramCollection::buildAndVerify (add_cref<Version> vulkanVer, add_cref<Ve
 			{
 				const auto key = std::make_pair(stage, k);
 				std::string shaderFileName;
-				std::vector<uint8_t> binary, assembly;
+                std::vector<char> binary, assembly;
 				if (verifyShaderCode(k, stage, vulkanVer, spirvVer,
 									 m_stageToCode[key], shaderFileName, binary, assembly, errors,
 									 enableValidation, genDisassembly, buildAlways, genBinary))

@@ -335,7 +335,7 @@ static void parseComponents (const char* const name, int& pos, ZFormatInfo& info
 	}
 }
 
-static ZFormatInfo makeFormatInfo (const FormatAndName* const pFan)
+static ZFormatInfo makeFormatInfo (add_cptr<FormatAndName> const pFan)
 {
 	ZFormatInfo	res{};
 	res.format	= pFan->format;
@@ -349,9 +349,9 @@ static ZFormatInfo makeFormatInfo (const FormatAndName* const pFan)
 	return res;
 }
 
-static const FormatAndName* findFormatAndName (VkFormat format)
+static add_cptr<FormatAndName> findFormatAndName (VkFormat format)
 {
-	const FormatAndName* pFan = nullptr;
+	add_cptr<FormatAndName> pFan = nullptr;
 	for (const FormatAndName& fan : formatAndNames) {
 		if (fan.format == format) {
 			pFan = &fan;
@@ -392,7 +392,7 @@ const char* formatGetString (VkFormat format)
 
 ZFormatInfo	formatGetInfo (VkFormat format)
 {
-	const FormatAndName* pFan = findFormatAndName(format);
+	add_cptr<FormatAndName> pFan = findFormatAndName(format);
 	ASSERTMSG(pFan, "Format not implemented");
 	if (nullptr == pFan) {
 		ZFormatInfo	res{};
@@ -447,6 +447,26 @@ bool formatSupportsLinearFlags (ZPhysicalDevice device, VkFormat format, VkForma
 {
 	VkFormatProperties p = formatGetProperties(device, format);
 	return (p.linearTilingFeatures & flags) == flags;
+}
+
+ZFormatInfoIterator::ZFormatInfoIterator ()
+{
+	reset();
+}
+
+void ZFormatInfoIterator::reset ()
+{
+	m_current = (-1);
+}
+
+bool ZFormatInfoIterator::next ()
+{
+	if ((m_current + 1) < ARRAY_LENGTH_CAST(formatAndNames, int))
+	{
+		*(static_cast<add_ptr<ZFormatInfo>>(this)) = makeFormatInfo(&formatAndNames[++m_current]);
+		return true;
+	}
+	return false;
 }
 
 } // vtf

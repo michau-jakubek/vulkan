@@ -42,6 +42,7 @@ struct GlobalAppFlags
 	char			tmpDir[_MAX_PATH];
 	std::string		assetsPath;
 	std::string		thisAppPath;
+	std::string		vulkanDriver;
 	bool			spirvValidate;
 	bool			genSpirvDisassembly;
 	bool			nowerror;

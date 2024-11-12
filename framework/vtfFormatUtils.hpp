@@ -91,8 +91,16 @@ struct ZFormatInfo
 	bool			sized;
 	bool			color;
 	bool			stencil;
-//private:
+};
 
+class ZFormatInfoIterator : public ZFormatInfo
+{
+	int m_current;
+public:
+
+	ZFormatInfoIterator ();
+	void reset ();
+	bool next ();
 };
 
 const char*			formatGetString		(VkFormat format);

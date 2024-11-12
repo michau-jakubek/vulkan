@@ -146,26 +146,14 @@ std::string readFile (const std::string& filename, bool* status)
 	return buffer;
 }
 
-uint32_t readFile(add_cref<fs::path> path, add_ref<std::vector<uint32_t>> buffer)
+uint32_t readFile (add_cref<fs::path> path, add_ref<std::vector<char>> buffer)
 {
 	if (!fs::exists(path)) return INVALID_UINT32;
 	const uint32_t length = (uint32_t)fs::file_size(path);
-	std::basic_ifstream<uint8_t> s(path.c_str(), std::ios::binary);
+    std::basic_ifstream<char> s(path.c_str(), std::ios::binary);
 	if (!s.is_open()) return INVALID_UINT32;
 	buffer.resize(length);
-	std::copy(std::istreambuf_iterator<uint8_t>(s), std::istreambuf_iterator<uint8_t>(), buffer.begin());
-	s.close();
-	return length;
-}
-
-uint32_t readFile (add_cref<fs::path> path, add_ref<std::vector<uint8_t>> buffer)
-{
-	if (!fs::exists(path)) return INVALID_UINT32;
-	const uint32_t length = (uint32_t)fs::file_size(path);
-	std::basic_ifstream<uint8_t> s(path.c_str(), std::ios::binary);
-	if (!s.is_open()) return INVALID_UINT32;
-	buffer.resize(length);
-	std::copy(std::istreambuf_iterator<uint8_t>(s), std::istreambuf_iterator<uint8_t>(), buffer.begin());
+    std::copy(std::istreambuf_iterator<char>(s), std::istreambuf_iterator<char>(), buffer.begin());
 	s.close();
 	return length;
 }
@@ -305,6 +293,13 @@ bool startswith (add_cptr<char> s, char c)
 template<> bool startswith<char> (std::basic_string<char> s, char c)
 {
 	return startswith(s.c_str(), c);
+}
+
+bool compareNoCase (add_cref<std::string> a, add_cref<std::string> b)
+{
+	const std::string A = toUpper(a);
+	const std::string B = toUpper(b);
+	return A == B;
 }
 
 std::string captureSystemCommandResult (const char* cmd, bool& status, const char LF)

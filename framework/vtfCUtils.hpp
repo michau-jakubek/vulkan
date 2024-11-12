@@ -45,8 +45,7 @@ std::string	subst_variables (const std::string& templateStr, const vtf::string_t
 std::string getRealPath (const char* path, bool& status);
 // if status is null or points to false then throw on error, otherwise opening status is returned
 std::string	readFile (const std::string& filename, bool* status = nullptr);
-uint32_t	readFile (add_cref<fs::path> path, add_ref<std::vector<uint32_t>> buffer);
-uint32_t	readFile (add_cref<fs::path> path, add_ref<std::vector<uint8_t>> buffer);
+uint32_t	readFile (add_cref<fs::path> path, add_ref<std::vector<char>> buffer);
 std::string captureSystemCommandResult (const char* cmd, bool& status, const char LF = '\0');
 
 bool		containsString (const std::string& s, const vtf::strings& list);
@@ -65,6 +64,7 @@ void		toLower (add_ref<std::string> out, add_cref<std::string> src);
 void		toUpper (add_ref<std::string> out, add_cref<std::string> src);
 bool		startswith (add_cptr<char> s, char c);
 template<class CharType> bool startswith (std::basic_string<CharType> s, CharType c);
+bool		compareNoCase (add_cref<std::string> a, add_cref<std::string> b);
 
 // Be careful, source strings must be alive after to_strings() is invoked.
 template<template<class T, class... U> class C, class T, class... U>

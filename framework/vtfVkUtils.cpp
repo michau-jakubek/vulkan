@@ -342,7 +342,43 @@ uint32_t enumerateSwapchainImages (VkDevice device, VkSwapchainKHR swapchain, st
 	return imageCount;
 }
 
-std::ostream& printPhysicalDevices (VkInstance instance, std::ostream& str)
+std::ostream& printPhysicalDevice (
+    add_cref<VkPhysicalDeviceProperties> props,
+    std::ostream&                        str,
+    uint32_t                             deviceIndex)
+{
+    const Version apiVersion = Version::fromUint(props.apiVersion);
+    const uint32_t driverMajorVersion = (props.driverVersion >> 22) & 0x7F;
+    const uint32_t driverMinorVersion = (props.driverVersion >> 12) & 0x3FF;
+    const uint32_t driverPatchVersion = props.driverVersion & 0xFFF;
+
+    if (deviceIndex != INVALID_UINT32)
+    {
+        str << deviceIndex << ") ";
+    }
+    str << "Name: \"" << props.deviceName
+        << "\"  Vendor: " << std::hex << props.vendorID
+        << "  Device: " << std::hex << props.deviceID << std::endl;
+    str << std::dec << "  " << " API: " << apiVersion;
+    str << ", Driver version: (" << driverMajorVersion << ", "
+        << driverMinorVersion << ", " << driverPatchVersion << ')' << std::endl;
+    return str;
+}
+
+std::ostream& printPhysicalDevice (
+    VkPhysicalDevice    device,
+    std::ostream&       str,
+    uint32_t            deviceIndex)
+{
+    VkPhysicalDeviceProperties p;
+    vkGetPhysicalDeviceProperties(device, &p);
+    printPhysicalDevice(p, str, deviceIndex);
+    return str;
+}
+
+std::ostream& printPhysicalDevices (
+    VkInstance      instance,
+    std::ostream&   str)
 {
 	std::vector<VkPhysicalDevice> devices;
 	enumeratePhysicalDevices(instance, devices);
@@ -356,15 +392,7 @@ std::ostream& printPhysicalDevices (VkInstance instance, std::ostream& str)
 		str << "Found " << deviceCount << " physicalDevices" << std::endl;
 		for (uint32_t i = 0; i < deviceCount; ++i)
 		{
-			VkPhysicalDeviceProperties p;
-			vkGetPhysicalDeviceProperties(devices[i], &p);
-
-			Version apiVersion = Version::fromUint(p.apiVersion);
-			Version driverVersion = Version::fromUint(p.driverVersion);
-
-			str << i << ") Name: \"" << p.deviceName << "\"  Vendor: " << std::hex << p.vendorID
-				  << "  Device: " << std::hex << p.deviceID << std::endl;
-			str << std::dec << "  " << " API: " << apiVersion << ", Driver version: " << driverVersion << std::endl;
+            printPhysicalDevice(devices[i], str, i);
 		}
 	}
 	return str;

@@ -13,8 +13,8 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
 endif()
 add_definitions(-DSYSTEM_OS_LINUX=${SYSTEM_OS_LINUX})
 add_definitions(-DSYSTEM_OS_WINDOWS=${SYSTEM_OS_WINDOWS})
-message(STATUS "Create definition: -DSYSTEM_OS_LINUX=${SYSTEM_OS_LINUX}")
-message(STATUS "Create definition: -DSYSTEM_OS_WINDOWS=${SYSTEM_OS_WINDOWS}")
+message(STATUS "Defined preprocessor constant: SYSTEM_OS_LINUX=${SYSTEM_OS_LINUX}")
+message(STATUS "Defined preprocessor constant: SYSTEM_OS_WINDOWS=${SYSTEM_OS_WINDOWS}")
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -24,13 +24,18 @@ endif()
 
 if     (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 	add_definitions(-DDETECTED_COMPILER=1)
+	set(DETECTED_COMPILER 1)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	add_definitions(-DDETECTED_COMPILER=2)
+	set(DETECTED_COMPILER 2)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
 	add_definitions(-DDETECTED_COMPILER=3)
+	set(DETECTED_COMPILER 3)
 else   ()
 	add_definitions(-DDETECTED_COMPILER=0)
+	set(DETECTED_COMPILER 0)
 endif  ()
+message(STATUS "Defined preprocessor constant: DETECTED_COMPILER=${DETECTED_COMPILER}")
 
 string(TOUPPER ${CMAKE_GENERATOR} UPPER_CASE_CMAKE_GENERATOR)
 string(REGEX MATCH "VISUAL" CURRENT_GENERATOR ${UPPER_CASE_CMAKE_GENERATOR})
@@ -47,7 +52,7 @@ else ()
     if (${SYSTEM_OS_LINUX} EQUAL 0)
         set(ADDITIONAL_LIBS "-pthread")
     else ()
-        set(ADDITIONAL_LIBS "-pthread -ldl -lm -lstdc++fs")
+        set(ADDITIONAL_LIBS "-pthread -ldl -lm -lstdc++fs -lX11")
     endif ()
 endif()
 
@@ -73,7 +78,6 @@ find_package(Git REQUIRED)
 find_package(Python REQUIRED)
 find_package(LookForDependencies REQUIRED)
 message(STATUS "Found Python interpreter: " ${Python_EXECUTABLE})
-
 
 if ("${VULKAN_LIB_PATH}" STREQUAL "")
 	if (NOT "${LOOK_FOR_VULKAN}" STREQUAL "")
@@ -103,33 +107,41 @@ if("${VULKAN_LIB_PATH}" STREQUAL "")
     else()
 		message(WARNING "VULKAN_LIB_PATH not defined, try for an example: /opt/vulkan/1.3.216.0/x86_64/lib/libvulkan.so")
     endif()
-	message(WARNING "You can also try -DLOOK_FOR_VULKAN and -DHINT_FOR_VULKAN if it is ambigous, "
-		"example: -DLOOK_FOR_VULKAN=/c/VulkanSDK -DHONT_FOR_VULKAN=1.3.250.1,Lib32")
-	message(FATAL_ERROR "Looking for Vulkan dependencies failed.")
+    message(WARNING "You can also try -DLOOK_FOR_VULKAN and -DHINT_FOR_VULKAN if it is ambigous, "
+                    "example: -DLOOK_FOR_VULKAN=/c/VulkanSDK -DHONT_FOR_VULKAN=1.3.250.1,Lib32")
+    message(FATAL_ERROR "Looking for Vulkan dependencies failed.")
 endif()
 message(STATUS "Define variable VULKAN_LIB_PATH=${VULKAN_LIB_PATH}")
 
+if ("${VULKAN_DRIVER}" STREQUAL "")
+	if (WIN32)
+		set(VULKAN_DRIVER "vulkan-1.dll")
+	else()
+		get_filename_component(VULKAN_DRIVER ${VULKAN_LIB_PATH} NAME)
+	endif()
+endif()
+
 if("${VULKAN_INCLUDE_DIR}" STREQUAL "")
     if(${SYSTEM_OS_LINUX} EQUAL 0)
-		message(WARNING "VULKAN_INCLUDE_DIR not defined, try for an example: c:\\VulkanSDK\\1.3.216.0\\Include")
+        message(WARNING "VULKAN_INCLUDE_DIR not defined, try for an example: c:\\VulkanSDK\\1.3.216.0\\Include")
     else()
-		message(WARNING "VULKAN_INCLUDE_DIR not defined, try for an example: /opt/vulkan/1.3.216.0/x86_64/include")
+        message(WARNING "VULKAN_INCLUDE_DIR not defined, try for an example: /opt/vulkan/1.3.216.0/x86_64/include")
     endif()
-	message(WARNING "You can also try -DLOOK_FOR_VULKAN and -DHINT_FOR_VULKAN if it is ambigous, "
-		"example: -DLOOK_FOR_VULKAN=/c/VulkanSDK -DHONT_FOR_VULKAN=1.3.250.1,Lib32")
-	message(FATAL_ERROR "Looking for Vulkan dependencies failed.")
+    message(WARNING "You can also try -DLOOK_FOR_VULKAN and -DHINT_FOR_VULKAN if it is ambigous, "
+                    "example: -DLOOK_FOR_VULKAN=/c/VulkanSDK -DHONT_FOR_VULKAN=1.3.250.1,Lib32")
+    message(FATAL_ERROR "Looking for Vulkan dependencies failed.")
 endif()
 message(STATUS "Define variable VULKAN_INCLUDE_DIR=${VULKAN_INCLUDE_DIR}")
 
 
 if("${GLFW3_LIB_PATH}" STREQUAL "")
     if(${SYSTEM_OS_LINUX} EQUAL 0)
-		message(WARNING "GLFW3_LIB_PATH not defined, try for an example: c:\\glfw-3.3.6.bin.WIN64\\lib-vc2019\\glfw3.lib")
+        message(WARNING "GLFW3_LIB_PATH not defined, try for an example: c:\\glfw-3.3.6.bin.WIN64\\lib-vc2019\\glfw3.lib")
     else()
-		message(WARNING "GLFW3_LIB_PATH not defined, try for an example: /opt/glfw/build/src/libglfw3.a")
+        message(WARNING "GLFW3_LIB_PATH not defined, try for an example: /opt/glfw/build/src/libglfw3.a")
     endif()
-	message(WARNING "You can also try -DLOOK_FOR_GLFW3 and -DHINT_FOR_GLFW3 if it is ambigous, "
-		"example: -DLOOK_FOR_GLFW2=/c/VulkanDeps/glfw-3.3.8.bin.WIN64/ -HINT_FOR_GLFW3=lib-vc2022")
+    message(WARNING "You can also try -DLOOK_FOR_GLFW3 and -DHINT_FOR_GLFW3 if it is ambigous, "
+                    "example: -DLOOK_FOR_GLFW2=/c/VulkanDeps/glfw-3.3.8.bin.WIN64/ -HINT_FOR_GLFW3=lib-vc2022")
 	message(FATAL_ERROR "Looking for GLFW3 dependencied failed.")
 endif()
 
@@ -179,6 +191,9 @@ include_directories(
 	external/stl_reader
 	)
 
+add_subdirectory(driver)
+include_directories(driver)
+
 add_subdirectory(console)
 include_directories(console)
 add_dependencies(console external)
@@ -194,8 +209,6 @@ add_dependencies(daemon external)
 add_subdirectory(tests)
 include_directories(tests)
 add_dependencies(tests external)
-
-set(app_libs ${COMMON_LIBS} framework console tests)
 
 include_directories(app)
 add_subdirectory(app)

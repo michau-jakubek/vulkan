@@ -26,7 +26,7 @@ GlfwInitializerFinalizer::GlfwInitializerFinalizer(bool initialize)
 {
 	if (initialize)
 	{
-		ASSERTMSG(GLFW_TRUE == glfwInit(), "Failed to initialize GLFW library");
+        ASSERTMSG(GLFW_TRUE == glfwInit(), "Failed to initialize GLFW library");
 	}
 }
 
@@ -104,6 +104,20 @@ CanvasContext::CanvasContext (add_cptr<char>		appName,
 {
 }
 
+CanvasContext::CanvasContext	(ZPhysicalDevice		physicalDevice,
+								 OnEnablingFeatures		onEnablingFeatures,
+								 bool					enableDebugPrintf,
+								 add_cref<CanvasStyle>	style,
+								 add_ptr<Canvas>		canvas)
+	: cc_callbacks(physicalDevice.getParam<VkAllocationCallbacksPtr>())
+	, cc_instance(physicalDevice.getParam<ZInstance>())
+	, cc_window(createWindow(style, cc_instance.getParamRef<std::string>().c_str(), canvas))
+	, cc_surface(createSurface(cc_instance, cc_callbacks, cc_window))
+	, cc_physicalDevice(physicalDevice)
+	, cc_device(createLogicalDevice(cc_physicalDevice, onEnablingFeatures, cc_surface, enableDebugPrintf))
+{
+}
+
 Canvas::Canvas	(add_cptr<char>			appName,
 				 add_cref<strings>		instanceLayers,
 				 add_cref<strings>		instanceExtensions,
@@ -128,6 +142,7 @@ Canvas::Canvas	(add_cptr<char>			appName,
 	// end of references initialization
 	, m_surfaceDetails			()
 	, m_surfaceFormatIndex		(INVALID_UINT32)
+	, m_surfaceFormat			(VK_FORMAT_UNDEFINED)
 	, m_width					(style.width)
 	, m_height					(style.height)
 	, m_presentQueue			(queueSupportSwapchain(graphicsQueue)
@@ -137,8 +152,45 @@ Canvas::Canvas	(add_cptr<char>			appName,
 	, m_timerUserData			(nullptr)
 	, m_timerPeriodMS			(0)
 {
+	construct();
+}
+
+Canvas::Canvas	(ZPhysicalDevice		physicalDevice,
+				 add_cref<CanvasStyle>	canvasStyle,
+				 OnEnablingFeatures		onEnablingFeatures,
+				 bool					enableDebugPrintf)
+	: CanvasContext(physicalDevice, onEnablingFeatures, enableDebugPrintf, canvasStyle, this)
+	, VulkanContext(cc_instance, cc_physicalDevice, cc_device)
+	// beginning references initialization
+	, window				(cc_window)
+	, surface				(cc_surface)
+	, surfaceDetails		(m_surfaceDetails)
+	, surfaceFormatIndex	(m_surfaceFormatIndex)
+	, surfaceFormat			(m_surfaceFormat)
+	, style					(canvasStyle)
+	, width					(m_width)
+	, height				(m_height)
+	, presentQueue			(m_presentQueue)
+	// end of references initialization
+	, m_surfaceDetails		()
+	, m_surfaceFormatIndex	(INVALID_UINT32)
+	, m_surfaceFormat		(VK_FORMAT_UNDEFINED)
+	, m_width				(style.width)
+	, m_height				(style.height)
+	, m_presentQueue		(queueSupportSwapchain(graphicsQueue)
+								? graphicsQueue
+								: deviceGetNextQueue(device, VK_QUEUE_GRAPHICS_BIT, true))
+	, m_events				(new GLFWEvents(*this))
+	, m_timerUserData		(nullptr)
+	, m_timerPeriodMS		(0)
+{
+	construct();
+}
+
+void Canvas::construct()
+{
 	m_surfaceDetails.update(physicalDevice, surface);
-	m_surfaceFormatIndex = m_surfaceDetails.selectFormat(physicalDevice, canvasStyle.surfaceFormatFlags);
+	m_surfaceFormatIndex = m_surfaceDetails.selectFormat(physicalDevice, style.surfaceFormatFlags);
 	ASSERTMSG(INVALID_UINT32 != m_surfaceFormatIndex, "Unable to find surface format with desired features");
 	m_surfaceFormat = m_surfaceDetails.formats[m_surfaceFormatIndex].format;
 

@@ -54,6 +54,11 @@ struct CanvasContext
 					 bool					enableDebugPrintf,
 					 add_cref<CanvasStyle>	style,
 					 add_ptr<Canvas>		canvas);
+	CanvasContext	(ZPhysicalDevice		physicalDevice,
+					 OnEnablingFeatures		onEnablingFeatures,
+					 bool					enableDebugPrintf,
+					 add_cref<CanvasStyle>	style,
+					 add_ptr<Canvas>		canvas);
 	virtual ~CanvasContext();
 };
 
@@ -162,6 +167,12 @@ public:
 			 OnEnablingFeatures		onEnablingFeatures		= nullptr,
 			 add_cref<ApiVersion>	apiVersion				= Version(1,0),
 			 bool					enableDebugPrintf		= false);
+
+	Canvas	(ZPhysicalDevice		physicalDevice,
+			 add_cref<CanvasStyle>	canvasStyle			= DefaultStyle,
+			 OnEnablingFeatures		onEnablingFeatures	= nullptr,
+			 bool					enableDebugPrintf	= false);
+
 	virtual ~Canvas	();
 
 	add_cref<ZGLFWwindowPtr>	window;
@@ -214,7 +225,7 @@ protected:
 												 add_ptr<std::mutex>				readyBuffersStackMutex,
 												 add_ptr<std::condition_variable>	readyBufferCondition,
 												 OnCommandRecording					onCommandRecording);
-
+	void				construct				();
 
 	friend struct GLFWEvents;
 
