@@ -13,7 +13,7 @@
 #include "vtfLocale.hpp"
 #include "allTests.hpp"
 #include "vtfOptionParser.hpp"
-#include "driver.hpp"
+#include "vtfPlatformDriver.hpp"
 
 using namespace vtf;
 
@@ -417,7 +417,6 @@ int main (int argc, char* argv[])
 	catch (std::runtime_error& e)
 	{
 		std::cout << e.what();
-		throw;
 	}
 	if (performTest)
 	{
@@ -503,9 +502,9 @@ void printUsage (std::ostream& str)
 	str << "  -dprintf:                 enable Debug Printf feature" << std::endl;
 	str << "                            #extension GL_EXT_debug_printf : enable and debugPrintfEXT(...)" << std::endl;
 	str << "  -bt:                      enable backtrace" << std::endl;
-	str << "  -driver <file>            change Vulkan driver. Defaultly for Windows it is vulkan-1.dll and\n"
-		   "                            for Linux is a library which you built this app. To enable this functionality\n"
-		   "                            remeber to define VULKAN_DRIVER." << std::endl;
+	str << "  -driver <file>            change Vulkan driver. By defaault for Windows it is vulkan-1.dll and\n"
+		   "                            for Linux is a library which you built with this app. To enable this functionality\n"
+		   "                            remeber to enable VULKAN_CUSTOM_DRIVER." << std::endl;
 	str << "Compiler options:" << std::endl;
 	str << "  -vulkan <version>:        (major * 10 + minor), default is 10 aka vulkan1.0" << std::endl;
 	str << "  -spirv <version>:         (major * 10 + minor), default is 10 aka spirv1.0" << std::endl;

@@ -13,6 +13,7 @@
 #include "vtfBacktrace.hpp"
 #include "vtfThreadSafeLogger.hpp"
 #include "vtfFormatUtils.hpp"
+#include "vtfVulkanDriver.hpp"
 
 #include <optional>
 
@@ -21,22 +22,37 @@
 namespace vtf
 {
 
-GlfwInitializerFinalizer::GlfwInitializerFinalizer(bool initialize)
-	: m_initialize(initialize)
+void GlfwInitializerFinalizer::init(ZInstance instance)
 {
-	if (initialize)
+	UNREF(instance);
+	if (!m_initialized)
 	{
-        ASSERTMSG(GLFW_TRUE == glfwInit(), "Failed to initialize GLFW library");
+#ifdef VULKAN_CUSTOM_DRIVER
+		PFN_vkGetInstanceProcAddr proc = getDriverGetInstanceProcAddr();
+		ASSERTMSG(proc, "vkGetInstanceProcAddr() failed");
+		glfwInitVulkanLoader(proc);
+#endif // VULKAN_CUSTOM_DRIVER
+		ASSERTMSG(GLFW_TRUE == glfwInit(), "Failed to initialize GLFW library");
+		m_initialized = true;
 	}
+}
+
+GlfwInitializerFinalizer::GlfwInitializerFinalizer(ZInstance instance, bool initialize)
+	: m_initialized(false)
+{
+	if (initialize) init(instance);
 }
 
 GlfwInitializerFinalizer::~GlfwInitializerFinalizer ()
 {
-	if (m_initialize) glfwTerminate();
-	if (getGlobalAppFlags().verbose)
+	if (m_initialized)
 	{
-		std::cout << "[INFO] Destructor " << __func__
-				  << (m_initialize ? " calls glfwTerminate()" : "") << std::endl;
+		glfwTerminate();
+		if (getGlobalAppFlags().verbose)
+		{
+			std::cout << "[INFO] Destructor " << __func__
+				<< (m_initialized ? " calls glfwTerminate()" : "") << std::endl;
+		}
 	}
 }
 
@@ -92,6 +108,7 @@ CanvasContext::CanvasContext (add_cptr<char>		appName,
 												  mergeStringsDistinct(getGlfwRequiredInstanceExtensions(), instanceExtensions),
 												  apiVersion, enableDebugPrintf);
 							 }))
+	, cc_glfw			(cc_instance)
 	, cc_window			(createWindow(style, appName, canvas))
 	, cc_surface		(createSurface(cc_instance, cc_callbacks, cc_window))
 	, cc_physicalDevice	(getSharedInstance().select(getSharedPhysicalDevice(), ([&,this]() -> ZPhysicalDevice {
@@ -111,6 +128,7 @@ CanvasContext::CanvasContext	(ZPhysicalDevice		physicalDevice,
 								 add_ptr<Canvas>		canvas)
 	: cc_callbacks(physicalDevice.getParam<VkAllocationCallbacksPtr>())
 	, cc_instance(physicalDevice.getParam<ZInstance>())
+	, cc_glfw(cc_instance)
 	, cc_window(createWindow(style, cc_instance.getParamRef<std::string>().c_str(), canvas))
 	, cc_surface(createSurface(cc_instance, cc_callbacks, cc_window))
 	, cc_physicalDevice(physicalDevice)
@@ -126,8 +144,7 @@ Canvas::Canvas	(add_cptr<char>			appName,
 				 OnEnablingFeatures		onEnablingFeatures,
 				 add_cref<ApiVersion>	apiVersion,
 				 bool					enableDebugPrintf)
-	: GlfwInitializerFinalizer()
-	, CanvasContext(appName, apiVersion, instanceLayers, instanceExtensions, deviceExtensions, onEnablingFeatures, enableDebugPrintf, canvasStyle, this)
+	: CanvasContext(appName, apiVersion, instanceLayers, instanceExtensions, deviceExtensions, onEnablingFeatures, enableDebugPrintf, canvasStyle, this)
 	, VulkanContext	(cc_instance, cc_physicalDevice, cc_device)
 	// beginning references initialization
 	, window					(cc_window)

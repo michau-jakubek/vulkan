@@ -240,7 +240,7 @@ int runTest (add_ref<VulkanContext> ctx, add_cref<Params> params,
 	const bool unchanged2	= data2 == bufferData[2];
 	const bool unchanged3	= data3 == bufferData[3];
 
-	VkResult secondResult = secondResult = params.deviceLost
+	VkResult secondResult = params.deviceLost
 		? commandBufferSubmitAndWait(cmd, devLostFence, INVALID_UINT64, false)
 		: vkQueueWaitIdle(*ctx.computeQueue);
 	const time_point t4 = std::chrono::steady_clock::now();

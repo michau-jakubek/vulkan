@@ -521,6 +521,7 @@ ZPipelineLayout	LayoutManager::createPipelineLayout (add_cref<ZPushConstants> pu
 ZPipelineLayout LayoutManager::createPipelineLayout (ZDescriptorSetLayout dsLayout,
 													 add_cref<ZPushConstants> pushConstants)
 {
+	ASSERTMSG(dsLayout.has_handle(), "DescriptorSetLayout must have a valid handle");
 	return createPipelineLayout_(pushConstants, { dsLayout });
 }
 ZPipelineLayout LayoutManager::createPipelineLayout_ (add_cref<ZPushConstants> pushConstants,
@@ -572,8 +573,16 @@ VarDescriptorInfo LayoutManager::getDescriptorInfo (uint32_t binding) const
 	if (isBufferDescriptorType(b.descriptorType))
 	{
 		VkDeviceSize range = ROUNDUP( (b.size * b.elementCount), getDescriptorAlignment(b.descriptorType) );
-		auto buffer = m_buffers.at({b.descriptorType, (b.shared ? UNIQUE_IBINDING : static_cast<int>(binding))});
-		var.emplace<DescriptorBufferInfo>(buffer, b.offset, range);
+		auto itBuffer = m_buffers.find({ b.descriptorType, (b.shared ? UNIQUE_IBINDING : static_cast<int>(binding)) });
+		if (m_buffers.cend() == itBuffer)
+		{
+			std::ostringstream os;
+			os << "Unable to find anything at binding.";
+			os << " Result from " << __func__ << "() is valid after descriptor set is updated";
+			os.flush();
+			ASSERTMSG(false, os.str());
+		}
+		var.emplace<DescriptorBufferInfo>(itBuffer->second, b.offset, range);
 	}
 	else if (isImageDescriptorType(b.descriptorType))
 	{

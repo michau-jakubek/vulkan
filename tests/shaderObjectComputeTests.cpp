@@ -1,4 +1,4 @@
-#include "linkedComputeTests.hpp"
+#include "shaderObjectComputeTests.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfOptionParser.hpp"
 #include "vtfShaderObjectCollection.hpp"
@@ -164,7 +164,7 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 
 	VulkanContext ctx(record.name, instanceLayers, {}, {}, onEnablingFeatures, params.effectiveApiVersion);
 
-	if (VK_TRUE != fShaderObject.shaderObject || deviceGetInterface(ctx.device).shaderObject() == false)
+	if (VK_TRUE != fShaderObject.shaderObject || ctx.device.getInterface().isShaderObjectEnabled() == false)
 	{
 		std::cout << "ERROR: " VK_EXT_SHADER_OBJECT_EXTENSION_NAME " is not supported by device\n";
 		return 1;
@@ -448,13 +448,13 @@ TriLogicInt performTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 
 } // unnamed namespace
 
-template<> struct TestRecorder<LINKED_COMPUTE>
+template<> struct TestRecorder<SHADER_OBJECT_COMPUTE>
 {
 	static bool record(TestRecord&);
 };
-bool TestRecorder<LINKED_COMPUTE>::record(TestRecord& record)
+bool TestRecorder<SHADER_OBJECT_COMPUTE>::record(TestRecord& record)
 {
-	record.name = "linked_compute";
+	record.name = "shader_object_compute";
 	record.call = &prepareTests;
 	return true;
 }

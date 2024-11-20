@@ -281,8 +281,8 @@ int ShaderObjectCollection::create (add_cref<Version> vulkanVer, add_cref<Versio
 		return 0;
 	}
 
-	add_cref<ZDeviceInterface>			di		= deviceGetInterface(m_device);
-	ASSERTMSG(di.shaderObject(), "ERROR: \"" VK_EXT_SHADER_OBJECT_EXTENSION_NAME "\" not supported");
+	add_cref<ZDeviceInterface>			di		= m_device.getInterface();
+	ASSERTMSG(di.isShaderObjectEnabled(), "ERROR: \"" VK_EXT_SHADER_OBJECT_EXTENSION_NAME "\" not supported");
 
 	std::vector<VkShaderEXT>			handles	(make_unsigned(handleCount), VK_NULL_HANDLE);
 	add_cref<ShaderObjectCollection>	me		(*this);
@@ -354,8 +354,8 @@ bool ShaderObjectCollection::create (add_cref<Version> vulkanVer, add_cref<Versi
 		return false;
 	}
 
-	add_cref<ZDeviceInterface> di = deviceGetInterface(m_device);
-	ASSERTMSG(di.shaderObject(), "ERROR: \"" VK_EXT_SHADER_OBJECT_EXTENSION_NAME "\" not supported");
+	add_cref<ZDeviceInterface> di = m_device.getInterface();
+	ASSERTMSG(di.isShaderObjectEnabled(), "ERROR: \"" VK_EXT_SHADER_OBJECT_EXTENSION_NAME "\" not supported");
 
 	std::vector<VkShaderEXT>			handles	(link.count(), VK_NULL_HANDLE);
 	add_cref<ShaderObjectCollection>	me		(*this);
@@ -473,8 +473,8 @@ static void commandBufferBindShaders (
 	if (shaderCount == 0u) return;
 
 	ASSERTMSG(shaderCount <= 64u, "Currently supported shader count is 64");
-	add_cref<ZDeviceInterface> di = deviceGetInterface(cmdBuffer.getParam<ZDevice>());
-	ASSERTMSG(di.shaderObject(), "ERROR: \"" VK_EXT_SHADER_OBJECT_EXTENSION_NAME "\" not supported");
+	add_cref<ZDeviceInterface> di = cmdBuffer.getParamRef<ZDevice>().getInterface();
+	ASSERTMSG(di.isShaderObjectEnabled(), "ERROR: \"" VK_EXT_SHADER_OBJECT_EXTENSION_NAME "\" not supported");
 
 	VkShaderEXT				list[64];
 	VkShaderStageFlagBits	stages[64];

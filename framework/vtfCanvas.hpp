@@ -20,9 +20,10 @@ class Canvas;
 
 struct GlfwInitializerFinalizer
 {
-	const bool m_initialize;
-	GlfwInitializerFinalizer (bool initialize = true);
+	bool m_initialized;
+	GlfwInitializerFinalizer (ZInstance instance, bool initialize = true);
 	virtual ~GlfwInitializerFinalizer ();
+	void init(ZInstance instance);
 };
 
 struct CanvasStyle
@@ -41,6 +42,7 @@ struct CanvasContext
 {
 	VkAllocationCallbacksPtr	cc_callbacks;
 	ZInstance					cc_instance;
+	GlfwInitializerFinalizer	cc_glfw;
 	ZGLFWwindowPtr				cc_window;
 	ZSurfaceKHR					cc_surface;
 	ZPhysicalDevice				cc_physicalDevice;
@@ -62,7 +64,7 @@ struct CanvasContext
 	virtual ~CanvasContext();
 };
 
-class Canvas : public GlfwInitializerFinalizer, public CanvasContext, public VulkanContext
+class Canvas : public CanvasContext, public VulkanContext
 {
 public:
 	struct SurfaceDetails

@@ -8,7 +8,7 @@ namespace vtf
 struct ZInstanceSingleton;
 struct ZDeviceSingleton;
 
-struct ZInstanceInterface
+struct ZInstanceInterface : public vk::DispatchLoaderDynamic
 {
 	friend	struct	ZInstanceSingleton;
 
@@ -31,7 +31,7 @@ struct ZDeviceInterface : public vk::DispatchLoaderDynamic
 		(*mDestroyShaderEXT)(device, shader, pAllocator);
 	}
 
-	bool shaderObject () const;
+	bool isShaderObjectEnabled () const;
 
 protected:
 			ZDeviceInterface () : initialized(false) {}
@@ -42,17 +42,18 @@ protected:
 struct ZInstanceSingleton
 {
 	virtual ~ZInstanceSingleton ();
-	const ZInstanceInterface& getInterface (VkInstance instance);
-
+	const ZInstanceInterface& getInterface () const;
 protected:
+	const ZInstanceInterface& initInterface (VkInstance instance);
 	static ZInstanceInterface	m_interface;
 };
 
 struct ZDeviceSingleton
 {
-	const ZDeviceInterface& getInterface (VkInstance instance, VkDevice device);
+	const ZDeviceInterface& getInterface () const;
 
 protected:
+	const ZDeviceInterface& initInterface (VkInstance instance, VkDevice device);
 	static ZDeviceInterface m_interface;
 };
 

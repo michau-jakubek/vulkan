@@ -7,13 +7,14 @@
 
 namespace vtf
 {
-struct SharedDevice : public expander<SharedDevice, ZDevice>, public ZDevice, public GlfwInitializerFinalizer
+struct SharedDevice : public expander<SharedDevice, ZDevice>, public ZDevice
 {
 	using expander<SharedDevice, ZDevice>::operator=;
 	add_cref<GlobalAppFlags>	m_globalAppFlags;
 	VkAllocationCallbacksPtr	m_callbacks;
 	VkDebugUtilsMessengerEXT	m_debugMessenger;
 	VkDebugReportCallbackEXT	m_debugReport;
+	GlfwInitializerFinalizer	m_glfw;
 	const bool					m_graphical;
 	SharedDevice();
 	SharedDevice(add_cptr<char> name, bool graphical);

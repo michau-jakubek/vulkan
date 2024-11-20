@@ -79,20 +79,6 @@ VkPhysicalDeviceFeatures2
 				deviceGetPhysicalFeatures2 (ZPhysicalDevice device, void* pNext = nullptr);
 ZPhysicalDevice	deviceGetPhysicalDevice (ZDevice device);
 ZQueue			deviceGetNextQueue			(ZDevice device, VkQueueFlags queueFlags, bool mustSupportSurface);
-
-extern add_cref<ZDeviceInterface> deviceGetInterfaceImpl(ZDevice device);
-extern add_cref<ZInstanceInterface> instanceGetInterfaceImpl(ZInstance instance);
-// Supress an annoying GCC warning: possibly dangling reference to a temporary [-Wdangling-reference]
-inline auto deviceGetInterface = [](ZDevice device) -> add_cref<ZDeviceInterface>
-{
-	return deviceGetInterfaceImpl(device);
-};
-// Supress an annoying GCC warning: possibly dangling reference to a temporary [-Wdangling-reference]
-inline auto instanceGetInterface = [](ZInstance instance) -> add_cref<ZInstanceInterface>
-{
-	return instanceGetInterfaceImpl(instance);
-};
-
 uint32_t		queueGetFamilyIndex			(ZQueue queue);
 uint32_t		queueGetIndex				(ZQueue queue);
 VkQueueFlags	queueGetFlags				(ZQueue queue);
@@ -162,6 +148,9 @@ VkFormat		selectBestDepthStencilFormat (ZPhysicalDevice					device,
 bool			pointInTriangle2D (const Vec2& p, const Vec2& p0, const Vec2& p1, const Vec2& p2, bool bar = false);
 bool			pointInTriangle2D (const Vec3& p, const Vec3& p0, const Vec3& p1, const Vec3& p2, bool bar = false);
 bool			pointInTriangle2D (const Vec4& p, const Vec4& p0, const Vec4& p1, const Vec4& p2, bool bar = false);
+
+uint32_t enumeratePhysicalDevices (ZInstance instance, std::vector<VkPhysicalDevice>& devices);
+
 
 /*
 template<class PixelType, class MapFun>

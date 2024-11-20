@@ -9,21 +9,21 @@ extern ZGLFWwindowPtr	createWindow (const CanvasStyle& style, const char* title,
 extern ZSurfaceKHR		createSurface (ZInstance instance, VkAllocationCallbacksPtr callbacks, ZGLFWwindowPtr window);
 
 SharedDevice::SharedDevice ()
-	: GlfwInitializerFinalizer(false)
-	, m_globalAppFlags	(getGlobalAppFlags())
+	: m_globalAppFlags	(getGlobalAppFlags())
 	, m_callbacks		(getAllocationCallbacks())
 	, m_debugMessenger	()
 	, m_debugReport		()
+	, m_glfw			(ZInstance(), false)
 	, m_graphical		(false)
 {
 }
 
 SharedDevice::SharedDevice (add_cptr<char> name, bool graphical)
-	: GlfwInitializerFinalizer(graphical)
-	, m_globalAppFlags	(getGlobalAppFlags())
+	: m_globalAppFlags	(getGlobalAppFlags())
 	, m_callbacks		(getAllocationCallbacks())
 	, m_debugMessenger	()
 	, m_debugReport		()
+	, m_glfw			(ZInstance(), false)
 	, m_graphical		(graphical)
 {
 	ZInstance instance = createInstance(name, m_callbacks,
@@ -42,6 +42,7 @@ SharedDevice::SharedDevice (add_cptr<char> name, bool graphical)
 	ZSurfaceKHR		surface;
 	if (graphical)
 	{
+		m_glfw.init(instance);
 		window = createWindow(Canvas::DefaultStyle, name, this);
 		surface = createSurface(instance, m_callbacks, window);
 	}

@@ -1,0 +1,36 @@
+
+if ("${VULKAN_LIB_PATH}" STREQUAL "")
+	if (NOT "${LOOK_FOR_VULKAN}" STREQUAL "")
+		get_filename_component(ABS_LOOK_FOR_VULKAN ${LOOK_FOR_VULKAN} REALPATH)
+		find_vulkan("${ABS_LOOK_FOR_VULKAN}" "${HINT_FOR_VULKAN}" Q_VULKAN_INCLUDE_DIR Q_VULKAN_LIB_PATH)
+		string(REPLACE "\"" "" VULKAN_LIB_PATH    "${Q_VULKAN_LIB_PATH}")
+	endif()
+endif()
+if ("${VULKAN_INCLUDE_DIR}" STREQUAL "")
+	string(REPLACE "\"" "" VULKAN_INCLUDE_DIR "${Q_VULKAN_INCLUDE_DIR}")
+endif()
+
+if("${VULKAN_LIB_PATH}" STREQUAL "")
+    if(${SYSTEM_OS_LINUX} EQUAL 0)
+		message(WARNING "VULKAN_LIB_PATH not defined, try for an example: c:\\VulkanSDK\\1.3.216.0\\Lib\\vulkan-1.lib")
+    else()
+		message(WARNING "VULKAN_LIB_PATH not defined, try for an example: /opt/vulkan/1.3.216.0/x86_64/lib/libvulkan.so")
+    endif()
+    message(WARNING "You can also try -DLOOK_FOR_VULKAN and -DHINT_FOR_VULKAN if it is ambigous, "
+                    "example: -DLOOK_FOR_VULKAN=/c/VulkanSDK -DHONT_FOR_VULKAN=1.3.250.1,Lib32")
+    message(FATAL_ERROR "Looking for Vulkan dependencies failed.")
+endif()
+message(STATUS "Define variable VULKAN_LIB_PATH=${VULKAN_LIB_PATH}")
+
+if("${VULKAN_INCLUDE_DIR}" STREQUAL "")
+    if(${SYSTEM_OS_LINUX} EQUAL 0)
+        message(WARNING "VULKAN_INCLUDE_DIR not defined, try for an example: c:\\VulkanSDK\\1.3.216.0\\Include")
+    else()
+        message(WARNING "VULKAN_INCLUDE_DIR not defined, try for an example: /opt/vulkan/1.3.216.0/x86_64/include")
+    endif()
+    message(WARNING "You can also try -DLOOK_FOR_VULKAN and -DHINT_FOR_VULKAN if it is ambigous, "
+                    "example: -DLOOK_FOR_VULKAN=/c/VulkanSDK -DHONT_FOR_VULKAN=1.3.250.1,Lib32")
+    message(FATAL_ERROR "Looking for Vulkan dependencies failed.")
+endif()
+message(STATUS "Define variable VULKAN_INCLUDE_DIR=${VULKAN_INCLUDE_DIR}")
+

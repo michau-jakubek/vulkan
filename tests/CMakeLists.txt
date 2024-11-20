@@ -43,8 +43,8 @@ set(tests_files
     deviceTimeoutTests.hpp
     shaderObjectTriangleTests.cpp
     shaderObjectTriangleTests.hpp
-    linkedComputeTests.cpp
-    linkedComputeTests.hpp
+    shaderObjectComputeTests.cpp
+    shaderObjectComputeTests.hpp
     )
 
 set(tests_libs
@@ -62,5 +62,5 @@ target_include_directories(tests
                            AFTER PRIVATE  ${daemon_headers}
                            AFTER PRIVATE  ${CMAKE_CURRENT_SOURCE_DIR}
                            )
-target_link_libraries(tests driver ${tests_libs})
+target_link_libraries(tests pdriver driver ${tests_libs})
 

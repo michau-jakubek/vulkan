@@ -6,12 +6,13 @@
 #include "vtfStructUtils.hpp"
 #include "vtfZImage.hpp"
 #include "vtfZBuffer.hpp"
+#include "vtfZBuffer.hpp"
 #include "vtfZDeviceMemory.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfDebugMessenger.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfThreadSafeLogger.hpp"
-#include "driver.hpp"
+#include "vtfVulkanDriver.hpp"
 
 void releaseQueue (const QueueParams& params)
 {
@@ -454,10 +455,11 @@ ZInstance createInstance (
 	ASSERTMSG(containsAllStrings(availableExtensions, desiredExtensions),
 			  "All required extension(s) must match available instance extension(s)");
 
-	const VkValidationFeatureEnableEXT					enabledValidationFeature = VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT;
-	VkValidationFeaturesEXT								validationFeatures = makeVkStruct();
-	validationFeatures.pEnabledValidationFeatures		= &enabledValidationFeature;
-	validationFeatures.enabledValidationFeatureCount	= 1u;
+	const VkValidationFeatureEnableEXT	enabledValidationFeature[]{
+											VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT };
+	VkValidationFeaturesEXT				validationFeatures = makeVkStruct();
+	validationFeatures.pEnabledValidationFeatures		= enabledValidationFeature;
+	validationFeatures.enabledValidationFeatureCount	= data_count(enabledValidationFeature);
 	validationFeatures.pDisabledValidationFeatures		= nullptr;
 	validationFeatures.disabledValidationFeatureCount	= 0u;
 
@@ -473,7 +475,7 @@ ZInstance createInstance (
 
 	strings requiredExtensions(desiredExtensions);
 
-	void* pNext = nullptr, **p2pNext = &pNext;
+	void* instanceCreateInfoPnext = nullptr;
 
 	if (debugMessengerEnabled)
 	{
@@ -489,10 +491,10 @@ ZInstance createInstance (
 		makeDebugCreateInfo(debugReportInfo, &instance.getParamRef<Logger>(), nullptr, enableDebugPrintf);
 	}
 
-	if (debugMessengerEnabled || debugReportEnabled)
+	if (enableDebugPrintf)
 	{
-		*p2pNext = &validationFeatures;
-		p2pNext = (void**)&validationFeatures.pNext;
+		instanceCreateInfoPnext = &validationFeatures;
+		validationFeatures.pNext = nullptr;
 	}
 
 	VkApplicationInfo	appInfo			= makeVkStruct();
@@ -505,7 +507,7 @@ ZInstance createInstance (
 	std::vector<const char*>			v_layerNames(to_cstrings(requiredLayers));
 	std::vector<const char*>			v_extensions(to_cstrings(availableExtensions));
 
-	VkInstanceCreateInfo createInfo		= makeVkStruct();
+	VkInstanceCreateInfo createInfo		= makeVkStruct(instanceCreateInfoPnext);
 	createInfo.pApplicationInfo			= &appInfo;
 	createInfo.enabledExtensionCount	= data_count(v_extensions);
 	createInfo.ppEnabledExtensionNames	= data_or_null(v_extensions);
@@ -521,7 +523,9 @@ ZInstance createInstance (
 				  << "       engineVersion:      " << Version::fromUint(appInfo.engineVersion) << std::endl
 				  << "       apiVersion:         " << Version::fromUint(apiVersion) << std::endl;
 	}
-	VKASSERT3(vkCreateInstance(&createInfo, callbacks, instance.setter()), "Failed to create instance!");
+	auto pfnCreateInstance = getDriverCreateInstanceProc();
+	ASSERTMSG(pfnCreateInstance, "vkCreateInstance() must not be null");
+	VKASSERT3((*pfnCreateInstance)(&createInfo, callbacks, instance.setter()), "Failed to create instance!");
 
 	if (getGlobalAppFlags().verbose)
 	{
@@ -531,13 +535,18 @@ ZInstance createInstance (
 
 		Version nullApiVersion = getVulkanImplVersion();
 		Version vulkanApiVersion = getVulkanImplVersion(instance);
-		logger << "[app] Vulkan driver file name:       " << driverFileName << std::endl;
+		logger << "[APP] Vulkan driver file name:       " << driverFileName << std::endl;
 		logger << "[APP] Vulkan Null Instance Version:  " << nullApiVersion << std::endl;
 		logger << "[APP] Vulkan Implementation Version: " << vulkanApiVersion << std::endl;
 	}
 
-	add_cref<ZInstanceInterface> ii = instance.getInterface(*instance);
-	UNREF(ii);
+	struct AInstance : public ZInstance {
+		AInstance(ZInstance i) : ZInstance(i) {}
+		void initInterface() {
+			ZInstanceSingleton::initInterface(this->operator*());
+		}
+	};
+	AInstance(instance).initInterface();
 
 	if (debugMessengerEnabled)
 	{
@@ -556,7 +565,7 @@ ZInstance createInstance (
 ZPhysicalDevice	getPhysicalDeviceByIndex (ZInstance instance, uint32_t physicalDeviceIndex)
 {
 	std::vector<VkPhysicalDevice> devices;
-	const uint32_t				deviceCount = enumeratePhysicalDevices(*instance, devices);
+	const uint32_t				deviceCount = enumeratePhysicalDevices(instance, devices);
 	ASSERTMSG(physicalDeviceIndex < deviceCount, "Failed to find GPUs with Vulkan support!");
 	VkPhysicalDevice			physDevice	= devices.at(physicalDeviceIndex);
 	add_cref<strings>			layers		= instance.getParamRef<ZDistType<RequiredLayers, strings>>();
@@ -576,7 +585,8 @@ ZPhysicalDevice selectPhysicalDevice (
     ZSurfaceKHR			surface)
 {	
 	std::vector<VkPhysicalDevice> devices;
-	const uint32_t deviceCount = enumeratePhysicalDevices(*instance, devices);
+	const uint32_t deviceCount = enumeratePhysicalDevices(instance, devices);
+	add_cref<ZInstanceInterface> instanceInterface = instance.getInterface();
 	ASSERTMSG(deviceCount != 0, "Failed to find GPUs that suppors Vulkan!");
 
     if (getGlobalAppFlags().verbose)
@@ -655,7 +665,7 @@ ZPhysicalDevice selectPhysicalDevice (
 		ASSERTMSG(false, oss.str());
 	}
 
-	vkGetPhysicalDeviceProperties(result, &deviceProperties);
+	instanceInterface.vkGetPhysicalDeviceProperties(result, &deviceProperties);
 
     if (getGlobalAppFlags().verbose)
     {
@@ -780,11 +790,24 @@ ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
 	createInfo.ppEnabledLayerNames		= data_or_null(layers);
 
 	ZDevice logicalDevice(VK_NULL_HANDLE, callbacks, physDevice, std::move(queueCreateExInfos));
-	VKASSERT2(vkCreateDevice(*physDevice, &createInfo, callbacks, logicalDevice.setter()));
+	auto pfnCreateDevice = getDriverCreateDeviceProc();
+    ASSERTMSG(pfnCreateDevice, "vkCreateDevice must not be null");
+	VKASSERT2((*pfnCreateDevice)(*physDevice, &createInfo, callbacks, logicalDevice.setter()));
 	logicalDevice.verbose(getGlobalAppFlags().verbose != 0);
 
-	add_cref<ZDeviceInterface> di = logicalDevice.getInterface(*instance, *logicalDevice);
-	UNREF(di);
+	struct AInstance : public ZInstance	{
+		struct ADevice : public ZDevice	{
+			ADevice(ZDevice dev) : ZDevice(dev) {}
+			void initInterface(VkInstance instance, VkDevice device) {
+				ZDeviceSingleton::initInterface(instance, device);
+			}
+		};
+		AInstance(ZInstance instance) : ZInstance(instance) {}
+		void initInterface(ZDevice dev) {
+			ADevice(dev).initInterface(this->operator*(), *dev);
+		}
+	};
+	AInstance(physDevice.getParam<ZInstance>()).initInterface(logicalDevice);
 
 	return logicalDevice;
 }
@@ -856,21 +879,10 @@ add_cref<VkPhysicalDeviceLimits> deviceGetPhysicalLimits (add_cref<ZPhysicalDevi
 
 VkPhysicalDeviceFeatures2 deviceGetPhysicalFeatures2 (ZPhysicalDevice device, void* pNext)
 {
+	add_cref<ZInstanceInterface> instanceInterface = device.getParamRef<ZInstance>().getInterface();
 	VkPhysicalDeviceFeatures2 features = makeVkStruct(pNext);
-	vkGetPhysicalDeviceFeatures2(*device, &features);
+	instanceInterface.vkGetPhysicalDeviceFeatures2(*device, &features);
 	return features;
-}
-
-add_cref<ZDeviceInterface> deviceGetInterfaceImpl (ZDevice device)
-{
-	return device.getInterface(
-		*device.getParam<ZPhysicalDevice>().getParam<ZInstance>(),
-		*device);
-}
-
-add_cref<ZInstanceInterface> instanceGetInterfaceImpl (ZInstance instance)
-{
-	return instance.getInterface(*instance);
 }
 
 uint32_t queueGetFamilyIndex (ZQueue queue)
@@ -1076,6 +1088,16 @@ bool pointInTriangle2D (const Vec3& p, const Vec3& p0, const Vec3& p1, const Vec
 bool pointInTriangle2D (const Vec4& p, const Vec4& p0, const Vec4& p1, const Vec4& p2, bool bar)
 {
 	return pointInTriangle2D(Vec2().assign(p), Vec2().assign(p0), Vec2().assign(p1), Vec2().assign(p2), bar);
+}
+
+uint32_t enumeratePhysicalDevices (ZInstance instance, std::vector<VkPhysicalDevice>& devices)
+{
+	uint32_t deviceCount = 0;
+	add_cref<ZInstanceInterface> ii = instance.getInterface();
+	VKASSERT2(ii.vkEnumeratePhysicalDevices(*instance, &deviceCount, nullptr));
+	devices.resize(deviceCount, VkPhysicalDevice(0));
+	VKASSERT2(ii.vkEnumeratePhysicalDevices(*instance, &deviceCount, devices.data()));
+	return deviceCount;
 }
 
 } // namespace vtf

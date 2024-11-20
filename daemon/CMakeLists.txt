@@ -6,16 +6,17 @@ set(daemon_files
         daemon.cpp
         daemon.hpp)
 set(daemon_libs
+        pdriver
 		framework
 		console
-		driver)
+		)
 
 add_library(daemon SHARED ${daemon_files})
 target_include_directories(daemon BEFORE PRIVATE ${VULKAN_INCLUDE_DIR})
 target_include_directories(daemon BEFORE PRIVATE ${GLFW3_INCLUDE_DIR})
 target_link_libraries(daemon ${daemon_libs})
 
-if (${DETECTED_COMPILER} EQUAL 3)
+if (${DETECTED_COMPILER} EQUAL ${DETECTED_COMPILER_MSVC})
     set_property(TARGET daemon PROPERTY LINK_FLAGS "/DELAYLOAD:${VULKAN_DRIVER}")
     target_link_libraries(daemon ${daemon_libs} delayimp)
 endif()

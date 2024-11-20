@@ -138,7 +138,8 @@ void commandBufferBinDescriptorSets (ZCommandBuffer cmd, ZPipelineLayout layout,
 		std::transform(descriptorLayouts.begin(), descriptorLayouts.end(), sets.begin(),
 			[](const ZDescriptorSetLayout& dsl) { return *dsl.getParam<ZDescriptorSet>(); });
 
-		vkCmdBindDescriptorSets(*cmd,
+		add_cref<ZDeviceInterface> di = cmd.getParamRef<ZDevice>().getInterface();
+		di.vkCmdBindDescriptorSets(*cmd,
 			bindingPoint,
 			*layout,
 			0,			//firstSet
@@ -178,9 +179,9 @@ void commandBufferBindVertexBuffers (ZCommandBuffer cmd, add_cref<VertexInput> i
 
 void commandBufferSetVertexInputEXT (ZCommandBuffer cmd, add_cref<VertexInput> input)
 {
-	add_cref<ZDeviceInterface> di = deviceGetInterface(cmd.getParam<ZDevice>());
+	add_cref<ZDeviceInterface> di = cmd.getParamRef<ZDevice>().getInterface();
 
-	ASSERTMSG(di.shaderObject(), "ERROR: \"" VK_EXT_SHADER_OBJECT_EXTENSION_NAME "\" not supported");
+	ASSERTMSG(di.isShaderObjectEnabled(), "ERROR: \"" VK_EXT_SHADER_OBJECT_EXTENSION_NAME "\" not supported");
 
 	ZVertexInput2EXT ext(input);
 	di.vkCmdSetVertexInputEXT(*cmd,
@@ -459,14 +460,14 @@ void commandBufferBeginRendering (ZCommandBuffer cmd, std::initializer_list<ZIma
 	rInfo.pDepthAttachment		= nullptr;
 	rInfo.pStencilAttachment	= nullptr;
 
-	add_cref<ZDeviceInterface> di = deviceGetInterface(cmd.getParam<ZDevice>());
+	add_cref<ZDeviceInterface> di = cmd.getParamRef<ZDevice>().getInterface();
 	di.vkCmdBeginRendering(*cmd, &rInfo);
 }
 
 void commandBufferEndRendering (ZCommandBuffer cmd)
 
 {
-	deviceGetInterface(cmd.getParam<ZDevice>()).vkCmdEndRendering(*cmd);
+	cmd.getParamRef<ZDevice>().getInterface().vkCmdEndRendering(*cmd);
 }
 
 void commandBufferSetViewport (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain)

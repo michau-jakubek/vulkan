@@ -1,10 +1,6 @@
 #ifndef __VTF_VULKAN_HPP_INCLUDED__
 #define __VTF_VULKAN_HPP_INCLUDED__
 
-#define DETECTED_COMPILER_CLANG	1
-#define DETECTED_COMPILER_GNU	2
-#define DETECTED_COMPILER_MSVC	3
-
 // This file changes the vulkan.hpp file compilation
 // in order to get rid of some warnings an error when
 // build with another platforms, e.g. gcc, clang and

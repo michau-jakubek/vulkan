@@ -109,6 +109,12 @@ uint32_t data_count (const Ctr<T, ImplCppSpecDontCare...>& ctr)
 	return static_cast<uint32_t>(ctr.size());
 }
 
+template<std::size_t N, typename X>
+uint32_t data_count(const X(&)[N])
+{
+	return static_cast<uint32_t>(N);
+}
+
 template<template<class, class...> class Ctr, class T, class... ImplCppSpecDontCare>
 add_ptr<T> data_or_null (Ctr<T, ImplCppSpecDontCare...>& ctr)
 {

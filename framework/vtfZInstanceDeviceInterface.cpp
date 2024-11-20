@@ -1,5 +1,6 @@
 #include "vtfZInstanceDeviceInterface.hpp"
 #include "vtfDebugMessenger.hpp"
+#include "vtfVulkanDriver.hpp"
 #include "vtfCUtils.hpp"
 
 #include <iostream>
@@ -18,24 +19,40 @@ ZInstanceSingleton::~ZInstanceSingleton ()
 	}
 }
 
-const ZInstanceInterface& ZInstanceSingleton::getInterface (VkInstance instance)
+const ZInstanceInterface& ZInstanceSingleton::initInterface (VkInstance instance)
 {
 	m_interface.initialize(instance);
 	return m_interface;
 }
 
+const ZInstanceInterface& ZInstanceSingleton::getInterface() const
+{
+	ASSERTMSG(m_interface.initialized, "Device interface is not initialized");
+	return m_interface;
+}
+
 ZDeviceInterface ZDeviceSingleton::m_interface;
-const ZDeviceInterface& ZDeviceSingleton::getInterface (VkInstance instance, VkDevice device)
+const ZDeviceInterface& ZDeviceSingleton::initInterface (VkInstance instance, VkDevice device)
 {
 	m_interface.initialize(instance, device);
 	return m_interface;
 }
 
+const ZDeviceInterface& ZDeviceSingleton::getInterface () const
+{
+	ASSERTMSG(m_interface.initialized, "Device interface is not initialized");
+	return m_interface;
+}
+
 void ZInstanceInterface::initialize (VkInstance instance)
 {
-	UNREF(instance);
-	if (initialized) return;
-	initialized = true;
+	if (false == initialized)
+	{
+		initialized = true;
+		const PFN_vkGetInstanceProcAddr instProc = getDriverGetInstanceProcAddr();
+		ASSERTMSG(instProc, "vkGetInstanceProcAddr() failed");
+		init(instance, instProc);
+	}
 }
 
 PFN_vkDestroyShaderEXT ZDeviceInterface::mDestroyShaderEXT;
@@ -43,28 +60,14 @@ PFN_vkDestroyShaderEXT ZDeviceInterface::mDestroyShaderEXT;
 void ZDeviceInterface::initialize (VkInstance instance, VkDevice device)
 {
 	if (initialized) return;
-	init(instance, &::vkGetInstanceProcAddr, device, &::vkGetDeviceProcAddr);
+	const PFN_vkGetDeviceProcAddr devProc = getDriverGetDeviceProcAddr();
+	const PFN_vkGetInstanceProcAddr instProc = getDriverGetInstanceProcAddr();
+	init(instance, instProc, device, devProc);
 	mDestroyShaderEXT = this->vkDestroyShaderEXT;
 	initialized = true;
-	//__PFN_vkCreateShadersEXT = (PFN_vkCreateShadersEXT)
-	//	vkGetDeviceProcAddr(device, "vkCreateShadersEXT");
-	//__PFN_vkDestroyShaderEXT = (PFN_vkDestroyShaderEXT)
-	//	vkGetDeviceProcAddr(device, "vkDestroyShaderEXT");
-	//__PFN_vkGetShaderBinaryDataEXT = (PFN_vkGetShaderBinaryDataEXT)
-	//	vkGetDeviceProcAddr(device, "vkGetShaderBinaryDataEXT");
-	//__PFN_vkCmdBindShadersEXT = (PFN_vkCmdBindShadersEXT)
-	//	vkGetDeviceProcAddr(device, "vkCmdBindShadersEXT");
-	//__PFN_vkCmdSetVertexInputEXT = (PFN_vkCmdSetVertexInputEXT)
-	//	vkGetDeviceProcAddr(device, "vkCmdSetVertexInputEXT");
-
-	//// VK_EXT_extended_dynamic_state
-	//__PFN_vkCmdSetScissorWithCountEXT = (PFN_vkCmdSetScissorWithCountEXT)
-	//	vkGetDeviceProcAddr(device, "vkCmdSetScissorWithCountEXT");
-	//__PFN_vkCmdSetViewportWithCountEXT = (PFN_vkCmdSetViewportWithCountEXT)
-	//	vkGetDeviceProcAddr(device, "vkCmdSetViewportWithCountEXT");
 }
 
-bool ZDeviceInterface::shaderObject () const
+bool ZDeviceInterface::isShaderObjectEnabled () const
 {
 	return true
 		&& this->vkCreateShadersEXT != nullptr

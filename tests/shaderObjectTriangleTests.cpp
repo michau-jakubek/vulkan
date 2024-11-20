@@ -18,8 +18,6 @@
 #include <type_traits>
 #include <thread>
 
-#include <vulkan/vulkan.hpp>
-
 namespace
 {
 using namespace vtf;
@@ -153,6 +151,13 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 	VkPhysicalDeviceExtendedDynamicStateFeaturesEXT dynamicStateFeatures = makeVkStruct(&dynamicRenderingFeatures);
 	auto onEnablingFeatures = [&](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
 	{
+		extensions.clear();
+
+		extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+		extensions.push_back("VK_EXT_extended_dynamic_state");
+		extensions.push_back("VK_EXT_extended_dynamic_state2");
+		extensions.push_back("VK_KHR_maintenance1");
+
 		deviceGetPhysicalFeatures2(physicalDevice, &dynamicStateFeatures);
 
 		params.shaderObject = shaderObjectFeatures.shaderObject;
@@ -217,7 +222,7 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 			" is not supported by device" << std::endl;
 		return 1;
 	}
-	if (false == deviceGetInterface(cs.device).shaderObject())
+	if (false == cs.device.getInterface().isShaderObjectEnabled())
 	{
 		std::cout << "ERROR: Unable to initialize Vulkan calls for shaderObject" << std::endl;
 		return 1;
@@ -276,12 +281,11 @@ void onKey (Canvas& cs, void* userData, const int key, int scancode, int action,
 }
 
 TriLogicInt runTriangeSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets, add_cref<TestParams> params)
-
 {
 	params.print(std::cout);
 
-	add_cref<ZDeviceInterface>	di				= deviceGetInterface(cs.device);
-	LayoutManager				pl				(cs.device);
+	add_cref<ZDeviceInterface>	di				= cs.device.getInterface();
+	LayoutManager				lm				(cs.device);
 	const GlobalAppFlags		flags			(getGlobalAppFlags());
 	const bool					genAssembly		(false);
 
@@ -292,17 +296,25 @@ TriLogicInt runTriangeSingleThread (add_ref<Canvas> cs, add_cref<std::string> as
 	Link						linkVertex		= coll.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	Link						linkFragment	= coll.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag", linkVertex);
 
+	lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 256u);
+	ZDescriptorSetLayout		dsLayout		= lm.createDescriptorSetLayout();
+	ZBuffer						testBuffer		= std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(0)).buffer;
+
+	//ZPushConstants				pushConstants	{ZPushRange<Vec4>()};
+
 	coll.updateShader			(singleVertex, params.buildAlways, flags.spirvValidate, genAssembly);
 	coll.updateShader			(singleFragment, params.buildAlways, flags.spirvValidate, genAssembly);
 	coll.updateShader			(singleVertex, ZSpecEntry<int>(13), ZSpecEntry<uint32_t>(17), ZSpecEntry<Vec4>(Vec4()));
 	coll.updateShader			(singleFragment, ZSpecEntry<uint8_t>(13), ZSpecEntry<double>(17));
-	coll.updateShaders			({ singleVertex, singleFragment }, ZPushRange<uint8_t>(), ZPushRange<Vec4>(), ZPushRange<int>());
+	coll.updateShaders			({ singleVertex, singleFragment } ); // push
+	coll.updateShaders			({ singleVertex, singleFragment }, { dsLayout });
 
 	coll.updateShader			(linkVertex, params.buildAlways, flags.spirvValidate, genAssembly);
 	coll.updateShader			(linkFragment, params.buildAlways, flags.spirvValidate, genAssembly);
 	coll.updateShader			(linkFragment, ZSpecEntry<int>(13), ZSpecEntry<uint32_t>(17), ZSpecEntry<Vec4>(Vec4()));
 	coll.updateShader			(linkVertex, ZSpecEntry<uint8_t>(13), ZSpecEntry<double>(17));
-	coll.updateShaders			({ linkVertex, linkFragment }, ZPushRange<uint8_t>(), ZPushRange<Vec4>(), ZPushRange<int>());
+	coll.updateShaders			({ linkVertex, linkFragment } ); // push
+	coll.updateShaders			({ linkVertex, linkFragment }, { dsLayout });
 
 	coll.buildAndVerify();
 
@@ -325,7 +337,8 @@ TriLogicInt runTriangeSingleThread (add_ref<Canvas> cs, add_cref<std::string> as
 	const VkFormat				format				= cs.surfaceFormat;
 	const VkClearValue			clearColor			{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
 	ZRenderPass					renderPass			= createColorRenderPass(cs.device, {format}, {{clearColor}});
-	ZPipelineLayout				pipelineLayout		= pl.createPipelineLayout();
+
+	ZPipelineLayout				pipelineLayout		= lm.createPipelineLayout(dsLayout); // push
 
 	int drawTrigger = 1;
 	cs.events().cbKey.set(onKey, nullptr);
@@ -355,29 +368,38 @@ TriLogicInt runTriangeSingleThread (add_ref<Canvas> cs, add_cref<std::string> as
 
 		// VkPipelineMultisampleStateCreateInfo
 		di.vkCmdSetRasterizationSamplesEXT(*cmdBuffer, VK_SAMPLE_COUNT_1_BIT);
-		di.vkCmdSetSampleMaskEXT(*cmdBuffer, VK_SAMPLE_COUNT_1_BIT, makeQuickPtr(0u));
+		di.vkCmdSetSampleMaskEXT(*cmdBuffer, VK_SAMPLE_COUNT_1_BIT, makeQuickPtr(~0u));
 		di.vkCmdSetAlphaToCoverageEnableEXT(*cmdBuffer, VK_FALSE);
 
 		// VkPipelineColorBlendAttachmentState
+		const VkColorComponentFlags mask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
+											| VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 		di.vkCmdSetColorBlendEnableEXT(*cmdBuffer, 0u, 1u, makeQuickPtr(VK_FALSE));
-		di.vkCmdSetColorWriteMaskEXT(*cmdBuffer, 0u, 1u, makeQuickPtr(VkColorComponentFlags(0)));
+		di.vkCmdSetColorWriteMaskEXT(*cmdBuffer, 0u, 1u, &mask);
 
 		di.vkCmdSetConservativeRasterizationModeEXT(*cmdBuffer, VK_CONSERVATIVE_RASTERIZATION_MODE_DISABLED_EXT);
 		di.vkCmdSetSampleLocationsEnableEXT(*cmdBuffer, VK_FALSE);
 		di.vkCmdSetProvokingVertexModeEXT(*cmdBuffer, VK_PROVOKING_VERTEX_MODE_FIRST_VERTEX_EXT);
 	};
 
+	auto onAfterRecording = [&](add_ref<Canvas>)
+	{
+		if (params.infinity) { drawTrigger = 1; }
+
+		const uint32_t bufferSize = bufferGetElementCount<uint32_t>(testBuffer);
+		static std::vector<uint32_t> bufferData(bufferSize);
+		bufferRead(testBuffer, bufferData);
+		std::cout << bufferData[0] << bufferData[1] << std::endl;
+	};
+
 	auto onCommandRecording = [&](add_ref<Canvas>, add_cref<Canvas::Swapchain> swapchain, ZCommandBuffer cmdBuffer, ZFramebuffer framebuffer)
 	{
-		if (params.infinity)
-		{
-			drawTrigger = drawTrigger + 1;
-		}
-
 		ZImageMemoryBarrier makeImageGeneral(framebufferGetImage(framebuffer),
 											VK_ACCESS_NONE, VK_ACCESS_NONE, VK_IMAGE_LAYOUT_GENERAL);
 
 		commandBufferBegin(cmdBuffer);
+//			commandBufferBinDescriptorSets(cmdBuffer, pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS);
+			commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
 			commandBufferBindShaders(cmdBuffer, { vertexShaderObject, fragmentShaderObject });
 
 			// VkPipelineViewportStateCreateInfo
@@ -390,14 +412,15 @@ TriLogicInt runTriangeSingleThread (add_ref<Canvas> cs, add_cref<std::string> as
 				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, makeImageGeneral);
 
 			commandBufferBeginRendering(cmdBuffer, { framebufferGetView(framebuffer) }, { { clearColor } });
-				vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1, 0, 0);
+				di.vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1, 0, 0);
 			commandBufferEndRendering(cmdBuffer);
 
 			commandBufferMakeImagePresentationReady(cmdBuffer, framebufferGetImage(framebuffer));
 		commandBufferEnd(cmdBuffer);
 	};
 
-	return cs.run(onCommandRecording, renderPass, std::ref(drawTrigger));
+	return cs.run(onCommandRecording, renderPass, std::ref(drawTrigger),
+		Canvas::OnIdle(), std::bind(onAfterRecording, std::ref(cs)));
 }
 
 TriLogicInt runTriangleMultipleThreads (add_ref<Canvas> cs, add_cref<std::string> assets, add_cref<TestParams> params)
