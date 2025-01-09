@@ -17,7 +17,7 @@ extern bool getVtfVerboseMode ();
 extern const std::string& getVtfCustomDriver ();
 extern bool compareNoCase (const std::string& a, const std::string& b);
 
-bool verifyVulkanDriver (HMODULE h)
+static bool verifyVulkanDriver (HMODULE h)
 {
     return GetProcAddress(h, "vkCreateInstance");
 }
@@ -105,6 +105,17 @@ DriverInitializer::DriverInitializer ()
     __pfnDliNotifyHook2 = DliNotifyHook;
 #endif
 }
+
+void DriverInitializer::operator ()(const std::string& customVtfDriver, uint32_t verboseMode)
+{
+    static_cast<void>(customVtfDriver);
+
+    if (verboseMode)
+    {
+        std::cout << "[DRIVER] DriverInitializer" << std::endl;
+    }
+}
+
 DriverInitializer::~DriverInitializer ()
 {
 }
@@ -146,19 +157,27 @@ auto DriverInitializer::getPlatformDriverFileName (bool& success) -> std::string
 
 auto DriverInitializer::getPlatformDriverProc (const char* procName) -> std::add_pointer_t<void>
 {
-    if (getVtfVerboseMode())
-    {
-        std::cout << "[DRIVER] " << __func__ << ": " << std::boolalpha << isCustomDriver() << std::noboolalpha << std::endl;
-    }
-
 #ifdef VULKAN_CUSTOM_DRIVER
-    HMODULE driver = isCustomDriver()
+    HMODULE handle = isCustomDriver()
         ? (HMODULE)__customDriver
         : GetModuleHandle(fs::path(VULKAN_DRIVER).filename().string().c_str());
 #else
     const HMODULE driver = GetModuleHandle(fs::path(VULKAN_DRIVER).filename().string().c_str());
 #endif
+    if (getVtfVerboseMode())
+    {
+        std::cout << "[DRIVER] " << __func__
+            << "(handle=" << handle << ", name=" << std::quoted(procName) << ')';
+        if (handle)
+        {
+            std::vector<TCHAR> p(1024);
+            GetModuleFileName(handle, p.data(), (DWORD)p.size());
 
-    return driver ? GetProcAddress(driver, procName) : nullptr;
+            std::cout << ", lib=" << p.data();
+        }
+        std::cout << std::endl;
+    }
+
+    return handle ? GetProcAddress(handle, procName) : nullptr;
 }
 

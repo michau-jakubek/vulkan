@@ -90,14 +90,6 @@ message(STATUS "Found Python interpreter: " ${Python_EXECUTABLE})
 include(cmake/vulkan_paths.cmake)
 include(cmake/glfw_paths.cmake)
 
-if ("${VULKAN_DRIVER}" STREQUAL "")
-	if (WIN32)
-		set(VULKAN_DRIVER "vulkan-1.dll")
-	else()
-		get_filename_component(VULKAN_DRIVER ${VULKAN_LIB_PATH} NAME)
-	endif()
-endif()
-
 if(NOT EXISTS "${VULKAN_INCLUDE_DIR}" OR NOT EXISTS "${VULKAN_LIB_PATH}"
 	OR NOT EXISTS "${GLFW3_INCLUDE_DIR}" OR NOT EXISTS "${GLFW3_LIB_PATH}")
 message(FATAL_ERROR "--- Some of the following do not exist: ---\n"
@@ -121,6 +113,15 @@ include_directories(${GLFW3_INCLUDE_DIR})
 get_filename_component(ABS_VULKAN_LIB_PATH ${VULKAN_LIB_PATH} REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
 get_filename_component(ABS_GLFW3_LIB_PATH ${GLFW3_LIB_PATH} REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
 set(COMMON_LIBS ${ADDITIONAL_LIBS} ${ABS_VULKAN_LIB_PATH} ${ABS_GLFW3_LIB_PATH})
+
+if ("${VULKAN_DRIVER}" STREQUAL "")
+	if (WIN32)
+		set(VULKAN_DRIVER "vulkan-1.dll")
+	else()
+		#get_filename_component(VULKAN_DRIVER ${VULKAN_LIB_PATH} NAME)
+		set(VULKAN_DRIVER ${ABS_VULKAN_LIB_PATH})
+	endif()
+endif()
 
 add_subdirectory(pdriver)
 include_directories(pdriver)

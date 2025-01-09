@@ -15,43 +15,78 @@
 
 namespace fs = std::filesystem;
 
-extern bool getVtfVerboseMode();
-extern const std::string& getVtfCustomDriver();
-extern bool compareNoCase(const std::string& a, const std::string& b);
+extern bool getVtfVerboseMode ();
+extern bool compareNoCase (const std::string& a, const std::string& b);
 
-//static_assert(std::is_same_v<decltype(*(&dlclose)), int (&)(void*) noexcept>, "???");
-//std::cout << demangledName(&dlclose) << std::endl;
-
-bool verifyVulkanDriver (void* h)
-{
-    return (h != nullptr) && dlsym(h, "vkCreateInstance");
-}
+static std::string readLibraryPath (void* lib);
 
 #ifdef VULKAN_CUSTOM_DRIVER
 
 typedef void* (*dlopen_t)(const char*, int);
 static std::atomic<void*> __customDriver;
 static std::atomic<dlopen_t> __system_dlopen;
+static bool __verboseMode;
+static std::string __customVtfDriver;
+static const std::string __vulkanDriverFileName = fs::path(VULKAN_DRIVER).filename();
 
-std::string readLibraryPath(void* lib);
-
-#if 0
-std::map<std::string, void*> __libraries;
-std::recursive_mutex __libraries_mutex;
-#endif
-
-extern "C" void* my_dlopen(const char* libFileName, int flags) __attribute__((alias("dlopen")));
-
-void* dlopen(const char* libFileName, int flags) 
+static void* system_dlopen (const char* lib, int flags)
 {
-    const bool verboseMode(getVtfVerboseMode());
-    const std::string vulkanDriverFileName(fs::path(VULKAN_DRIVER).filename());
+    return (*__system_dlopen.load(std::memory_order_acquire))(lib, flags);
+}
+static void* system_dlopen (const std::string& lib, int flags)
+{
+    return system_dlopen(lib.c_str(), flags);
+}
+static bool verifyVulkanDriver (void* h)
+{
+    return (h != nullptr) && dlsym(h, "vkCreateInstance");
+}
+
+static void freeDriver (const char* driver, bool verboseMode);
+static void freeDriver (const std::string& driver, bool verboseMode);
+
+static void freeDriver (void* driver, bool verboseMode)
+{
+    if (!driver) return;
+
+    const std::string driverPath(verboseMode ? readLibraryPath(driver) : std::string());
+    if (dlclose(driver) == 0)
+    {
+        void* p = system_dlopen(driverPath, (RTLD_NOLOAD));
+        if (verboseMode)
+        {
+            //const std::string oldDriverFile(fs::path(oldDriverPath) / currentLibFileName);
+            std::cout << "[DRIVER] Successfully unloaded driver library " << driver << std::endl
+                      << "     lib " << std::quoted(driverPath) << std::endl
+		      << "  exists " << std::boolalpha << (nullptr != p) << std::noboolalpha << std::endl;
+        }
+    }
+    else if (verboseMode)
+    {
+        const char* error = dlerror();
+        std::cout << "[DRIVER] Failed to unload driver library, error: "
+		  << (error ? error : "<unknown-library>") << std::endl;
+    }
+}
+
+static void freeDriver (const char* driver, bool verboseMode)
+{
+    freeDriver(system_dlopen(driver, RTLD_NOLOAD), verboseMode);
+}
+
+[[maybe_unused]] static void freeDriver (const std::string& driver, bool verboseMode)
+{
+    freeDriver(driver.c_str(), verboseMode);
+}
+
+extern "C" void* my_dlopen (const char* libFileName, int flags) __attribute__((alias("dlopen")));
+
+void* dlopen (const char* libFileName, int flags)
+{
     const std::string currentLibFileName(libFileName
                                     ? fs::path(libFileName).filename().string()
                                     : std::string());
-    const std::string customVtfDriver = getVtfCustomDriver().empty()
-                                            ? std::string()
-                                            : fs::absolute(getVtfCustomDriver()).string();
+
     auto readDlError = []() -> const char*
     {
         const char* error = dlerror();
@@ -78,98 +113,75 @@ void* dlopen(const char* libFileName, int flags)
     dlopen_t null_dlopen = nullptr;
     *(void**)(&sys_dlopen) = dlsym(RTLD_NEXT, "dlopen");
     *(void**)(&this_dlopen) = dlsym(RTLD_DEFAULT, "dlopen");
-    if (this_dlopen != sys_dlopen)
+    if ((__system_dlopen.load(std::memory_order_acquire) == null_dlopen) && (this_dlopen != sys_dlopen))
     {
-        __system_dlopen.compare_exchange_strong(null_dlopen, sys_dlopen, std::memory_order_acquire, std::memory_order_relaxed);
+        if (__verboseMode) std::cout << "[DRIVER] assign system_dlopen " << *(void**)&sys_dlopen << std::endl;
+        __system_dlopen.compare_exchange_strong(null_dlopen, sys_dlopen,
+			                        std::memory_order_acquire, std::memory_order_relaxed);
     }
 
     void* (*sys_dlsym)(int, const char*) = nullptr;
     *(void**)(&sys_dlsym) = dlsym(RTLD_DEFAULT, "dlsym");
 
-    if ((getVtfCustomDriver().empty() == false) && compareNoCase(vulkanDriverFileName, currentLibFileName))
+    if ((__customVtfDriver.empty() == false) && compareNoCase(__vulkanDriverFileName, currentLibFileName))
     {
-        if (verboseMode)
+        if (__verboseMode)
         {
             std::cout << "[DRIVER] system_dlopen           " << *(void**)&__system_dlopen << std::endl;
             std::cout << "         system_dlsym            " << *(void**)&sys_dlsym << std::endl;
             std::cout << "         local_dlopen            " << *(void**)&this_dlopen << std::endl;
-            std::cout << "         Handled loading library " << std::quoted(libFileName) << std::endl;
-            std::cout << "         Trying to load driver   " << customVtfDriver << std::endl;
+            std::cout << "         Handled loading driver  " << std::quoted(libFileName) << std::endl;
+            std::cout << "         Trying to load driver   " << __customVtfDriver << std::endl;
         }
 
-        void* oldDriver = (*__system_dlopen.load(std::memory_order_acquire))(currentLibFileName.c_str(), RTLD_NOLOAD | RTLD_LAZY);
-        void* newDriver = (*__system_dlopen.load(std::memory_order_acquire))(customVtfDriver.c_str(), RTLD_LAZY);
+        void* oldDriver = system_dlopen(currentLibFileName, RTLD_NOLOAD);
 
-        if (newDriver)
+        void* newDriver = __customDriver.load(std::memory_order_acquire);
+
+	if (newDriver)
+	{
+            if (__verboseMode)
+	    {
+                std::cout << "[DRIVER] Library already loaded: " << newDriver
+                          << ' ' << readLibraryPath(newDriver) << std::endl;
+	    }
+            return newDriver;
+	}
+
+        if (newDriver = system_dlopen(__customVtfDriver, RTLD_LAZY); newDriver)
         {
             if (verifyVulkanDriver(newDriver))
             {
-                if (verboseMode)
+                if (__verboseMode)
                 {
-                    std::cout << "[DRIVER] Successfully loaded driver library" << std::endl;
+                    std::cout << "[DRIVER] Successfully loaded driver " << readLibraryPath(newDriver) << std::endl;
                 }
 
-                if (oldDriver)
-                {
-                    const std::string oldDriverPath(verboseMode ? readLibraryPath(oldDriver) : std::string());
-                    if (dlclose(oldDriver) == 0)
-                    {
-                        if (verboseMode)
-                        {
-                            //const std::string oldDriverFile(fs::path(oldDriverPath) / currentLibFileName);
-                            std::cout << "[DRIVER] Successfully unloaded old driver library, was "
-                                      << std::quoted(oldDriverPath) << std::endl;
-                        }
-                    }
-                    else if (verboseMode)
-                    {
-                        std::cout << "[DRIVER] Failed to unload old driver library, error: " << readDlError() << std::endl;
-                    }
-                }
+                freeDriver(oldDriver, __verboseMode);
 
                 __customDriver.store(newDriver, std::memory_order_relaxed);
 
-                if (verboseMode)
+                if (__verboseMode)
                 {
                     std::cout << "[DRIVER] Assign new driver handle: " << newDriver << std::endl;
                 }
 
                 return newDriver;
             }
-            else if (verboseMode)
+            else if (__verboseMode)
             {
-                std::cout << "[DRIVER] Given " << std::quoted(customVtfDriver) << " is not valid Vulkan Driver\n"
-                          << "          Instead trying to load " << std::quoted(libFileName) << std::endl;
+                std::cout << "[DRIVER] Given " << std::quoted(__customVtfDriver) << " is not valid Vulkan Driver\n"
+                          << "         Instead trying to load " << std::quoted(libFileName) << std::endl;
             }
         }
-        else if (verboseMode)
+        else if (__verboseMode)
         {
             std::cout << "[DRIVER] Driver library loading failed: " << readDlError() << std::endl
                       << "          Instead trying to load " << std::quoted(libFileName) << std::endl;
         }
     }
 
-#if 0
-    static int unique;
-    if (libFileName)
-    {
-        std::lock_guard<std::recursive_mutex> lock(__libraries_mutex);
-
-        void* lib = nullptr;
-	const std::string strLib(libFileName);
-        auto ilib = __libraries.find(strLib);
-	if (ilib == __libraries.end())
-	{
-            std::cout << "Unique: " << ++unique << ' ' << libFileName << std::endl;
-            lib = (*__system_dlopen.load(std::memory_order_acquire))(libFileName, flags);
-	    __libraries[strLib] = lib;
-	}
-	else lib = ilib->second;
-        return lib;
-    }
-#endif
-
-    return (*__system_dlopen.load(std::memory_order_acquire))(libFileName, flags);
+    return system_dlopen(libFileName, flags);
 }
 #endif // VULKAN_CUSTOM_DRIVER
 
@@ -177,11 +189,107 @@ DriverInitializer::DriverInitializer ()
 {
 }
 
-DriverInitializer::~DriverInitializer ()
+void DriverInitializer::operator ()(const std::string& customVtfDriver, uint32_t verboseMode)
 {
+    static_cast<void>(customVtfDriver);
+
+    if (verboseMode)
+    {
+        std::cout << "[DRIVER] DriverInitializer" << std::endl;
+    }
+
+#ifdef VULKAN_CUSTOM_DRIVER
+    __verboseMode = verboseMode;
+
+    dlopen_t this_dlopen, sys_dlopen;
+    dlopen_t null_dlopen = nullptr;
+    *(void**)(&sys_dlopen) = dlsym(RTLD_NEXT, "dlopen");
+    *(void**)(&this_dlopen) = dlsym(RTLD_DEFAULT, "dlopen");
+    if (this_dlopen != sys_dlopen)
+    {
+        __system_dlopen.compare_exchange_strong(null_dlopen, sys_dlopen,
+			                        std::memory_order_acquire, std::memory_order_relaxed);
+    }
+
+    void* (*sys_dlsym)(int, const char*) = nullptr;
+    *(void**)(&sys_dlsym) = dlsym(RTLD_DEFAULT, "dlsym");
+
+    if (verboseMode)
+    {
+        std::cout << "[DRIVER] system_dlopen           " << *(void**)&__system_dlopen << std::endl;
+        std::cout << "         system_dlsym            " << *(void**)&sys_dlsym << std::endl;
+        std::cout << "         local_dlopen            " << *(void**)&this_dlopen << std::endl;
+    }
+
+    if (customVtfDriver.empty())
+    {
+	void* null_ptr = nullptr;
+
+        void* vkDriver = system_dlopen(VULKAN_DRIVER, RTLD_NOLOAD);
+	if (vkDriver)
+        {
+            __customDriver.compare_exchange_strong(null_ptr, vkDriver,
+                           std::memory_order_acquire, std::memory_order_relaxed);
+	    if (verboseMode)
+	    {
+                std::cout << "[DRIVER] Use builing driver : "
+                          << vkDriver << ' ' << readLibraryPath(vkDriver) << std::endl;
+	    }
+	}
+	else
+	{
+            std::cout << "[DRIVER] Trying to load driver   " << VULKAN_DRIVER << std::endl;
+            vkDriver = system_dlopen(VULKAN_DRIVER, RTLD_LAZY);
+
+            if (false == verifyVulkanDriver(vkDriver))
+	    {
+	    }
+
+            __customDriver.compare_exchange_strong(null_ptr, vkDriver,
+                           std::memory_order_acquire, std::memory_order_relaxed);
+            if (verboseMode)
+            {
+                std::cout << "[DRIVER] Successfully loaded driver: "
+                          << vkDriver << ' ' << readLibraryPath(vkDriver) << std::endl;
+            }
+        }
+    }
+    else
+    {
+	freeDriver(VULKAN_DRIVER, verboseMode);
+
+        std::cout << "[DRIVER] Trying to load driver   " << customVtfDriver << std::endl;
+        void* newDriver = system_dlopen(customVtfDriver, RTLD_LAZY);
+
+        if (false == verifyVulkanDriver(newDriver))
+	{
+	}
+
+	void* null_ptr = nullptr;
+        __customDriver.compare_exchange_strong(null_ptr, newDriver,
+			                        std::memory_order_acquire, std::memory_order_relaxed);
+        if (verboseMode)
+        {
+            std::cout << "[DRIVER] Successfully loaded driver: " << newDriver << ' ' << readLibraryPath(newDriver) << std::endl;
+        }
+
+        __customVtfDriver = fs::absolute(customVtfDriver).string();
+    }
+#endif // VULKAN_CUSTOM_DRIVER
 }
 
-auto DriverInitializer::isCustomDriver() -> bool
+DriverInitializer::~DriverInitializer ()
+{
+#ifdef VULKAN_CUSTOM_DRIVER
+    if (void* newDriver = __customDriver.load(std::memory_order_acquire); newDriver)
+    {
+        freeDriver(newDriver, getVtfVerboseMode());
+	__customDriver.store(nullptr, std::memory_order_relaxed);
+    }
+#endif // VULKAN_CUSTOM_DRIVER
+}
+
+auto DriverInitializer::isCustomDriver () -> bool
 {
 #ifdef VULKAN_CUSTOM_DRIVER
     return (nullptr != __customDriver.load(std::memory_order_acquire));
@@ -190,7 +298,7 @@ auto DriverInitializer::isCustomDriver() -> bool
 #endif
 }
 
-std::string readLibraryPath(void* lib)
+static std::string readLibraryPath (void* lib)
 {
     link_map* map = nullptr;
 
@@ -202,7 +310,7 @@ std::string readLibraryPath(void* lib)
     return map->l_name;
 }
 
-auto DriverInitializer::getPlatformDriverFileName(bool& success) -> std::string
+auto DriverInitializer::getPlatformDriverFileName (bool& success) -> std::string
 {
     if (getVtfVerboseMode())
     {
@@ -214,29 +322,38 @@ auto DriverInitializer::getPlatformDriverFileName(bool& success) -> std::string
                           ? readLibraryPath(__customDriver.load(std::memory_order_acquire))
                           : VULKAN_DRIVER);
 #else
-    const std::string path(readLibraryPath(dlopen(VULKAN_DRIVER, RTLD_NOLOAD|RTLD_LAZY)));
+    const std::string path(readLibraryPath(dlopen(VULKAN_DRIVER, RTLD_NOLOAD | RTLD_LAZY)));
 #endif
     success = (path.empty() == false);
 
     return fs::absolute(path);
 }
 
-auto DriverInitializer::getPlatformDriverProc(const char* procName) -> std::add_pointer_t<void>
+auto DriverInitializer::getPlatformDriverProc (const char* procName) -> std::add_pointer_t<void>
 {
-    if (getVtfVerboseMode())
-    {
-        std::cout << "[DRIVER] " << __func__ << ": " << std::boolalpha << isCustomDriver() << std::noboolalpha << std::endl;
-    }
+    const int flags = RTLD_NOLOAD | RTLD_LAZY;
 
 #ifdef VULKAN_CUSTOM_DRIVER
     void* handle = isCustomDriver()
                        ? __customDriver.load(std::memory_order_acquire)
                        : (__system_dlopen.load(std::memory_order_acquire)
-                              ? (*__system_dlopen.load(std::memory_order_acquire))(VULKAN_DRIVER, RTLD_NOLOAD | RTLD_LAZY)
-                              : dlopen(VULKAN_DRIVER, RTLD_NOLOAD | RTLD_LAZY));
+                              ? system_dlopen(VULKAN_DRIVER, flags)
+                              : dlopen(VULKAN_DRIVER, flags));
 #else
-    void* handle = dlopen(VULKAN_DRIVER, RTLD_NOLOAD | RTLD_LAZY);
+    void* handle = dlopen(VULKAN_DRIVER, flags);
 #endif
+
+    if (getVtfVerboseMode())
+    {
+        std::cout << "[DRIVER] " << __func__
+                  << "(handle=" << handle << ", name=" << std::quoted(procName) << ')';
+	    if (handle)
+	    {
+            std::cout << ", lib=" << readLibraryPath(handle);
+	    }
+
+	    std::cout << std::endl;
+    }
 
     return handle ? dlsym(handle, procName) : nullptr;
 }

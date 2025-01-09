@@ -130,6 +130,11 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 		setGlobalAppFlags(globalAppFlags);
 	}
 
+#ifndef VULKAN_CUSTOM_DRIVER
+	vkGetInstanceProcAddr(nullptr, "vkGetInstanceProcAddr");
+#endif
+        mainDriverInitlializer(globalAppFlags.vulkanDriver, globalAppFlags.verbose);
+
 #if SYSTEM_OS_WINDOWS
 	const char listSeparator = ';';
 #else
