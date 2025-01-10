@@ -9,6 +9,19 @@
 #include "vtfDebugMessenger.hpp"
 #include "vtfBacktrace.hpp"
 
+namespace
+{
+using namespace vtf;
+
+strings upgradeInstanceExtensions(add_cref<strings> src)
+{
+	strings exts(src);
+	exts.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+	return exts;
+}
+
+} // unnamed namespace
+
 namespace vtf
 {
 
@@ -56,7 +69,7 @@ VulkanContext::VulkanContext (add_cptr<char>		appName,
 	, m_instance					(getSharedInstance()
 									 | ([&,this]() -> ZInstance
 										{
-									 return createInstance(appName, m_callbacks, instanceLayers, instanceExtensions,
+									 return createInstance(appName, m_callbacks, instanceLayers, upgradeInstanceExtensions(instanceExtensions),
 															apiVersion, enableDebugPrintf);}))
 	, m_physicalDevice				(getSharedPhysicalDevice()
 									 | selectPhysicalDevice(make_signed(getGlobalAppFlags().physicalDeviceIndex), m_instance, deviceExtensions))
@@ -99,7 +112,7 @@ const strings& VulkanContext::getAvailableInstanceExtensions() const
 
 const strings& VulkanContext::getAvailablePhysicalDeviceExtensions() const
 {
-	return physicalDevice.getParamRef<strings>();
+	return physicalDevice.getParamRef<ZDistType<AvailableDeviceExtensions, strings>>();
 }
 
 ZCommandPool VulkanContext::createGraphicsCommandPool ()

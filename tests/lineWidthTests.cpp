@@ -128,28 +128,17 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 	CanvasStyle canvasStyle = Canvas::DefaultStyle;
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
 
-	VkPhysicalDeviceProperties	properties{};
-	VkPhysicalDeviceFeatures	availableFeatures{};
-	auto onEnablingFeatures = [&](ZPhysicalDevice dev, add_ref<strings>)
+	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
-		vkGetPhysicalDeviceProperties(*dev, &properties);
-		vkGetPhysicalDeviceFeatures(*dev, &availableFeatures);
-		const VkPhysicalDeviceFeatures2	enabledFeatures
-		{
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-			nullptr,
-			availableFeatures
-		};
-		return enabledFeatures;
+		VkPhysicalDeviceFeatures f{};
+		auto f10 = caps.addFeature(f, true);
+		f.wideLines = f10.checkNotSupported(&VkPhysicalDeviceFeatures::wideLines, true, "wideLines");
+		caps.replaceFeature(f);
 	};
 
 	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFeatures, gf.apiVer);
 
-	if (availableFeatures.wideLines != VK_TRUE)
-	{
-		std::cout << "VkPhysicalDeviceFeatures::wideLines not supported" << std::endl;
-		return {};
-	}
+	add_cref<VkPhysicalDeviceProperties> properties = deviceGetPhysicalProperties(cs.device);
 
 	if (!(params.verticalWidth >= properties.limits.lineWidthRange[0])
 		&& (params.verticalWidth <= properties.limits.lineWidthRange[1])

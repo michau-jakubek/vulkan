@@ -21,10 +21,8 @@ void ZSpecializationInfo::pushEntry (VkSpecializationMapEntry newEntry, add_cptr
 	{
 		if (INVALID_UINT32 != newEntry.constantID && entry.constantID == newEntry.constantID)
 		{
-			std::ostringstream os;
-			os << "Desired new specialization entry with constantID = ";
-			os << newEntry.constantID << " already exists";
-			ASSERTMSG(false, os.str());
+			ASSERTFALSE("Desired new specialization entry with constantID = ",
+				newEntry.constantID, " already exists");
 		}
 	}
 

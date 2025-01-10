@@ -1,6 +1,8 @@
 #include "vtfVkUtils.hpp"
 #include "vtfZUtils.hpp"
 #include "vtfFormatUtils.hpp"
+#include "vtfVulkanDriver.hpp"
+#include "vulkan/vulkan_to_string.hpp"
 
 #include <functional>
 #include <inttypes.h>
@@ -13,117 +15,14 @@
 namespace vtf
 {
 
-// Unfortunately not thread-safe
-static char vkResultToStringBuffer[64];
-const char* vkResultToString (VkResult res)
+std::string vkResultToString (VkResult res)
 {
-	struct { VkResult v; const char* s; }
-	const results[]
-	{
-		MKP(VK_SUCCESS),
-		MKP(VK_NOT_READY),
-		MKP(VK_TIMEOUT),
-		MKP(VK_EVENT_SET),
-		MKP(VK_EVENT_RESET),
-		MKP(VK_INCOMPLETE),
-		MKP(VK_ERROR_OUT_OF_HOST_MEMORY),
-		MKP(VK_ERROR_OUT_OF_DEVICE_MEMORY),
-		MKP(VK_ERROR_INITIALIZATION_FAILED),
-		MKP(VK_ERROR_DEVICE_LOST),
-		MKP(VK_ERROR_MEMORY_MAP_FAILED),
-		MKP(VK_ERROR_LAYER_NOT_PRESENT),
-		MKP(VK_ERROR_EXTENSION_NOT_PRESENT),
-		MKP(VK_ERROR_FEATURE_NOT_PRESENT),
-		MKP(VK_ERROR_INCOMPATIBLE_DRIVER),
-		MKP(VK_ERROR_TOO_MANY_OBJECTS),
-		MKP(VK_ERROR_FORMAT_NOT_SUPPORTED),
-		MKP(VK_ERROR_FRAGMENTED_POOL),
-		MKP(VK_ERROR_UNKNOWN),
-		MKP(VK_ERROR_OUT_OF_POOL_MEMORY),
-		MKP(VK_ERROR_INVALID_EXTERNAL_HANDLE),
-		MKP(VK_ERROR_FRAGMENTATION),
-		MKP(VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS),
-		MKP(VK_PIPELINE_COMPILE_REQUIRED),
-		MKP(VK_ERROR_SURFACE_LOST_KHR),
-		MKP(VK_ERROR_NATIVE_WINDOW_IN_USE_KHR),
-		MKP(VK_SUBOPTIMAL_KHR),
-		MKP(VK_ERROR_OUT_OF_DATE_KHR),
-		MKP(VK_ERROR_INCOMPATIBLE_DISPLAY_KHR),
-		MKP(VK_ERROR_VALIDATION_FAILED_EXT),
-		MKP(VK_ERROR_INVALID_SHADER_NV),
-		MKP(VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT),
-		MKP(VK_ERROR_NOT_PERMITTED_KHR),
-		MKP(VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT),
-		MKP(VK_THREAD_IDLE_KHR),
-		MKP(VK_THREAD_DONE_KHR),
-		MKP(VK_OPERATION_DEFERRED_KHR),
-		MKP(VK_OPERATION_NOT_DEFERRED_KHR),
-		MKP(VK_ERROR_COMPRESSION_EXHAUSTED_EXT),
-
-		// Ugly, but I have not any idea how to exclude this enum from compilation
-		// MKP(VK_INCOMPATIBLE_SHADER_BINARY_EXT),
-		MKPT(VkResult, 1000482000, "VK_INCOMPATIBLE_SHADER_BINARY_EXT"),
-
-		MKP(VK_ERROR_OUT_OF_POOL_MEMORY_KHR),				// = VK_ERROR_OUT_OF_POOL_MEMORY,
-		MKP(VK_ERROR_INVALID_EXTERNAL_HANDLE_KHR),			// = VK_ERROR_INVALID_EXTERNAL_HANDLE,
-		MKP(VK_ERROR_FRAGMENTATION_EXT),					// = VK_ERROR_FRAGMENTATION,
-		MKP(VK_ERROR_NOT_PERMITTED_EXT),					// = VK_ERROR_NOT_PERMITTED_KHR,
-		MKP(VK_ERROR_INVALID_DEVICE_ADDRESS_EXT),			// = VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS,
-		MKP(VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR),	// = VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS,
-		MKP(VK_PIPELINE_COMPILE_REQUIRED_EXT),				// = VK_PIPELINE_COMPILE_REQUIRED,
-		MKP(VK_ERROR_PIPELINE_COMPILE_REQUIRED_EXT),		// = VK_PIPELINE_COMPILE_REQUIRED,
-
-		// Ugly, but I have not any idea how to exclude this enum from compilation
-		// MKP(VK_ERROR_INCOMPATIBLE_SHADER_BINARY_EXT),	// = VK_INCOMPATIBLE_SHADER_BINARY_EXT,
-		MKPT(VkResult, 1000482000, "VK_ERROR_INCOMPATIBLE_SHADER_BINARY_EXT"),
-	};
-	for (auto& r : results)
-	{
-		if (r.v == res) return r.s;
-	}
-#ifdef _MSC_VER
-	sprintf_s(vkResultToStringBuffer, "<VkResult UNDEFINED ERROR %" PRId64 ">", int64_t(res));
-#else
-	sprintf(vkResultToStringBuffer, "<VkResult UNDEFINED ERROR %" PRId64 ">", int64_t(res));
-#endif
-	return vkResultToStringBuffer;
-}
-
-static const char* queueFlagBitsToString (VkQueueFlagBits bits)
-{
-	struct { VkQueueFlagBits b; const char* s; }
-	static const results[] {
-		MKP(VK_QUEUE_GRAPHICS_BIT),
-		MKP(VK_QUEUE_COMPUTE_BIT),
-		MKP(VK_QUEUE_TRANSFER_BIT),
-		MKP(VK_QUEUE_SPARSE_BINDING_BIT),
-		MKP(VK_QUEUE_PROTECTED_BIT)
-	};
-	for (auto& r : results)
-	{
-		if (r.b == bits) return r.s;
-	}
-	return "<VkQueueFlagBits UNKNOWN>";
+	return vk::to_string(static_cast<vk::Result>(res));
 }
 
 std::ostream& operator<<(std::ostream& str, add_cref<ZDistType<QueueFlags, VkQueueFlags>> flags)
 {
-	static const VkQueueFlagBits bits[] {
-		(VK_QUEUE_GRAPHICS_BIT),
-		(VK_QUEUE_COMPUTE_BIT),
-		(VK_QUEUE_TRANSFER_BIT),
-		(VK_QUEUE_SPARSE_BINDING_BIT),
-		(VK_QUEUE_PROTECTED_BIT)
-	};
-	for (uint32_t i = 0, j = 0; i < ARRAY_LENGTH(bits); ++i)
-	{
-		if ((bits[i] & flags) == make_unsigned(bits[i]))
-		{
-			if (j++) str << " | ";
-			str << queueFlagBitsToString(bits[i]);
-		}
-	}
-	return str;
+	return str << vk::to_string(static_cast<vk::QueueFlags>(flags.get()));
 }
 
 std::ostream& operator<< (std::ostream& str, add_cref<ZDeviceQueueCreateInfo> props)
@@ -137,58 +36,12 @@ std::ostream& operator<< (std::ostream& str, add_cref<ZDeviceQueueCreateInfo> pr
 
 std::ostream& operator<< (std::ostream& str, add_cref<VkPrimitiveTopology> topo)
 {
-	static const char* names[] {
-		MKN(VK_PRIMITIVE_TOPOLOGY_POINT_LIST),
-		MKN(VK_PRIMITIVE_TOPOLOGY_LINE_LIST),
-		MKN(VK_PRIMITIVE_TOPOLOGY_LINE_STRIP),
-		MKN(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST),
-		MKN(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP),
-		MKN(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN),
-		MKN(VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY),
-		MKN(VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY),
-		MKN(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY),
-		MKN(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY),
-		MKN(VK_PRIMITIVE_TOPOLOGY_PATCH_LIST)
-	};
-
-	if (int(topo) >= 0 && uint32_t(topo) < ARRAY_LENGTH(names))
-		str << names[uint32_t(topo)];
-	else str << "Unknown VkPrimitiveTopology(" << uint32_t(topo) << ')';
-
-	return str;
+	return str << vk::to_string(static_cast<vk::PrimitiveTopology>(topo));
 }
 
 std::ostream& operator<< (std::ostream& str, add_cref<VkShaderStageFlagBits> stage)
 {
-	static auto getVkShaderStageFlagBitsString = [](VkShaderStageFlagBits shader) -> add_cptr<char>
-	{
-		switch (shader)
-		{
-		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_VERTEX_BIT);
-		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT);
-		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT);
-		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_GEOMETRY_BIT);
-		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_FRAGMENT_BIT);
-		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_COMPUTE_BIT);
-		// VK_SHADER_STAGE_ALL_GRAPHICS = 0x0000001F,
-		// VK_SHADER_STAGE_ALL = 0x7FFFFFFF,
-		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_RAYGEN_BIT_KHR);
-		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_ANY_HIT_BIT_KHR);
-		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
-		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_MISS_BIT_KHR);
-		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_INTERSECTION_BIT_KHR);
-		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_CALLABLE_BIT_KHR);
-		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_TASK_BIT_NV);
-		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_MESH_BIT_NV);
-		MK_CASE_RETURN_STRING(VK_SHADER_STAGE_SUBPASS_SHADING_BIT_HUAWEI);
-		default: break;
-		}
-		return nullptr;
-	};
-	if (add_cptr<char> name = getVkShaderStageFlagBitsString(stage); name != nullptr)
-		str << name;
-	else str << "Unknown VkShaderStageFlagBits(" << uint32_t(stage) << ')';
-	return str;
+	return str << vk::to_string(static_cast<vk::ShaderStageFlagBits>(stage));
 }
 
 uint32_t findQueueFamilyIndex (VkPhysicalDevice phDevice, VkQueueFlagBits bit)
@@ -215,7 +68,7 @@ uint32_t findSurfaceSupportedQueueFamilyIndex (VkPhysicalDevice physDevice, VkSu
 	for (uint32_t index = 0; index < queueFamilyCount; ++index)
 	{
 		VkBool32 presentSupport = false;
-		VKASSERT2(vkGetPhysicalDeviceSurfaceSupportKHR(physDevice, index, surfaceKHR, &presentSupport));
+		VKASSERT(vkGetPhysicalDeviceSurfaceSupportKHR(physDevice, index, surfaceKHR, &presentSupport));
 		if (presentSupport) return index;
 	}
 	return INVALID_UINT32;
@@ -231,7 +84,7 @@ std::vector<uint32_t> findSurfaceSupportedQueueFamilyIndices (VkPhysicalDevice p
 		for (uint32_t index = 0; index < queueFamilyCount; ++index)
 		{
 			VkBool32 presentSupport = false;
-			VKASSERT2(vkGetPhysicalDeviceSurfaceSupportKHR(physDevice, index, *surface, &presentSupport));
+			VKASSERT(vkGetPhysicalDeviceSurfaceSupportKHR(physDevice, index, *surface, &presentSupport));
 			if (presentSupport) indices.emplace_back(index);
 		}
 	}
@@ -242,8 +95,8 @@ bool hasFormatsAndModes (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR)
 {
 	uint32_t formatCount		= 0;
 	uint32_t presentModeCount	= 0;
-	VKASSERT2(vkGetPhysicalDeviceSurfaceFormatsKHR(physDevice, surfaceKHR, &formatCount, nullptr));
-	VKASSERT2(vkGetPhysicalDeviceSurfacePresentModesKHR(physDevice, surfaceKHR, &presentModeCount, nullptr));
+	VKASSERT(vkGetPhysicalDeviceSurfaceFormatsKHR(physDevice, surfaceKHR, &formatCount, nullptr));
+	VKASSERT(vkGetPhysicalDeviceSurfacePresentModesKHR(physDevice, surfaceKHR, &presentModeCount, nullptr));
 	return (formatCount != 0) && (presentModeCount != 0);
 }
 
@@ -252,13 +105,16 @@ strings enumerateInstanceLayers ()
 	strings propNames;
 	uint32_t propertyCount = 0;
 
-	VKASSERT2(vkEnumerateInstanceLayerProperties(&propertyCount, nullptr));
+	const PFN_vkEnumerateInstanceLayerProperties proc =
+		getDriverEnumerateInstanceLayerPropertiesProcAddr();
+	ASSERTMSG(proc, "Unable to get vkEnumerateInstanceLayerProperties()");
+	VKASSERT((*proc)(&propertyCount, nullptr));
 
 	if (propertyCount)
 	{
 		propNames.resize(propertyCount);
 		std::vector<VkLayerProperties> props(propertyCount);
-		VKASSERT2(vkEnumerateInstanceLayerProperties(&propertyCount, props.data()));
+		VKASSERT((*proc)(&propertyCount, props.data()));
 		std::transform(props.begin(), props.end(), propNames.begin(),
 					   [](VkLayerProperties& p){return std::string(p.layerName);});
 	}
@@ -266,18 +122,22 @@ strings enumerateInstanceLayers ()
 	return propNames;
 }
 
-static strings enumerateInstanceExtensions (const char* layerName)
+strings enumerateInstanceExtensions (const char* layerName)
 {
 	strings extensions;
 	uint32_t extensionCount = 0;
-
-	VKASSERT2(vkEnumerateInstanceExtensionProperties(layerName, &extensionCount, nullptr));
+	const PFN_vkEnumerateInstanceExtensionProperties proc =
+		getDriverEnumerateInstanceExtensionPropertiesProcAddr();
+	ASSERTMSG((proc != nullptr), "Unable to get vkEnumerateInstanceExtensionProperties()");
+	VKASSERTMSG((*proc)(layerName, &extensionCount, nullptr),
+		"pLayerName = ", (layerName ? layerName : "nullptr"), ", pPropertyCount = 0");
 
 	if (extensionCount)
 	{
 		extensions.resize(extensionCount);
 		std::vector<VkExtensionProperties> props(extensionCount);
-		VKASSERT2(vkEnumerateInstanceExtensionProperties(layerName, &extensionCount, props.data()));
+		VKASSERTMSG((*proc)(layerName, &extensionCount, props.data()),
+			"pLayerName = ", (layerName ? layerName : "nullptr"), ", pPropertyCount = ", extensionCount);
 		std::transform(props.begin(), props.end(), extensions.begin(),
 					   [](VkExtensionProperties& p){return std::string(p.extensionName);});
 	}
@@ -290,7 +150,7 @@ strings enumerateInstanceExtensions (const strings& layerNames)
 	strings extensions	= enumerateInstanceExtensions(nullptr);
 	for (const auto& layerName : layerNames)
 	{
-		extensions = mergeStringsDistinct(extensions, enumerateInstanceExtensions(layerName.c_str()));
+		mergeStringsDistinct(extensions, enumerateInstanceExtensions(layerName.c_str()));
 	}
 	return extensions;
 }
@@ -300,13 +160,13 @@ static strings enumerateDeviceExtensions (VkPhysicalDevice device, const char* l
 	strings		extensions;
 	uint32_t	extensionCount = 0;
 
-	VKASSERT2(vkEnumerateDeviceExtensionProperties(device, layerName, &extensionCount, nullptr));
+	VKASSERT(vkEnumerateDeviceExtensionProperties(device, layerName, &extensionCount, nullptr));
 
 	if (extensionCount)
 	{
 		extensions.resize(extensionCount);
 		std::vector<VkExtensionProperties> props(extensionCount);
-		VKASSERT2(vkEnumerateDeviceExtensionProperties(device, layerName, &extensionCount, props.data()));
+		VKASSERT(vkEnumerateDeviceExtensionProperties(device, layerName, &extensionCount, props.data()));
 		std::transform(props.begin(), props.end(), extensions.begin(),
 					   [](VkExtensionProperties& p){return std::string(p.extensionName);});
 	}
@@ -319,7 +179,7 @@ strings enumerateDeviceExtensions (VkPhysicalDevice device, const strings& layer
 	strings extensions = enumerateDeviceExtensions(device, nullptr);
 	for (const auto& layerName : layerNames)
 	{
-		extensions = mergeStringsDistinct(extensions, enumerateDeviceExtensions(device, layerName.c_str()));
+		mergeStringsDistinct(extensions, enumerateDeviceExtensions(device, layerName.c_str()));
 	}
 	return extensions;
 }
@@ -327,19 +187,83 @@ strings enumerateDeviceExtensions (VkPhysicalDevice device, const strings& layer
 uint32_t enumeratePhysicalDevices (VkInstance instance, std::vector<VkPhysicalDevice>& devices)
 {
 	uint32_t deviceCount = 0;
-	VKASSERT2(vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr));
+	VKASSERT(vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr));
 	devices.resize(deviceCount, VkPhysicalDevice(0));
-	VKASSERT2(vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()));
+	VKASSERT(vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()));
 	return deviceCount;
 }
 
 uint32_t enumerateSwapchainImages (VkDevice device, VkSwapchainKHR swapchain, std::vector<VkImage>& images)
 {
 	uint32_t imageCount = 0;
-	VKASSERT2(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr));
+	VKASSERT(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr));
 	images.resize(imageCount);
-	VKASSERT2(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, images.data()));
+	VKASSERT(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, images.data()));
 	return imageCount;
+}
+
+add_ref<std::ostream> printPhysicalDeviceFeatures (
+	add_cref<VkPhysicalDeviceFeatures> features,
+	add_ref<std::ostream> str,
+	uint32_t indent)
+{
+	const std::string si(indent, ' ');
+	if (features.robustBufferAccess)						str << si << "robustBufferAccess: true" << std::endl;
+	if (features.fullDrawIndexUint32)						str << si << "fullDrawIndexUint32: true" << std::endl;
+	if (features.imageCubeArray)							str << si << "imageCubeArray: true" << std::endl;
+	if (features.independentBlend)							str << si << "independentBlend: true" << std::endl;
+	if (features.geometryShader)							str << si << "geometryShader: true" << std::endl;
+	if (features.tessellationShader)						str << si << "tessellationShader: true" << std::endl;
+	if (features.sampleRateShading)							str << si << "sampleRateShading: true" << std::endl;
+	if (features.dualSrcBlend)								str << si << "dualSrcBlend: true" << std::endl;
+	if (features.logicOp)									str << si << "logicOp: true" << std::endl;
+	if (features.multiDrawIndirect)							str << si << "multiDrawIndirect: true" << std::endl;
+	if (features.drawIndirectFirstInstance)					str << si << "drawIndirectFirstInstance: true" << std::endl;
+	if (features.depthClamp)								str << si << "depthClamp: true" << std::endl;
+	if (features.depthBiasClamp)							str << si << "depthBiasClamp: true" << std::endl;
+	if (features.fillModeNonSolid)							str << si << "fillModeNonSolid: true" << std::endl;
+	if (features.depthBounds)								str << si << "depthBounds: true" << std::endl;
+	if (features.wideLines)									str << si << "wideLines: true" << std::endl;
+	if (features.largePoints)								str << si << "largePoints: true" << std::endl;
+	if (features.alphaToOne)								str << si << "alphaToOne: true" << std::endl;
+	if (features.multiViewport)								str << si << "multiViewport: true" << std::endl;
+	if (features.samplerAnisotropy)							str << si << "samplerAnisotropy: true" << std::endl;
+	if (features.textureCompressionETC2)					str << si << "textureCompressionETC2: true" << std::endl;
+	if (features.textureCompressionASTC_LDR)				str << si << "textureCompressionASTC_LDR: true" << std::endl;
+	if (features.textureCompressionBC)						str << si << "textureCompressionBC: true" << std::endl;
+	if (features.occlusionQueryPrecise)						str << si << "occlusionQueryPrecise: true" << std::endl;
+	if (features.pipelineStatisticsQuery)					str << si << "pipelineStatisticsQuery: true" << std::endl;
+	if (features.vertexPipelineStoresAndAtomics)			str << si << "vertexPipelineStoresAndAtomics: true" << std::endl;
+	if (features.fragmentStoresAndAtomics)					str << si << "fragmentStoresAndAtomics: true" << std::endl;
+	if (features.shaderTessellationAndGeometryPointSize)	str << si << "shaderTessellationAndGeometryPointSize: true" << std::endl;
+	if (features.shaderImageGatherExtended)					str << si << "shaderImageGatherExtended: true" << std::endl;
+	if (features.shaderStorageImageExtendedFormats)			str << si << "shaderStorageImageExtendedFormats: true" << std::endl;
+	if (features.shaderStorageImageMultisample)				str << si << "shaderStorageImageMultisample: true" << std::endl;
+	if (features.shaderStorageImageReadWithoutFormat)		str << si << "shaderStorageImageReadWithoutFormat: true" << std::endl;
+	if (features.shaderStorageImageWriteWithoutFormat)		str << si << "shaderStorageImageWriteWithoutFormat: true" << std::endl;
+	if (features.shaderUniformBufferArrayDynamicIndexing)	str << si << "shaderUniformBufferArrayDynamicIndexing: true" << std::endl;
+	if (features.shaderSampledImageArrayDynamicIndexing)	str << si << "shaderSampledImageArrayDynamicIndexing: true" << std::endl;
+	if (features.shaderStorageBufferArrayDynamicIndexing)	str << si << "shaderStorageBufferArrayDynamicIndexing: true" << std::endl;
+	if (features.shaderStorageImageArrayDynamicIndexing)	str << si << "shaderStorageImageArrayDynamicIndexing: true" << std::endl;
+	if (features.shaderClipDistance)						str << si << "shaderClipDistance: true" << std::endl;
+	if (features.shaderCullDistance)						str << si << "shaderCullDistance: true" << std::endl;
+	if (features.shaderFloat64)								str << si << "shaderFloat64: true" << std::endl;
+	if (features.shaderInt64)								str << si << "shaderInt64: true" << std::endl;
+	if (features.shaderInt16)								str << si << "shaderInt16: true" << std::endl;
+	if (features.shaderResourceResidency)					str << si << "shaderResourceResidency: true" << std::endl;
+	if (features.shaderResourceMinLod)						str << si << "shaderResourceMinLod: true" << std::endl;
+	if (features.sparseBinding)								str << si << "sparseBinding: true" << std::endl;
+	if (features.sparseResidencyBuffer)						str << si << "sparseResidencyBuffer: true" << std::endl;
+	if (features.sparseResidencyImage2D)					str << si << "sparseResidencyImage2D: true" << std::endl;
+	if (features.sparseResidencyImage3D)					str << si << "sparseResidencyImage3D: true" << std::endl;
+	if (features.sparseResidency2Samples)					str << si << "sparseResidency2Samples: true" << std::endl;
+	if (features.sparseResidency4Samples)					str << si << "sparseResidency4Samples: true" << std::endl;
+	if (features.sparseResidency8Samples)					str << si << "sparseResidency8Samples: true" << std::endl;
+	if (features.sparseResidency16Samples)					str << si << "sparseResidency16Samples: true" << std::endl;
+	if (features.sparseResidencyAliased)					str << si << "sparseResidencyAliased: true" << std::endl;
+	if (features.variableMultisampleRate)					str << si << "variableMultisampleRate: true" << std::endl;
+	if (features.inheritedQueries)							str << si << "inheritedQueries: true" << std::endl;
+	return str;
 }
 
 std::ostream& printPhysicalDevice (

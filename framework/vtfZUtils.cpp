@@ -93,7 +93,7 @@ ZShaderModule createShaderModule (
 		}
 	}
 
-	VKASSERT2(vkCreateShaderModule(*device, &createInfo, callbacks, &shaderModule));
+	VKASSERT(vkCreateShaderModule(*device, &createInfo, callbacks, &shaderModule));
 
 	return ZShaderModule::create(shaderModule, device, callbacks, stage, entryName);
 }
@@ -131,7 +131,7 @@ ZFramebuffer createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t
 	framebufferInfo.height			= height;
 	framebufferInfo.layers			= 1;
 
-	VKASSERT2(vkCreateFramebuffer(*device, &framebufferInfo, allocationCallbacks, &framebuffer));
+	VKASSERT(vkCreateFramebuffer(*device, &framebufferInfo, allocationCallbacks, &framebuffer));
 
 	return ZFramebuffer::create(framebuffer, device, allocationCallbacks, width, height, renderPass, attachments);
 }
@@ -304,7 +304,7 @@ ZRenderPass	createRenderPassImpl (ZDevice device, void* pNext,
 	ZRenderPass	renderPass = ZRenderPass::create(VK_NULL_HANDLE, device, callbacks,
 												 attachmentCount, renderPassInfo.subpassCount,
 												 {/*clearValues*/}, false, finalColorLayout);
-	VKASSERT2(vkCreateRenderPass(*device, &renderPassInfo, callbacks, renderPass.setter()));
+	VKASSERT(vkCreateRenderPass(*device, &renderPassInfo, callbacks, renderPass.setter()));
 
 	if (pClearColors)
 	{
@@ -424,37 +424,119 @@ ZInstance getSharedInstance ()
 }
 
 ZInstance createInstance (
-	const char*					appName,
+	const char* appName,
 	VkAllocationCallbacksPtr	callbacks,
-	const strings&				desiredLayers,
-	const strings&				desiredExtensions,
+	const strings& desiredLayers,
+	const strings& desiredExtensions,
 	uint32_t					apiVersion,
-	bool						enableDebugPrintf)
+	bool						/*enableDebugPrintf 2025-01-12*/)
 {
-	Logger						logger				{};
-	ZInstance					instance			(VK_NULL_HANDLE, callbacks, (appName ? appName : ""), apiVersion,
-														{}, {}, logger, VK_NULL_HANDLE, VK_NULL_HANDLE);
-	add_ref<strings>			requiredLayers		= instance.getParamRef<ZDistType<RequiredLayers, strings>>();
-	add_ref<strings>			availableExtensions	= instance.getParamRef<ZDistType<AvailableLayerExtensions, strings>>();
-	add_cref<GlobalAppFlags>	gf					= getGlobalAppFlags();
+	Logger						logger{};
+	ZInstance					instance(VkInstance(VK_NULL_HANDLE)
+		, callbacks
+		, (appName ? appName : "VTF")
+		, apiVersion
+		, {/*AvailableLayers*/ }
+		, {/*RequiredLayers*/ }
+		, {/*AvailableLayerExtensions*/ }
+		, {/*RequiredLayerExtensions*/ }
+		, logger
+		, VkDebugUtilsMessengerEXT(VK_NULL_HANDLE)
+		, VkDebugReportCallbackEXT(VK_NULL_HANDLE));
+	add_ref<strings>			requiredLayers = instance.getParamRef<ZDistType<RequiredLayers, strings>>();
+	add_ref<strings>			availableLayers = instance.getParamRef<ZDistType<AvailableLayers, strings>>();
+	add_ref<strings>			availableExtensions = instance.getParamRef<ZDistType<AvailableLayerExtensions, strings>>();
+	add_ref<strings>			requiredExtensions = instance.getParamRef<ZDistType<RequiredLayerExtensions, strings>>();
+	add_cref<GlobalAppFlags>	gf = getGlobalAppFlags();
 
-	requiredLayers = desiredLayers;
-	if (enableDebugPrintf)
-		requiredLayers.push_back("VK_LAYER_KHRONOS_validation");
-
-	strings availableLayers;
-	if (requiredLayers.size())
+	// setup layers
 	{
+		requiredLayers = distinctStrings(desiredLayers);
 		availableLayers = enumerateInstanceLayers();
-		if (!containsAllStrings(availableLayers, requiredLayers))
-			ASSERTMSG(false, "All required layer(s) must match to available instance layer(s)!!!");
+		ASSERTMSG(containsAllStrings(availableLayers, requiredLayers),
+			"All required layer(s) must match to available instance layer(s)!!!");
 	}
 
-	availableExtensions	= enumerateInstanceExtensions();
+	const bool validationRequired = !!requiredLayers.size();
+	const std::string utilsExt(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);		// "VK_EXT_debug_utils"
+	const std::string reportExt(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);	// "VK_EXT_debug_report"
 
-	ASSERTMSG(containsAllStrings(availableExtensions, desiredExtensions),
-			  "All required extension(s) must match available instance extension(s)");
+	bool utilsRequired = false;
+	bool reportRequired = false;
+	bool portabilityDesired = true;
+	bool portabilityRequired = false;
 
+	// setup extensions
+	{
+		availableExtensions = enumerateInstanceExtensions();
+
+		if (portabilityDesired)
+		{
+			const std::string portabilityExt(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+			if (containsString(availableExtensions, portabilityExt))
+			{
+				requiredExtensions.push_back(portabilityExt);
+				portabilityRequired = true;
+			}
+		}
+
+		const bool utilsDesired = containsString(utilsExt, desiredExtensions);
+		const bool reportDesired = containsString(reportExt, desiredExtensions);
+		const bool utilsAvailable = containsString(utilsExt, availableExtensions);
+		const bool reportAvailable = containsString(reportExt, availableExtensions);
+
+		// Add the desired extensions, ignoring UTILS and REPORT for now
+		for (add_cref<std::string> ext : desiredExtensions) {
+			if (ext != utilsExt && ext != reportExt) {
+				requiredExtensions.push_back(ext);
+			}
+		}
+
+		// Prefer UTILS if both are available, but only add one of them
+		auto checkDebugExtensions = [&](bool preferReport, bool checkDesirability) -> void
+		{
+			if (preferReport)
+			{
+				if (reportAvailable && (checkDesirability ? reportDesired : true)) {
+					reportRequired = true;
+					requiredExtensions.push_back(reportExt);
+				}
+				else if (utilsAvailable && (checkDesirability ? utilsDesired : true)) {
+					utilsRequired = true;
+					requiredExtensions.push_back(utilsExt);
+				}
+			}
+			else
+			{
+				if (utilsAvailable && (checkDesirability ? utilsDesired : true)) {
+					utilsRequired = true;
+					requiredExtensions.push_back(utilsExt);
+				}
+				else if (reportAvailable && (checkDesirability ? reportDesired : true)) {
+					reportRequired = true;
+					requiredExtensions.push_back(reportExt);
+				}
+			}
+			if ((false == utilsRequired) && (false == reportRequired)) {
+				ASSERTMSG(checkDesirability, "???");
+			}
+		};
+
+		checkDebugExtensions(true, true);
+
+		// If validation is enabled, make sure at least one extension is added
+		if (validationRequired && (utilsRequired || reportRequired))
+		{
+			checkDebugExtensions(true, false);
+		}
+
+		distinctStrings(requiredExtensions);
+
+		ASSERTMSG(containsAllStrings(availableExtensions, requiredExtensions),
+			"All required extension(s) must match available instance extension(s)");
+	}
+
+	/*
 	const VkValidationFeatureEnableEXT	enabledValidationFeature[]{
 											VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT };
 	VkValidationFeaturesEXT				validationFeatures = makeVkStruct();
@@ -462,52 +544,41 @@ ZInstance createInstance (
 	validationFeatures.enabledValidationFeatureCount	= data_count(enabledValidationFeature);
 	validationFeatures.pDisabledValidationFeatures		= nullptr;
 	validationFeatures.disabledValidationFeatureCount	= 0u;
+	*/
 
 	VkDebugUtilsMessengerCreateInfoEXT debugMessengerInfo{};
 	VkDebugReportCallbackCreateInfoEXT debugReportInfo{};
-	const std::string debugUtilsExtName(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);		// "VK_EXT_debug_utils"
-	const std::string debugReportExtName(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);	// "VK_EXT_debug_report"
-	const bool debugReportEnabled		= containsString(debugReportExtName, desiredExtensions)
-										|| containsString(debugReportExtName, availableExtensions);
-	const bool debugMessengerEnabled	= (containsString(debugUtilsExtName, desiredExtensions)
-										|| containsString(debugUtilsExtName, availableExtensions))
-										&& (debugReportEnabled == false);
-
-	strings requiredExtensions(desiredExtensions);
-
 	void* instanceCreateInfoPnext = nullptr;
 
-	if (debugMessengerEnabled)
+	if (utilsRequired)
 	{
-		if (!containsString(debugUtilsExtName, desiredExtensions))
-			requiredExtensions.push_back(debugUtilsExtName);
-		makeDebugCreateInfo(debugMessengerInfo, &instance.getParamRef<Logger>(), nullptr, enableDebugPrintf);
+		ASSERTION(false == reportRequired);
+		makeDebugCreateInfo(debugMessengerInfo, &instance.getParamRef<Logger>(), nullptr, false);
 	}
-
-	if (debugReportEnabled)
+	if (reportRequired)
 	{
-		if (!containsString(debugReportExtName, desiredExtensions))
-			requiredExtensions.push_back(debugReportExtName);
-		makeDebugCreateInfo(debugReportInfo, &instance.getParamRef<Logger>(), nullptr, enableDebugPrintf);
-	}
-
-	if (enableDebugPrintf)
-	{
-		instanceCreateInfoPnext = &validationFeatures;
-		validationFeatures.pNext = nullptr;
+		ASSERTION(false == utilsRequired);
+		makeDebugCreateInfo(debugReportInfo, &instance.getParamRef<Logger>(), nullptr, false);
 	}
 
 	VkApplicationInfo	appInfo			= makeVkStruct();
 	appInfo.pApplicationName			= instance.getParamRef<std::string>().c_str();
 	appInfo.applicationVersion			= VK_MAKE_VERSION(gf.vtfVer.nmajor, gf.vtfVer.nminor, gf.vtfVer.npatch);
-	appInfo.pEngineName					= "<unknown>";
+	appInfo.pEngineName					= "VTF";
 	appInfo.engineVersion				= VK_MAKE_VERSION(1, 0, 0);
 	appInfo.apiVersion					= apiVersion;	// default VK_API_VERSION_1_0
 
 	std::vector<const char*>			v_layerNames(to_cstrings(requiredLayers));
-	std::vector<const char*>			v_extensions(to_cstrings(availableExtensions));
+	std::vector<const char*>			v_extensions(to_cstrings(requiredExtensions));
+
+	VkInstanceCreateFlags				flags(VkInstanceCreateFlags(0));
+	if (portabilityRequired)
+	{
+		flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+	}
 
 	VkInstanceCreateInfo createInfo		= makeVkStruct(instanceCreateInfoPnext);
+	createInfo.flags					= flags;
 	createInfo.pApplicationInfo			= &appInfo;
 	createInfo.enabledExtensionCount	= data_count(v_extensions);
 	createInfo.ppEnabledExtensionNames	= data_or_null(v_extensions);
@@ -516,16 +587,40 @@ ZInstance createInstance (
 
 	if (gf.verbose)
 	{
+		struct VP
+		{
+			const Version ver;
+			VP(add_cref<Version> v) : ver(v) {}
+			std::string operator()() {
+				std::ostringstream os;
+				os << "(variant=" << ver.nvariant;
+				os << ", major=" << ver.nmajor;
+				os << ", minor=" << ver.nminor;
+				os << ", patch=" << ver.npatch << ')';
+				return os.str();
+			}
+		};
+
 		std::cout << "[APP] Trying to create Vulkan instance:\n"
-				  << "       pApplicationName:   " << std::quoted(appInfo.pApplicationName) << std::endl
-				  << "       applicationVersion: " << gf.vtfVer << std::endl
-				  << "       pEngineName:        " << std::quoted(appInfo.pEngineName) << std::endl
-				  << "       engineVersion:      " << Version::fromUint(appInfo.engineVersion) << std::endl
-				  << "       apiVersion:         " << Version::fromUint(apiVersion) << std::endl;
+				  << "       pApplicationName:      " << std::quoted(appInfo.pApplicationName) << std::endl
+				  << "       applicationVersion:    " << gf.vtfVer << std::endl
+				  << "       pEngineName:           " << std::quoted(appInfo.pEngineName) << std::endl
+				  << "       engineVersion:         " << Version::fromUint(appInfo.engineVersion) << std::endl
+				  << "       apiVersion:            " << VP(Version::fromUint(apiVersion))() << std::endl;
+		std::cout << "       enabledLayerCount:     " << createInfo.enabledLayerCount << std::endl;
+		for (uint32_t i = 0; i < createInfo.enabledLayerCount; ++i)
+		{
+			std::cout << "         " << i << ": " << createInfo.ppEnabledLayerNames[i] << std::endl;
+		}
+		std::cout << "       enabledExtensionCount: " << createInfo.enabledExtensionCount << std::endl;
+		for (uint32_t i = 0; i < createInfo.enabledExtensionCount; ++i)
+		{
+			std::cout << "         " << i << ": " << createInfo.ppEnabledExtensionNames[i] << std::endl;
+		}
 	}
 	auto pfnCreateInstance = getDriverCreateInstanceProc();
 	ASSERTMSG(pfnCreateInstance, "vkCreateInstance() must not be null");
-	VKASSERT3((*pfnCreateInstance)(&createInfo, callbacks, instance.setter()), "Failed to create instance!");
+	VKASSERTMSG((*pfnCreateInstance)(&createInfo, callbacks, instance.setter()), "Failed to create instance!");
 
 	if (getGlobalAppFlags().verbose)
 	{
@@ -548,11 +643,11 @@ ZInstance createInstance (
 	};
 	AInstance(instance).initInterface();
 
-	if (debugMessengerEnabled)
+	if (utilsRequired)
 	{
 		createDebugMessenger(instance, callbacks, debugMessengerInfo, instance.getParamRef<VkDebugUtilsMessengerEXT>());
 	}
-	if (debugReportEnabled)
+	if (reportRequired)
 	{
 		createDebugReport(instance, callbacks, debugReportInfo, instance.getParamRef<VkDebugReportCallbackEXT>());
 	}
@@ -573,7 +668,7 @@ ZPhysicalDevice	getPhysicalDeviceByIndex (ZInstance instance, uint32_t physicalD
 	VkPhysicalDeviceProperties	deviceProps	{};
 	vkGetPhysicalDeviceProperties(physDevice, &deviceProps);
 	auto dev = ZPhysicalDevice::create(physDevice, instance.getParam<VkAllocationCallbacksPtr>(), instance,
-									   physicalDeviceIndex, extensions, deviceProps);
+		physicalDeviceIndex, {/* TODO */}, extensions, deviceProps);
 	dev.verbose(getGlobalAppFlags().verbose != 0);
 	return dev;
 }
@@ -581,7 +676,7 @@ ZPhysicalDevice	getPhysicalDeviceByIndex (ZInstance instance, uint32_t physicalD
 ZPhysicalDevice selectPhysicalDevice (
     const int			proposedDeviceIndex,
     ZInstance			instance,
-    add_cref<strings>   requiredExtensions,
+    add_cref<strings>   desiredExtensions,
     ZSurfaceKHR			surface)
 {	
 	std::vector<VkPhysicalDevice> devices;
@@ -594,7 +689,7 @@ ZPhysicalDevice selectPhysicalDevice (
         std::cout << "[INFO] Found " << deviceCount << " available device(s)" << std::endl;
         for (uint32_t i = 0; i < deviceCount; ++i)
         {
-            printPhysicalDevice(devices.at(i), std::cout, i);
+            printPhysicalDevice(instance, devices.at(i), std::cout, i);
         }
     }
 
@@ -606,15 +701,16 @@ ZPhysicalDevice selectPhysicalDevice (
 
 	auto isDeviceSuitable = [&](VkPhysicalDevice device)
 	{
-		availableExtensions = enumerateDeviceExtensions(device, layers);
-		if (containsString(VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, availableExtensions)
-			&& containsString(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, availableExtensions))
-		{
-			removeStrings(extensionToRemove, availableExtensions);
-		}
+		availableExtensions = enumerateDeviceExtensions(instance, device, layers);
+		// TODO why?
+		//if (containsString(VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, availableExtensions)
+		//	&& containsString(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, availableExtensions))
+		//{
+		//	removeStrings(extensionToRemove, availableExtensions);
+		//}
 		std::vector<uint32_t> surfaceSupportQueueIndices = findSurfaceSupportedQueueFamilyIndices(device, surface);
 		const bool effectiveSurfaceSupport = surface.has_handle() ? (surfaceSupportQueueIndices.size() != 0) : true;
-		return (containsAllStrings(availableExtensions, requiredExtensions) && effectiveSurfaceSupport);
+		return (containsAllStrings(availableExtensions, desiredExtensions) && effectiveSurfaceSupport);
 	};
 
     if (getGlobalAppFlags().verbose)
@@ -638,7 +734,7 @@ ZPhysicalDevice selectPhysicalDevice (
 				break;
 			}
 		}
-		ASSERTMSG((i < deviceCount), "No GPU found that supports required extension or queues");
+		ASSERTMSG((i < deviceCount), "No GPU found that supports desired extension or queues");
 	}
 	else if (make_unsigned(proposedDeviceIndex) < deviceCount)
 	{
@@ -650,19 +746,13 @@ ZPhysicalDevice selectPhysicalDevice (
 		}
 		else
 		{
-			std::ostringstream oss;
-			oss << "Selected GPU " << proposedDeviceIndex << " does not support desired queues!";
-			oss.flush();
-			ASSERTMSG(false, oss.str());
+			ASSERTFALSE("Selected GPU ", proposedDeviceIndex, " does not support desired queues!");
 		}
 	}
 	else
 	{
-		std::ostringstream oss;
-		oss << "Selected device index " << proposedDeviceIndex
-			<< " exceeds available physical device count " << deviceCount;
-		oss.flush();
-		ASSERTMSG(false, oss.str());
+		ASSERTFALSE("Selected device index ", proposedDeviceIndex,
+			" exceeds available physical device count ", deviceCount);
 	}
 
 	instanceInterface.vkGetPhysicalDeviceProperties(result, &deviceProperties);
@@ -674,18 +764,23 @@ ZPhysicalDevice selectPhysicalDevice (
         printPhysicalDevice(deviceProperties, std::cout, physicalDeviceIndex);
     }
 
-	auto dev = ZPhysicalDevice(result,
-						   instance.getParam<VkAllocationCallbacksPtr>(), instance,
-						   physicalDeviceIndex, availableExtensions, deviceProperties);
+	auto dev = ZPhysicalDevice(result
+						, instance.getParam<VkAllocationCallbacksPtr>()
+						, instance
+						, physicalDeviceIndex
+						, std::move(availableExtensions)
+						, desiredExtensions
+						, deviceProperties);
 	dev.verbose(getGlobalAppFlags().verbose != 0);
 
 	return dev;
 }
 
-ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
-							 OnEnablingFeatures		onEnablingFeatures,
-							 ZSurfaceKHR			surface,
-							 bool					enableDebugPrintf)
+ZDevice createLogicalDevice	(
+	ZPhysicalDevice		physDevice,
+	OnEnablingFeatures	onEnablingFeatures,
+	ZSurfaceKHR			surface,
+	bool				/* enableDebugPrintf 2025-01-12 */)
 {	
 	uint32_t								queueFamilyPropCount = 0;
 	std::vector<float>						queuePriorities;
@@ -694,13 +789,14 @@ ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
 	std::vector<ZDeviceQueueCreateInfo>		queueCreateExInfos;
 
 	add_ref<Logger>	logger = physDevice.getParam<ZInstance>().getParamRef<Logger>();
+	add_cref<ZInstanceInterface> ii = physDevice.getParamRef<ZInstance>().getInterface();
 
-	vkGetPhysicalDeviceQueueFamilyProperties(*physDevice, &queueFamilyPropCount, nullptr);
+	ii.vkGetPhysicalDeviceQueueFamilyProperties(*physDevice, &queueFamilyPropCount, nullptr);
 	ASSERTMSG(queueFamilyPropCount, "Unable to get VkQueueFamilyProperties");
 	queueFamilyProps.resize(queueFamilyPropCount);
 	queueCreateInfos.resize(queueFamilyPropCount);
 	queueCreateExInfos.resize(queueFamilyPropCount);
-	vkGetPhysicalDeviceQueueFamilyProperties(*physDevice, &queueFamilyPropCount, queueFamilyProps.data());
+	ii.vkGetPhysicalDeviceQueueFamilyProperties(*physDevice, &queueFamilyPropCount, queueFamilyProps.data());
 
 	auto makeQueueCreateInfo = [&](uint32_t familyIndex, uint32_t queueCount) -> VkDeviceQueueCreateInfo
 	{
@@ -752,47 +848,109 @@ ZDevice createLogicalDevice	(ZPhysicalDevice		physDevice,
 		}
 	}
 
-	VkPhysicalDeviceFeatures2	features	{};
 	ZInstance					instance	= physDevice.getParam<ZInstance>();
 	VkAllocationCallbacksPtr	callbacks	= instance.getParam<VkAllocationCallbacksPtr>();
 	std::vector<const char*>	layers		(to_cstrings(instance.getParamRef<ZDistType<RequiredLayers,strings>>().get()));
 
-	strings	availableDeviceExtensions(physDevice.getParamRef<strings>());
-	removeStrings(getGlobalAppFlags().excludedDevExtensions, availableDeviceExtensions);
-	if (onEnablingFeatures)	features	= onEnablingFeatures(physDevice, availableDeviceExtensions);
-	features.sType = mkstype<decltype(features)>;
-	// Add common features
+	add_cref<strings>	availableExtensions(physDevice.getParamRef<ZDistType<AvailableDeviceExtensions, strings>>().get());
+	add_cref<strings>	desiredExtensions(physDevice.getParamRef<ZDistType<DesiredRequiredDeviceExtensions, strings>>().get());
+
+	DeviceCaps::Features deviceCapsFeatures;
+	DeviceCaps deviceCaps(availableExtensions, physDevice);
+
+	add_ref<strings> requiredExtensions(deviceCaps.requiredExtension);
+	removeStrings(getGlobalAppFlags().excludedDevExtensions, requiredExtensions);
+	mergeStringsDistinct(requiredExtensions, desiredExtensions);
+
+	if (onEnablingFeatures)
 	{
-		if (enableDebugPrintf)
-		{
-			availableDeviceExtensions.push_back(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME);
-		}
-		// vertexPipelineStoresAndAtomics & fragmentStoresAndAtomics must be enabled
-		VkPhysicalDeviceFeatures tmp{};
-		vkGetPhysicalDeviceFeatures(*physDevice, &tmp);
-		features.features.vertexPipelineStoresAndAtomics = tmp.vertexPipelineStoresAndAtomics;
-		features.features.fragmentStoresAndAtomics = tmp.fragmentStoresAndAtomics;
+		onEnablingFeatures(deviceCaps);
 	}
 
-	std::vector<const char*>	extensions	(to_cstrings(availableDeviceExtensions));
+	//if (enableDebugPrintf)
+	//{
+	//	availableDeviceExtensions.push_back(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME);
+	//}
+
+	std::vector<const char*>	extensions	(to_cstrings(requiredExtensions));
 
 	VkDeviceCreateInfo createInfo		= makeVkStruct();
 
 	createInfo.queueCreateInfoCount		= data_count(queueCreateInfos);
 	createInfo.pQueueCreateInfos		= queueCreateInfos.data();
 
-	createInfo.pNext					= onEnablingFeatures ? &features : nullptr;
-	createInfo.pEnabledFeatures			= onEnablingFeatures ? nullptr : &features.features;
+	//createInfo.pNext					= established in updateDeviceCreateInfo
+	//createInfo.pEnabledFeatures		= established in updateDeviceCreateInfo
 
 	createInfo.enabledExtensionCount	= data_count(extensions);
 	createInfo.ppEnabledExtensionNames	= data_or_null(extensions);
 	createInfo.enabledLayerCount		= data_count(layers);
 	createInfo.ppEnabledLayerNames		= data_or_null(layers);
 
-	ZDevice logicalDevice(VK_NULL_HANDLE, callbacks, physDevice, std::move(queueCreateExInfos));
+	VkPhysicalDeviceFeatures merge{};
+	{
+		VkPhysicalDeviceFeatures tmp{};
+		ii.vkGetPhysicalDeviceFeatures(*physDevice, &tmp);
+		merge.vertexPipelineStoresAndAtomics = tmp.vertexPipelineStoresAndAtomics;
+		merge.fragmentStoresAndAtomics = tmp.fragmentStoresAndAtomics;
+	}
+	deviceCaps.updateDeviceCreateInfo(createInfo, merge, deviceCapsFeatures);
+
+	if (getGlobalAppFlags().verbose)
+	{
+		std::cout << "[APP] Trying to create logical device" << std::endl;
+		std::cout << "      enabledLayerCount:     " << createInfo.enabledLayerCount << std::endl;
+		for (uint32_t i = 0; i < createInfo.enabledLayerCount; ++i)
+		{
+			std::cout << "        " << i << ": " << createInfo.ppEnabledLayerNames[i] << std::endl;
+		}
+		std::cout << "      enabledExtensionCount: " << createInfo.enabledExtensionCount << std::endl;
+		for (uint32_t i = 0; i < createInfo.enabledExtensionCount; ++i)
+		{
+			std::cout << "        " << i << ": " << createInfo.ppEnabledExtensionNames[i] << std::endl;
+		}
+		if (createInfo.pEnabledFeatures)
+		{
+			std::cout << "      pEnabledFeatures: VkPhysicalDeviceFeatures" << std::endl;
+			printPhysicalDeviceFeatures(*createInfo.pEnabledFeatures, std::cout, 10);
+		}
+		else
+		{
+			std::cout << "      pEnabledFeatures: nullptr" << std::endl;
+		}
+		if (createInfo.pNext)
+		{
+			int indent = 0;
+			add_cptr<void> pNext = createInfo.pNext;
+			std::cout << "      pNext: ";
+			while (pNext) {
+				add_cptr<VkBaseOutStructure> base = static_cast<add_cptr<VkBaseOutStructure>>(pNext);
+				if (indent)
+					std::cout << std::string(13, ' ');
+				std::cout << vk::to_string(static_cast<vk::StructureType>(base->sType)) << std::endl;
+				if (base->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2)
+				{
+					add_cptr<VkPhysicalDeviceFeatures2> f20 = static_cast<add_cptr<VkPhysicalDeviceFeatures2>>(pNext);
+					add_cref<VkPhysicalDeviceFeatures> f10 = f20->features;
+					printPhysicalDeviceFeatures(f10, std::cout, 15);
+				}
+				
+				pNext = base->pNext;
+				indent = 1;
+			}
+		}
+		else
+		{
+			std::cout << "      pNext: nullptr" << std::endl;
+		}
+	}
+
+	VkDevice deviceHandle(VK_NULL_HANDLE);
 	auto pfnCreateDevice = getDriverCreateDeviceProc();
     ASSERTMSG(pfnCreateDevice, "vkCreateDevice must not be null");
-	VKASSERT2((*pfnCreateDevice)(*physDevice, &createInfo, callbacks, logicalDevice.setter()));
+	const VkResult createResult = (*pfnCreateDevice)(*physDevice, &createInfo, callbacks, &deviceHandle);
+	VKASSERTMSG(createResult, "Failed to create logical device");
+	ZDevice logicalDevice(deviceHandle, callbacks, physDevice, std::move(queueCreateExInfos));
 	logicalDevice.verbose(getGlobalAppFlags().verbose != 0);
 
 	struct AInstance : public ZInstance	{
@@ -853,8 +1011,12 @@ ZQueue deviceGetNextQueue (ZDevice device, VkQueueFlags queueFlags, bool mustSup
 
 add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (add_cref<ZDevice> device)
 {
-	ASSERTMSG(device.has_handle(), "Device must have handle");
-	return device.getParam<ZPhysicalDevice>().getParamRef<VkPhysicalDeviceProperties>();
+	return deviceGetPhysicalProperties(device.getParamRef<ZPhysicalDevice>());
+}
+
+add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (add_cref<ZPhysicalDevice> device)
+{
+	return device.getParamRef<VkPhysicalDeviceProperties>();
 }
 
 VkPhysicalDeviceProperties2 deviceGetPhysicalProperties2 (add_cref<ZDevice> device, add_ptr<void> pNext)
@@ -913,7 +1075,7 @@ ZFence createFence (ZDevice device, bool signaled)
 	VkFenceCreateInfo fenceInfo = makeVkStruct();
 	fenceInfo.flags = signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0;
 
-	VKASSERT2(vkCreateFence(*device, &fenceInfo, callbacks, &handle));
+	VKASSERT(vkCreateFence(*device, &fenceInfo, callbacks, &handle));
 	return ZFence::create(handle, device, callbacks);
 }
 
@@ -921,7 +1083,7 @@ VkResult waitForFence (ZFence fence, uint64_t timeout, bool assertOnFail)
 {
 	VkDevice device = *fence.getParam<ZDevice>();
 	const VkResult res = vkWaitForFences(device, 1, fence.ptr(), VK_TRUE, timeout);
-	if (assertOnFail) VKASSERT2(res);
+	if (assertOnFail) VKASSERT(res);
 	return res;
 }
 
@@ -937,7 +1099,7 @@ void waitForFences (std::initializer_list<ZFence> fences, uint64_t timeout)
 			ASSERTION(device == i->getParam<ZDevice>());
 			handles[make_unsigned(std::distance(b, i))] = **i;
 		}
-		VKASSERT2(vkWaitForFences(*device, count, handles.data(), VK_TRUE, timeout));
+		VKASSERT(vkWaitForFences(*device, count, handles.data(), VK_TRUE, timeout));
 	}
 }
 
@@ -953,14 +1115,14 @@ void waitForFences (std::vector<ZFence> fences, uint64_t timeout)
 			ASSERTION(device == i->getParam<ZDevice>());
 			handles[make_unsigned(std::distance(b, i))] = **i;
 		}
-		VKASSERT2(vkWaitForFences(*device, count, handles.data(), VK_TRUE, timeout));
+		VKASSERT(vkWaitForFences(*device, count, handles.data(), VK_TRUE, timeout));
 	}
 }
 
 void resetFence (ZFence fence)
 {
 	VkDevice device = *fence.getParam<ZDevice>();
-	VKASSERT2(vkResetFences(device, 1, fence.ptr()));
+	VKASSERT(vkResetFences(device, 1, fence.ptr()));
 }
 
 void resetFences (std::initializer_list<ZFence> fences)
@@ -975,7 +1137,7 @@ void resetFences (std::initializer_list<ZFence> fences)
 			ASSERTION(device == i->getParam<ZDevice>());
 			handles[make_unsigned(std::distance(b, i))] = **i;
 		}
-		VKASSERT2(vkResetFences(*device, count, handles.data()));
+		VKASSERT(vkResetFences(*device, count, handles.data()));
 	}
 }
 
@@ -991,7 +1153,7 @@ void resetFences (std::vector<ZFence> fences)
 			ASSERTION(device == i->getParam<ZDevice>());
 			handles[make_unsigned(std::distance(b, i))] = **i;
 		}
-		VKASSERT2(vkResetFences(*device, count, handles.data()));
+		VKASSERT(vkResetFences(*device, count, handles.data()));
 	}
 }
 
@@ -1011,7 +1173,7 @@ ZSemaphore createSemaphore (ZDevice device)
 	VkSemaphoreCreateInfo semInfo = makeVkStruct();
 	semInfo.flags = VkSemaphoreCreateFlags(0);
 
-	VKASSERT2(vkCreateSemaphore(*device, &semInfo, callbacks, &handle));
+	VKASSERT(vkCreateSemaphore(*device, &semInfo, callbacks, &handle));
 
 	return ZSemaphore::create(handle, device, callbacks);
 }
@@ -1045,13 +1207,13 @@ VkFormat selectBestDepthStencilFormat (ZPhysicalDevice					device,
 			case VK_IMAGE_TILING_OPTIMAL:
 				features = props.optimalTilingFeatures;
 				break;
-			default: ASSERTION(0);
+			default: ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/);
 		}
 
 		if ((features & featuresFlags) == featuresFlags)
 			return *i;
 	}
-	ASSERTION(0);
+	ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/);
 	return VK_FORMAT_UNDEFINED;
 }
 
@@ -1094,10 +1256,50 @@ uint32_t enumeratePhysicalDevices (ZInstance instance, std::vector<VkPhysicalDev
 {
 	uint32_t deviceCount = 0;
 	add_cref<ZInstanceInterface> ii = instance.getInterface();
-	VKASSERT2(ii.vkEnumeratePhysicalDevices(*instance, &deviceCount, nullptr));
+	VKASSERT(ii.vkEnumeratePhysicalDevices(*instance, &deviceCount, nullptr));
 	devices.resize(deviceCount, VkPhysicalDevice(0));
-	VKASSERT2(ii.vkEnumeratePhysicalDevices(*instance, &deviceCount, devices.data()));
+	VKASSERT(ii.vkEnumeratePhysicalDevices(*instance, &deviceCount, devices.data()));
 	return deviceCount;
+}
+
+std::ostream& printPhysicalDevice (
+	ZInstance instance,
+	VkPhysicalDevice device,
+	std::ostream& str,
+	uint32_t deviceIndex)
+{
+	VkPhysicalDeviceProperties props{};
+	instance.getInterface().vkGetPhysicalDeviceProperties(device, &props);
+	return printPhysicalDevice(props, str, deviceIndex);
+}
+
+static strings enumerateDeviceExtensions(ZInstance instance, VkPhysicalDevice device, const char* layerName)
+{
+	strings		extensions;
+	uint32_t	extensionCount = 0;
+
+	VKASSERT(instance.getInterface().vkEnumerateDeviceExtensionProperties(device, layerName, &extensionCount, nullptr));
+
+	if (extensionCount)
+	{
+		extensions.resize(extensionCount);
+		std::vector<VkExtensionProperties> props(extensionCount);
+		VKASSERT(instance.getInterface().vkEnumerateDeviceExtensionProperties(device, layerName, &extensionCount, props.data()));
+		std::transform(props.begin(), props.end(), extensions.begin(),
+			[](VkExtensionProperties& p) {return std::string(p.extensionName); });
+	}
+
+	return extensions;
+}
+
+strings enumerateDeviceExtensions(ZInstance instance, VkPhysicalDevice device, const strings& layerNames)
+{
+	strings extensions = enumerateDeviceExtensions(instance, device, nullptr);
+	for (const auto& layerName : layerNames)
+	{
+		mergeStringsDistinct(extensions, enumerateDeviceExtensions(instance, device, layerName.c_str()));
+	}
+	return extensions;
 }
 
 } // namespace vtf

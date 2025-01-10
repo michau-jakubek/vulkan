@@ -22,7 +22,7 @@ std::locale makeLocale (add_cref<Locales> locales)
 	switch (locales)
 	{
 	case Locales::pl_PL:	name = "pl_PL.UTF-8";	break;
-	default: ASSERTMSG(false, "Unknown locales");
+	default: ASSERTFALSE("Unknown locales");
 	}
 	return std::locale(name);
 }

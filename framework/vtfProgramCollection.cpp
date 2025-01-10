@@ -282,7 +282,7 @@ static const char* shaderStageToCommand (VkShaderStageFlagBits stage)
 	case VK_SHADER_STAGE_GEOMETRY_BIT:					return "geom";
 	default: break;
 	}
-	ASSERTION(false);
+	ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/);
 	return 0;
 }
 
@@ -816,8 +816,7 @@ bool _GlSpvProgramCollection::addFromFile (VkShaderStageFlagBits type,
 	}
 	else if (verbose)
 	{
-		const std::string msg("Unable to open \"" + source_name + "\"");
-		ASSERTMSG(false, msg);
+		ASSERTFALSE("Unable to open \"", source_name, "\"");
 	}
 	return result;
 }
@@ -889,7 +888,7 @@ void ProgramCollection::buildAndVerify (add_cref<Version> vulkanVer, add_cref<Ve
 					m_stageToAssembly[key]	= std::move(assembly);
 					m_stageToBinary[key]	= std::move(binary);
 				}
-				else ASSERTMSG(false, errors);
+				else ASSERTFALSE(errors);
 			}
 		}
 	}
@@ -912,7 +911,7 @@ ZShaderModule ProgramCollection::getShader (VkShaderStageFlagBits stage, uint32_
 	}
 	else if (verbose)
 	{
-		ASSERTION(false);
+		ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/);
 	}
 	return module;
 }

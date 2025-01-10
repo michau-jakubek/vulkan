@@ -149,16 +149,14 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 	VkPhysicalDeviceShaderObjectFeaturesEXT shaderObjectFeatures = makeVkStruct();
 	VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures = makeVkStruct(&shaderObjectFeatures);
 	VkPhysicalDeviceExtendedDynamicStateFeaturesEXT dynamicStateFeatures = makeVkStruct(&dynamicRenderingFeatures);
-	auto onEnablingFeatures = [&](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
+	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
-		extensions.clear();
+		caps.requiredExtension.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+		caps.requiredExtension.push_back("VK_EXT_extended_dynamic_state");
+		caps.requiredExtension.push_back("VK_EXT_extended_dynamic_state2");
+		caps.requiredExtension.push_back("VK_KHR_maintenance1");
 
-		extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-		extensions.push_back("VK_EXT_extended_dynamic_state");
-		extensions.push_back("VK_EXT_extended_dynamic_state2");
-		extensions.push_back("VK_KHR_maintenance1");
-
-		deviceGetPhysicalFeatures2(physicalDevice, &dynamicStateFeatures);
+		deviceGetPhysicalFeatures2(caps.physicalDevice, &dynamicStateFeatures);
 
 		params.shaderObject = shaderObjectFeatures.shaderObject;
 		params.dynamicRendering = dynamicRenderingFeatures.dynamicRendering;
@@ -167,11 +165,11 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 		if (params.ignoreSoExtension)
 		{
 			shaderObjectFeatures.shaderObject = VK_TRUE;
-			extensions.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
+			caps.requiredExtension.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
 		}
 		else if (shaderObjectFeatures.shaderObject != VK_FALSE)
 		{
-			extensions.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
+			caps.requiredExtension.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
 		}
 
 		VkPhysicalDeviceFeatures2 enabledFeatures = makeVkStruct(&dynamicStateFeatures);
@@ -179,11 +177,11 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 
 		if (dynamicRenderingFeatures.dynamicRendering != VK_FALSE)
 		{
-			extensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+			caps.requiredExtension.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
 		}
 		if (dynamicStateFeatures.extendedDynamicState != VK_FALSE)
 		{
-			extensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
+			caps.requiredExtension.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
 		}
 
 		return enabledFeatures;

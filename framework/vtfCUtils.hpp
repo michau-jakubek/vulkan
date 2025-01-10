@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <type_traits>
 #include <fstream>
+#include <variant>
 
 #include "vtfFilesystem.hpp"
 #include "vtfZDeletable.hpp"
@@ -20,6 +21,15 @@
 #define UNREF(x__) static_cast<void>(x__)
 #endif
 #define SIDE_EFFECT(x__) UNREF(x__)
+
+#ifndef MULTI_UNREF
+#define MULTI_UNREF(...)             \
+    do                                  \
+    {                                   \
+        auto unref = [](auto &&...) {}; \
+        unref(__VA_ARGS__);             \
+    } while (false)
+#endif
 
 #ifdef _MSC_VER
 #define UNUSED [[maybe_unused]]
@@ -49,11 +59,15 @@ uint32_t	readFile (add_cref<fs::path> path, add_ref<std::vector<char>> buffer);
 std::string captureSystemCommandResult (const char* cmd, bool& status, const char LF = '\0');
 
 bool		containsString (const std::string& s, const vtf::strings& list);
+bool		containsString (const vtf::strings& list, const std::string& s);
 bool		containsAllStrings (const vtf::strings& range, const vtf::strings& all);
 bool		containsAnyString (const vtf::strings& range, const vtf::strings& include);
 uint32_t	removeStrings (const vtf::strings& strs, vtf::strings& list);
-strings		mergeStrings (const strings& a, const strings& b);
-strings		mergeStringsDistinct (const strings& a, const strings& b);
+void		distinctStrings (add_ref<strings> target);
+strings		distinctStrings (add_cref<strings> set);
+strings		mergeStrings (add_cref<strings> target, add_cref<strings> source);
+void		mergeStringsDistinct(add_ref<strings> target, add_cref<strings> source);
+strings		mergeStringsDistinct (add_cref<strings> target, add_cref<strings> source);
 strings		splitString (const std::string& delimitedString, char delimiter = ',');
 
 std::string	toLower (add_cref<std::string> s);
@@ -239,7 +253,43 @@ void copy_initializer_list (const std::initializer_list<ListItem>& src, ListItem
 	}
 }
 
+namespace types
+{
+
+// Helper template for removing a type from the type list
+template <template <typename...> typename Container, typename X, typename... Types>
+struct remove_type;
+
+template <template <typename...> typename Container, typename X, typename Head, typename... Tail>
+struct remove_type<Container, X, Head, Tail...> {
+	using type = std::conditional_t<
+		std::is_same_v<X, Head>,
+		typename remove_type<Container, X, Tail...>::type,
+		Container<Head, typename remove_type<Container, X, Tail...>::type>
+	>;
+};
+
+template <template <typename...> typename Container, typename X>
+struct remove_type<Container, X> {
+	using type = Container<>;
+};
+
+template <typename X, typename Container>
+struct RemoveTypeFromContainer;
+
+template <typename X, typename... Types>
+struct RemoveTypeFromContainer<X, std::variant<Types...>> {
+	using type = typename remove_type<std::variant, X, Types...>::type;
+};
+
+} // namesapce types
+
+template<typename X, typename Container>
+using RemoveTypeFromContainer_t = typename types::RemoveTypeFromContainer<X, Container>::type;
+
+#ifndef STRINGIZE
 #define STRINGIZE(value__) #value__
+#endif
 
 #define BEGIN_SWITCH_STR(variable_lhs_, variable_rhs_, switch__) {	\
 	const char* variable_rhs_ = nullptr;							\
@@ -360,8 +410,8 @@ template<class Y> add_cref<Y> makeQuickRef(Y&& y)
 
 struct TriLogicInt
 {
-				TriLogicInt	() : m_value{}, m_hasValue(false) {}
-				TriLogicInt (int value) : m_value(value), m_hasValue(true) {}
+	TriLogicInt	() : m_value{}, m_hasValue(false) {}
+	TriLogicInt (int value) : m_value(value), m_hasValue(true) {}
 	// definition of implicit copy assignment operator for 'TriLogicInt'
 	// is deprecated because it has a user - provided copy constructor
 	// TriLogicInt (add_cref<TriLogicInt> other) = default;

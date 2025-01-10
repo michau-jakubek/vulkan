@@ -31,8 +31,8 @@ uint32_t getSystemSubgroupSize (ZDevice device)
 {
 	VkPhysicalDeviceSubgroupProperties	sp	= makeVkStruct();
 	VkPhysicalDeviceProperties2			p2	= makeVkStruct(&sp);
-	vkGetPhysicalDeviceProperties2(*device.getParam<ZPhysicalDevice>(), &p2);
-	return sp.subgroupSize;
+	device.getInterface().vkGetPhysicalDeviceProperties2(*device.getParam<ZPhysicalDevice>(), &p2);
+	return 0 == sp.subgroupSize ? 32 : sp.subgroupSize;
 }
 
 std::tuple<UVec3,UVec3,uint32_t,uint32_t,uint32_t> getDeviceLimits (ZDevice device)
@@ -182,7 +182,7 @@ void Params::printInputValueImpl (add_ref<std::ostream> str, add_cref<StreamThro
 	{
 		p = &inputJvalues;
 	}
-	else { ASSERTION(0); }
+	else { ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/); }
 	u32vec_cref inputValues(*p);
 	const uint32_t inputValue = (streamThrough.val == INVALID_UINT32)
 							? inputValues.at(streamThrough.at)
@@ -203,7 +203,7 @@ void Params::setInputType (u32vec_cref values, const uint32_t at, InputTypes typ
 		typeIdx = 0u;
 	else if (&values == &inputJvalues)
 		typeIdx = 1u;
-	else { ASSERTION(0); }
+	else { ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/); }
 	if (at != INVALID_UINT32)
 		((uint16_t*)(&inputTypes.at(at)))[typeIdx] = uint16_t(type);
 	else
@@ -380,7 +380,7 @@ add_cptr<char> Params::addressingModeToString (AddresingMode am)
 	case AddresingMode::absolut:	return "absolut";
 	case AddresingMode::local:		return "local";
 	}
-	ASSERTMSG(false, "Unknown AddressingMode");
+	ASSERTFALSE("Unknown AddressingMode");
 	return nullptr;
 }
 template<class C> using add_cref2 = typename std::add_const<typename std::add_lvalue_reference<C>::type>::type;
@@ -930,13 +930,13 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 	const bool sucfEnabled = hasCmdLineSUCF();
 	VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR sucfFeatures = makeVkStruct();
 	VkPhysicalDeviceFeatures2 resultFeatures = makeVkStruct(sucfEnabled ? &sucfFeatures : nullptr);
-	auto onEnablingFeatures = [&](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
+	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
 		if (sucfEnabled)
 		{
-			extensions.emplace_back(VK_KHR_SHADER_SUBGROUP_UNIFORM_CONTROL_FLOW_EXTENSION_NAME);
+			caps.requiredExtension.emplace_back(VK_KHR_SHADER_SUBGROUP_UNIFORM_CONTROL_FLOW_EXTENSION_NAME);
 		}
-		vkGetPhysicalDeviceFeatures2(*physicalDevice, &resultFeatures);
+		vkGetPhysicalDeviceFeatures2(*caps.physicalDevice, &resultFeatures);
 		return resultFeatures;
 	};
 	VulkanContext ctx(record.name, gf.layers, {}, {}, onEnablingFeatures, gf.apiVer, gf.debugPrintfEnabled);

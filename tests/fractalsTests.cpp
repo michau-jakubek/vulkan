@@ -13,8 +13,6 @@
 #include <array>
 #include <variant>
 
-
-
 namespace
 {
 using namespace vtf;
@@ -118,18 +116,13 @@ TriLogicInt prepareTest (add_cref<TestRecord> record, add_cref<strings> commandL
 	TestConfig	config(commandLineParams);
 
 	bool		enableFloat64 = false;
-	auto onGetEnabledFeatures = [&](ZPhysicalDevice physDevice, add_ref<strings> /*deviceExtensions*/) -> VkPhysicalDeviceFeatures2
+	auto onGetEnabledFeatures = [&](add_ref<DeviceCaps> caps)
 	{
 		VkPhysicalDeviceFeatures features{};
-		vkGetPhysicalDeviceFeatures(*physDevice, &features);
-
-		VkPhysicalDeviceFeatures2 result{};
-		if (!config.float32)
-		{
-			enableFloat64 = (features.shaderFloat64 != VK_FALSE);
-			result.features.shaderFloat64 = features.shaderFloat64;
-		}
-		return result;
+		auto f10 = caps.addFeature(features, true);
+		enableFloat64 = f10.checkNotSupported(&VkPhysicalDeviceFeatures::shaderFloat64, false);
+		features.shaderFloat64 = enableFloat64 ? VK_TRUE : VK_FALSE;
+		caps.replaceFeature(features);
 	};
 
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();

@@ -3,10 +3,14 @@
 
 #include "vtfCUtils.hpp"
 
-std::string					getDriverFileName (add_ref<bool> success);
-PFN_vkCreateInstance		getDriverCreateInstanceProc  ();
-PFN_vkCreateDevice			getDriverCreateDeviceProc    ();
-PFN_vkGetInstanceProcAddr	getDriverGetInstanceProcAddr ();
-PFN_vkGetDeviceProcAddr		getDriverGetDeviceProcAddr   ();
+std::string									getDriverFileName (add_ref<bool> success);
+PFN_vkCreateInstance						getDriverCreateInstanceProc  ();
+PFN_vkDestroyInstance						getDriverDestroyInstanceProc ();
+PFN_vkCreateDevice							getDriverCreateDeviceProc    ();
+PFN_vkDestroyDevice							getDriverDestroyDeviceProc   ();
+PFN_vkGetInstanceProcAddr					getDriverGetInstanceProcAddr ();
+PFN_vkGetDeviceProcAddr						getDriverGetDeviceProcAddr   ();
+PFN_vkEnumerateInstanceLayerProperties		getDriverEnumerateInstanceLayerPropertiesProcAddr ();
+PFN_vkEnumerateInstanceExtensionProperties	getDriverEnumerateInstanceExtensionPropertiesProcAddr ();
 
 #endif // __VTF_VULKAN_DRIVER_HPP_INCLUDED__

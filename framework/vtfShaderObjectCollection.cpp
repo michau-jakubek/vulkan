@@ -308,7 +308,7 @@ int ShaderObjectCollection::create (add_cref<Version> vulkanVer, add_cref<Versio
 			m_stageToAssembly[key] = std::move(assembly);
 			m_stageToBinary[key] = std::move(binary);
 		}
-		else ASSERTMSG(false, errors);
+		else ASSERTFALSE(errors);
 
 		data->shader.setParam<VkShaderStageFlagBits>(link.stage);
 		data->shader.getParamRef<std::vector<type_index_with_default>>() = data->pushConstants.types();
@@ -320,7 +320,7 @@ int ShaderObjectCollection::create (add_cref<Version> vulkanVer, add_cref<Versio
 	std::transform(zInfos.begin(), zInfos.end(), createInfos.begin(),
 		[](add_cref<ZShaderCreateInfoEXT> ric) { return ric(); });
 
-	VKASSERT3(di.vkCreateShadersEXT(
+	VKASSERTMSG(di.vkCreateShadersEXT(
 						*m_device,
 						data_count(createInfos),
 						data_or_null(createInfos),
@@ -387,7 +387,7 @@ bool ShaderObjectCollection::create (add_cref<Version> vulkanVer, add_cref<Versi
 			m_stageToAssembly[key] = std::move(assembly);
 			m_stageToBinary[key] = std::move(binary);
 		}
-		else ASSERTMSG(false, errors);
+		else ASSERTFALSE(errors);
 
 		const VkShaderStageFlagBits oldStage = data->shader.getParam<VkShaderStageFlagBits>();
 		UNREF(oldStage);
@@ -404,7 +404,7 @@ bool ShaderObjectCollection::create (add_cref<Version> vulkanVer, add_cref<Versi
 	std::transform(zInfos.begin(), zInfos.end(), createInfos.begin(),
 		[](add_ref<ZShaderCreateInfoEXT> ric) { return ric(); });
 
-	VKASSERT3(di.vkCreateShadersEXT(
+	VKASSERTMSG(di.vkCreateShadersEXT(
 						*m_device,
 						data_count(createInfos),
 						data_or_null(createInfos),

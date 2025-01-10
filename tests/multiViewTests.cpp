@@ -110,14 +110,14 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 
 	VkPhysicalDeviceMultiviewFeatures multiviewFeatures = makeVkStruct();
 
-	auto onEnablingFeatures = [&](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
+	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
 		VkPhysicalDeviceFeatures2 resultFeatures = makeVkStruct();
 
-		if (containsString(VK_KHR_MULTIVIEW_EXTENSION_NAME, extensions))
+		if (containsString(VK_KHR_MULTIVIEW_EXTENSION_NAME, caps.availableExtensions))
 		{
 			resultFeatures.pNext = &multiviewFeatures;
-			vkGetPhysicalDeviceFeatures2(*physicalDevice, &resultFeatures);
+			vkGetPhysicalDeviceFeatures2(*caps.physicalDevice, &resultFeatures);
 		}
 
 		return resultFeatures;

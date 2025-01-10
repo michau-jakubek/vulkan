@@ -65,12 +65,20 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 				  << "Add command line parameter \'-spirv " << reqSpirv.to10xMajorPlusMinor() << "\' or higher." << std::endl;
 		return (1);
 	}
-	VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures demoteFeatures = makeVkStruct();
-	VkPhysicalDeviceFeatures2 deviceFeatures = makeVkStruct(&demoteFeatures);
-	auto onEnablingFatures = [&](ZPhysicalDevice device, add_ref<strings> /*deviceExtensions*/) -> VkPhysicalDeviceFeatures2
+	typedef VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures DemoteFeatures;
+	auto onEnablingFatures = [&](add_ref<DeviceCaps> caps)
 	{
-		vkGetPhysicalDeviceFeatures2(*device, &deviceFeatures);
-		return deviceFeatures;
+		caps.requiredExtension.push_back(VK_EXT_SHADER_SUBGROUP_VOTE_EXTENSION_NAME);
+		caps.requiredExtension.push_back(VK_EXT_SHADER_SUBGROUP_BALLOT_EXTENSION_NAME);
+		caps.requiredExtension.push_back(VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME);
+
+		deviceCheckProperties(caps.physicalDevice,
+			&VkPhysicalDeviceSubgroupProperties::supportedStages, false,
+			VK_SHADER_STAGE_FRAGMENT_BIT, true, "supportedStages doesn't contain VK_SHADER_STAGE_FRAGMENT_BIT");
+
+		caps.addFeature(DemoteFeatures(), true)
+			.checkNotSupported(&DemoteFeatures::shaderDemoteToHelperInvocation,
+				true, "shaderDemoteToHelperInvocation");
 	};
 	auto [status, params, err] = Params::parseCommandLine(cmdLineParams);
 	switch (status)
@@ -93,11 +101,7 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 	CanvasStyle canvasStyle = Canvas::DefaultStyle;
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
 	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFatures, gf.apiVer);
-	if (!demoteFeatures.shaderDemoteToHelperInvocation)
-	{
-		std::cout << "ERROR: shaderDemoteToHelperInvocation is not supported by device" << std::endl;
-		return (1);
-	}
+
 	return runDemoteInvocationsSingleThread(cs, record.assets, params);
 }
 
@@ -1007,7 +1011,7 @@ void printInfo (add_ref<VulkanContext>, add_ref<UserData> ui)
 						SIDE_EFFECT(pixel.property<PixelInfo::Properties::subgroupInvocationID>());
 						SIDE_EFFECT(pixel.property<PixelInfo::Properties::subgroupID>());
 						SIDE_EFFECT(pixel.property<PixelInfo::Properties::derivative>());
-						ASSERTION(0);
+						ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/);
 					}
 				}
 				log << std::endl;

@@ -52,7 +52,7 @@ void createDebugMessenger (ZInstance instance, VkAllocationCallbacksPtr callback
 	ASSERTION(createDebugUtilsMessengerEXT != nullptr);
 
 	ASSERTION(messenger == VK_NULL_HANDLE);
-	VKASSERT2(createDebugUtilsMessengerEXT(*instance, &info, callbacks, &messenger));
+	VKASSERT(createDebugUtilsMessengerEXT(*instance, &info, callbacks, &messenger));
 }
 
 void destroyDebugMessenger (ZInstance instance, VkAllocationCallbacksPtr callbacks, VkDebugUtilsMessengerEXT& messenger)
@@ -98,7 +98,7 @@ void createDebugReport (ZInstance instance, VkAllocationCallbacksPtr callbacks, 
 	ASSERTION(createDebugReportCallbackEXT != nullptr);
 
 	ASSERTION(report == VK_NULL_HANDLE);
-	VKASSERT2(createDebugReportCallbackEXT(*instance, &info, callbacks, &report));
+	VKASSERT(createDebugReportCallbackEXT(*instance, &info, callbacks, &report));
 }
 
 void destroyDebugReport (ZInstance instance, VkAllocationCallbacksPtr callbacks, VkDebugReportCallbackEXT& report)

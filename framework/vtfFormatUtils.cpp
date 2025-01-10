@@ -244,7 +244,7 @@ void parseType (const char* const name, int& pos, ZFormatInfo& info)
 			info.floating	= true;
 			info.integral	= false;
 		CASE_STR_DEFAULT(p)
-			ASSERTMSG(0, "Format not implemented");
+			ASSERTFALSE("Format not implemented");
 	END_SWITCH_STR(p)
 	pos += concise_convert(skip, pos);
 }

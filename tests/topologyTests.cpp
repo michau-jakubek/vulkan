@@ -238,7 +238,7 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 	VkPhysicalDeviceDynamicRenderingFeatures	drFeatures		= makeVkStruct();
 	const std::string extensionToVerify(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
 #endif
-	auto onEnablingFeatures = [&](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
+	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
 #ifdef REQUIRE_DYNAMIC_RENDERING
 		if (containsString(extensionToVerify, extensions))
@@ -248,9 +248,8 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 			featuresAvailable = VK_FALSE != drFeatures.dynamicRendering;
 #else
 			VkPhysicalDeviceFeatures2 tmpFeatures = makeVkStruct();
-			vkGetPhysicalDeviceFeatures2(*physicalDevice, &tmpFeatures);
+			vkGetPhysicalDeviceFeatures2(*caps.physicalDevice, &tmpFeatures);
 			featuresAvailable = true;
-			UNREF(extensions);
 #endif
 			if (featuresAvailable && geometryRequired)
 			{

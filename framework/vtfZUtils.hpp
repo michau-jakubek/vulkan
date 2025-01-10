@@ -8,6 +8,7 @@
 #include "vtfZDeletable.hpp"
 #include "vtfVkUtils.hpp"
 #include "vtfZBarriers.hpp"
+#include "vtfExtensions.hpp"
 #if SYSTEM_OS_LINUX == 1
   #include "demangle.hpp"
 #endif
@@ -46,31 +47,36 @@ ZPhysicalDevice selectPhysicalDevice		(const int									proposedDeviceIndex,
 											 add_cref<strings>							requiredExtensions,
 											 ZSurfaceKHR								surface = ZSurfaceKHR());
 
-// By default all device features are disabled so if you want to enable any of them, these must be
-// known before logical device is created. To express the features you can use OnEnablingFeatures
-// callback where both physicalDevice and a reference to extension list are given as parameters.
-// If present then prepare deviceExtensions you want and return your VkPhysicalDeviceFeatures2 struct
-// with desired features enabled  from onEnablingFeatures callback. This structure will be passed as
-// VkDeviceCreateInfo::pNext during logical device creation. Do not care about sType field and pNext
-// field of that struct, these will be populated properly behind the scene.
-// Typically a signature and a body of that callback would look like this:
-// 
-// VkPhysicalDeviceFeatures2	requiredfeatures = makeVkStruct();
-// auto onEnablingFeatures = [](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
-// {
-// 		VkPhysicalDeviceFeatures2 availableFatures = deviceGetPhysicalFeatures2(physicalDevice);
-//		requiredfeatures.features.tessellationShader = availableFatures.features.tessellationShader;
-//		return requiredFeatures;
-// };
-typedef std::function<VkPhysicalDeviceFeatures2(ZPhysicalDevice, add_ref<strings> deviceExtensions)> OnEnablingFeatures;
+typedef std::function<void(add_ref<DeviceCaps>)> OnEnablingFeatures;
 ZDevice			createLogicalDevice	(ZPhysicalDevice		physDevice,
 									 OnEnablingFeatures		onEnablingFeatures,
 									 ZSurfaceKHR			surface = ZSurfaceKHR(),
 									 bool					enableDebugPrintf = false);
-add_cref<VkPhysicalDeviceProperties>
-				deviceGetPhysicalProperties	(add_cref<ZDevice> device);
-VkPhysicalDeviceProperties2
-				deviceGetPhysicalProperties2 (add_cref<ZDevice> device, add_ptr<void> pNext = nullptr);
+add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (add_cref<ZDevice> device);
+add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (add_cref<ZPhysicalDevice> device);
+VkPhysicalDeviceProperties2			 deviceGetPhysicalProperties2 (add_cref<ZDevice> device, add_ptr<void> pNext = nullptr);
+template<typename  PropertiesType, typename FieldType, typename MaskType>
+FieldType deviceCheckProperties (
+	ZPhysicalDevice dev,
+	FieldType PropertiesType::* pField,
+	bool anyBit = true,
+	MaskType mask = {},
+	bool exceptionOnFail = true,
+	add_cptr<char> fieldNameAndDescription = {})
+{
+	PropertiesType pp = makeVkStruct();
+	VkPhysicalDeviceProperties2 p2 = makeVkStruct(&pp);
+	vkGetPhysicalDeviceProperties2(*dev, &p2);
+	const FieldType fieldValue = pp.*pField;
+	if (exceptionOnFail) {
+		ASSERTMSG(anyBit
+			? std::bitset<sizeof(FieldType) * 8>(fieldValue).any()
+			: ((fieldValue & FieldType(mask)) == FieldType(mask)),
+				demangledName<PropertiesType>(), "::",
+					(fieldNameAndDescription ? fieldNameAndDescription : ""));
+	}
+	return fieldValue;
+}
 add_cref<VkPhysicalDeviceLimits>
 				deviceGetPhysicalLimits (add_cref<ZDevice> device);
 add_cref<VkPhysicalDeviceLimits>
@@ -150,6 +156,8 @@ bool			pointInTriangle2D (const Vec3& p, const Vec3& p0, const Vec3& p1, const V
 bool			pointInTriangle2D (const Vec4& p, const Vec4& p0, const Vec4& p1, const Vec4& p2, bool bar = false);
 
 uint32_t enumeratePhysicalDevices (ZInstance instance, std::vector<VkPhysicalDevice>& devices);
+std::ostream& printPhysicalDevice (ZInstance instance, VkPhysicalDevice device, std::ostream& str, uint32_t deviceIndex);
+strings enumerateDeviceExtensions(ZInstance instance, VkPhysicalDevice device, const strings& layerNames);
 
 
 /*

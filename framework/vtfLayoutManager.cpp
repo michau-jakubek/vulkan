@@ -123,7 +123,7 @@ uint32_t LayoutManager::addBinding (ZImageView			view,
 		}
 		else
 		{
-			ASSERTMSG(false, "At least of view and sampler must have a handle");
+			ASSERTFALSE("At least of view and sampler must have a handle");
 		}
 	}
 	else
@@ -141,7 +141,7 @@ uint32_t LayoutManager::addBinding (ZImageView			view,
 			ASSERTION(view.has_handle());
 			break;
 		default:
-			ASSERTION(0);
+			ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/);
 			break;
 		}
 		descriptorType = type;
@@ -163,7 +163,7 @@ uint32_t LayoutManager::addBinding (ZImageView			view,
 		m_views[m_extbindings[binding].offset] = view;
 		break;
 	default:
-		ASSERTION(0);
+		ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/);
 		break;
 	}
 
@@ -200,7 +200,7 @@ uint32_t LayoutManager::addBinding (VkDescriptorType	type,
 		b.offset			= m_viewsAndSamplers.size();
 		m_viewsAndSamplers.push_back({ ZImageView(), ZSampler() });
 		break;
-	default:	ASSERTION(false);
+	default:	ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/);
 	}
 	b.elementCount			= 0;
 	b.isVector				= false;
@@ -245,16 +245,16 @@ ZDescriptorSetLayout LayoutManager::createDescriptorSetLayout (
 		poolCreateInfo.maxSets			= 1;
 		poolCreateInfo.poolSizeCount	= data_count(poolSizes);
 		poolCreateInfo.pPoolSizes		= data_or_null(poolSizes);
-		VKASSERT(vkCreateDescriptorPool(*device, &poolCreateInfo, callbacks,
-										descriptorPool.setter()), "Unable to create descriptor pool");
+		VKASSERTMSG(vkCreateDescriptorPool(*device, &poolCreateInfo, callbacks,
+										   descriptorPool.setter()), "Unable to create descriptor pool");
 	}
 
 	VkDescriptorSetLayoutCreateInfo		setLayoutCreateInfo = makeVkStruct();
 	setLayoutCreateInfo.flags			= layoutCreateFlags;
 	setLayoutCreateInfo.bindingCount	= data_count(bindings);
 	setLayoutCreateInfo.pBindings		= data_or_null(bindings);
-	VKASSERT(vkCreateDescriptorSetLayout(*device, &setLayoutCreateInfo, callbacks,
-										 descriptorSetLayout.setter()), "Failed to create descriptor set layout");
+	VKASSERTMSG(vkCreateDescriptorSetLayout(*device, &setLayoutCreateInfo, callbacks,
+											descriptorSetLayout.setter()), "Failed to create descriptor set layout");
 
 	updateBuffersOffsets();
 	recreateUpdateBuffers(m_buffers, performUpdateDescriptorSets);
@@ -264,8 +264,8 @@ ZDescriptorSetLayout LayoutManager::createDescriptorSetLayout (
 	allocInfo.descriptorPool		= *descriptorPool;
 	allocInfo.descriptorSetCount	= 1;
 	allocInfo.pSetLayouts			= descriptorSetLayout.ptr();
-	VKASSERT(vkAllocateDescriptorSets(*device, &allocInfo,
-									  descriptorSet.setter()), "Failed to allocate descriptor set");
+	VKASSERTMSG(vkAllocateDescriptorSets(*device, &allocInfo,
+										 descriptorSet.setter()), "Failed to allocate descriptor set");
 
 	if (performUpdateDescriptorSets)
 	{
@@ -385,7 +385,7 @@ void LayoutManager::updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZI
 		m_views[ptr->offset] = view;
 	else
 	{
-		ASSERTMSG(false, "Mismatch type binding");
+		ASSERTFALSE("Mismatch type binding");
 	}
 	updateDescriptorSet_(ds, m_buffers);
 }
@@ -401,7 +401,7 @@ void LayoutManager::updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZS
 		m_samplers[ptr->offset] = sampler;
 	else
 	{
-		ASSERTMSG(false, "Mismatch type binding");
+		ASSERTFALSE("Mismatch type binding");
 	}
 	updateDescriptorSet_(ds, m_buffers);
 }
@@ -420,7 +420,7 @@ void LayoutManager::updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZI
 	}
 	else
 	{
-		ASSERTMSG(false, "Mismatch type binding");
+		ASSERTFALSE("Mismatch type binding");
 	}
 	updateDescriptorSet_(ds, m_buffers);
 }
@@ -470,7 +470,7 @@ void LayoutManager::updateDescriptorSet_	(ZDescriptorSet	descriptorSet,
 					imageInfo.sampler		= *samp;
 				}
 				break;
-			default:	ASSERTION(false);
+			default:	ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/);
 			}
 			writeParams.pImageInfo	= &imageInfo;
 		}
@@ -494,7 +494,7 @@ void LayoutManager::updateDescriptorSet_	(ZDescriptorSet	descriptorSet,
 		}
 		else
 		{
-			ASSERTION(0);
+			ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/);
 		}
 
 		vkUpdateDescriptorSets(*device,
@@ -555,7 +555,7 @@ ZPipelineLayout LayoutManager::createPipelineLayout_ (add_cref<ZPushConstants> p
 	pipelineLayoutInfo.pushConstantRangeCount	= data_count(ranges);
 	pipelineLayoutInfo.pPushConstantRanges		= data_or_null(ranges);
 
-	VKASSERT(vkCreatePipelineLayout(*device, &pipelineLayoutInfo, callbacks, pipelineLayout.setter()),
+	VKASSERTMSG(vkCreatePipelineLayout(*device, &pipelineLayoutInfo, callbacks, pipelineLayout.setter()),
 										"failed to create pipeline layout!");
 
 	return pipelineLayout;
@@ -576,11 +576,8 @@ VarDescriptorInfo LayoutManager::getDescriptorInfo (uint32_t binding) const
 		auto itBuffer = m_buffers.find({ b.descriptorType, (b.shared ? UNIQUE_IBINDING : static_cast<int>(binding)) });
 		if (m_buffers.cend() == itBuffer)
 		{
-			std::ostringstream os;
-			os << "Unable to find anything at binding.";
-			os << " Result from " << __func__ << "() is valid after descriptor set is updated";
-			os.flush();
-			ASSERTMSG(false, os.str());
+			ASSERTFALSE("Unable to find anything at binding.",
+				" Result from ", __func__, "() is valid after descriptor set is updated");
 		}
 		var.emplace<DescriptorBufferInfo>(itBuffer->second, b.offset, range);
 	}

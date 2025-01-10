@@ -24,19 +24,53 @@
 
 #define NEXT_MAGIC() (__COUNTER__ + 1)
 
-template<class C> using add_cst		= typename std::add_const<C>::type;
-template<class P> using add_ptr		= typename std::add_pointer<P>::type;
-template<class R> using add_ref		= typename std::add_lvalue_reference<R>::type;
-template<class R> using add_rref	= typename std::add_rvalue_reference<R>::type;
-template<class P> using add_cptr	= add_ptr<add_cst<P>>;
-template<class R> using add_cref	= add_ref<add_cst<R>>;
+template<class C> using add_cst    = typename std::add_const<C>::type;
+template<class P> using add_ptr    = typename std::add_pointer<P>::type;
+template<class R> using add_ref    = typename std::add_lvalue_reference<R>::type;
+template<class R> using add_rref   = typename std::add_rvalue_reference<R>::type;
+template<class P> using add_cptr   = add_ptr<add_cst<P>>;
+template<class R> using add_cref   = add_ref<add_cst<R>>;
 
 template<class X> struct add_extent	{ typedef X type[]; };
+
+// glslang	9a415ad3c69eae445b84ee9647c10e46d42dc25d
+// headers	6782ffb1a16d3485d6f17ca919729d8a9b75d990
+// tools	c4dd14909e60c3b2d0be035d84e232496cb2e7ab
+// docs	0a10fc1caae9a95de0fb304ca4a778fbd7936ba0
+
 
 VkAllocationCallbacks* getAllocationCallbacks();
 void deletable_selfTest ();
 
-void	assertion					(bool cond, const char* func, const char* file, int line, add_cref<std::string> msg = {});
+void writeBackTrace (add_ref<std::ostringstream> ss);
+void writeExpression (add_ref<std::ostringstream> ss, const char* func, const char* file, int line,
+					  const char* expr, VkResult res, std::string::size_type ind);
+template<typename... Args>
+void assertion (
+	bool		cond,
+	const char*	func,
+	const char*	file,
+	int			line,
+	const char*	expr,
+	VkResult	res,
+	bool		print,
+	Args&&...	args)
+{
+	(void)cond;
+	std::ostringstream ss;
+	const std::string::size_type ind = 2;
+	writeExpression(ss, func, file, line, expr, res, ind);
+	if (print)
+	{
+		ss << std::string(ind, ' ');
+		((ss << args), ...);
+		ss << std::endl;
+	}
+	writeBackTrace(ss);
+	ss.flush();
+	throw std::runtime_error(ss.str());
+}
+
 bool	backtraceEnabled			();
 void	backtraceEnabled			(bool enable);
 
@@ -45,10 +79,24 @@ void	alloc_deallocate			(void* p, size_t numBytes);
 size_t	alloc_get_allocation_count	();
 size_t	alloc_get_allocation_size	();
 
-#define ASSERTMSG(x,msg) assertion( !!(x), __func__, __FILE__, __LINE__, (msg))
-#define VKASSERT(expr,msg) assertion( ((expr) == VK_SUCCESS), __func__, __FILE__, __LINE__, (msg))
-#define ASSERTION(x) ASSERTMSG((x), std::string())
-#define ASSERT_NOT_IMPLEMENTED() ASSERTMSG(false, "Not implemented yet")
+#ifndef STRINGIZE
+#define STRINGIZE(expr__) #expr__
+#endif
+
+#define ASSERT_IMPL(cond__, sexpr__, vkrez__, print__, ...) \
+	assertion( cond__, __func__, __FILE__, __LINE__, sexpr__, vkrez__, print__, __VA_ARGS__)
+
+#define ASSERTFALSE(...) ASSERT_IMPL(false, nullptr, VK_SUCCESS, true, __VA_ARGS__)
+
+#define ASSERTION(expr__) { \
+	const bool rez__ = !!(expr__); if (false == rez__) \
+	ASSERT_IMPL( !!(expr__), STRINGIZE(expr__), VK_SUCCESS, false, 0); }
+
+#define ASSERTMSG(expr__, ...) { \
+	const bool rez__ = !!(expr__); if (false == rez__) \
+	ASSERT_IMPL( rez__, STRINGIZE(expr__), VK_SUCCESS, true, __VA_ARGS__); }
+
+#define ASSERT_NOT_IMPLEMENTED() ASSERTFALSE("Not implemented yet")
 
 template<class Z> struct ZAccess
 {
@@ -291,7 +339,7 @@ enum ZDistName
 	None,
 	RequiredLayers,				AvailableLayers,
 	RequiredLayerExtensions,	AvailableLayerExtensions,
-	RequiredDeviceExtensions,	AvailableDeviceExtensions,
+	DesiredRequiredDeviceExtensions,	AvailableDeviceExtensions,
 	Width, Height, Depth,		PatchControlPoints, SubpassIndex,
 	SizeFirst, SizeSecond, SizeThird,
 	VtfVer, ApiVer, VulkanVer, SpirvVer,
@@ -317,12 +365,15 @@ private:
 
 typedef add_ptr<VkAllocationCallbacks> VkAllocationCallbacksPtr;
 
+void vtfDestroyInstance (VkInstance, VkAllocationCallbacksPtr);
 typedef ZDeletable<VkInstance,
-	decltype(&vkDestroyInstance), &vkDestroyInstance,
+	decltype(&vtfDestroyInstance), &vtfDestroyInstance,
 	swizzle_two_param, vtf::ZInstanceSingleton,
 	VkAllocationCallbacksPtr, std::string, /*apiVersion*/ uint32_t,
+	ZDistType<AvailableLayers, std::vector<std::string>>,
 	ZDistType<RequiredLayers, std::vector<std::string>>,
 	ZDistType<AvailableLayerExtensions, std::vector<std::string>>,
+	ZDistType<RequiredLayerExtensions, std::vector<std::string>>,
 	vtf::Logger, VkDebugUtilsMessengerEXT, VkDebugReportCallbackEXT>
 ZInstance;
 
@@ -333,7 +384,8 @@ typedef ZDeletable<VkPhysicalDevice,
 	, VkAllocationCallbacksPtr
 	, ZInstance
 	, uint32_t /*Physical device index across the system*/
-	, std::vector<std::string> /*Device extensions*/
+	, ZDistType<AvailableDeviceExtensions, std::vector<std::string>>
+	, ZDistType<DesiredRequiredDeviceExtensions, std::vector<std::string>>
 	, VkPhysicalDeviceProperties>
 ZPhysicalDevice;
 
@@ -359,9 +411,10 @@ struct ZDeviceQueueCreateInfo : VkDeviceQueueCreateInfo
 	bool			surfaceSupport;
 	ZDeviceQueueCreateInfo () = default;
 };
+void vtfDestroyDevice (VkDevice, VkAllocationCallbacksPtr, add_cref<ZPhysicalDevice>);
 typedef ZDeletable<VkDevice,
-	decltype(&vkDestroyDevice), &vkDestroyDevice,
-	swizzle_two_param,
+	decltype(&vtfDestroyDevice), &vtfDestroyDevice,
+	std::integer_sequence<int, -1, 0, (DontDereferenceParamOffset + 1)>,
 	vtf::ZDeviceSingleton,
 	VkAllocationCallbacksPtr,
 	ZPhysicalDevice,

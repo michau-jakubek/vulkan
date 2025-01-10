@@ -13,15 +13,20 @@ message(STATUS "Define preprocessor constant: VULKAN_DRIVER=${VULKAN_DRIVER}")
 
 set(app_files
         main.cpp
-        main.hpp)
+        main.hpp
+		inlineParams.cpp)
 
 set(app_libs
-	pdriver
+	    pdriver
         framework
         console
         tests
-        daemon
         driver)
+
+if(ENABLE_DAEMON_TEST)
+list(APPEND app_libs daemon)
+endif()
+
 
 add_executable(app ${app_files})
 target_include_directories(app BEFORE PRIVATE ${VULKAN_INCLUDE_DIR})

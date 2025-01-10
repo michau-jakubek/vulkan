@@ -65,12 +65,12 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 
 	VkPhysicalDeviceSynchronization2Features	synchFeatures = makeVkStruct();
 
-	auto onEnablingFeatures = [&](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
+	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
 		VkPhysicalDeviceFeatures2 availableFeatures =
-				deviceGetPhysicalFeatures2(physicalDevice, &synchFeatures);
+				deviceGetPhysicalFeatures2(caps.physicalDevice, &synchFeatures);
 		synchFeatures.synchronization2 |= (containsString(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
-														  extensions) ? VK_TRUE : VK_FALSE);
+														  caps.availableExtensions) ? VK_TRUE : VK_FALSE);
 		availableFeatures.features = {};
 		return availableFeatures;
 	};

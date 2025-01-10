@@ -3,6 +3,7 @@
 #include <thread>
 #include <chrono>
 #include <iostream>
+#include <optional>
 #include <vulkan/vulkan.h>
 #include "GLFW/glfw3.h"
 #include "vtfCUtils.hpp"
@@ -15,12 +16,57 @@
 #include "vtfFormatUtils.hpp"
 #include "vtfVulkanDriver.hpp"
 
-#include <optional>
+#if 0
+#if SYSTEM_OS_WINDOWS == 1
+  #include <Windows.h>
+  #include "vulkan/vulkan_win32.h"
+  #ifdef min
+    #undef min
+  #endif
+  #ifdef max
+    #undef max
+  #endif
+#elif SYSTEM_OS_LINUX == 1
+  #include "vulkan/vulkan_xcb.h"
+  #include "vulkan/vulkan_xcb.h"
+#endif
+#endif
 
 #define MAX_BACK_BUFFER_COUNT 2
 
 namespace vtf
 {
+
+namespace
+{
+strings upgradeInstanceExtensions (add_cref<strings> desiredExtensions)
+{
+	strings e = desiredExtensions;
+	const strings exts = enumerateInstanceExtensions();
+	auto addExt = [&](std::string ext) -> void
+	{
+		if (containsString(exts, ext))
+			e.emplace_back(std::move(ext));
+	};
+
+	addExt("VK_KHR_surface");
+#if SYSTEM_OS_WINDOWS == 1
+	addExt("VK_KHR_win32_surface");
+#elif SYSTEM_OS_LINUX == 1
+	addExt("VK_KHR_xcb_surface");
+	addExt("VK_KHR_xlib_surface");
+#endif
+	return e;
+}
+
+strings upgradeDeviceExtensions (add_cref<strings> desiredExtensions)
+{
+	strings e = desiredExtensions;
+	e.push_back("VK_KHR_swapchain");
+	return e;
+}
+
+} // unnamed namespace
 
 void GlfwInitializerFinalizer::init(ZInstance instance)
 {
@@ -144,7 +190,14 @@ Canvas::Canvas	(add_cptr<char>			appName,
 				 OnEnablingFeatures		onEnablingFeatures,
 				 add_cref<ApiVersion>	apiVersion,
 				 bool					enableDebugPrintf)
-	: CanvasContext(appName, apiVersion, instanceLayers, instanceExtensions, deviceExtensions, onEnablingFeatures, enableDebugPrintf, canvasStyle, this)
+	: CanvasContext(appName,
+					apiVersion,
+					instanceLayers,
+					upgradeInstanceExtensions(instanceExtensions),
+					upgradeDeviceExtensions(deviceExtensions),
+					onEnablingFeatures,
+					enableDebugPrintf,
+					canvasStyle, this)
 	, VulkanContext	(cc_instance, cc_physicalDevice, cc_device)
 	// beginning references initialization
 	, window					(cc_window)
@@ -275,7 +328,7 @@ ZGLFWwindowPtr updateWindow (ZGLFWwindowPtr window, const CanvasStyle& style, co
 ZSurfaceKHR	createSurface (ZInstance instance, VkAllocationCallbacksPtr callbacks, ZGLFWwindowPtr window)
 {
 	VkSurfaceKHR surface = VK_NULL_HANDLE;
-	VKASSERT2(glfwCreateWindowSurface(*instance, *window, callbacks, &surface));
+	VKASSERT(glfwCreateWindowSurface(*instance, *window, callbacks, &surface));
 	if (getGlobalAppFlags().verbose)
 	{
 		std::cout << "[INFO] " << __func__ << ' ' << surface << ' ' << window << std::endl;
@@ -292,19 +345,19 @@ Canvas::SurfaceDetails::SurfaceDetails ()
 
 void Canvas::SurfaceDetails::update (ZPhysicalDevice physDevice, ZSurfaceKHR surfaceKHR)
 {
-	VKASSERT2(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*physDevice, *surfaceKHR, &caps));
+	VKASSERT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*physDevice, *surfaceKHR, &caps));
 
 	uint32_t formatCount = 0;;
-	VKASSERT2(vkGetPhysicalDeviceSurfaceFormatsKHR(*physDevice, *surfaceKHR, &formatCount, nullptr));
+	VKASSERT(vkGetPhysicalDeviceSurfaceFormatsKHR(*physDevice, *surfaceKHR, &formatCount, nullptr));
 	ASSERTION(formatCount != 0);
 	formats.resize(formatCount);
-	VKASSERT2(vkGetPhysicalDeviceSurfaceFormatsKHR(*physDevice, *surfaceKHR, &formatCount, formats.data()));
+	VKASSERT(vkGetPhysicalDeviceSurfaceFormatsKHR(*physDevice, *surfaceKHR, &formatCount, formats.data()));
 
 	uint32_t presentModeCount = 0;
-	VKASSERT2(vkGetPhysicalDeviceSurfacePresentModesKHR(*physDevice, *surfaceKHR, &presentModeCount, nullptr));
+	VKASSERT(vkGetPhysicalDeviceSurfacePresentModesKHR(*physDevice, *surfaceKHR, &presentModeCount, nullptr));
 	ASSERTION(presentModeCount != 0);
 	modes.resize(presentModeCount);
-	VKASSERT2(vkGetPhysicalDeviceSurfacePresentModesKHR(*physDevice, *surfaceKHR, &presentModeCount, modes.data()));
+	VKASSERT(vkGetPhysicalDeviceSurfacePresentModesKHR(*physDevice, *surfaceKHR, &presentModeCount, modes.data()));
 }
 
 uint32_t Canvas::SurfaceDetails::selectFormat (ZPhysicalDevice physDevice, VkFormatFeatureFlags formatFlags)
@@ -463,7 +516,7 @@ void Canvas::Swapchain::createFramebuffers (ZRenderPass rp, uint32_t minImageCou
 void Canvas::Swapchain::recreate (ZRenderPass rp, uint32_t acquirableImageCount, uint32_t hintWidth, uint32_t hintHeight, bool force)
 {
 	VkSurfaceCapabilitiesKHR caps;
-	VKASSERT2(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*canvas.physicalDevice, *canvas.surface, &caps));
+	VKASSERT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*canvas.physicalDevice, *canvas.surface, &caps));
 
 	if (caps.currentExtent.width == INVALID_UINT32 || caps.currentExtent.height == INVALID_UINT32)
 	{
@@ -554,13 +607,14 @@ void Canvas::Swapchain::recreate (ZRenderPass rp, uint32_t acquirableImageCount,
 
 	destroyFramebuffers();
 
-	VKASSERT2(vkCreateSwapchainKHR(*canvas.device, &swapchainCreateInfo, canvas.callbacks, &m_handle));
+	add_cref<ZDeviceInterface> di = canvas.device.getInterface();
+	VKASSERT(di.vkCreateSwapchainKHR(*canvas.device, &swapchainCreateInfo, canvas.callbacks, &m_handle));
 
 	// destroying the old swapchain
 	if (swapchainCreateInfo.oldSwapchain != VK_NULL_HANDLE)
 	{
 		++m_refreshCount;
-		VKASSERT2(vkDeviceWaitIdle(*canvas.device));
+		VKASSERT(vkDeviceWaitIdle(*canvas.device));
 		vkDestroySwapchainKHR(*canvas.device, swapchainCreateInfo.oldSwapchain, canvas.callbacks);
 	}
 
@@ -571,7 +625,7 @@ void Canvas::Swapchain::recreate (ZRenderPass rp, uint32_t acquirableImageCount,
 void Canvas::updateExtent ()
 {
 	VkSurfaceCapabilitiesKHR caps;
-	VKASSERT2(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*physicalDevice, *surface, &caps));
+	VKASSERT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*physicalDevice, *surface, &caps));
 	m_width = caps.currentExtent.width;
 	m_height = caps.currentExtent.height;
 }
@@ -641,7 +695,7 @@ Canvas::BackBuffer Canvas::acquireBackBuffer (add_ref<std::queue<BackBuffer>>	bu
 		}
 		else
 		{
-			VKASSERT2(res);
+			VKASSERT(res);
 		}
 	}
 	while (VK_SUCCESS != res);
@@ -690,12 +744,12 @@ bool Canvas::presentBackBuffer (add_cref<BackBuffer>				buffer,
 	VkResult res = VK_SUCCESS;
 	if (silent)
 	{
-		VKASSERT2(vkQueueSubmit(*graphicsQueue, 1, &submitInfo, (VkFence)VK_NULL_HANDLE));
+		VKASSERT(vkQueueSubmit(*graphicsQueue, 1, &submitInfo, (VkFence)VK_NULL_HANDLE));
 	}
 	else
 	{
 		res = vkQueuePresentKHR(*presentQueue, &presentInfo);
-		VKASSERT2(vkQueueSubmit(*presentQueue, 0, (const VkSubmitInfo*)nullptr, *presentFence));
+		VKASSERT(vkQueueSubmit(*presentQueue, 0, (const VkSubmitInfo*)nullptr, *presentFence));
 
 		waitForFence(presentFence);
 		resetFence(presentFence);
@@ -789,8 +843,8 @@ void Canvas::render	(add_ref<Swapchain>					swapchain,
 		}
 
 		ZQueue queue = buffer.blitCommand.getParam<ZCommandPool>().getParam<ZQueue>();
-		VKASSERT2(vkQueueSubmit(*queue, 1u, &blitSubmitInfo, *buffer.renderFence));
-		VKASSERT2(vkWaitForFences(*device, 1u, buffer.renderFence.ptr(), VK_TRUE, INVALID_UINT64));
+		VKASSERT(vkQueueSubmit(*queue, 1u, &blitSubmitInfo, *buffer.renderFence));
+		VKASSERT(vkWaitForFences(*device, 1u, buffer.renderFence.ptr(), VK_TRUE, INVALID_UINT64));
 		resetFence(buffer.renderFence);
 	}
 	else
@@ -820,8 +874,8 @@ void Canvas::render	(add_ref<Swapchain>					swapchain,
 					  << std::endl;
 		}
 		ZQueue queue = buffer.renderCommand.getParam<ZCommandPool>().getParam<ZQueue>();
-		VKASSERT2(vkQueueSubmit(*queue, 1u, &renderSubmitInfo, *buffer.renderFence));
-		VKASSERT2(vkWaitForFences(*device, 1u, buffer.renderFence.ptr(), VK_TRUE, INVALID_UINT64));
+		VKASSERT(vkQueueSubmit(*queue, 1u, &renderSubmitInfo, *buffer.renderFence));
+		VKASSERT(vkWaitForFences(*device, 1u, buffer.renderFence.ptr(), VK_TRUE, INVALID_UINT64));
 		resetFence(buffer.renderFence);
 	}
 

@@ -18,7 +18,7 @@ using namespace vtf;
 struct Params
 {
 	add_cref<std::string>	assets;
-	bool					ignoreSoExtension;
+	bool					dontIgnoreSoExtension;
 	bool					useGlobalVulkan;
 	bool					useGlobalApi;
 	bool					useGlobalSpirv;
@@ -35,17 +35,17 @@ struct Params
 	Version		effectiveSpvVersion;
 
 	Params (add_cref<std::string> anAssets)
-		: assets			(anAssets)
-		, ignoreSoExtension	(false)
-		, useGlobalVulkan	(false)
-		, useGlobalApi		(false)
-		, useGlobalSpirv	(false)
-		, dontEnableSoLayer	(false)
-		, buildAlways		(false)
-		, mixture			(false)
-		, structPCobject	(false)
-		, structPCmodule	(false)
-		, shaderObject		(VK_FALSE)
+		: assets				(anAssets)
+		, dontIgnoreSoExtension	(false)
+		, useGlobalVulkan		(false)
+		, useGlobalApi			(false)
+		, useGlobalSpirv		(false)
+		, dontEnableSoLayer		(false)
+		, buildAlways			(false)
+		, mixture				(false)
+		, structPCobject		(false)
+		, structPCmodule		(false)
+		, shaderObject			(VK_FALSE)
 		, effectiveApiVersion	(Version(1, 3))
 		, effectiveVkVersion	(Version(1, 3))
 		, effectiveSpvVersion	(Version(1, 3))	{}
@@ -60,7 +60,7 @@ struct Params
 	OptionParser<Params>		getParser ();
 	void						print (add_ref<std::ostream> str) const;
 };
-constexpr Option optionIgnoreSoExtension	{ "--ignore-so-extension", 0 };
+constexpr Option optionIgnoreSoExtension	{ "--dont-ignore-so-extension", 0 };
 constexpr Option optionUseGlobalApiVer		{ "--use-global-api", 0 };
 constexpr Option optionUseGlobalVkVer		{ "--use-global-vulkan", 0 };
 constexpr Option optionUseGlobalSpvVer		{ "--use-global-spirv", 0 };
@@ -80,8 +80,8 @@ OptionParser<Params> Params::getParser ()
 		"Use global -vulkan param, instead of 1.3 version", { useGlobalVulkan }, flags);
 	parser.addOption(&Params::useGlobalSpirv, optionUseGlobalSpvVer,
 		"Use global -spirv param, instead of 1.3 version", { useGlobalSpirv }, flags);
-	parser.addOption(&Params::ignoreSoExtension, optionIgnoreSoExtension,
-		"Ignore " VK_EXT_SHADER_OBJECT_EXTENSION_NAME " extension", { ignoreSoExtension }, flags);
+	parser.addOption(&Params::dontIgnoreSoExtension, optionIgnoreSoExtension,
+		"Don't ignore " VK_EXT_SHADER_OBJECT_EXTENSION_NAME " extension", { dontIgnoreSoExtension }, flags);
 	parser.addOption(&Params::dontEnableSoLayer, optionDontEnableSoLayer,
 		"Do not enable " VK_LAYER_KHRONOS_SHADER_OBJECT_NAME " layer", { dontEnableSoLayer }, flags);
 	parser.addOption(&Params::buildAlways, optionBuildAlways,
@@ -139,21 +139,19 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 
 	params.updateEffectiveVersions();
 
-	VkPhysicalDeviceShaderObjectFeaturesEXT fShaderObject = makeVkStruct();
-
-	auto onEnablingFeatures = [&](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
+	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
-		deviceGetPhysicalFeatures2(physicalDevice, &fShaderObject);
-
-		params.shaderObject = fShaderObject.shaderObject;
-
-		if (params.ignoreSoExtension || fShaderObject.shaderObject != VK_FALSE)
+		auto so = caps.addFeature(VkPhysicalDeviceShaderObjectFeaturesEXT(), true);
+		params.shaderObject = so.checkNotSupported(&VkPhysicalDeviceShaderObjectFeaturesEXT::shaderObject,
+										params.dontIgnoreSoExtension, "shaderObject not supported");
+		if (params.dontIgnoreSoExtension)
 		{
-			fShaderObject.shaderObject = VK_TRUE;
-			extensions.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
+			caps.requiredExtension.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
 		}
-		VkPhysicalDeviceFeatures2 requiredFeatures = makeVkStruct(&fShaderObject);
-		return requiredFeatures;
+		else
+		{
+			caps.removeFeature<VkPhysicalDeviceShaderObjectFeaturesEXT>();
+		}
 	};
 
 	strings instanceLayers;
@@ -163,12 +161,6 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 	}
 
 	VulkanContext ctx(record.name, instanceLayers, {}, {}, onEnablingFeatures, params.effectiveApiVersion);
-
-	if (VK_TRUE != fShaderObject.shaderObject || ctx.device.getInterface().isShaderObjectEnabled() == false)
-	{
-		std::cout << "ERROR: " VK_EXT_SHADER_OBJECT_EXTENSION_NAME " is not supported by device\n";
-		return 1;
-	}
 
 	return performTests(ctx, params);
 }

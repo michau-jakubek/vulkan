@@ -521,10 +521,9 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 
 	bool availableDualSourceBlend = false;
 	VkPhysicalDeviceFeatures2	requiredfeatures	= makeVkStruct();
-	auto onEnablingFeatures = [&](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
+	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
-		UNREF(extensions);
-		VkPhysicalDeviceFeatures2 availableFatures = deviceGetPhysicalFeatures2(physicalDevice);
+		VkPhysicalDeviceFeatures2 availableFatures = deviceGetPhysicalFeatures2(caps.physicalDevice);
 		requiredfeatures.features.dualSrcBlend = availableFatures.features.dualSrcBlend;
 		availableDualSourceBlend = availableFatures.features.dualSrcBlend != VK_FALSE;
 		return requiredfeatures;

@@ -61,7 +61,7 @@ ZSampler createSampler (ZDevice device, VkFormat format, uint32_t mipLevels, boo
 		}
 		else
 		{
-			ASSERTMSG(0, "Linear filtering is not supported for that format");
+			ASSERTFALSE("Linear filtering is not supported for that format");
 		}
 	}
 
@@ -102,7 +102,7 @@ ZSampler createSampler (ZDevice device, VkFormat format, uint32_t mipLevels, boo
 	samplerInfo.unnormalizedCoordinates	= normalized ? VK_FALSE : VK_TRUE;
 
 	ZSampler sampler(VK_NULL_HANDLE, device, callbacks, samplerInfo);
-	VKASSERT3(vkCreateSampler(*device, &samplerInfo, callbacks, sampler.setter()), "Failed to create sampler");
+	VKASSERTMSG(vkCreateSampler(*device, &samplerInfo, callbacks, sampler.setter()), "Failed to create sampler");
 
 	return sampler;
 }
@@ -142,7 +142,7 @@ ZImage createImage (ZDevice device, VkFormat format, VkImageType type, uint32_t 
 				  << std::endl;
 	}
 	const VkResult				status = vkGetPhysicalDeviceImageFormatProperties(*phys, format, type, tiling, effectiveUsage, flags, &props);
-	VKASSERT3(status, "Unable to create an image with specified parameters");
+	VKASSERTMSG(status, "Unable to create an image with specified parameters");
 	// TODO:
 	// VkExtent3D            maxExtent;
 	// uint32_t              maxMipLevels;
@@ -169,7 +169,7 @@ ZImage createImage (ZDevice device, VkFormat format, VkImageType type, uint32_t 
 	imageInfo.sharingMode	= VK_SHARING_MODE_EXCLUSIVE;
 
 	VkImage	image = VK_NULL_HANDLE;
-	VKASSERT2(vkCreateImage(*device, &imageInfo, callbacks, &image));
+	VKASSERT(vkCreateImage(*device, &imageInfo, callbacks, &image));
 
 	VkMemoryRequirements memRequirements;
 	vkGetImageMemoryRequirements(*device, image, &memRequirements);
@@ -341,7 +341,7 @@ ZImage createCubeImageAndLoadFromFiles	(ZDevice device, ZCommandPool commandPool
 	case 2: dataFormat = VK_FORMAT_R32G32_SFLOAT;		break;
 	case 3: dataFormat = VK_FORMAT_R32G32B32_SFLOAT;	break;
 	case 4: dataFormat = VK_FORMAT_R32G32B32A32_SFLOAT;	break;
-	default:	ASSERTION(false);
+	default:	ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/);
 	}
 
 	for (uint32_t layer = 0; layer < 6; ++layer)
@@ -438,7 +438,7 @@ VkImageViewType imageTypeToViewType (VkImageType imageType)
 	case VK_IMAGE_TYPE_1D:	res = VK_IMAGE_VIEW_TYPE_1D;	break;
 	case VK_IMAGE_TYPE_2D:	res = VK_IMAGE_VIEW_TYPE_2D;	break;
 	case VK_IMAGE_TYPE_3D:	res = VK_IMAGE_VIEW_TYPE_3D;	break;
-	default: ASSERTION(false);
+	default: ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/);
 	}
 	return res;
 }
@@ -486,7 +486,7 @@ ZImageView createImageView (ZImage image, uint32_t baseMipLevel, uint32_t mipLev
 	viewInfo.components			= components;
 	viewInfo.subresourceRange	= subresourceRange;
 
-	VKASSERT3(vkCreateImageView(*device, &viewInfo, callbacks, &imageView), "");
+	VKASSERTMSG(vkCreateImageView(*device, &viewInfo, callbacks, &imageView), "");
 
 	return ZImageView::create(imageView, device, callbacks, viewInfo, image);
 }

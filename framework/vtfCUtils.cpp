@@ -181,6 +181,11 @@ bool containsString (const std::string& s, const vtf::strings& list)
 	return p != list.end();
 }
 
+bool containsString(const vtf::strings& list, const std::string& s)
+{
+	return containsString(s, list);
+}
+
 bool containsAllStrings (const vtf::strings& range, const vtf::strings& all)
 {
 	bool contains = true;
@@ -215,22 +220,42 @@ uint32_t removeStrings (const vtf::strings& strs, vtf::strings& list)
 	return count;
 }
 
-strings mergeStrings (const strings& a, const strings& b)
+void distinctStrings (add_ref<strings> target)
 {
-	strings c(a);
-	c.insert(c.end(), b.begin(), b.end());
-	return c;
+	std::sort(target.begin(), target.end());
+	target.erase(std::unique(target.begin(), target.end()), target.end());
 }
 
-strings mergeStringsDistinct (const strings& a, const strings& b)
+strings distinctStrings (add_cref<strings> set)
 {
-	strings c(a);
-	for (const auto& s : b)
-	{
-		auto i = std::find(a.begin(), a.end(), s);
-		if (a.end() == i) c.emplace_back(s);
-	}
-	return c;
+	strings res(set);
+	distinctStrings(res);
+	return res;
+}
+
+strings mergeStrings (add_cref<strings> target, add_cref<strings> source)
+{
+	strings::size_type i = 0;
+	const strings::size_type ts = target.size();
+	strings r(ts + source.size());
+	for (; i < ts; ++i)
+		r[i] = target[i];
+	for (; i < r.size(); ++i)
+		r[i] = source[i - ts];
+	return r;
+}
+
+void mergeStringsDistinct (add_ref<strings> target, add_cref<strings> source)
+{
+	target.insert(target.end(), source.begin(), source.end());
+	distinctStrings(target);
+}
+
+strings mergeStringsDistinct (add_cref<strings> target, add_cref<strings> source)
+{
+	strings res(target);
+	mergeStringsDistinct(res, source);
+	return res;
 }
 
 strings splitString (const std::string& delimitedString, char delimiter)

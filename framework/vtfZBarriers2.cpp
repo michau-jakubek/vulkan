@@ -144,7 +144,8 @@ void doCommandBufferPipelineBarriers2 (ZCommandBuffer			cmd,
 									   VkDependencyFlags		dependencyFlags)
 {
 	// TODO: verify VK_KHR_synchronization2 and api >= 1.3
-	add_ref<strings> exts = cmd.getParam<ZDevice>().getParam<ZPhysicalDevice>().getParamRef<strings>();
+	add_ref<strings> exts = cmd.getParam<ZDevice>().getParam<ZPhysicalDevice>()
+		.getParamRef<ZDistType<AvailableDeviceExtensions, strings>>();
 	ASSERTMSG(containsString(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, exts),
 			  VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME " not supported by device");
 	ASSERTMSG(!(getGlobalAppFlags().apiVer < Version(1,3)),

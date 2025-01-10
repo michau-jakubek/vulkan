@@ -37,6 +37,7 @@ SharedDevice::SharedDevice (add_cptr<char> name, bool graphical)
 		vkGetPhysicalDeviceFeatures2(*physicalDevice, &resultFeatures);
 		return resultFeatures;
 	};
+	UNREF(onEnablingFeatures);
 
 	ZGLFWwindowPtr	window;
 	ZSurfaceKHR		surface;
@@ -46,7 +47,9 @@ SharedDevice::SharedDevice (add_cptr<char> name, bool graphical)
 		window = createWindow(Canvas::DefaultStyle, name, this);
 		surface = createSurface(instance, m_callbacks, window);
 	}
-	*this = createLogicalDevice(physDev, onEnablingFeatures, surface, m_globalAppFlags.debugPrintfEnabled);
+	// TODO: 
+	//*this = createLogicalDevice(physDev, onEnablingFeatures, surface, m_globalAppFlags.debugPrintfEnabled);
+	ASSERT_NOT_IMPLEMENTED();
 }
 
 SharedDevice::~SharedDevice()

@@ -49,6 +49,7 @@ string(TOUPPER ${CMAKE_GENERATOR} UPPER_CASE_CMAKE_GENERATOR)
 string(REGEX MATCH "VISUAL" CURRENT_GENERATOR ${UPPER_CASE_CMAKE_GENERATOR})
 if ("${CURRENT_GENERATOR}" STREQUAL "VISUAL")
     # Globally disable terribly onerous warning C26812: Prefer 'enum class' over 'enum' (Enum.3)
+	# Warning C4127 - conditional expression is constant
 	set(COMMON_BUILD_OPTIONS "/std:c++17 /W4 /GR /wd26812 /MP")
     set(ADDITIONAL_DEBUG_BUILD_OPTIONS "")
     set(ADDITIONAL_RELEASE_BUILD_OPTIONS "")
@@ -145,9 +146,12 @@ add_subdirectory(framework)
 include_directories(framework)
 add_dependencies(framework external)
 
+if(ENABLE_DAEMON_TEST)
+add_definitions(-DENABLE_DAEMON_TEST 1)
 add_subdirectory(daemon)
 include_directories(daemon)
 add_dependencies(daemon external)
+endif()
 
 add_subdirectory(tests)
 include_directories(tests)
@@ -156,6 +160,7 @@ add_dependencies(tests external)
 include_directories(app)
 add_subdirectory(app)
 
+if(ENABLE_DAEMON_TEST)
 add_custom_target(copy-binaries ALL
                     DEPENDS daemon console app
                     COMMENT "Copy binaries ...")
@@ -165,4 +170,4 @@ add_custom_command(TARGET copy-binaries
                 #"Copying" $<TARGET_FILE:daemon> "to" $<TARGET_FILE_DIR:app>
                 COMMAND ${CMAKE_COMMAND} ARGS -E copy
                 $<TARGET_FILE:daemon> $<TARGET_FILE_DIR:app>)
-
+endif()

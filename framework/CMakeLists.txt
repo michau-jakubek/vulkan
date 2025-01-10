@@ -83,10 +83,16 @@ set(framework_files
 	vtfZPushConstants.hpp
 )
 
+set(framework_libs pdriver driver)
+
+if(WIN32)
+list(APPEND framework_libs dbghelp)
+endif()
+
 add_library(framework STATIC ${framework_files})
 target_include_directories(framework BEFORE PRIVATE ${GLFW3_INCLUDE_DIR})
 target_include_directories(framework BEFORE PRIVATE ${VULKAN_INCLUDE_DIR})
 target_include_directories(framework PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(framework pdriver driver)
+target_link_libraries(framework ${framework_libs})
 add_definitions(-DVULKAN_DRIVER="${VULKAN_DRIVER}")
 

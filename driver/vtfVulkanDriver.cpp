@@ -34,9 +34,19 @@ PFN_vkCreateInstance getDriverCreateInstanceProc ()
     return (PFN_vkCreateInstance)DriverInitializer::getPlatformDriverProc("vkCreateInstance");
 }
 
+PFN_vkDestroyInstance getDriverDestroyInstanceProc()
+{
+    return (PFN_vkDestroyInstance)DriverInitializer::getPlatformDriverProc("vkDestroyInstance");
+}
+
 PFN_vkCreateDevice getDriverCreateDeviceProc ()
 {
     return (PFN_vkCreateDevice)DriverInitializer::getPlatformDriverProc("vkCreateDevice");
+}
+
+PFN_vkDestroyDevice getDriverDestroyDeviceProc()
+{
+    return (PFN_vkDestroyDevice)DriverInitializer::getPlatformDriverProc("vkDestroyDevice");
 }
 
 PFN_vkGetInstanceProcAddr getDriverGetInstanceProcAddr ()
@@ -44,7 +54,19 @@ PFN_vkGetInstanceProcAddr getDriverGetInstanceProcAddr ()
     return (PFN_vkGetInstanceProcAddr)DriverInitializer::getPlatformDriverProc("vkGetInstanceProcAddr");
 }
 
-PFN_vkGetDeviceProcAddr getDriverGetDeviceProcAddr()
+PFN_vkGetDeviceProcAddr getDriverGetDeviceProcAddr ()
 {
     return (PFN_vkGetDeviceProcAddr)DriverInitializer::getPlatformDriverProc("vkGetDeviceProcAddr");
+}
+
+PFN_vkEnumerateInstanceLayerProperties getDriverEnumerateInstanceLayerPropertiesProcAddr ()
+{
+    return (PFN_vkEnumerateInstanceLayerProperties)
+        DriverInitializer::getPlatformDriverProc("vkEnumerateInstanceLayerProperties");
+}
+
+PFN_vkEnumerateInstanceExtensionProperties getDriverEnumerateInstanceExtensionPropertiesProcAddr ()
+{
+    return (PFN_vkEnumerateInstanceExtensionProperties)
+        DriverInitializer::getPlatformDriverProc("vkEnumerateInstanceExtensionProperties");
 }

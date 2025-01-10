@@ -45,7 +45,7 @@ std::vector<ZDeviceMemory> createMemory (ZDevice device, add_cref<VkMemoryRequir
 		allocInfo.allocationSize = allocationSize;
 		allocInfo.memoryTypeIndex = memoryTypeIndex;
 
-		VKASSERT(vkAllocateMemory(*device, &allocInfo, callbacks, &memory), "failed to allocate buffer memory!");
+		VKASSERTMSG(vkAllocateMemory(*device, &allocInfo, callbacks, &memory), "failed to allocate buffer memory!");
 
 		ZDistType<SizeSecond, VkDeviceSize> chunkSize = allocationSize;
 		if (false == sparse)
@@ -210,7 +210,7 @@ Alloc::Impl::Value Alloc::Impl::val ()
 		loAllocSize = hiAllocSize;
 	}
 #endif
-	ASSERTMSG(false, "Out of range");
+	ASSERTFALSE("Out of range");
 	return Value{};
 }
 void Alloc::Impl::verify (add_cref<Impl> other) const

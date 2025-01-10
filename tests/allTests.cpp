@@ -3,6 +3,7 @@
 #include "vtfVkUtils.hpp"
 #include "vtfCUtils.hpp"
 #include "allTests.hpp"
+#include "shell.hpp"
 
 std::vector<TestRecord> AllTestRecords;
 
@@ -194,5 +195,14 @@ template<class T> bool warnParamRange(const std::string& paramName,
 template bool warnParamRange(const std::string&, int&, const int&, const int&, const int&, bool);
 template bool warnParamRange(const std::string&, float&, const float&, const float&, const float&, bool);
 
-
+#if !defined(ENABLE_DAEMON_TEST) || ENABLE_DAEMON_TEST == 0
+std::shared_ptr<Shell> getOrCreateUniqueShell (
+	std::ostream&			output,
+	OnShellCommand			onCommand,
+	add_cref<std::string>	helpMessage,
+	add_cref<std::string>	historyFile)
+{
+	return std::make_shared<Shell>(output, onCommand, helpMessage, historyFile);
+}
+#endif
 

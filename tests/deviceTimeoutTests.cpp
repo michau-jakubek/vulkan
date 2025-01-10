@@ -124,7 +124,7 @@ TriLogicInt prepareTest (const TestRecord& record, const strings& cmdLineParams)
 	{
 		VkPhysicalDeviceSynchronization2Features	synchFeatures = makeVkStruct();
 
-		auto onEnablingFeatures = [&](ZPhysicalDevice, add_ref<strings>)
+		auto onEnablingFeatures = [&](add_ref<DeviceCaps>)
 		{
 			const VkPhysicalDeviceFeatures2 requiredFeatures = makeVkStruct(&synchFeatures);
 			return requiredFeatures;

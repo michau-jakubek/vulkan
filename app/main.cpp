@@ -7,6 +7,7 @@
 #include "main.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfCUtils.hpp"
+#include "vtfVector.hpp"
 #include "vtfZUtils.hpp"
 #include "vtfContext.hpp"
 #include "vtfFilesystem.hpp"
@@ -22,6 +23,7 @@ using namespace vtf;
 static void printUsage (std::ostream& str);
 static void printVtfVersion (std::ostream& str, uint32_t level);
 static std::string constructCompleteCommand (const char* appPath);
+extern void printLayersAndExtensions (add_ref<std::ostream> str);
 
 static DriverInitializer mainDriverInitlializer;
 
@@ -91,6 +93,7 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	Option optTempDir{ "-tmp", 1 };             options.push_back(optTempDir);
 	Option btrace{ "-bt", 0 };					options.push_back(btrace);
 	Option optApi{ "-api", 1 };					options.push_back(optApi);
+	Option optApiInt{ "-api-int", 1 };			options.push_back(optApiInt);
 	Option vulkan{ "-vulkan", 1 };				options.push_back(vulkan);
 	Option spirv{ "-spirv",  1 };				options.push_back(spirv);
 	Option spvValid{ "-spvvalid", 0 };			options.push_back(spvValid);
@@ -133,7 +136,7 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 #ifndef VULKAN_CUSTOM_DRIVER
 	vkGetInstanceProcAddr(nullptr, "vkGetInstanceProcAddr");
 #endif
-        mainDriverInitlializer(globalAppFlags.vulkanDriver, globalAppFlags.verbose);
+    mainDriverInitlializer(globalAppFlags.vulkanDriver, globalAppFlags.verbose);
 
 #if SYSTEM_OS_WINDOWS
 	const char listSeparator = ';';
@@ -200,8 +203,7 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 
 	if (consumeOptions(layList, options, appArgs, sink) > 0)
 	{
-		for (const auto& name : enumerateInstanceLayers())
-			std::cout << name << std::endl;
+		printLayersAndExtensions(std::cout);
 		return 0;
 	}
 
@@ -229,6 +231,7 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 		backtraceEnabled(fromText(sink.back(), 0, status) != 0);
 	}
 
+	// -api
 	uint32_t	apiVer = Version::make(1, 1);
 	consumeRes = consumeOptions(optApi, options, appArgs, sink);
 	if (consumeRes < 0)
@@ -254,6 +257,33 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 		}
 	}
 
+	// -api-int variant,major,minor,patch
+	consumeRes = consumeOptions(optApiInt, options, appArgs, sink);
+	if (consumeRes < 0)
+	{
+		std::cout << "ERROR: Missing \"" << optApiInt.name << "\" (Veulkan API version) option param" << std::endl;
+		return 2;
+	}
+	else if (consumeRes > 0)
+	{
+		std::array<bool, 4> statuses;
+		const UVec4 defApiInt(globalAppFlags.apiVer.nmajor, globalAppFlags.apiVer.nminor, 0, 0);
+		const UVec4 apiInt = UVec4::fromText(sink.back(), defApiInt, statuses, &status);
+		if (!status)
+		{
+			std::cout << "Unable to parse Vulkan API version, default "
+				<< globalAppFlags.apiVer.nmajor << '.' << globalAppFlags.apiVer.nminor
+				<< " will be used" << std::endl;
+		}
+		else
+		{
+			const Version version(apiInt.y(), apiInt.z(), apiInt.w(), apiInt.x());
+			globalAppFlags.apiVer.update(version);
+			apiVer = version;
+		}
+	}
+
+	// -d
 	if (consumeOptions(extList, options, appArgs, sink) > 0)
 	{
 		const uint32_t deviceIndex = fromText(sink.back(), 0u, status);
@@ -278,7 +308,7 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 													  , false					// enableDebugPrintf
 													  );
 		ZPhysicalDevice		phys = selectPhysicalDevice(make_signed(deviceIndex), instance, {/* required extensions */});
-		add_cref<strings>	exts	= phys.getParamRef<strings>();
+		add_cref<strings>	exts	= phys.getParamRef<ZDistType<AvailableDeviceExtensions, strings>>();
 		uint32_t			entry	= 0;
 		for (add_cref<strings::value_type> ext : exts)
 		{
@@ -421,14 +451,18 @@ int main (int argc, char* argv[])
 	}
 	catch (std::runtime_error& e)
 	{
+		result = {};
+		performTest = false;
 		std::cout << e.what();
+		std::cout << "The test " << std::quoted(testRecord.name) << ' '
+			<< "thrown an exception so no result to show." << std::endl;
 	}
 	if (performTest)
 	{
 		std::cout << "The test " << std::quoted(testRecord.name) << ' '
 			<< (result.hasValue()
 				? (result == 0 ? "Passed" : "FAILED")
-				: "finished but no results to show") << std::endl;
+				: "finished but no results to show.") << std::endl;
 	}
 
 	return result.hasValue() ? result.value() : (1);
@@ -501,6 +535,7 @@ void printUsage (std::ostream& str)
 	str << "                            e.g. \"-l-suppress VUID-vkBeginCommandBuffer-commandBuffer\"" << std::endl;
 	str << "                            will match to VUID-vkBeginCommandBuffer-commandBuffer-00049" << std::endl;
 	str << "  -api <version>:           Vulkan API version to apply, (major * 10 + minor), default is 1.1" << std::endl;
+	str << "  -api-int <version>        Vulkan API version as (variant,major,minor,patch). If any, has higher priority than -api" << std::endl;
 	str << "  -assets <assets_dir>      change assets directory, default is ${REPO}/assets/<test_name>" << std::endl;
 	str << "  -tmp <temp_dir>           change temp directory, default is system's temp directory" << std::endl;
 	str << "  -verbose <level>          enable application diagnostic messages, default is 0 that means disabled" << std::endl;

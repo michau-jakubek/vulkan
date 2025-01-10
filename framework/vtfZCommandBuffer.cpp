@@ -20,7 +20,7 @@ ZCommandPool createCommandPool (ZDevice device, ZQueue queue, VkCommandPoolCreat
 	VkAllocationCallbacksPtr	callbacks = device.getParam<VkAllocationCallbacksPtr>();
 	ZCommandPool				commandPool(VK_NULL_HANDLE, device, callbacks, queue);
 
-	VKASSERT2(vkCreateCommandPool(*device, &poolInfo, callbacks, commandPool.setter()));
+	VKASSERT(vkCreateCommandPool(*device, &poolInfo, callbacks, commandPool.setter()));
 
 	return commandPool;
 }
@@ -42,7 +42,7 @@ ZCommandBuffer createCommandBuffer (ZCommandPool commandPool, bool primary, cons
 	allocInfo.level					= primary ? VK_COMMAND_BUFFER_LEVEL_PRIMARY : VK_COMMAND_BUFFER_LEVEL_SECONDARY;
 	allocInfo.commandBufferCount	= 1;
 
-	VKASSERT2(vkAllocateCommandBuffers(*device, &allocInfo, &commandBuffer));
+	VKASSERT(vkAllocateCommandBuffers(*device, &allocInfo, &commandBuffer));
 
 	return ZCommandBuffer::create(commandBuffer, device, commandPool, primary);
 }
@@ -54,7 +54,7 @@ ZCommandPool commandBufferGetCommandPool (ZCommandBuffer commandBuffer)
 
 void commandBufferEnd (ZCommandBuffer commandBuffer)
 {
-	VKASSERT2(vkEndCommandBuffer(*commandBuffer));
+	VKASSERT(vkEndCommandBuffer(*commandBuffer));
 }
 
 void commandBufferBegin (ZCommandBuffer commandBuffer, VkCommandBufferUsageFlags usage, add_ptr<void> pNext)
@@ -87,7 +87,7 @@ void commandBufferBegin (ZCommandBuffer commandBuffer, ZFramebuffer fb, ZRenderP
 	}
 	beginInfo.pInheritanceInfo	= commandBuffer.getParam<bool>() ? nullptr : &inheritInfo;
 
-	VKASSERT2(vkBeginCommandBuffer(*commandBuffer, &beginInfo));
+	VKASSERT(vkBeginCommandBuffer(*commandBuffer, &beginInfo));
 }
 
 void commandBufferExecuteCommands (ZCommandBuffer primary, std::initializer_list<ZCommandBuffer> secondaryCommands)
@@ -116,9 +116,9 @@ VkResult commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFe
 	submitInfo.commandBufferCount	= 1u;
 	submitInfo.pCommandBuffers		= commandBuffer.ptr();
 
-	VKASSERT2(vkQueueSubmit(*queue, 1u, &submitInfo, *fence));
+	VKASSERT(vkQueueSubmit(*queue, 1u, &submitInfo, *fence));
 	const VkResult waitResult = vkWaitForFences(*device, 1u, fence.ptr(), VK_TRUE, timeout);
-	if (assertWaitResult) VKASSERT2(waitResult);
+	if (assertWaitResult) VKASSERT(waitResult);
 	if (hintFence.has_handle() == false)
 	{
 		resetFence(fence);
@@ -201,7 +201,7 @@ void commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkDeviceS
 		indexType = VK_INDEX_TYPE_UINT32;
 	else if (type == type_index_with_default::make<uint16_t>())
 		indexType = VK_INDEX_TYPE_UINT16;
-	else { ASSERTMSG(false, "Unknown index type"); }
+	else { ASSERTFALSE("Unknown index type"); }
 	vkCmdBindIndexBuffer(*cmd, *buffer, offset, indexType);
 }
 

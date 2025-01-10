@@ -264,7 +264,7 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 																			 1u, &info,
 																			 callbacks,
 																			 &pipelineHandle);
-	VKASSERT2(createStatus);
+	VKASSERT(createStatus);
 
 	return ZPipeline::create(pipelineHandle, device, callbacks,
 							 settings.m_layout, settings.m_renderPass, VK_PIPELINE_BIND_POINT_GRAPHICS);
@@ -443,10 +443,8 @@ bool computePipelineVerifyLimits (ZDevice device, add_cref<UVec3> wgSizes, bool 
 				result = false;
 				if (raise)
 				{
-					std::stringstream ss;
-					ss << "workGroupSize[" << i << "] of " << wgSizes[i]
-						<< " is greater than available " << limits.maxComputeWorkGroupSize[i];
-					ASSERTMSG(false, ss.str());
+					ASSERTFALSE("workGroupSize[", i, "] of ", wgSizes[i],
+						" is greater than available ", limits.maxComputeWorkGroupSize[i]);
 				}
 			}
 			/*
@@ -466,9 +464,7 @@ bool computePipelineVerifyLimits (ZDevice device, add_cref<UVec3> wgSizes, bool 
 				result = false;
 				if (raise)
 				{
-					std::stringstream ss;
-					ss << "localSize product of " << product << " is grater than available " << limits.maxComputeWorkGroupInvocations;
-					ASSERTMSG(false, ss.str());
+					ASSERTFALSE("localSize product of ", product, " is grater than available ", limits.maxComputeWorkGroupInvocations);
 				}
 			}
 		}
@@ -518,7 +514,7 @@ ZPipeline createComputePipelineImpl (
 	ci.basePipelineIndex	= 0;
 
 	ZPipeline	computePipeline (VK_NULL_HANDLE, aDevice, callbacks, layout, ZRenderPass(), VK_PIPELINE_BIND_POINT_COMPUTE);
-	VKASSERT2(vkCreateComputePipelines(*aDevice, VkPipelineCache(VK_NULL_HANDLE), 1u, &ci, callbacks, computePipeline.setter()));
+	VKASSERT(vkCreateComputePipelines(*aDevice, VkPipelineCache(VK_NULL_HANDLE), 1u, &ci, callbacks, computePipeline.setter()));
 
 	return computePipeline;
 }

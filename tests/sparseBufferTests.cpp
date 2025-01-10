@@ -28,10 +28,9 @@ TriLogicInt prepareTests(add_cref<TestRecord> record, add_cref<strings> cmdLineP
 	add_ref<std::ostream> log(std::cout);
 
 	VkStruct<VkPhysicalDeviceFeatures2>	requiredfeatures;
-	auto onEnablingFeatures = [&](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
+	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
-		UNREF(extensions);
-		const VkPhysicalDeviceFeatures2 availableFeatures = deviceGetPhysicalFeatures2(physicalDevice);
+		const VkPhysicalDeviceFeatures2 availableFeatures = deviceGetPhysicalFeatures2(caps.physicalDevice);
 		requiredfeatures.features.sparseBinding = availableFeatures.features.sparseBinding;
 		return availableFeatures;
 	};

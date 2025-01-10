@@ -19,7 +19,11 @@ void printBacktrace (std::ostream& ss, std::size_t skip = 0)
 	printBts(ss, bts, nbt, skip);
 }
 
-#endif // SYSTEM_OS_LINUX
+#elif SYSTEM_OS_WINDOWS
+
+void PrintStackTrace (std::ostream& str, const int maxFrames, const int skip = 0);
+
+#endif // SYSTEM_OS_LINUX | SYSTEM_OS_WINDOWS
 
 #include "vtfVkUtils.hpp"
 

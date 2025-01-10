@@ -1,12 +1,11 @@
-#include <sstream>
-#include <string_view>
 #include "GLFW/glfw3.h"
 #include "vtfZDeletable.hpp"
 #include "vtfBacktrace.hpp"
+#include "vtfVulkanDriver.hpp"
+#include "vtfVkUtils.hpp"
 
-#if SYSTEM_OS_LINUX == 1
-#include "vtfBacktrace.hpp"
-#endif
+#include <sstream>
+#include <string_view>
 
 static bool backtraceEnabled__ = false;
 bool backtraceEnabled () { return backtraceEnabled__; }
@@ -17,21 +16,32 @@ VkAllocationCallbacks* getAllocationCallbacks()
 	return nullptr;
 }
 
-void assertion (bool cond, const char* func, const char* file, int line, add_cref<std::string> msg)
+void writeExpression (
+	add_ref<std::ostringstream> ss,
+	const char*				func,
+	const char*				file,
+	int						line,
+    const char*				expr,
+	VkResult				res,
+	std::string::size_type	ind)
 {
-	if (!cond)
-	{
-		std::stringstream ss;
-		ss << "ASSERT: In \"" << func << "\"" << std::endl;
-		ss << "  from \"" << file << "\" at " << line << " line" << std::endl;
-		if (!msg.empty()) ss << "  \"" << msg << '\"' << std::endl;
-#if SYSTEM_OS_LINUX == 1
-		if (backtraceEnabled__) printBacktrace<20>(ss, 2);
-#endif
-		ss.flush();
-		throw std::runtime_error(ss.str());
-	}
+	ss << "ASSERT: In \"" << func << "\"" << std::endl;
+	ss << "  from \"" << file << "\" at " << line << " line" << std::endl;
+	if (expr) ss << std::string(ind, ' ') << "Expr: " << std::quoted(expr);
+	if (VK_SUCCESS != res) ss << " returned " << vtf::vkResultToString(res);
+	ss << std::endl;
 }
+
+void writeBackTrace (add_ref<std::ostringstream> ss)
+{
+#if SYSTEM_OS_LINUX == 1
+	if (backtraceEnabled__) printBacktrace<20>(ss, 2);
+#elif SYSTEM_OS_WINDOWS
+	if (backtraceEnabled__) PrintStackTrace(ss, 20);
+#endif
+}
+
+void deletable_selfTest() {}
 
 void freeWindow(add_ptr<GLFWwindow> window)
 {
@@ -42,4 +52,22 @@ void freeWindow(add_ptr<GLFWwindow> window)
 	}
 }
 
-void deletable_selfTest () {}
+void vtfDestroyInstance (VkInstance instance, VkAllocationCallbacksPtr callbacks)
+{
+	PFN_vkDestroyInstance proc = getDriverDestroyInstanceProc();
+	if (proc)
+	{
+		(*proc)(instance, callbacks);
+	}
+}
+
+void vtfDestroyDevice (VkDevice dev, VkAllocationCallbacksPtr cb, add_cref<ZPhysicalDevice> phd)
+{
+	UNREF(phd);
+	PFN_vkDestroyDevice proc = getDriverDestroyDeviceProc();
+	if (proc)
+	{
+		(*proc)(dev, cb);
+	}
+}
+

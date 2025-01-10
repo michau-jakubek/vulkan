@@ -3,22 +3,79 @@
 
 #include "vulkan/vulkan.h"
 #include "vtfZDeletable.hpp"
+#include "vtfCUtils.hpp"
 #include <typeinfo>
+#include <variant>
 
 namespace vtf
 {
 
 template<class> std::bad_typeid mkstype;
 
-#define MKSTYPE(vkstructtype_, vkstructname_) template<> inline constexpr \
-	VkStructureType	mkstype<vkstructtype_> = vkstructname_
+//#define MKSTYPE_SELECT(what_, vkstructtype_, vkstructname_) \
+//	MKSTYPE_SELECT_IMPL(what_, vkstructtype_, vkstructname_)
+
+//#define MKSTYPE_SELECT_IMPL(what_, vkstructtype_, vkstructname_) \
+//	MKSTYPE_SELECT_##what_(vkstructtype_, vkstructname_)
+
+#define MKSTYPE(vkstructtype_, vkstructname_) \
+	template<> inline constexpr VkStructureType	mkstype<vkstructtype_> = vkstructname_
+
+#define MKSTYPE_SELECT(what_, vkstructtype_, vkstructname_) \
+	MKSTYPE_SELECT_##what_(vkstructtype_, vkstructname_)
+
+#define MKSTYPE_SELECT_DEF(vkstructtype_, vkstructname_) \
+	template<> constexpr inline VkStructureType mkstype<vkstructtype_> = vkstructname_;
+
+#define MKSTYPE_EXTRACT(what_, vkstructtype_, vkstructname_) \
+	MKSTYPE_EXTRACT_##what_(vkstructtype_, vkstructname_)
+
+#define MKSTYPE_EXTRACT_DEF(vkstructtype_, vkstructname_) ,vkstructtype_
+
+//#define MKSTYPE_SELECT_DEFINE_TYPE(vkstructtype_, vkstructname_) \
+//	template<> constexpr VkStructureType mkstype<vkstructtype_> = vkstructname_;
+
+//#define MKSTYPE_SELECT_EXTRACT_TYPE(vkstructtype_, vkstructname_) ,vkstructtype_
+
+//#define APPLY_DEFINE_TYPE(vkstructtype_, vkstructname_) \
+//	MKSTYPE_SELECT(DEFINE_TYPE, vkstructtype_, vkstructname_)
+
+//#define APPLY_EXTRACT_TYPE(vkstructtype_, vkstructname_) \
+//    MKSTYPE_SELECT(EXTRACT_TYPE, vkstructtype_, vkstructname_)
+
+#define FEATURES_LIST(APPLY) \
+APPLY(DEF, VkValidationFeaturesEXT, VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT) \
+APPLY(DEF, VkPhysicalDeviceFeatures2, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2) \
+APPLY(DEF, VkPhysicalDeviceVulkan11Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES) \
+APPLY(DEF, VkPhysicalDeviceVulkan12Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES) \
+APPLY(DEF, VkPhysicalDeviceVulkan13Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES) \
+APPLY(DEF, VkPhysicalDeviceMultiviewFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES) \
+APPLY(DEF, VkPhysicalDeviceMaintenance4Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES) \
+APPLY(DEF, VkPhysicalDeviceShaderObjectFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT) \
+APPLY(DEF, VkPhysicalDeviceDynamicRenderingFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES) \
+APPLY(DEF, VkPhysicalDeviceSynchronization2Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES) \
+APPLY(DEF, VkPhysicalDeviceSubgroupSizeControlFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES) \
+APPLY(DEF, VkPhysicalDeviceExtendedDynamicStateFeaturesEXT,	VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT) \
+APPLY(DEF, VkPhysicalDeviceShaderTerminateInvocationFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_TERMINATE_INVOCATION_FEATURES) \
+APPLY(DEF, VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DEMOTE_TO_HELPER_INVOCATION_FEATURES) \
+APPLY(DEF, VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR,	VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_UNIFORM_CONTROL_FLOW_FEATURES_KHR)
+//APPLY(DEF, VkPhysicalDeviceFeatures, VK_STRUCTURE_TYPE_MAX_ENUM)
+MKSTYPE(VkPhysicalDeviceFeatures, VK_STRUCTURE_TYPE_MAX_ENUM);
+
+//#define EXTRACT_TYPES() FEATURES_LIST(APPLY_EXTRACT_TYPE)
+//#define DEFINE_FEATURES() FEATURES_LIST(APPLY_DEFINE_TYPE)
+
+// VkBaseInStructure -> VK_STRUCTURE_TYPE_BASE_IN_STRUCTURE
+// VkBaseInStructure -> VK_STRUCTURE_TYPE_BASE_IN_STRUCTURE
+FEATURES_LIST(MKSTYPE_SELECT)
+
+#define EXTRACT_TYPES() FEATURES_LIST(MKSTYPE_EXTRACT)
+//using FeaturesVar = RemoveTypeFromContainer_t< int, std::variant<int EXTRACT_TYPES()> >;
+using FeaturesVar = std::variant<VkPhysicalDeviceFeatures EXTRACT_TYPES()>;
+//using FeaturesVar = RemoveTypeFromContainer_t<int, FeaturesVar_>;
 
 MKSTYPE(VkPhysicalDeviceProperties2,				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
-MKSTYPE(VkPhysicalDeviceFeatures2,					VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
 MKSTYPE(VkPhysicalDeviceMultiviewProperties,		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PROPERTIES);
-MKSTYPE(VkPhysicalDeviceMultiviewFeatures,			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES);
-MKSTYPE(VkValidationFeaturesEXT,					VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT);
-MKSTYPE(VkPhysicalDeviceDynamicRenderingFeatures,	VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES);
 MKSTYPE(VkRenderPassBeginInfo,						VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO);
 MKSTYPE(VkApplicationInfo,							VK_STRUCTURE_TYPE_APPLICATION_INFO);
 MKSTYPE(VkMemoryAllocateInfo,						VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO);
@@ -26,22 +83,9 @@ MKSTYPE(VkMappedMemoryRange,						VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE);
 MKSTYPE(VkRenderingAttachmentInfo,					VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
 MKSTYPE(VkRenderingInfo,							VK_STRUCTURE_TYPE_RENDERING_INFO);
 MKSTYPE(VkPhysicalDeviceSubgroupProperties,			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES);
-MKSTYPE(VkPhysicalDeviceMaintenance4Features,		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES);
 MKSTYPE(VkPhysicalDeviceMaintenance4Properties,		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_PROPERTIES);
-MKSTYPE(VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR,
-													VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_UNIFORM_CONTROL_FLOW_FEATURES_KHR);
-MKSTYPE(VkPhysicalDeviceSubgroupSizeControlFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES);
 MKSTYPE(VkPipelineShaderStageRequiredSubgroupSizeCreateInfo,
 													VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO);
-MKSTYPE(VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures,
-													VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DEMOTE_TO_HELPER_INVOCATION_FEATURES);
-MKSTYPE(VkPhysicalDeviceShaderTerminateInvocationFeatures,
-													VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_TERMINATE_INVOCATION_FEATURES);
-MKSTYPE(VkPhysicalDeviceVulkan11Features,			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
-MKSTYPE(VkPhysicalDeviceVulkan12Features,			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
-MKSTYPE(VkPhysicalDeviceVulkan13Features,			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES);
-MKSTYPE(VkPhysicalDeviceSynchronization2Features,	VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES);
-MKSTYPE(VkPhysicalDeviceShaderObjectFeaturesEXT,	VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT);
 MKSTYPE(VkPhysicalDeviceShaderObjectPropertiesEXT,  VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_PROPERTIES_EXT);
 MKSTYPE(VkPipelineInputAssemblyStateCreateInfo,		VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO);
 MKSTYPE(VkPipelineVertexInputStateCreateInfo,		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO);
@@ -87,14 +131,12 @@ MKSTYPE(VkCopyImageToBufferInfo2,					VK_STRUCTURE_TYPE_COPY_IMAGE_TO_BUFFER_INF
 MKSTYPE(VkCopyBufferToImageInfo2,					VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2);
 MKSTYPE(VkVertexInputAttributeDescription2EXT,		VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT);
 MKSTYPE(VkVertexInputBindingDescription2EXT,		VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT);
-MKSTYPE(VkPhysicalDeviceExtendedDynamicStateFeaturesEXT,
-													VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT);
 
 struct makeVkStruct
 {
 	void* m_pNext;
 	makeVkStruct (void* pNext = nullptr)
-		: m_pNext(pNext) {}
+		: m_pNext(pNext) { }
 	template<class VKStructure>
 	operator VKStructure () {
 		VKStructure s{};
@@ -120,6 +162,21 @@ struct VkStruct : public VkStructName
 		add_ref<VkStructName>(*this) = makeVkStruct(pNext);
 	}
 };
+
+template<class, class = void>
+struct hasPnextOfVoidPtr : std::false_type {};
+template<class X> struct hasPnextOfVoidPtr<X, std::void_t<decltype(std::declval<X>().pNext)>>
+	: std::integral_constant<bool,
+		std::is_same<decltype(std::declval<X>().pNext), void*>::value ||
+		std::is_same<decltype(std::declval<X>().pNext), const void*>::value> {};
+
+#undef MKSTYPE_EXTRACT_DEF
+#undef MKSTYPE_SELECT_DEF
+#undef MKSTYPE_EXTRACT
+#undef MKSTYPE_SELECT
+#undef EXTRACT_TYPES
+#undef FEATURES_LIST
+#undef MKSTYPE
 
 } // namespace vtf
 

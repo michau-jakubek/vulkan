@@ -1,11 +1,14 @@
 #include "vtfBacktrace.hpp"
 
 #if SYSTEM_OS_LINUX
-
-#include <cstdlib>
-#include <string_view>
-#include <dlfcn.h>
-#include <link.h>
+ #include <cstdlib>
+ #include <string_view>
+ #include <dlfcn.h>
+ #include <link.h>
+#elif SYSTEM_OS_WINDOWS
+ #include <windows.h>
+ #include <dbghelp.h>
+#endif
 
 #include "demangle.hpp"
 
@@ -13,6 +16,7 @@
 #define ARRAY_LENGTH(a) std::extent<decltype(a)>::value
 #endif // ARRAY_LENGTH
 
+#if SYSTEM_OS_LINUX
 static int addr2line(const char* bin, const char* addr, char* output, size_t size)
 {		
 	char cmd[1024];
@@ -100,7 +104,33 @@ std::size_t printBts (std::ostream& ss, void** bts, std::size_t nbt, std::size_t
 	return (skip < nbt) ? (nbt - skip) : 0;
 }
 
-#endif // SYSTEM_OS_LINUX
+#elif SYSTEM_OS_WINDOWS
+
+void PrintStackTrace (std::ostream& str, const int maxFrames, const int)
+{
+    std::vector<void*> stack(maxFrames);
+    unsigned short frames;
+    SYMBOL_INFO* symbol;
+    HANDLE process = GetCurrentProcess();
+
+    SymInitialize(process, NULL, TRUE);
+    frames = CaptureStackBackTrace(0, maxFrames, stack.data(), NULL);
+
+    symbol = (SYMBOL_INFO*)calloc(sizeof(SYMBOL_INFO) + 256 * sizeof(char), 1);
+    symbol->MaxNameLen = 255;
+    symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+
+    for (unsigned int i = 0; i < frames; i++) {
+        SymFromAddr(process, (DWORD64)(stack[i]), 0, symbol);
+        str << frames - i - 1 << ": " << symbol->Name << " - 0x" << symbol->Address << std::endl;
+		if (strcmp(symbol->Name, "main") == 0)
+			break;
+    }
+
+    free(symbol);
+}
+
+#endif // SYSTEM_OS_LINUX | SYSTEM_OS_WINDOWS
 
 static GlobalAppFlags globalAppFlags;
 const GlobalAppFlags& getGlobalAppFlags () { return globalAppFlags; }

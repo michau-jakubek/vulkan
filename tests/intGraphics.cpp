@@ -38,7 +38,14 @@ struct TestParams
 		uint32_t	hasMatchAll			: 1;
 		uint32_t	hasParticularMatch	: 1;
 		uint32_t	hasAttributes		: 1;
-		uint32_t	pad					: 17;
+
+		uint32_t	shaderInt64			: 1;
+		uint32_t	shaderFloat64		: 1;
+		uint32_t	shaderInt16			: 1;
+		uint32_t	demoteInvocation	: 1;
+		uint32_t	terminateInvocation : 1;
+
+		uint32_t	pad					: 12;
 	} flags { };
 	static_assert(sizeof(flags) == sizeof(uint32_t), "???");
 	static	auto parseCmdLine	(add_cref<std::string> assets, add_cref<strings> cmdLineParams) -> std::tuple<TestParams, std::string>;
@@ -427,9 +434,8 @@ std::tuple<TestParams, std::string> TestParams::parseCmdLine (add_cref<std::stri
 TriLogicInt runTests (std::shared_ptr<VulkanContext> ctx, add_cref<TestParams> params);
 TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
 {
-	const auto [params, messages]	= TestParams::parseCmdLine(record.assets, cmdLineParams);
-	const bool needsTessellation	= params.flags.tessellation != 0;
-	const bool needsGeometry		= params.flags.geometry != 0;
+	const auto [prms, messages]	= TestParams::parseCmdLine(record.assets, cmdLineParams);
+	add_cref<TestParams> params(prms);
 	if (params.flags.printParams)
 	{
 		params.print(std::cout);
@@ -450,43 +456,59 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 		return {};
 	}
 
-	add_cref<GlobalAppFlags>	gf	= getGlobalAppFlags();
-	VkPhysicalDeviceVulkan11Features						vulkan11Features	= makeVkStruct();
-	VkPhysicalDeviceShaderTerminateInvocationFeatures		terminateFeature	= makeVkStruct(&vulkan11Features);
-	VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures	demoteFeature		= makeVkStruct(&terminateFeature);
-	VkPhysicalDeviceFeatures2								requiredfeatures	= makeVkStruct(&demoteFeature);
-	auto onEnablingFeatures = [&](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
+	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
-		UNREF(extensions);
-		VkPhysicalDeviceFeatures2 availableFatures = deviceGetPhysicalFeatures2(physicalDevice, &demoteFeature);
-		if (needsTessellation)
+		if (params.flags.terminateInvocation)
 		{
-			requiredfeatures.features.tessellationShader = availableFatures.features.tessellationShader;
+			auto f = caps.addFeature(VkPhysicalDeviceShaderTerminateInvocationFeatures(), true);
+			f.checkNotSupported(&VkPhysicalDeviceShaderTerminateInvocationFeatures::shaderTerminateInvocation,
+								true, "shaderTerminateInvocation");
 		}
-		if (needsGeometry)
+		if (params.flags.demoteInvocation)
 		{
-			requiredfeatures.features.geometryShader = availableFatures.features.geometryShader;
+			auto f = caps.addFeature(VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures(), true);
+			f.checkNotSupported(&VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures::shaderDemoteToHelperInvocation,
+								true, "shaderDemoteToHelperInvocation");
 		}
-		requiredfeatures.features.shaderFloat64 = availableFatures.features.shaderFloat64;
-		requiredfeatures.features.shaderInt64 = availableFatures.features.shaderInt64;
-		requiredfeatures.features.shaderInt16 = availableFatures.features.shaderInt16;
-		return requiredfeatures;
+
+		VkPhysicalDeviceFeatures f10{};
+		auto f = caps.addFeature(f10, true);
+		if (params.flags.tessellation)
+		{
+			f10.tessellationShader = f.checkNotSupported(&VkPhysicalDeviceFeatures::tessellationShader,
+															true, "tessellationShader");
+		}
+		if (params.flags.geometry)
+		{
+			f10.geometryShader = f.checkNotSupported(&VkPhysicalDeviceFeatures::geometryShader,
+														true, "geometryShader");
+		}
+		if (params.flags.shaderFloat64)
+		{
+			f10.shaderFloat64 = f.checkNotSupported(&VkPhysicalDeviceFeatures::shaderFloat64,
+													true, "shaderFloat64");
+		}
+		if (params.flags.shaderInt64)
+		{
+			f10.shaderInt64 = f.checkNotSupported(&VkPhysicalDeviceFeatures::shaderInt64,
+													true, "shaderInt64");
+		}
+		if (params.flags.shaderInt16)
+		{
+			f10.shaderInt16 = f.checkNotSupported(&VkPhysicalDeviceFeatures::shaderInt16,
+													true, "shaderInt16");
+		}
+
+		caps.replaceFeature(f10);
 	};
-	CanvasStyle canvasStyle = Canvas::DefaultStyle;
+	add_cref<GlobalAppFlags>	gf			= getGlobalAppFlags();
+	CanvasStyle					canvasStyle = Canvas::DefaultStyle;
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
 
 	const Version usedApiVer = (gf.apiVer < Version(1, 2)) ? Version(1, 2) : gf.apiVer;
 	std::shared_ptr<VulkanContext> ctx = (params.flags.visual != 0)
 		? std::make_shared<Canvas>(record.name, gf.layers, strings(), strings(), canvasStyle, onEnablingFeatures, usedApiVer)
 		: std::make_shared<VulkanContext>(record.name, gf.layers, strings(), strings(), onEnablingFeatures, usedApiVer);
-	if (needsTessellation && (false == requiredfeatures.features.tessellationShader))
-	{
-		std::cout << "[ERROR] Tessellation shader not supported by device" << std::endl;
-	}
-	if (needsGeometry && (false == requiredfeatures.features.geometryShader))
-	{
-		std::cout << "[ERROR] Tessellation shader not supported by device" << std::endl;
-	}
 	if (params.flags.warning)
 	{
 		std::cout << messages << std::endl;

@@ -59,10 +59,7 @@ VertexBinding::Location VertexBinding::declareAttributes_ (const AttrFwd* fwd, c
 		m_bufferType = BufferType::External;
 	else if (BufferType::External != m_bufferType)
 	{
-		std::ostringstream s;
-		s << "Cannot declare vertex attribs in binding (" << binding << ") with buffer";
-		s.flush();
-		ASSERTMSG(VK_FALSE, s.str());
+		ASSERTFALSE("Cannot declare vertex attribs in binding (", binding, ") with buffer");
 	}
 
 	const Location	location	= static_cast<Location>(m_descriptions.size());
@@ -99,10 +96,7 @@ VertexBinding::Location VertexBinding::appendAttribute (uint32_t location, VkFor
 		m_bufferType = BufferType::External;
 	else if (BufferType::External != m_bufferType)
 	{
-		std::ostringstream s;
-		s << "Cannot declare vertex attribs in binding (" << binding << ") with buffer";
-		s.flush();
-		ASSERTMSG(VK_FALSE, s.str());
+		ASSERTFALSE("Cannot declare vertex attribs in binding (", binding, ") with buffer");
 	}
 
 	Description d;
@@ -124,10 +118,7 @@ VertexBinding::Location VertexBinding::addAttributes_ (const AttrFwd* fwd, const
 		m_bufferType = BufferType::Internal;
 	else if (BufferType::Internal != m_bufferType)
 	{
-		std::ostringstream s;
-		s << "Cannot declare vertex attribs in binding (" << binding << ") with no buffer";
-		s.flush();
-		ASSERTMSG(VK_FALSE, s.str());
+		ASSERTFALSE("Cannot declare vertex attribs in binding (", binding, ") with no buffer");
 	}
 
 	const uint32_t elementCount = fwd[0].count;
@@ -149,7 +140,7 @@ VertexBinding::Location VertexBinding::addAttributes_ (const AttrFwd* fwd, const
 		}
 		if (differs)
 		{
-			ASSERTMSG(VK_FALSE, "Element count of all attribs must be equal");
+			ASSERTFALSE("Element count of all attribs must be equal");
 		}
 	}
 
@@ -188,13 +179,13 @@ VertexBinding::Location VertexBinding::addAttributes_ (const AttrFwd* fwd, const
 	const uint8_t*		inputSource		= nullptr;
 
 	ZDeviceMemory	newMemory	= bufferGetMemory(newBuffer, 0u);
-	VKASSERT(vkMapMemory(*device, *newMemory, 0, newBufferSize, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&dst)), "");
+	VKASSERT(vkMapMemory(*device, *newMemory, 0, newBufferSize, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&dst)));
 
 	if (oldStride)
 	{
 		const VkDeviceSize	oldBufferSize	= elementCount * oldStride;
 		ZDeviceMemory oldMemory = bufferGetMemory(m_buffer, 0u);
-		VKASSERT(vkMapMemory(*device, *oldMemory, 0, oldBufferSize, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&bindingSource)), "");
+		VKASSERT(vkMapMemory(*device, *oldMemory, 0, oldBufferSize, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&bindingSource)));
 
 		/*
 		VkMappedMemoryRange	range{};
@@ -411,7 +402,7 @@ std::vector<VkBuffer> VertexInput::getVertexBuffers (std::initializer_list<ZBuff
 		{
 		case VertexBinding::BufferType::Internal: ++internalBindingCount; break;
 		case VertexBinding::BufferType::External: ++externalBindingCount; break;
-		case VertexBinding::BufferType::Undefined: ASSERTMSG(0, "Unable to process empty binding");
+		case VertexBinding::BufferType::Undefined: ASSERTFALSE("Unable to process empty binding");
 		}
 
 		maxBinding = std::max(bind.binding, maxBinding);

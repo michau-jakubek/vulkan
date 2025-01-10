@@ -19,6 +19,8 @@ set(tests_files
     intMatrixTests.hpp
     intCompute.cpp
     intCompute.hpp
+	nothingCompute.cpp
+	nothingCompute.hpp
     intGraphics.cpp
     intGraphics.hpp
     intCipher.cpp
@@ -27,8 +29,7 @@ set(tests_files
     intThreadPool.hpp
     intSynchronization2.cpp
     intSynchronization2.hpp
-    daemonTests.cpp
-    daemonTests.hpp
+    ${daemon_test_files}
     subgroupMatrixTests.cpp
     subgroupMatrixTests.hpp
     topologyTests.cpp
@@ -47,6 +48,11 @@ set(tests_files
     shaderObjectComputeTests.hpp
     )
 
+if(ENABLE_DAEMON_TEST)
+list(APPEND tests_files daemonTests.cpp daemonTests.hpp)
+set(daemon_header_files ${daemon_headers})
+endif()
+
 set(tests_libs
     console
     framework
@@ -59,7 +65,7 @@ target_include_directories(tests
                            BEFORE PRIVATE ${GLFW3_INCLUDE_DIR}
                            BEFORE PRIVATE ${VULKAN_INCLUDE_DIR}
                            AFTER PRIVATE  ${console_headers}
-                           AFTER PRIVATE  ${daemon_headers}
+                           AFTER PRIVATE  ${daemon_header_files}
                            AFTER PRIVATE  ${CMAKE_CURRENT_SOURCE_DIR}
                            )
 target_link_libraries(tests pdriver driver ${tests_libs})

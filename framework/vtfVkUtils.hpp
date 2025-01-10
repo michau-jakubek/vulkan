@@ -24,19 +24,13 @@ constexpr uint64_t INVALID_UINT64 = (~(static_cast<uint64_t>(0u)));
 #define ROUNDUP(x__, multipler__) (MULTIPLERUP((x__),(multipler__))*(multipler__))
 #define ROUNDDOWN(x__, multipler__) (((x__)/(multipler__))*(multipler__))
 
-#define VKASSERT2(expr__) {				\
-	auto res__ = (expr__);				\
-	if (res__ != VK_SUCCESS) {			\
-		assertion( false, __func__, __FILE__, __LINE__, vkResultToString(res__)); \
-	} \
-}
+#define VKASSERT(expr__) { \
+	const VkResult rez__ = (expr__); if (rez__ != VK_SUCCESS) \
+	ASSERT_IMPL( (rez__ == VK_SUCCESS), STRINGIZE(expr__), rez__, false, 0); }
 
-#define VKASSERT3(expr__, msg__) {		\
-	auto res__ = (expr__);				\
-	if (res__ != VK_SUCCESS) {			\
-		assertion( false, __func__, __FILE__, __LINE__, (std::string(msg__) + ' ' + vkResultToString(res__))); \
-	} \
-}
+#define VKASSERTMSG(expr__, ...) { \
+	const VkResult rez__ = (expr__); if (rez__ != VK_SUCCESS) \
+	ASSERT_IMPL( (rez__ == VK_SUCCESS), STRINGIZE(expr__), rez__, true, __VA_ARGS__); }
 
 struct Version
 {
@@ -50,10 +44,10 @@ struct Version
 					, npatch	(0)
 					, nvariant	(0)
 				{ }
-	constexpr	Version	(uint32_t major, uint32_t minor, uint32_t path, uint32_t variant)
+	constexpr	Version	(uint32_t major, uint32_t minor, uint32_t patch, uint32_t variant)
 					: nmajor	(major)
 					, nminor	(minor)
-					, npatch	(path)
+					, npatch	(patch)
 					, nvariant	(variant)
 				{ }
 	void update (uint32_t v)
@@ -152,8 +146,9 @@ uint32_t		findQueueFamilyIndex (VkPhysicalDevice phDevice, VkQueueFlagBits bit);
 uint32_t		findSurfaceSupportedQueueFamilyIndex (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR);
 std::vector<uint32_t> findSurfaceSupportedQueueFamilyIndices (VkPhysicalDevice physDevice, ZSurfaceKHR surface);
 bool			hasFormatsAndModes (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR);
-const char*		vkResultToString (VkResult res);
+std::string		vkResultToString (VkResult res);
 strings			enumerateInstanceLayers ();
+strings			enumerateInstanceExtensions (const char* layerName);
 strings			enumerateInstanceExtensions (const strings& layerNames = {});
 strings			enumerateDeviceExtensions (VkPhysicalDevice device, const strings& layerNames = {});
 uint32_t		enumeratePhysicalDevices (VkInstance instance, std::vector<VkPhysicalDevice>& devices);
@@ -161,6 +156,7 @@ uint32_t		enumerateSwapchainImages (VkDevice device, VkSwapchainKHR swapchain, s
 std::ostream&	printPhysicalDevices (VkInstance instance, std::ostream& str);
 std::ostream&	printPhysicalDevice (VkPhysicalDevice device, std::ostream& str, uint32_t deviceIndex = INVALID_UINT32);
 std::ostream&   printPhysicalDevice (add_cref<VkPhysicalDeviceProperties> props, std::ostream& str, uint32_t deviceIndex = INVALID_UINT32);
+add_ref<std::ostream> printPhysicalDeviceFeatures (add_cref<VkPhysicalDeviceFeatures>, add_ref<std::ostream> str, uint32_t indent);
 
 uint32_t		computePixelByteSize (VkFormat format);
 uint32_t		computePixelChannelCount (VkFormat format);

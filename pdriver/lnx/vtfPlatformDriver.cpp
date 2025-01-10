@@ -20,6 +20,14 @@ extern bool compareNoCase (const std::string& a, const std::string& b);
 
 static std::string readLibraryPath (void* lib);
 
+auto getPlatformDriverProc (const char* procName, void* handle, bool& icd) -> std::add_pointer_t<void>;
+
+bool verifyVulkanDriver(void* h)
+{
+    bool icd = false;
+    return !!getPlatformDriverProc((const char*)"vkCreateInstance", h, icd);
+}
+
 #ifdef VULKAN_CUSTOM_DRIVER
 
 typedef void* (*dlopen_t)(const char*, int);
@@ -36,10 +44,6 @@ static void* system_dlopen (const char* lib, int flags)
 static void* system_dlopen (const std::string& lib, int flags)
 {
     return system_dlopen(lib.c_str(), flags);
-}
-static bool verifyVulkanDriver (void* h)
-{
-    return (h != nullptr) && dlsym(h, "vkCreateInstance");
 }
 
 static void freeDriver (const char* driver, bool verboseMode);
@@ -329,6 +333,27 @@ auto DriverInitializer::getPlatformDriverFileName (bool& success) -> std::string
     return fs::absolute(path);
 }
 
+auto getPlatformDriverProc (const char* procName, void* handle, bool& icd) -> std::add_pointer_t<void>
+{
+    void* addr = nullptr;
+    if (handle)
+    {
+        icd = false;
+        *(void**)(&addr) = dlsym(handle, procName);
+        if (nullptr == addr)
+        {
+            void* (*icd_addr)(uint64_t, const char*) = nullptr;
+            *(void**)(&icd_addr) = dlsym(handle, "vk_icdGetInstanceProcAddr");
+            if (icd_addr)
+            {
+                icd = true;
+                addr = (*icd_addr)(0, procName);
+            }
+        }
+    }
+    return addr;
+}
+
 auto DriverInitializer::getPlatformDriverProc (const char* procName) -> std::add_pointer_t<void>
 {
     const int flags = RTLD_NOLOAD | RTLD_LAZY;
@@ -343,10 +368,15 @@ auto DriverInitializer::getPlatformDriverProc (const char* procName) -> std::add
     void* handle = dlopen(VULKAN_DRIVER, flags);
 #endif
 
+    bool icdAccess = false;
+    void* addr = ::getPlatformDriverProc(procName, handle, icdAccess);
+
     if (getVtfVerboseMode())
     {
         std::cout << "[DRIVER] " << __func__
                   << "(handle=" << handle << ", name=" << std::quoted(procName) << ')';
+
+	    std::cout << " = " << addr << (addr ? icdAccess ? " ICD" : " API" : "");
 	    if (handle)
 	    {
             std::cout << ", lib=" << readLibraryPath(handle);
@@ -355,6 +385,6 @@ auto DriverInitializer::getPlatformDriverProc (const char* procName) -> std::add
 	    std::cout << std::endl;
     }
 
-    return handle ? dlsym(handle, procName) : nullptr;
+    return addr;
 }
 

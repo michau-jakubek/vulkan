@@ -48,7 +48,7 @@ static ZBuffer	createBuffer (ZDevice					device,
 	bufferInfo.usage		= VkBufferUsageFlags(usage) | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 	bufferInfo.sharingMode	= VK_SHARING_MODE_EXCLUSIVE;
 
-	VKASSERT(vkCreateBuffer(*device, &bufferInfo, callbacks, &handle), "failed to create buffer!");
+	VKASSERTMSG(vkCreateBuffer(*device, &bufferInfo, callbacks, &handle), "failed to create buffer!");
 
 	VkMemoryRequirements memRequirements;
 	vkGetBufferMemoryRequirements(*device, handle, &memRequirements);
@@ -57,7 +57,7 @@ static ZBuffer	createBuffer (ZDevice					device,
 	if (false == sparse)
 	{
 		for (add_ref<ZDeviceMemory> alloc : allocations)
-			VKASSERT2(vkBindBufferMemory(*device, handle, *alloc, 0));
+			VKASSERT(vkBindBufferMemory(*device, handle, *alloc, 0));
 	}
 
 	return ZBuffer::create(handle, device, callbacks, bufferInfo, allocations, size, type, extent, format);
@@ -112,8 +112,8 @@ void bufferBindMemory (ZBuffer buffer, ZQueue sparseQueue)
 	ZFence			fence = createFence(device);
 	add_cptr<char>	error = "failed to bind sparse buffer allocations";
 
-	VKASSERT(vkQueueBindSparse(*sparseQueue, 1u, &bindInfo, *fence), error);
-	VKASSERT(vkWaitForFences(*device, 1u, fence.ptr(), VK_TRUE, INVALID_UINT64), error);
+	VKASSERTMSG(vkQueueBindSparse(*sparseQueue, 1u, &bindInfo, *fence), error);
+	VKASSERTMSG(vkWaitForFences(*device, 1u, fence.ptr(), VK_TRUE, INVALID_UINT64), error);
 }
 
 ZBuffer	createTypedBuffer (ZDevice device, type_index_with_default type, VkDeviceSize size,
@@ -272,7 +272,7 @@ VkDeviceSize bufferWriteData (ZBuffer buffer, const uint8_t* src, const VkBuffer
 	ASSERTION((copy.dstOffset + copy.size) <= bufferSize);
 
 	uint8_t* dst = nullptr;
-	VKASSERT2(vkMapMemory(*device, *memory, copy.dstOffset, copy.size, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&dst)));
+	VKASSERT(vkMapMemory(*device, *memory, copy.dstOffset, copy.size, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&dst)));
 	ASSERTION(dst != nullptr);
 
 	std::copy(src, std::next(src, make_signed(copy.size)), dst);
@@ -284,7 +284,7 @@ VkDeviceSize bufferWriteData (ZBuffer buffer, const uint8_t* src, const VkBuffer
 		range.memory	= *memory;
 		range.offset	= copy.dstOffset;
 		range.size		= copy.size;
-		VKASSERT2(vkFlushMappedMemoryRanges(*device, 1, &range));
+		VKASSERT(vkFlushMappedMemoryRanges(*device, 1, &range));
 	}
 
 	vkUnmapMemory(*device, *memory);
@@ -320,7 +320,7 @@ VkDeviceSize bufferReadData (ZBuffer buffer, uint8_t* dst, const VkBufferCopy& c
 	ASSERTMSG((copy.srcOffset + copy.size) <= bufferSize, "Too long data requested to copy from buffer");
 
 	uint8_t* src = nullptr;
-	VKASSERT2(vkMapMemory(*device, *memory, copy.srcOffset, copy.size, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&src)));
+	VKASSERT(vkMapMemory(*device, *memory, copy.srcOffset, copy.size, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&src)));
 
 	if ((props & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
 	{
@@ -329,7 +329,7 @@ VkDeviceSize bufferReadData (ZBuffer buffer, uint8_t* dst, const VkBufferCopy& c
 		range.memory	= *memory;
 		range.offset	= copy.srcOffset;
 		range.size		= copy.size;
-		VKASSERT2(vkInvalidateMappedMemoryRanges(*device, 1, &range));
+		VKASSERT(vkInvalidateMappedMemoryRanges(*device, 1, &range));
 	}
 
 	std::copy(src, std::next(src, make_signed(copy.size)), dst);
@@ -354,10 +354,10 @@ void bufferFlush (ZBuffer buffer)
 		range.size		= VK_WHOLE_SIZE;
 
 		void* dst = nullptr;
-		VKASSERT2(vkMapMemory(*device, *memory, 0, bufferSize, (VkMemoryMapFlags)0, &dst));
+		VKASSERT(vkMapMemory(*device, *memory, 0, bufferSize, (VkMemoryMapFlags)0, &dst));
 		ASSERTION(dst != nullptr);
 
-		VKASSERT(vkFlushMappedMemoryRanges(*device, 1, &range), "");
+		VKASSERT(vkFlushMappedMemoryRanges(*device, 1, &range));
 
 		vkUnmapMemory(*device, *memory);
 	}
@@ -529,7 +529,7 @@ BufferTexelAccess_::BufferTexelAccess_ (ZBuffer buffer, uint32_t elementSize, ui
 	ASSERTION(usage & (VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT));
 	const VkMemoryPropertyFlags	flags = bufferGetMemory(buffer, 0u).getParam<VkMemoryPropertyFlags>();
 	ASSERTION(flags & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
-	VKASSERT2(vkMapMemory(*buffer.getParam<ZDevice>(), *buffer.getParam<std::vector<ZDeviceMemory>>().front(),
+	VKASSERT(vkMapMemory(*buffer.getParam<ZDevice>(), *buffer.getParam<std::vector<ZDeviceMemory>>().front(),
 						  0u, bufferGetMemorySize(buffer), (VkMemoryMapFlags)0, reinterpret_cast<void**>(&m_data)));
 }
 BufferTexelAccess_::~BufferTexelAccess_ ()
