@@ -76,9 +76,9 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 			&VkPhysicalDeviceSubgroupProperties::supportedStages, false,
 			VK_SHADER_STAGE_FRAGMENT_BIT, true, "supportedStages doesn't contain VK_SHADER_STAGE_FRAGMENT_BIT");
 
-		caps.addFeature(DemoteFeatures(), true)
-			.checkNotSupported(&DemoteFeatures::shaderDemoteToHelperInvocation,
-				true, "shaderDemoteToHelperInvocation");
+		caps.addUpdateFeature<DemoteFeatures>()
+				.checkNotSupported(&DemoteFeatures::shaderDemoteToHelperInvocation,
+					"shaderDemoteToHelperInvocation");
 	};
 	auto [status, params, err] = Params::parseCommandLine(cmdLineParams);
 	switch (status)

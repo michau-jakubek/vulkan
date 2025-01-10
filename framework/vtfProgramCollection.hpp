@@ -16,6 +16,7 @@ struct _GlSpvProgramCollection
 	enum StageToCode
 	{
 		shaderCode = 0,
+		header,
 		entryName,
 		fileName,
 		includePaths

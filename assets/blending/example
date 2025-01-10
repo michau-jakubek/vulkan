@@ -2,9 +2,8 @@
 # All empty lines will be ignored
 # All parameters must fit on one line
 
--bkg-color 0,1,0,0.6 -color0 1,0,0,0.6
--bkg-color 1,0,0,0.6 -color0 0,1,0,0.6
+-color0 1,0,0,1 -color1 0,1,0,1 -src-color-factor src_color -dst-color-factor dst_color -src-alpha-factor factor_one -dst-alpha-factor factor_zero
 
--dual-source -bkg-color 0,1,0,0.6 -color0 1,0,0,0.6 -color1 0,1,0,0.6 -dst-color-factor minus_src1_alpha
--dual-source -bkg-color 1,0,0,0.6 -color0 0,1,0,0.6 -color1 1,0,0,0.6 -dst-color-factor minus_src1_alpha
+-color0 1,0,0,1 -color1 0,1,0,1 -src-alpha-factor factor_one -dst-alpha-factor factor_zero -src-color-factor src_color -dual-source -dst-color-factor factor_src1_color
 
+-color0 1,0,0,0.5 -color1 0,1,0,0.5 -src-alpha-factor factor_one -dst-alpha-factor factor_one -src-color-factor src1_color -dual-source -dst-color-factor factor_dst_color

@@ -18,12 +18,12 @@ VkAllocationCallbacks* getAllocationCallbacks()
 
 void writeExpression (
 	add_ref<std::ostringstream> ss,
-	const char*				func,
-	const char*				file,
-	int						line,
-    const char*				expr,
-	VkResult				res,
-	std::string::size_type	ind)
+	const char*	func,
+	const char*	file,
+	int			line,
+    const char*	expr,
+	VkResult	res,
+	int			ind)
 {
 	ss << "ASSERT: In \"" << func << "\"" << std::endl;
 	ss << "  from \"" << file << "\" at " << line << " line" << std::endl;

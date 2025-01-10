@@ -47,18 +47,19 @@ struct OptionInterface : public Option
 		, m_parseState	(false)
 		, m_touched		(false) {}
 	virtual ~OptionInterface () = default;
+	using mptr = add_ptr<OptionInterface>;
 
 	virtual	auto	getName			() const -> add_cref<std::string>	= 0;
 	virtual auto	getType			() const -> std::type_index			= 0;
 	virtual auto	getDTypeName	() const -> std::string             = 0; // demangle type name
 	auto			getDesc			() const -> add_cref<std::string>	{ return m_desc; }
-	void			setDesc			(add_cref<std::string> desc)		{ m_desc = desc; }
+	mptr			setDesc			(add_cref<std::string> desc)		{ m_desc = desc; return this;}
 	auto			getFlags		() const -> add_cref<OptionFlags>	{ return m_flags; }
-	void			setFlags		(add_cref<OptionFlags> flags)		{ m_flags = flags; }
+	mptr			setFlags		(add_cref<OptionFlags> flags)		{ m_flags = flags; return this;}
 	auto			getTypeName		() const -> add_cref<std::string>	{ return m_typeName; }
-	void			setTypeName		(add_cref<std::string> typeName)	{ m_typeName = typeName; }
+	mptr			setTypeName		(add_cref<std::string> typeName)	{ m_typeName = typeName; return this;}
 	auto			getDefault		() const -> add_cref<std::string>	{ return m_default; }
-	void			setDefault		(add_cref<std::string> def)			{ m_default = def; }
+	mptr			setDefault		(add_cref<std::string> def)			{ m_default = def; return this;}
 	auto			getTouched		() const -> bool					{ return m_touched; }
 
 	struct DefaultWriter			{ add_cref<OptionInterface> intf; };
@@ -87,6 +88,23 @@ inline add_ref<std::ostream> operator<< (add_ref<std::ostream> str, add_cref<Opt
 	return ow.intf.writeValue(str);
 }
 
+#define DEF_OPTION_TYPE_NAME(type__, name__) \
+	template<> struct OptionTypeName<type__> { \
+		std::string get () const { return name__; } }
+template<class X> struct OptionTypeName
+{
+	std::string get () const { return demangledName<X>(); }
+};
+DEF_OPTION_TYPE_NAME(std::string, "text");
+DEF_OPTION_TYPE_NAME(int32_t, "int");
+DEF_OPTION_TYPE_NAME(uint32_t, "uint");
+DEF_OPTION_TYPE_NAME(float, "float");
+DEF_OPTION_TYPE_NAME(double, "double");
+template<class X, size_t N> struct OptionTypeName<VecX<X, N>>
+{
+	std::string get () const { return (OptionTypeName<X>().get().substr(0, 1) + "vec" + std::to_string(N)); }
+};
+
 typedef std::shared_ptr<OptionInterface> _OptIPtr;
 typedef std::vector<_OptIPtr> _OptIPtrVec;
 
@@ -97,7 +115,7 @@ struct OptionT : public OptionInterface
 							add_cref<OptionT<X>>		sender,
 							add_ref<bool>				status,
 							add_ref<OptionParserState>	state)> parse_cb;
-	typedef std::function<std::string(add_cref<OptionT<X>>	sender)> format_cb;										
+	typedef std::function<std::string(add_cref<OptionT<X>> sender)> format_cb;
 
 	OptionT (add_ref<X> storage, add_cref<Option> opt, add_cref<std::string> desc, std::optional<X> def,
 			OptionFlags flags, parse_cb parseCallback, format_cb formatCallback)
@@ -129,7 +147,7 @@ struct OptionT : public OptionInterface
 	virtual bool parse			(add_cref<std::string> text, add_ref<OptionParserState> state) override;
 	virtual auto getName		() const -> add_cref<std::string> override { return m_name; }
 	virtual auto getType		() const -> std::type_index override { return std::type_index(typeid(X)); }
-	virtual auto getDTypeName	() const -> std::string override {	return demangledName<X>(); }
+	virtual auto getDTypeName	() const -> std::string override {	return OptionTypeName<X>().get(); }
 	virtual auto writeDefault	(add_ref<std::ostream> str) const -> add_ref<std::ostream> override;
 	virtual auto writeValue		(add_ref<std::ostream> str) const -> add_ref<std::ostream> override;
 	add_ref<X>				m_storage;
@@ -153,9 +171,11 @@ struct OptionParserState
 
 struct _OptionParserImpl
 {
+	typedef std::function<bool(std::shared_ptr<OptionInterface> option, add_cref<std::string> value, add_ref<OptionParserState> state)> parse_cb;
+
 	_OptionParserImpl (bool includeHelp = true);
 	_OptionParserImpl (_OptionParserImpl&& other) noexcept;
-	auto	parse (add_cref<strings> cmdLineParams, bool allMustBeConsumed = true) -> strings;
+	auto	parse (add_cref<strings> cmdLineParams, bool allMustBeConsumed = true, parse_cb = {}) -> strings;
 	void	printOptions (add_ref<std::ostream> str, uint32_t descWidth = 40u, uint32_t indent = 2u) const;
 	auto	getMaxOptionNameLength (bool includeTypeName = false, bool onlyTouched = false) const -> uint32_t;
 	auto	getState() const -> add_cref<OptionParserState> { return m_state; }
@@ -174,6 +194,9 @@ protected:
 template<class UserParamsType>
 struct OptionParser : public _OptionParserImpl
 {
+	typedef std::function<bool(add_ref<UserParamsType> parser,
+		std::shared_ptr<OptionInterface> option, add_cref<std::string> value, add_ref<OptionParserState> state)> parse_cb;
+
 	OptionParser (OptionParser&& other) noexcept;
 	OptionParser (add_ref<UserParamsType> params, bool includeHelp = true);
 	template<class X> _OptIPtr	addOption	(X UserParamsType::* storage, add_cref<Option> opt,

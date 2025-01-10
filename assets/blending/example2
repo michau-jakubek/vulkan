@@ -1,0 +1,34 @@
+-format r5g6b5_unorm_pack16 -state "color_1msc_1ms1a_add_alpha_sc_o_sub" -dual-source
+
+-format a1r5g5b5_unorm_pack16 -state "color_o_s1a_add_alpha_sa_dc_sub" -dual-source
+
+-format r8_unorm -state "color_1msc_1ms1a_add_alpha_sc_o_sub" -dual-source
+
+-format r8_snorm -state "color_1msc_1ms1a_add_alpha_sc_o_sub" -dual-source
+
+-format r8g8_unorm -state "color_1msc_1ms1a_add_alpha_sc_o_sub" -dual-source
+
+-format r8g8_snorm -state "color_1msc_1ms1a_add_alpha_sc_o_sub" -dual-source
+
+-format a2r10g10b10_unorm_pack32 -state "color_o_s1a_add_alpha_1mda_dc_sub" -dual-source
+
+-format a2b10g10r10_unorm_pack32  -state "color_o_s1a_add_alpha_1mda_dc_sub" -dual-source
+
+-format r16_unorm -state "color_1msc_1ms1a_add_alpha_sc_o_sub" -dual-source
+
+-format r16_snorm -state "color_1msc_1ms1a_add_alpha_sc_o_sub" -dual-source
+
+-format r16_sfloat -state "color_1msc_1ms1a_add_alpha_sc_o_sub" -dual-source
+
+-format r16g16_unorm -state "color_1msc_1ms1a_add_alpha_sc_o_sub" -dual-source
+
+-format r16g16_snorm -state "color_1msc_1ms1a_add_alpha_sc_o_sub" -dual-source
+
+-format r16g16_sfloat -state "color_1msc_1ms1a_add_alpha_sc_o_sub" -dual-source
+
+-format r32_sfloat -state "color_1msc_1ms1a_add_alpha_sc_o_sub" -dual-source
+
+-format r32g32_sfloat -state "color_1msc_1ms1a_add_alpha_sc_o_sub" -dual-source
+
+-format b10g11r11_ufloat_pack32 -state "color_1msc_1ms1a_add_alpha_sc_o_sub" -dual-source
+

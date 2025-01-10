@@ -118,11 +118,7 @@ TriLogicInt prepareTest (add_cref<TestRecord> record, add_cref<strings> commandL
 	bool		enableFloat64 = false;
 	auto onGetEnabledFeatures = [&](add_ref<DeviceCaps> caps)
 	{
-		VkPhysicalDeviceFeatures features{};
-		auto f10 = caps.addFeature(features, true);
-		enableFloat64 = f10.checkNotSupported(&VkPhysicalDeviceFeatures::shaderFloat64, false);
-		features.shaderFloat64 = enableFloat64 ? VK_TRUE : VK_FALSE;
-		caps.replaceFeature(features);
+		enableFloat64 = caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::shaderFloat64);
 	};
 
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
@@ -417,7 +413,7 @@ void onScroll (Canvas& canvas, void* userData, double xScrollOffset, double yScr
 
 		VecX<Float,2> oldPoint;
 		Canvas::Area<Float> a = areaFromPC(ui->pc);
-		canvas.windowToUser(a, VecX<Float,2>(ui->xCursor, (height - ui->yCursor)), oldPoint);
+		canvas.windowToUser(a, VecX<Float,2>(ui->xCursor, ui->yCursor), oldPoint, true);
 
 		a.scale(scale);
 		VecX<Float,2> newPoint = oldPoint * scale;

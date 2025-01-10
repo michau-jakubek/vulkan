@@ -34,11 +34,12 @@ ZDevice			getSharedDevice ();
 ZInstance		getSharedInstance ();
 ZPhysicalDevice	getSharedPhysicalDevice ();
 
+strings			upgradeInstanceExtensions (add_cref<strings> desiredExtensions);
 ZInstance		createInstance (const char*							appName,
 								VkAllocationCallbacksPtr			callbacks,
 								const strings&						desiredLayers = {},
 								const strings&						desiredExtensions = {},
-								uint32_t							apiVersion = VK_API_VERSION_1_0,
+								uint32_t							apiVersion = VK_API_VERSION_1_1,
 								bool								enableDebugPrintf = false);
 ZPhysicalDevice	getPhysicalDeviceByIndex	(ZInstance									instance,
 											 uint32_t									physicalDeviceIndex);
@@ -47,6 +48,7 @@ ZPhysicalDevice selectPhysicalDevice		(const int									proposedDeviceIndex,
 											 add_cref<strings>							requiredExtensions,
 											 ZSurfaceKHR								surface = ZSurfaceKHR());
 
+strings			upgradeDeviceExtensions (add_cref<strings> desiredExtensions);
 typedef std::function<void(add_ref<DeviceCaps>)> OnEnablingFeatures;
 ZDevice			createLogicalDevice	(ZPhysicalDevice		physDevice,
 									 OnEnablingFeatures		onEnablingFeatures,

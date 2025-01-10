@@ -37,38 +37,7 @@
 namespace vtf
 {
 
-namespace
-{
-strings upgradeInstanceExtensions (add_cref<strings> desiredExtensions)
-{
-	strings e = desiredExtensions;
-	const strings exts = enumerateInstanceExtensions();
-	auto addExt = [&](std::string ext) -> void
-	{
-		if (containsString(exts, ext))
-			e.emplace_back(std::move(ext));
-	};
-
-	addExt("VK_KHR_surface");
-#if SYSTEM_OS_WINDOWS == 1
-	addExt("VK_KHR_win32_surface");
-#elif SYSTEM_OS_LINUX == 1
-	addExt("VK_KHR_xcb_surface");
-	addExt("VK_KHR_xlib_surface");
-#endif
-	return e;
-}
-
-strings upgradeDeviceExtensions (add_cref<strings> desiredExtensions)
-{
-	strings e = desiredExtensions;
-	e.push_back("VK_KHR_swapchain");
-	return e;
-}
-
-} // unnamed namespace
-
-void GlfwInitializerFinalizer::init(ZInstance instance)
+void GlfwInitializerFinalizer::init (ZInstance instance)
 {
 	UNREF(instance);
 	if (!m_initialized)
@@ -83,7 +52,7 @@ void GlfwInitializerFinalizer::init(ZInstance instance)
 	}
 }
 
-GlfwInitializerFinalizer::GlfwInitializerFinalizer(ZInstance instance, bool initialize)
+GlfwInitializerFinalizer::GlfwInitializerFinalizer (ZInstance instance, bool initialize)
 	: m_initialized(false)
 {
 	if (initialize) init(instance);
@@ -378,15 +347,16 @@ uint32_t Canvas::SurfaceDetails::selectFormat (ZPhysicalDevice physDevice, VkFor
 }
 
 Canvas::BackBuffer::BackBuffer (ZCommandPool renderPool, ZCommandPool blitPool)
-	: imageIndex		(INVALID_UINT32)
+	: device(renderPool.getParam<ZDevice>())
+	, imageIndex		(INVALID_UINT32)
 	, blitImage			()
-	, blitCommand		(::vtf::createCommandBuffer(blitPool))
-	, blitFence			(::vtf::createFence(blitPool.getParam<ZDevice>(), false))
-	, acquireSemaphore	(::vtf::createSemaphore(renderPool.getParam<ZDevice>()))
-	, renderSemaphore	(::vtf::createSemaphore(renderPool.getParam<ZDevice>()))
-	, presentFence		(::vtf::createFence(renderPool.getParam<ZDevice>(), false))
-	, renderCommand		(::vtf::createCommandBuffer(renderPool))
-	, renderFence		(::vtf::createFence(renderPool.getParam<ZDevice>(), false))
+	, blitCommand		(createCommandBuffer(blitPool))
+	, blitFence			(createFence(device, false))
+	, acquireSemaphore	(createSemaphore(device))
+	, renderSemaphore	(createSemaphore(device))
+	, presentFence		(createFence(device, false))
+	, renderCommand		(createCommandBuffer(renderPool))
+	, renderFence		(createFence(device, false))
 	, threadIndex		(INVALID_UINT32)
 	, threadID			(std::this_thread::get_id())
 {
@@ -411,7 +381,8 @@ add_ref<Canvas::BackBuffer> Canvas::BackBuffer::operator=(add_cref<BackBuffer> s
 }
 
 Canvas::BackBuffer::BackBuffer (add_cref<BackBuffer> src)
-	: imageIndex		(src.imageIndex)
+	: device			(src.device)
+	, imageIndex		(src.imageIndex)
 	, blitImage			(src.blitImage)
 	, blitCommand		(src.blitCommand)
 	, blitFence			(src.blitFence)
@@ -424,6 +395,11 @@ Canvas::BackBuffer::BackBuffer (add_cref<BackBuffer> src)
 	, threadID			(src.threadID)
 {
 	*this = src;
+}
+
+void Canvas::BackBuffer::recreateAcquireSemaphore ()
+{
+	acquireSemaphore = createSemaphore(device);
 }
 
 uint32_t Canvas::getPresentQueueFamilyIndex () const
@@ -692,6 +668,7 @@ Canvas::BackBuffer Canvas::acquireBackBuffer (add_ref<std::queue<BackBuffer>>	bu
 			}
 			updateExtent();
 			swapchain.recreate(swapchain.renderPass, acquirableImageCount, m_width, m_height, true);
+			buffer->recreateAcquireSemaphore();
 		}
 		else
 		{

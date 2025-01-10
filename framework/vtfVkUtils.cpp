@@ -15,6 +15,8 @@
 namespace vtf
 {
 
+// Unfortunately not thread-safe
+static char vkResultToStringBuffer[64];
 std::string vkResultToString (VkResult res)
 {
 	return vk::to_string(static_cast<vk::Result>(res));

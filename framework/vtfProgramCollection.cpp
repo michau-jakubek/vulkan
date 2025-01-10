@@ -590,7 +590,9 @@ bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 					   bool genBinary)
 {
 	add_cref<std::string> shaderCode = codeAndEntryAndIncludes[ProgramCollection::StageToCode::shaderCode];
-	const bool isGlsl = shaderCode.find("#version") != std::string::npos;
+	add_cref<std::string> codeFileName = codeAndEntryAndIncludes[ProgramCollection::StageToCode::fileName];
+	add_cref<std::string> shaderHdr = codeAndEntryAndIncludes[ProgramCollection::StageToCode::header];
+	const bool isGlsl = shaderHdr.find("#version") != std::string::npos;
 
 	bool status = false;
 	std::stringstream errorCollection;
@@ -607,9 +609,16 @@ bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 	const std::string compilerExecutable = getCompilerExecutable();
 	if (!fs::exists(textPath))
 	{
-		std::ofstream textFile(textPath.c_str());
-		ASSERTMSG(textFile.is_open(), textPath.string());
-		textFile << shaderCode;
+		if (shaderCode.empty())
+		{
+			fs::copy_file(fs::path(codeFileName), textPath, fs::copy_options::overwrite_existing);
+		}
+		else
+		{
+			std::ofstream textFile(textPath.c_str());
+			ASSERTMSG(textFile.is_open(), textPath.string());
+			textFile << shaderCode;
+		}
 	}
 	if (gf.verbose)
 	{
@@ -758,6 +767,8 @@ bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 		}
 		else
 		{
+			std::error_code ec;
+			fs::remove(textPath, ec);
 			errorCollection << result << std::endl;
 		}
 	}
@@ -783,9 +794,12 @@ _GlSpvProgramCollection::_GlSpvProgramCollection (ZDevice device, add_cref<std::
 void _GlSpvProgramCollection::addFromText (VkShaderStageFlagBits type, add_cref<std::string> code,
 										   add_cref<strings> includePaths, add_cref<std::string> entryName)
 {
+	std::string header;
+	std::copy_n(code.begin(), 20, std::back_inserter(header));
 	const auto key = std::make_pair(type, m_stageToCount[type]++);
-	// [0]: glsl code, [1]: entry name, [2] file name, [3...]: include path(s)
+	// [0]: glsl code, [1]: header, [2]: entry name, [3] file name, [4...]: include path(s)
 	m_stageToCode[key].push_back(code);
+	m_stageToCode[key].push_back(header);
 	m_stageToCode[key].push_back(entryName);
 	m_stageToCode[key].push_back(std::string());
 	for (size_t p = 0; p < includePaths.size(); ++p)
@@ -798,16 +812,20 @@ bool _GlSpvProgramCollection::addFromFile (VkShaderStageFlagBits type,
 {
 	bool				result			(false);
 	const fs::path		basePath		(m_basePath);
-	const std::string	source_name		((basePath / fileName).string());
+	const fs::path		sourcePath		= basePath / fileName;
+	const std::string	source_name		(sourcePath.string());
 	std::ifstream		source_handle	(source_name);
 	if (source_handle.is_open())
 	{
 		std::istreambuf_iterator<char> end, begin(source_handle);
-		std::string source_content = std::string(begin, end);
+		//std::string source_content = std::string(begin, end);
+		std::string header;
+		std::copy_n(begin, 20, std::back_inserter(header));
 		source_handle.close();
 		const auto key = std::make_pair(type, m_stageToCount[type]++);
-		// [0]: glsl code, [1]: entry name, [2] file name, [3...]: include path(s)
-		m_stageToCode[key].push_back(source_content);
+		// [0]: glsl code, [1]: header, [2]: entry name, [3] file name, [4...]: include path(s)
+		m_stageToCode[key].push_back(std::string());
+		m_stageToCode[key].push_back(header);
 		m_stageToCode[key].push_back(entryName);
 		m_stageToCode[key].push_back(source_name);
 		for (size_t p = 0; p < includePaths.size(); ++p)

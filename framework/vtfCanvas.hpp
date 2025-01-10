@@ -114,6 +114,7 @@ public:
 
 	struct BackBuffer
 	{
+		ZDevice			device;
 		uint32_t		imageIndex;
 		ZImage			blitImage;
 		ZCommandBuffer	blitCommand;
@@ -129,6 +130,7 @@ public:
 		BackBuffer (ZCommandPool renderPool, ZCommandPool blitPool);
 		BackBuffer (add_cref<BackBuffer>);
 		add_ref<BackBuffer> operator=(add_cref<BackBuffer>);
+		void recreateAcquireSemaphore ();
 	};
 
 	template<class Float> struct Area
@@ -142,6 +144,13 @@ public:
 		Float width () const;
 		Float height () const;
 		Area () : xMin(), xMax(), yMin(), yMax() {}
+		Area (Float XMin, Float XMax, Float YMin, Float YMax)
+			: xMin(XMin), xMax(XMax), yMin(YMin), yMax(YMax) {}
+		static auto userArea() { return Area<float>(-1.0f, +1.0f, -1.0f, +1.0f); }
+		template<class W> auto windowArea(add_cref<Canvas> canvas)
+		{
+			return Area<W>(W(0), W(canvas.width), W(0), W(canvas.height));
+		}
 	};
 
 	static const CanvasStyle DefaultStyle; // 800,600,0,1,true,true
@@ -203,8 +212,12 @@ public:
 	int						run					(OnSubcommandRecordingThenBlit	onCommandRecordingThenBlit,
 												 add_cref<std::vector<ZQueue>>	threadQueues);
 
-	template<class F> bool	userToWindow		(const Area<F>& userArea, const VecX<F,2>& userPoint, VecX<F,2>& windowPoint) const;
-	template<class F> bool	windowToUser		(const Area<F>& userArea, const VecX<F,2>& windowPoint, VecX<F,2>& userPoint) const;
+	template<class U, class W = U>
+	void	userToWindow		(const Area<U>& userArea, const VecX<U,2>& userPoint, VecX<W,2>& windowPoint,
+															bool invertY = false) const;
+	template<class W, class U = W>
+	void	windowToUser		(const Area<U>& userArea, const VecX<W,2>& windowPoint, VecX<U,2>& userPoint,
+															bool invertY = false) const;
 
 protected:
 
@@ -243,24 +256,30 @@ protected:
 	static int						m_drawTrigger;
 };
 
-template<class Float>
-bool Canvas::userToWindow (const Canvas::Area<Float>& userArea, const VecX<Float,2>& userPoint, VecX<Float,2>& windowPoint) const
+template<class UType, class WType>
+void Canvas::userToWindow (
+	const Canvas::Area<UType>&	userArea,
+	const VecX<UType,2>&		userPoint,
+	VecX<WType,2>&				windowPoint,
+	bool						invertY) const
 {
-	windowPoint.x( ((userPoint.x() - userArea.xMin) / userArea.width()) * float(width) );
-	windowPoint.y( ((userPoint.y() - userArea.yMin) / userArea.height()) * float(height) );
-	return true;
+	transformDistance(userArea.xMin, userArea.xMax, userPoint.x(), WType(0u), WType(width), windowPoint.x(), false);
+	transformDistance(userArea.yMin, userArea.yMax, userPoint.y(), WType(0u), WType(height), windowPoint.y(), invertY);
 }
 
-template<class Float>
-bool Canvas::windowToUser (const Canvas::Area<Float>& userArea, const VecX<Float,2>& windowPoint, VecX<Float,2>& userPoint) const
+template<class WType, class UType>
+void Canvas::windowToUser (
+	const Canvas::Area<UType>&	userArea,
+	const VecX<WType,2>&		windowPoint,
+	VecX<UType,2>&				userPoint,
+	bool						invertY) const
 {
-	userPoint.x( (windowPoint.x() / static_cast<Float>(width)) * userArea.width() + userArea.xMin );
-	userPoint.y( (windowPoint.y() / static_cast<Float>(height)) * userArea.height() + userArea.yMin );
-	return true;
+	transformDistance(WType(0u), WType(width), windowPoint.x(), userArea.xMin, userArea.xMax, userPoint.x(), false);
+	transformDistance(WType(0u), WType(height), windowPoint.y(), userArea.yMin, userArea.yMax, userPoint.y(), invertY);
 }
 
-template<class Float> Float Canvas::Area<Float>::width () const { return xMax - xMin; }
-template<class Float> Float Canvas::Area<Float>::height () const { return yMax - yMin; }
+template<class Float> Float Canvas::Area<Float>::width () const { return std::abs(xMax - xMin); }
+template<class Float> Float Canvas::Area<Float>::height () const { return std::abs(yMax - yMin); }
 template<class Float> void Canvas::Area<Float>::scale (Float f)
 {
 	xMin *= f;

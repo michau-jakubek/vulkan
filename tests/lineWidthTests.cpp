@@ -130,10 +130,8 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 
 	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
-		VkPhysicalDeviceFeatures f{};
-		auto f10 = caps.addFeature(f, true);
-		f.wideLines = f10.checkNotSupported(&VkPhysicalDeviceFeatures::wideLines, true, "wideLines");
-		caps.replaceFeature(f);
+		caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::wideLines)
+			.checkNotSupported(&VkPhysicalDeviceFeatures::wideLines, true, "wideLines");
 	};
 
 	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFeatures, gf.apiVer);

@@ -130,7 +130,7 @@ void _OptionParserImpl::addHelpOpts ()
 		comment, false, OptionFlags(), typename OptionT<bool>::parse_cb(), typename OptionT<bool>::format_cb()));
 }
 
-strings _OptionParserImpl::parse (add_cref<strings> cmdLineParams, bool allMustBeConsumed)
+strings _OptionParserImpl::parse (add_cref<strings> cmdLineParams, bool allMustBeConsumed, parse_cb onParsing)
 {
 	strings sink, args(cmdLineParams);
 	const std::string truestring("true");
@@ -140,7 +140,10 @@ strings _OptionParserImpl::parse (add_cref<strings> cmdLineParams, bool allMustB
 	{
 		if (consumeOptions(*opt, opts, args, sink) > 0)
 		{
-			opt->parse((opt->follows == 0) ? truestring : sink.back(), m_state);
+			if (false == (onParsing && onParsing(opt, (opt->follows == 0) ? truestring : sink.back(), m_state)))
+			{
+				opt->parse((opt->follows == 0) ? truestring : sink.back(), m_state);
+			}
 		}
 	}
 	if (allMustBeConsumed && !args.empty())

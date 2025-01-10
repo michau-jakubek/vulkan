@@ -23,10 +23,10 @@ TriLogicInt runTest(const TestRecord& record, const strings& cmdLineParams)
 
 		has10 = caps.hasPhysicalDeviceFeatures10();
 		has20 = caps.hasPhysicalDeviceFeatures20();
-		caps.addFeature(VkPhysicalDeviceFeatures(), true);
+		caps.addUpdateFeature(VkPhysicalDeviceFeatures());
 		try
 		{
-			caps.addFeature(VkPhysicalDeviceFeatures());
+			caps.addUpdateFeature(VkPhysicalDeviceFeatures());
 		}
 		catch (...)
 		{
@@ -35,7 +35,7 @@ TriLogicInt runTest(const TestRecord& record, const strings& cmdLineParams)
 		}
 		has10 = caps.hasPhysicalDeviceFeatures10();
 		has20 = caps.hasPhysicalDeviceFeatures20();
-		caps.addFeature(VkPhysicalDeviceFeatures2(), true);
+		caps.addUpdateFeature(VkPhysicalDeviceFeatures2());
 		has10 = caps.hasPhysicalDeviceFeatures10();
 		has20 = caps.hasPhysicalDeviceFeatures20();
 		has20 = caps.removeFeature< VkPhysicalDeviceFeatures2>();

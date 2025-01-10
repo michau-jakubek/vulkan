@@ -460,46 +460,42 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 	{
 		if (params.flags.terminateInvocation)
 		{
-			auto f = caps.addFeature(VkPhysicalDeviceShaderTerminateInvocationFeatures(), true);
-			f.checkNotSupported(&VkPhysicalDeviceShaderTerminateInvocationFeatures::shaderTerminateInvocation,
-								true, "shaderTerminateInvocation");
+			caps.addUpdateFeature<VkPhysicalDeviceShaderTerminateInvocationFeatures>()
+				.checkNotSupported(&VkPhysicalDeviceShaderTerminateInvocationFeatures::shaderTerminateInvocation,
+								   true, "shaderTerminateInvocation");
 		}
 		if (params.flags.demoteInvocation)
 		{
-			auto f = caps.addFeature(VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures(), true);
-			f.checkNotSupported(&VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures::shaderDemoteToHelperInvocation,
-								true, "shaderDemoteToHelperInvocation");
+			caps.addUpdateFeature<VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures>()
+				.checkNotSupported(&VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures::shaderDemoteToHelperInvocation,
+								   true, "shaderDemoteToHelperInvocation");
 		}
 
-		VkPhysicalDeviceFeatures f10{};
-		auto f = caps.addFeature(f10, true);
 		if (params.flags.tessellation)
 		{
-			f10.tessellationShader = f.checkNotSupported(&VkPhysicalDeviceFeatures::tessellationShader,
-															true, "tessellationShader");
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::tessellationShader)
+				.checkNotSupported(&VkPhysicalDeviceFeatures::tessellationShader, true, "tessellationShader");
 		}
 		if (params.flags.geometry)
 		{
-			f10.geometryShader = f.checkNotSupported(&VkPhysicalDeviceFeatures::geometryShader,
-														true, "geometryShader");
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::geometryShader)
+				.checkNotSupported(&VkPhysicalDeviceFeatures::geometryShader, true, "geometryShader");
 		}
 		if (params.flags.shaderFloat64)
 		{
-			f10.shaderFloat64 = f.checkNotSupported(&VkPhysicalDeviceFeatures::shaderFloat64,
-													true, "shaderFloat64");
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::shaderFloat64)
+				.checkNotSupported(&VkPhysicalDeviceFeatures::shaderFloat64, true, "shaderFloat64");
 		}
 		if (params.flags.shaderInt64)
 		{
-			f10.shaderInt64 = f.checkNotSupported(&VkPhysicalDeviceFeatures::shaderInt64,
-													true, "shaderInt64");
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::shaderInt64)
+				.checkNotSupported(&VkPhysicalDeviceFeatures::shaderInt64, true, "shaderInt64");
 		}
 		if (params.flags.shaderInt16)
 		{
-			f10.shaderInt16 = f.checkNotSupported(&VkPhysicalDeviceFeatures::shaderInt16,
-													true, "shaderInt16");
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::shaderInt16)
+				.checkNotSupported(&VkPhysicalDeviceFeatures::shaderInt16, true, "shaderInt16");
 		}
-
-		caps.replaceFeature(f10);
 	};
 	add_cref<GlobalAppFlags>	gf			= getGlobalAppFlags();
 	CanvasStyle					canvasStyle = Canvas::DefaultStyle;

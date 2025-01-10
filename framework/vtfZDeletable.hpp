@@ -30,6 +30,8 @@ template<class R> using add_ref    = typename std::add_lvalue_reference<R>::type
 template<class R> using add_rref   = typename std::add_rvalue_reference<R>::type;
 template<class P> using add_cptr   = add_ptr<add_cst<P>>;
 template<class R> using add_cref   = add_ref<add_cst<R>>;
+using void_cptr = add_cptr<void>;
+using void_ptr = add_ptr<void>;
 
 template<class X> struct add_extent	{ typedef X type[]; };
 
@@ -43,8 +45,8 @@ VkAllocationCallbacks* getAllocationCallbacks();
 void deletable_selfTest ();
 
 void writeBackTrace (add_ref<std::ostringstream> ss);
-void writeExpression (add_ref<std::ostringstream> ss, const char* func, const char* file, int line,
-					  const char* expr, VkResult res, std::string::size_type ind);
+void writeExpression (add_ref<std::ostringstream> ss,
+					  const char* func, const char* file, int line, const char* expr, VkResult res, int ind);
 template<typename... Args>
 void assertion (
 	bool		cond,
@@ -57,8 +59,8 @@ void assertion (
 	Args&&...	args)
 {
 	(void)cond;
+	const int ind = 2;
 	std::ostringstream ss;
-	const std::string::size_type ind = 2;
 	writeExpression(ss, func, file, line, expr, res, ind);
 	if (print)
 	{

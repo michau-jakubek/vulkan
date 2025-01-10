@@ -31,7 +31,7 @@ struct FeatureVisitor
     }
 
     template <class FeatureStructure>
-    void operator()(const FeatureStructure& feature)
+    void operator ()(const FeatureStructure& feature)
     {
         const VkStructureType sType = vtf::mkstype<FeatureStructure>;
         const bool hasPnext = vtf::hasPnextOfVoidPtr<FeatureStructure>::value;
@@ -164,6 +164,57 @@ void DeviceCaps::initializeFeature (add_ptr<void> feature, bool autoInitialize, 
     {
         deviceGetPhysicalFeatures2(physicalDevice, feature);
     }
+}
+
+void_cptr DeviceCaps::addUpdateFeature (VkStructureType sType, add_ptr<void> pExpected, add_cptr<void> pSource,
+                                   uint32_t featureSize, add_ref<Caller> caller)
+{
+    const bool isVkPhysicalDeviceFeatures10 = (VK_STRUCTURE_TYPE_MAX_ENUM == sType);
+
+    if (pExpected)
+    {
+        initializeFeature(pExpected, true, isVkPhysicalDeviceFeatures10);
+
+        if (caller.compareExchange(pExpected, nullptr))
+        {
+            const FeatureInfo fi = getFeatureInfo(sType, m_features);
+            if (fi.size)
+            {
+                ASSERTION(fi.size == featureSize);
+                caller.compareExchange(pExpected, fi.address);
+                return fi.address;
+            }
+            else
+            {
+                add_ptr<void> pNewFeature = caller.addFeature();
+                ASSERTION(pNewFeature); // Should never happen
+                caller.compareExchange(pExpected, pNewFeature);
+                return pNewFeature;
+            }
+        }
+    }
+    else
+    {
+        const FeatureInfo fi = getFeatureInfo(sType, m_features);
+        if (fi.size)
+        {
+            UNREF(featureSize);
+            ASSERTION(fi.size == featureSize);
+            if (nullptr == pSource)
+                initializeFeature(fi.address, true, isVkPhysicalDeviceFeatures10);
+            return fi.address;
+        }
+        else
+        {
+            void* pNewFeature = caller.addFeature();
+            ASSERTION(pNewFeature); // Should never happen
+            if (nullptr == pSource)
+                initializeFeature(pNewFeature, true, isVkPhysicalDeviceFeatures10);
+            return pNewFeature;
+        }
+    }
+
+    return nullptr;
 }
 
 add_ref<FeaturesVar> DeviceCaps::assertAlreadyExists (VkStructureType sType, FeaturesVar&& var)
@@ -305,19 +356,19 @@ void DeviceCaps::updateDeviceCreateInfo (add_ref<VkDeviceCreateInfo> createInfo,
                 f2.features = merge;
             }
 
-            tmp.addFeature(f2, false);
+            tmp.addUpdateFeature(f2);
             use20 = true;
         }
         else if (false == has10)
         {
-            tmp.addFeature(merge);
+            tmp.addUpdateFeature(merge);
             use20 = false;
         }
     }
     else if (false == has10)
     {
         use20 = false;
-        tmp.addFeature(merge);
+        tmp.addUpdateFeature(merge);
     }
 
     FeatureInfo tmpInfo20;

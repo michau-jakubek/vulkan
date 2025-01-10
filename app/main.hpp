@@ -3,7 +3,7 @@
 
 #include "vtfVkUtils.hpp"
 
-constexpr vtf::Version CurrentVtfVersion(1, 3, 4, 0);
+constexpr vtf::Version CurrentVtfVersion(1, 3, 4, 1);
 
 // 2024-04-10, 1.1.0.0, "Add versioning"
 // 2024-04-15, 1.1.1.0, "Some fixes in int_compute test."
@@ -21,5 +21,6 @@ constexpr vtf::Version CurrentVtfVersion(1, 3, 4, 0);
 // 2024-12-20, 1.3.3.1, "Continue Vulkan Driver plus several fixes."
 // 2025-01-09, 1.3.3.2, "Resolve Custom Vulkan Driver on Linux"
 // 2025-01-20, 1.3.4.0, "Device Capabilities"
+// 2025-02-13, 1.3.4.1, "Some fixes for blending tests"
 
 #endif // __MAIN_HPP_INCLUDED__

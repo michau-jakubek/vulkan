@@ -423,6 +423,26 @@ ZInstance getSharedInstance ()
 	return {};
 }
 
+strings upgradeInstanceExtensions (add_cref<strings> desiredExtensions)
+{
+	strings e = desiredExtensions;
+	const strings exts = enumerateInstanceExtensions();
+	auto addExt = [&](std::string ext) -> void
+		{
+			if (containsString(exts, ext))
+				e.emplace_back(std::move(ext));
+		};
+
+	addExt("VK_KHR_surface");
+#if SYSTEM_OS_WINDOWS == 1
+	addExt("VK_KHR_win32_surface");
+#elif SYSTEM_OS_LINUX == 1
+	addExt("VK_KHR_xcb_surface");
+	addExt("VK_KHR_xlib_surface");
+#endif
+	return e;
+}
+
 ZInstance createInstance (
 	const char* appName,
 	VkAllocationCallbacksPtr	callbacks,
@@ -774,6 +794,13 @@ ZPhysicalDevice selectPhysicalDevice (
 	dev.verbose(getGlobalAppFlags().verbose != 0);
 
 	return dev;
+}
+
+strings upgradeDeviceExtensions (add_cref<strings> desiredExtensions)
+{
+	strings e = desiredExtensions;
+	e.push_back("VK_KHR_swapchain");
+	return e;
 }
 
 ZDevice createLogicalDevice	(
