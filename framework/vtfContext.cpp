@@ -9,19 +9,6 @@
 #include "vtfDebugMessenger.hpp"
 #include "vtfBacktrace.hpp"
 
-namespace
-{
-using namespace vtf;
-
-strings upgradeInstanceExtensions(add_cref<strings> src)
-{
-	strings exts(src);
-	exts.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
-	return exts;
-}
-
-} // unnamed namespace
-
 namespace vtf
 {
 

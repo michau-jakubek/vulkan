@@ -169,7 +169,7 @@ public:
     bool addUpdateFeatureSet (FieldType FeatureStructure::* pField, const std::decay_t<FieldType>& setToValue,
         const std::decay_t<FieldType>& expectedValue = {}, bool enableExpectd = false)
     {
-        return _addUpdateFeatureSet<FeatureStruct>(nullptr, pField, setToValue, expectedValue, enableExpectd);
+        return _addUpdateFeatureSet<FeatureStructure>(nullptr, pField, setToValue, expectedValue, enableExpectd);
     }
 
     template <class FeatureStructure>

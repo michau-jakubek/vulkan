@@ -78,7 +78,7 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 
 		caps.addUpdateFeature<DemoteFeatures>()
 				.checkNotSupported(&DemoteFeatures::shaderDemoteToHelperInvocation,
-					"shaderDemoteToHelperInvocation");
+					true, "shaderDemoteToHelperInvocation");
 	};
 	auto [status, params, err] = Params::parseCommandLine(cmdLineParams);
 	switch (status)

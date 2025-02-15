@@ -426,7 +426,7 @@ template<class T_In, class T_Out>
 void transformDistance (T_In inMin, T_In inMax, T_In in, T_Out outMin, T_Out outMax, add_ref<T_Out> out, bool mirror)
 {
 	T_In lsrc = std::abs(make_signed(inMax) - make_signed(inMin));
-	T_Out ldst = std::abs(make_signed(outMax) - make_signed(outMin));
+	T_Out ldst = T_Out(std::abs(make_signed(outMax) - make_signed(outMin)));
 	T_In sdist = std::abs(make_signed(in) - make_signed(inMin));
 	T_Out ddist = T_Out((double(sdist) * ldst) / lsrc);
 	out = mirror ? (outMax - ddist) : (outMin + ddist);

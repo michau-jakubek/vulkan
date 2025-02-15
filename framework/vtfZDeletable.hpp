@@ -59,8 +59,8 @@ void assertion (
 	Args&&...	args)
 {
 	(void)cond;
-	const int ind = 2;
 	std::ostringstream ss;
+	const std::string::size_type ind = 2;
 	writeExpression(ss, func, file, line, expr, res, ind);
 	if (print)
 	{

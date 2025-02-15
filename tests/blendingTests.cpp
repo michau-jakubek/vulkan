@@ -361,9 +361,9 @@ VkPipelineColorBlendAttachmentState TestParams::getState (bool flatenize) const
 {
 	auto flatenizeIf = [&](uint32_t factor)
 	{
-		VkBlendFactor flat = VkBlendFactor(factor);
+		VkBlendFactor flat = VK_BLEND_FACTOR_ZERO;
 		if (flatenize)
-			switch (flat)
+			switch (VkBlendFactor(factor))
 			{
 			case VK_BLEND_FACTOR_SRC1_COLOR:
 				flat = VK_BLEND_FACTOR_DST_COLOR;
@@ -376,6 +376,9 @@ VkPipelineColorBlendAttachmentState TestParams::getState (bool flatenize) const
 				break;
 			case VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA:
 				flat = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+				break;
+			default:
+				flat = VkBlendFactor(factor);
 				break;
 			}
 		return flat;
@@ -707,7 +710,6 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
 
 	bool availableDualSourceBlend = false;
-	VkPhysicalDeviceFeatures2	requiredfeatures	= makeVkStruct();
 	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
 		availableDualSourceBlend = caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::dualSrcBlend);
@@ -864,7 +866,7 @@ auto makeClearParams(ZBuffer vertexBuffer, bool isFloatingFormat, add_cref<TestP
 	transformDistance(-1.0f, +1.0f, v.at(8).x(), 0u, currParams.defaultExtent.width, D.x(), false);
 	transformDistance(-1.0f, +1.0f, v.at(8).y(), 0u, currParams.defaultExtent.height, D.y(), false);
 	const VkClearRect clearRect{ {
-			makeOffset2D(A.x(), A.y()),
+			makeOffset2D(make_signed(A.x()), make_signed(A.y())),
 			makeExtent2D(B.x() - A.x(), C.y() - B.y())
 		}, 0u, 1u
 	};

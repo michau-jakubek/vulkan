@@ -139,8 +139,6 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 
 	params.updateEffectiveVersions();
 
-	VkPhysicalDeviceShaderObjectFeaturesEXT fShaderObject = makeVkStruct();
-
 	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
 		auto so = caps.addUpdateFeatureIf(&VkPhysicalDeviceShaderObjectFeaturesEXT::shaderObject);

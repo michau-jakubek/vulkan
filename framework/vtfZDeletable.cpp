@@ -27,7 +27,7 @@ void writeExpression (
 {
 	ss << "ASSERT: In \"" << func << "\"" << std::endl;
 	ss << "  from \"" << file << "\" at " << line << " line" << std::endl;
-	if (expr) ss << std::string(ind, ' ') << "Expr: " << std::quoted(expr);
+	if (expr) ss << std::string(std::string::size_type(ind), ' ') << "Expr: " << std::quoted(expr);
 	if (VK_SUCCESS != res) ss << " returned " << vtf::vkResultToString(res);
 	ss << std::endl;
 }

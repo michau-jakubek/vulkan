@@ -817,7 +817,7 @@ bool _GlSpvProgramCollection::addFromFile (VkShaderStageFlagBits type,
 	std::ifstream		source_handle	(source_name);
 	if (source_handle.is_open())
 	{
-		std::istreambuf_iterator<char> end, begin(source_handle);
+		std::istreambuf_iterator<char> begin(source_handle);
 		//std::string source_content = std::string(begin, end);
 		std::string header;
 		std::copy_n(begin, 20, std::back_inserter(header));
