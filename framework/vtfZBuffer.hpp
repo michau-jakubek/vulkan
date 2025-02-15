@@ -3,6 +3,7 @@
 
 #include "vtfZDeletable.hpp"
 #include "vtfVkUtils.hpp"
+#include "vtfFormatUtils.hpp"
 #include "vtfZDeviceMemory.hpp"
 #include "vtfZBarriers.hpp"
 #include "vtfZBarriers2.hpp"
@@ -155,25 +156,43 @@ namespace namespace_hidden
 {
 struct BufferTexelAccess_
 {
+	Vec4 asColor (uint32_t x, uint32_t y, uint32_t z = 0) const;
+
 protected:
-	BufferTexelAccess_ (ZBuffer buffer, uint32_t elementSize, uint32_t width, uint32_t height, uint32_t depth = 1u);
+	BufferTexelAccess_ (ZBuffer buffer, uint32_t elementSize,
+						uint32_t width, uint32_t height, uint32_t depth, VkComponentTypeKHR componentType);
 	virtual ~BufferTexelAccess_ ();
 	add_ptr<void>	at (uint32_t x, uint32_t y, uint32_t z = 0);
 	add_cptr<void>	at (uint32_t x, uint32_t y, uint32_t z = 0) const;
 
-	ZBuffer				m_buffer;
-	const uint32_t		m_elementSize;
-	const VkDeviceSize	m_bufferSize;
-	const UVec3			m_size;
-	add_ptr<uint8_t>	m_data;
+	ZBuffer						m_buffer;
+	const uint32_t				m_elementSize;
+	const VkComponentTypeKHR	m_componentType;
+	const VkDeviceSize			m_bufferSize;
+	const UVec3					m_size;
+	add_ptr<uint8_t>			m_data;
 };
+
+template<class ElementType>
+struct BufferTexelAccess_ComponentType
+{
+	static inline VkComponentTypeKHR type = ctype_to_vk_component_type<ElementType>;
+};
+
+template<class ElementType, size_t N>
+struct BufferTexelAccess_ComponentType<VecX<ElementType, N>>
+{
+	static inline VkComponentTypeKHR type = ctype_to_vk_component_type<ElementType>;
+};
+
 } // namespace_hidden
 
 template<class ElementType>
 struct BufferTexelAccess : namespace_hidden::BufferTexelAccess_
 {
 	BufferTexelAccess (ZBuffer buffer, uint32_t width, uint32_t height, uint32_t depth = 1u)
-		: BufferTexelAccess_ (buffer, static_cast<uint32_t>(sizeof(ElementType)), width, height, depth) {}
+		: BufferTexelAccess_ (buffer, static_cast<uint32_t>(sizeof(ElementType)), width, height, depth, 
+							  namespace_hidden::BufferTexelAccess_ComponentType<ElementType>::type) {}
 	add_ref<ElementType>	at (uint32_t x, uint32_t y, uint32_t z = 0)
 	{
 		return *static_cast<add_ptr<ElementType>>(BufferTexelAccess_::at(x, y, z));

@@ -6,6 +6,7 @@
 #include "vtfContext.hpp"
 #include "vtfZImage.hpp"
 #include "vtfThreadSafeLogger.hpp"
+#include "vtfTemplateUtils.hpp"
 
 #include <condition_variable>
 #include <thread>

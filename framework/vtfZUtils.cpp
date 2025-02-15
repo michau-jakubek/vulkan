@@ -428,10 +428,10 @@ strings upgradeInstanceExtensions (add_cref<strings> desiredExtensions)
 	strings e = desiredExtensions;
 	const strings exts = enumerateInstanceExtensions();
 	auto addExt = [&](std::string ext) -> void
-		{
-			if (containsString(exts, ext))
-				e.emplace_back(std::move(ext));
-		};
+	{
+		if (containsString(exts, ext))
+			e.emplace_back(std::move(ext));
+	};
 
 	addExt("VK_KHR_surface");
 #if SYSTEM_OS_WINDOWS == 1

@@ -4,6 +4,7 @@
 #include "vulkan/vulkan.h"
 #include "vtfZDeletable.hpp"
 #include "vtfVector.hpp"
+#include "vtfFloat16.hpp"
 
 #include <iostream>
 #include <cstring>
@@ -80,7 +81,8 @@ struct ZFormatInfo
 	const char*		name;
 	VkFormat		format;
 	int8_t			swizzling[4];		// [3210] -> ABGR
-	uint8_t			componentSizes[4];	// in RGBA order
+	uint8_t			componentBitSizes[4];	// in RGBA order
+	uint8_t			componentByteSizes[4];	// in RGBA order
 	uint32_t		componentCount;
 	uint32_t		pixelByteSize;
 	bool			isSigned;
@@ -216,6 +218,21 @@ VKFORMATTOTYPEIMPL(          VK_FORMAT_R32_SFLOAT, Vec1, General);
 VKFORMATTOTYPEIMPL(       VK_FORMAT_R32G32_SFLOAT, Vec2, General);
 VKFORMATTOTYPEIMPL(    VK_FORMAT_R32G32B32_SFLOAT, Vec3, General);
 VKFORMATTOTYPEIMPL( VK_FORMAT_R32G32B32A32_SFLOAT, Vec4, General);
+
+uint32_t getComponentByteSize (VkComponentTypeKHR c);
+
+template<class> VkComponentTypeKHR ctype_to_vk_component_type = VK_COMPONENT_TYPE_MAX_ENUM_KHR;
+template<> inline constexpr VkComponentTypeKHR ctype_to_vk_component_type<Float16>	= VK_COMPONENT_TYPE_FLOAT16_KHR;
+template<> inline constexpr VkComponentTypeKHR ctype_to_vk_component_type<float>	= VK_COMPONENT_TYPE_FLOAT32_KHR;
+template<> inline constexpr VkComponentTypeKHR ctype_to_vk_component_type<double>	= VK_COMPONENT_TYPE_FLOAT64_KHR;
+template<> inline constexpr VkComponentTypeKHR ctype_to_vk_component_type<int8_t>	= VK_COMPONENT_TYPE_SINT8_KHR;
+template<> inline constexpr VkComponentTypeKHR ctype_to_vk_component_type<int16_t>	= VK_COMPONENT_TYPE_SINT16_KHR;
+template<> inline constexpr VkComponentTypeKHR ctype_to_vk_component_type<int32_t>	= VK_COMPONENT_TYPE_SINT32_KHR;
+template<> inline constexpr VkComponentTypeKHR ctype_to_vk_component_type<int64_t>	= VK_COMPONENT_TYPE_SINT64_KHR;
+template<> inline constexpr VkComponentTypeKHR ctype_to_vk_component_type<uint8_t>	= VK_COMPONENT_TYPE_UINT8_KHR;
+template<> inline constexpr VkComponentTypeKHR ctype_to_vk_component_type<uint16_t>	= VK_COMPONENT_TYPE_UINT16_KHR;
+template<> inline constexpr VkComponentTypeKHR ctype_to_vk_component_type<uint32_t>	= VK_COMPONENT_TYPE_UINT32_KHR;
+template<> inline constexpr VkComponentTypeKHR ctype_to_vk_component_type<uint64_t>	= VK_COMPONENT_TYPE_UINT64_KHR;
 
 } // vtf
 

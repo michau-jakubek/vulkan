@@ -447,7 +447,12 @@ int main (int argc, char* argv[])
 	try
 	{
 		result = parseParams(argc, argv, testRecord, testArgs, performTest);
-		if (performTest) result = (*testRecord.call)(testRecord, testArgs);
+		if (performTest)
+		{
+			printVtfVersion(std::cout, 2);
+			std::cout << std::endl;
+			result = (*testRecord.call)(testRecord, testArgs);
+		}
 	}
 	catch (std::runtime_error& e)
 	{

@@ -161,9 +161,8 @@ void computePixelByteSize (ZFormatInfo& info)
 	uint32_t bitsSize = 0;
 	for (int i = 0; i < 4; ++i)
 	{
-		bitsSize += info.componentSizes[i];
+		bitsSize += ROUNDUP(info.componentBitSizes[i], 8);
 	}
-	bitsSize = ROUNDUP(bitsSize, 8);
 	info.pixelByteSize = bitsSize / 8;
 }
 
@@ -177,16 +176,16 @@ void parseType (const char* const name, int& pos, ZFormatInfo& info)
 			info.normalized	= true;
 			info.scaled		= false;
 			info.sized		= false;
-			info.floating	= true;
-			info.integral	= false;
+			info.floating	= false;
+			info.integral	= true;
 		CASE_STR(p, "UNORM")
 			skip = std::strlen(q);
 			info.isSigned	= false;
 			info.normalized	= true;
 			info.scaled		= false;
 			info.sized		= false;
-			info.floating	= true;
-			info.integral	= false;
+			info.floating	= false;
+			info.integral	= true;
 		CASE_STR(p, "SSCALED")
 			skip = std::strlen(q);
 			info.isSigned	= true;
@@ -194,7 +193,7 @@ void parseType (const char* const name, int& pos, ZFormatInfo& info)
 			info.scaled		= true;
 			info.sized		= false;
 			info.floating	= false;
-			info.integral	= false;
+			info.integral	= true;
 		CASE_STR(p, "USCALED")
 			skip = std::strlen(q);
 			info.isSigned	= false;
@@ -202,7 +201,7 @@ void parseType (const char* const name, int& pos, ZFormatInfo& info)
 			info.scaled		= true;
 			info.sized		= false;
 			info.floating	= false;
-			info.integral	= false;
+			info.integral	= true;
 		CASE_STR(p, "SRGB")
 			skip = std::strlen(q);
 			info.isSigned	= true;
@@ -210,7 +209,7 @@ void parseType (const char* const name, int& pos, ZFormatInfo& info)
 			info.scaled		= false;
 			info.sized		= false;
 			info.floating	= false;
-			info.integral	= false;
+			info.integral	= true;
 		CASE_STR(p, "SINT")
 			skip = std::strlen(q);
 			info.isSigned	= true;
@@ -284,7 +283,8 @@ static bool parseComponents (const char* const name, int& pos, int& index, int& 
 	{
 		const uint8_t width = parseNumber(name, pos);
 		info.swizzling[index++] = int8_t(comp);
-		info.componentSizes[comp] = width;
+		info.componentBitSizes[comp] = width;
+		info.componentByteSizes[comp] = ROUNDUP(width, 8) / 8;
 	}
 	else if (std::isdigit(name[pos+1]))
 	{
@@ -306,10 +306,10 @@ static void parseComponents (const char* const name, int& pos, ZFormatInfo& info
 	= info.swizzling[2]
 	= info.swizzling[3] = -1;
 
-	info.componentSizes[0]
-	= info.componentSizes[1]
-	= info.componentSizes[2]
-	= info.componentSizes[3] = 0;
+	info.componentBitSizes[0]
+	= info.componentBitSizes[1]
+	= info.componentBitSizes[2]
+	= info.componentBitSizes[3] = 0;
 
 	int			comp	= 0;
 	int			index	= 0;
@@ -370,7 +370,8 @@ ZFormatInfo::ZFormatInfo ()
 	: name(nullptr)
 	, format(VK_FORMAT_UNDEFINED)
 	, swizzling{}		// [3210] -> ABGR
-	, componentSizes{}	// in RGBA order
+	, componentBitSizes{}	// in RGBA order
+	, componentByteSizes{}	// in RGBA order
 	, componentCount{}
 	, pixelByteSize{}
 	, isSigned{}
@@ -467,6 +468,30 @@ bool ZFormatInfoIterator::next ()
 		return true;
 	}
 	return false;
+}
+
+uint32_t getComponentByteSize (VkComponentTypeKHR c)
+{
+	switch (c)
+	{
+	case VK_COMPONENT_TYPE_SINT8_KHR:
+	case VK_COMPONENT_TYPE_UINT8_KHR:
+		return 1;
+	case VK_COMPONENT_TYPE_FLOAT16_KHR:
+	case VK_COMPONENT_TYPE_SINT16_KHR:
+	case VK_COMPONENT_TYPE_UINT16_KHR:
+		return 2;
+	case VK_COMPONENT_TYPE_FLOAT32_KHR:
+	case VK_COMPONENT_TYPE_SINT32_KHR:
+	case VK_COMPONENT_TYPE_UINT32_KHR:
+		return 4;
+	case VK_COMPONENT_TYPE_FLOAT64_KHR:
+	case VK_COMPONENT_TYPE_SINT64_KHR:
+	case VK_COMPONENT_TYPE_UINT64_KHR:
+		return 8;
+	default: break;
+	}
+	return 0;
 }
 
 } // vtf

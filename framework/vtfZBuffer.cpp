@@ -2,6 +2,7 @@
 #include "vtfCUtils.hpp"
 #include "vtfZUtils.hpp"
 #include "vtfStructUtils.hpp"
+#include "vtfTemplateUtils.hpp"
 #include "vtfZBuffer.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfZImage.hpp"
@@ -517,12 +518,14 @@ void	bufferCopyToImage	(ZCommandBuffer cmdBuffer, ZBuffer buffer, ZImage image,
 
 namespace namespace_hidden
 {
-BufferTexelAccess_::BufferTexelAccess_ (ZBuffer buffer, uint32_t elementSize, uint32_t width, uint32_t height, uint32_t depth)
-	: m_buffer		(buffer)
-	, m_elementSize	(elementSize)
-	, m_bufferSize	(bufferGetSize(buffer))
-	, m_size		(width, height, depth)
-	, m_data		(nullptr)
+BufferTexelAccess_::BufferTexelAccess_ (ZBuffer buffer, uint32_t elementSize,
+										uint32_t width, uint32_t height, uint32_t depth, VkComponentTypeKHR componentType)
+	: m_buffer			(buffer)
+	, m_elementSize		(elementSize)
+	, m_componentType	(componentType)
+	, m_bufferSize		(bufferGetSize(buffer))
+	, m_size			(width, height, depth)
+	, m_data			(nullptr)
 {
 	ASSERTION(width != 0 && height != 0 && depth != 0 && (VkDeviceSize(elementSize) * width * height * depth) <= m_bufferSize);
 	const VkBufferUsageFlags	usage = buffer.getParamRef<VkBufferCreateInfo>().usage;
@@ -547,6 +550,66 @@ add_cptr<void> BufferTexelAccess_::at (uint32_t x, uint32_t y, uint32_t z) const
 	const std::size_t address = static_cast<std::size_t>(m_elementSize * ((z * m_size.x() * m_size.y()) + (y * m_size.x()) + x));
 	ASSERTION(address < m_bufferSize);
 	return &m_data[address];
+}
+
+template<class T> float convertToFloat (void_cptr p)
+{
+	return float(double(*((const T*)(p))) / double(std::numeric_limits<T>::max()));
+}
+
+Vec4 BufferTexelAccess_::asColor (uint32_t x, uint32_t y, uint32_t z) const
+{
+	if (m_componentType == VK_COMPONENT_TYPE_MAX_ENUM_KHR)
+	{
+		return {};
+	}
+
+	Vec4 result;
+	void_cptr p = at(x, y, z);
+	const uint32_t componentCount = m_elementSize / getComponentByteSize(m_componentType);
+
+	for (uint32_t c = 0; c < componentCount; ++c)
+	{
+		switch (m_componentType)
+		{
+		case VK_COMPONENT_TYPE_SINT8_KHR:
+			result[c] = convertToFloat<int8_t>(p);
+			break;
+		case VK_COMPONENT_TYPE_UINT8_KHR:
+			result[c] = convertToFloat<uint8_t>(p);
+			break;
+		case VK_COMPONENT_TYPE_FLOAT16_KHR:
+			result[c] = float16ToFloat32(Float16::construct(*((const uint16_t*)(p))));
+			break;
+		case VK_COMPONENT_TYPE_SINT16_KHR:
+			result[c] = convertToFloat<int16_t>(p);
+			break;
+		case VK_COMPONENT_TYPE_UINT16_KHR:
+			result[c] = convertToFloat<uint16_t>(p);
+			break;
+		case VK_COMPONENT_TYPE_FLOAT32_KHR:
+			result[c] = *((const float*)(p));
+			break;
+		case VK_COMPONENT_TYPE_SINT32_KHR:
+			result[c] = convertToFloat<int32_t>(p);
+			break;
+		case VK_COMPONENT_TYPE_UINT32_KHR:
+			result[c] = convertToFloat<uint32_t>(p);
+			break;
+		case VK_COMPONENT_TYPE_FLOAT64_KHR:
+			result[c] = float(*((const double*)(p)));
+			break;
+		case VK_COMPONENT_TYPE_SINT64_KHR:
+			result[c] = convertToFloat<int64_t>(p);
+			break;
+		case VK_COMPONENT_TYPE_UINT64_KHR:
+			result[c] = convertToFloat<uint64_t>(p);
+			break;
+		default: break;
+		}
+	}
+
+	return result;
 }
 
 } // namespace_hidden

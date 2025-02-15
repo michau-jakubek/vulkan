@@ -20,7 +20,10 @@ set(framework_files
 	vtfVkUtils.cpp
 	vtfZUtils.cpp
 	vtfZUtils.hpp
+	vtfTemplateUtils.hpp
 	vtfCopyUtils.hpp
+	vtfFloat16.cpp
+	vtfFloat16.hpp
 	vtfFormatUtils.cpp
 	vtfFormatUtils.hpp
 	vtfStructUtils.cpp

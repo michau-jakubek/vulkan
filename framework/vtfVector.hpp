@@ -3,6 +3,7 @@
 
 #include "vtfZDeletable.hpp"
 #include "vtfCUtils.hpp"
+#include "vtfFloat16.hpp"
 
 #include <algorithm>
 #include <array>
@@ -421,6 +422,11 @@ typedef VecX<float,1> Vec1;
 typedef VecX<float,2> Vec2;
 typedef VecX<float,3> Vec3;
 typedef VecX<float,4> Vec4;
+
+typedef VecX<Float16, 1> F16Vec1;
+typedef VecX<Float16, 2> F16Vec2;
+typedef VecX<Float16, 3> F16Vec3;
+typedef VecX<Float16, 4> F16Vec4;
 
 typedef VecX<int8_t,1> BVec1;
 typedef VecX<int8_t,2> BVec2;
