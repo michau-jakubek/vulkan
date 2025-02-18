@@ -363,6 +363,30 @@ public:
 		return v;
 	}
 
+	VecX min (const VecX& other) const
+	{
+		VecX v;
+		for (size_t i = 0; i < N; ++i)
+			v.data[i] = std::min(this->data[i], other.data[i]);
+		return v;
+	}
+
+	VecX max (const VecX& other) const
+	{
+		VecX v;
+		for (size_t i = 0; i < N; ++i)
+			v.data[i] = std::max(this->data[i], other.data[i]);
+		return v;
+	}
+
+	VecX<bool, N> matches(const VecX& other, const VecX<double, N>& epsilon) const
+	{
+		VecX<bool, N> res;
+		for (size_t i = 0; i < N; ++i)
+			res[i] = std::abs(double(this->data[i]) - double(other.data[i])) < epsilon[i];
+		return res;
+	}
+
 	static VecX fromText (add_cref<std::string> text, add_cref<VecX> def,
 						  add_ref<std::array<bool, N>> status, add_ptr<bool> all = nullptr)
 	{
@@ -457,6 +481,11 @@ typedef VecX<uint32_t,1> UVec1;
 typedef VecX<uint32_t,2> UVec2;
 typedef VecX<uint32_t,3> UVec3;
 typedef VecX<uint32_t,4> UVec4;
+
+typedef VecX<double, 1> DVec1;
+typedef VecX<double, 2> DVec2;
+typedef VecX<double, 3> DVec3;
+typedef VecX<double, 4> DVec4;
 
 template<class T, size_t N>
 template<class U>

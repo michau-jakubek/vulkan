@@ -1,0 +1,48 @@
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_sa_sa_add
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_sa_sa_sub
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_sa_sa_rsub
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_sa_sa_min
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_sa_sa_max
+
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_sc_sa_add
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_sc_sa_sub
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_sc_sa_rsub
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_sc_sa_min
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_sc_sa_max
+
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_sc_da_add
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_sc_da_sub
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_sc_da_rsub
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_sc_da_min
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_sc_da_max
+
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_dc_da_add
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_dc_da_sub
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_dc_da_rsub
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_dc_da_min
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_sub_alpha_dc_da_max
+
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_1msa_sa_add
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_1msa_sa_sub
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_1msa_sa_rsub
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_1msa_sa_min
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_1msa_sa_max
+
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_1msc_sa_add
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_1msc_sa_sub
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_1msc_sa_rsub
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_1msc_sa_min
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_1msc_sa_max
+
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_sc_1mda_add
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_sc_1mda_sub
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_sc_1mda_rsub
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_sc_1mda_min
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_sc_1mda_max
+
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_1mdc_da_add
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_1mdc_da_sub
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_1mdc_da_rsub
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_1mdc_da_min
+-color0 0.75,0.25,0,0.5 -color1 0.15,0.85,0,0.25 -state color_sc_dc_rsub_alpha_1mdc_da_max
+

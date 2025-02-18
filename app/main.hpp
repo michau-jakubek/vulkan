@@ -3,7 +3,7 @@
 
 #include "vtfVkUtils.hpp"
 
-constexpr vtf::Version CurrentVtfVersion(1, 3, 4, 3);
+constexpr vtf::Version CurrentVtfVersion(1, 3, 4, 4);
 
 // 2024-04-10, 1.1.0.0, "Add versioning"
 // 2024-04-15, 1.1.1.0, "Some fixes in int_compute test."
@@ -24,5 +24,6 @@ constexpr vtf::Version CurrentVtfVersion(1, 3, 4, 3);
 // 2025-02-13, 1.3.4.1, "Some fixes for blending tests"
 // 2025-02-15, 1.3.4.2, "Fix compilation warnings"
 // 2025-02-18, 1.3.4.3, "Blending Equation + float16"
+// 2025-02-19, 1.3.4.4, "Blending and Reverse Alpha"
 
 #endif  // __MAIN_HPP_INCLUDED__
