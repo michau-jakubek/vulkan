@@ -25,4 +25,4 @@ constexpr vtf::Version CurrentVtfVersion(1, 3, 4, 3);
 // 2025-02-15, 1.3.4.2, "Fix compilation warnings"
 // 2025-02-18, 1.3.4.3, "Blending Equation + float16"
 
-#endif // __MAIN_HPP_INCLUDED__
+#endif  // __MAIN_HPP_INCLUDED__
