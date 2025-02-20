@@ -53,30 +53,6 @@ struct ZFormatInfo;
 
 struct ZFormatInfo
 {
-	/*
-	template<class X> using add_get = add_get<ZFormatInfo, X>;
-	//template<class C, class X, class Y> using aa = std::common_type<X C:::*, Y C::*>;
-
-	//bool get_bool	(bool ZFormatInfo::*) { return false; }
-	bool get_bool	(add_get<bool> ZFormatInfo::* x)
-	{
-		if (x == &ZFormatInfo::xxx) {
-		} else if (x == &ZFormatInfo::yyy) {
-		} else if (x == &ZFormatInfo::zzz) {
-		}
-		return false;
-	}
-
-	GetFieldInfo<ZFormatInfo, bool> getter;
-	add_get<bool>	xxx;
-	add_get<bool>	yyy;
-	add_get<bool>	zzz;
-	ZFormatInfo ()
-		: getter(*this, &ZFormatInfo::get_bool)
-		, xxx(getter)
-		, yyy(getter)
-		, zzz(getter) {}
-	*/
 	ZFormatInfo ();
 	const char*		name;
 	VkFormat		format;
