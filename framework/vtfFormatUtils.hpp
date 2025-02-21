@@ -61,6 +61,7 @@ struct ZFormatInfo
 	uint8_t			componentByteSizes[4];	// in RGBA order
 	uint32_t		componentCount;
 	uint32_t		pixelByteSize;
+	uint32_t		pack;
 	bool			isSigned;
 	bool			normalized;
 	bool			floating;

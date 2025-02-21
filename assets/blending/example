@@ -1,9 +1,0 @@
-# Line that starts with '#' is considered as a comment
-# All empty lines will be ignored
-# All parameters must fit on one line
-
--color0 1,0,0,1 -color1 0,1,0,1 -src-color-factor src_color -dst-color-factor dst_color -src-alpha-factor factor_one -dst-alpha-factor factor_zero
-
--color0 1,0,0,1 -color1 0,1,0,1 -src-alpha-factor factor_one -dst-alpha-factor factor_zero -src-color-factor src_color -dual-source -dst-color-factor factor_src1_color
-
--color0 1,0,0,0.5 -color1 0,1,0,0.5 -src-alpha-factor factor_one -dst-alpha-factor factor_one -src-color-factor src1_color -dual-source -dst-color-factor factor_dst_color

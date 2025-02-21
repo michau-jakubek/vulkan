@@ -12,6 +12,8 @@ layout(location = 0) out vec4 outColor;
 
 void main()
 {
-	outColor = (instance == 0) ? fColor0 : (instance == 1) ? fColor1 : vec4(1);
+	outColor = (instance == 0) ? fColor0
+			 : (instance == 1) ? fColor1
+			 : (instance == 2) ? vec4(1) : vec4(0);
 }
 

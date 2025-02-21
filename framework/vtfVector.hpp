@@ -487,6 +487,11 @@ typedef VecX<double, 2> DVec2;
 typedef VecX<double, 3> DVec3;
 typedef VecX<double, 4> DVec4;
 
+typedef VecX<bool, 1> BoolVec1;
+typedef VecX<bool, 2> BoolVec2;
+typedef VecX<bool, 3> BoolVec3;
+typedef VecX<bool, 4> BoolVec4;
+
 template<class T, size_t N>
 template<class U>
 inline VecX<T,N>& VecX<T,N>::operator= (const VecX<U,N>& s)

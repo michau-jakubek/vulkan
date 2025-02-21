@@ -161,12 +161,44 @@ void computePixelByteSize (ZFormatInfo& info)
 	uint32_t bitsSize = 0;
 	for (int i = 0; i < 4; ++i)
 	{
-		bitsSize += ROUNDUP(info.componentBitSizes[i], 8);
+		bitsSize += info.componentBitSizes[i];
 	}
-	info.pixelByteSize = bitsSize / 8;
+	info.pixelByteSize = ROUNDUP(bitsSize, 8) / 8;
 }
 
-void parseType (const char* const name, int& pos, ZFormatInfo& info)
+static uint8_t parseNumber(const char* const name, int& pos)
+{
+	int num[8];
+	int mag = 0;
+	while (std::isdigit(name[pos]))
+	{
+		num[mag++] = name[pos++] - '0';
+	}
+	uint8_t res = 0u;
+	uint8_t mul = 1u;
+	while (--mag >= 0)
+	{
+		res = uint8_t(res + num[mag] * mul);
+		mul = uint8_t(mul * 10);
+	}
+	return res;
+}
+
+static void parsePack (const char* const name, int& pos, ZFormatInfo& info)
+{
+	int tmpPos = pos;
+	if (name[tmpPos] == '_') tmpPos += 1;
+	std::string_view sv(&name[tmpPos]);
+	if (sv.substr(0, 4) == "PACK")
+	{
+		int snum = 0;
+		tmpPos += 4;
+		info.pack = parseNumber(&name[tmpPos], snum);
+		pos = tmpPos + snum;
+	}
+}
+
+static void parseType (const char* const name, int& pos, ZFormatInfo& info)
 {
 	size_t skip = 0;
 	BEGIN_SWITCH_STR(p, q, &name[pos])
@@ -245,94 +277,61 @@ void parseType (const char* const name, int& pos, ZFormatInfo& info)
 		CASE_STR_DEFAULT(p)
 			ASSERTFALSE("Format not implemented");
 	END_SWITCH_STR(p)
-	pos += concise_convert(skip, pos);
+	pos += int(skip);
 }
 
-static uint8_t parseNumber (const char* const name, int& pos)
+static bool parseComponent (const char* const name, int& pos, int& swizz, ZFormatInfo& info)
 {
-	int num[2];
-	int mag= 0;
-	while (std::isdigit(name[pos]))
-	{
-		num[mag++] = name[pos++] - '0';
-	}
-	uint8_t res = 0u;
-	uint8_t mul = 1u;
-	while (--mag >= 0)
-	{
-		res = uint8_t(res + num[mag] * mul);
-		mul = uint8_t(mul * 10);
-	}
-	return res;
-}
+	int comp = -1;
 
-static bool parseComponents (const char* const name, int& pos, int& index, int& comp, ZFormatInfo& info)
-{
 	switch (name[pos])
 	{
 	case '\0':											return false;
 	// TODO: consider VK_FORMAT_X8_D24_UNORM_PACK32 or VK_FORMAT_G8_B8_R8_3PLANE_444_UNORM
 	case '_':	pos += 1;								return false;
-	case 'R':	pos += 1;	info.color	= true;	comp = 0;					break;
-	case 'G':	pos += 1;	info.color	= true; comp = 1;					break;
-	case 'B':	pos += 1;	info.color	= true; comp = 2;					break;
-	case 'A':	pos += 1;	info.color	= true; comp = 3;					break;
+	case 'R':	pos += 1;	info.color	= true;		comp = 0;	break;
+	case 'G':	pos += 1;	info.color	= true;		comp = 1;	break;
+	case 'B':	pos += 1;	info.color	= true;		comp = 2;	break;
+	case 'A':	pos += 1;	info.color	= true;		comp = 3;	break;
+	case 'D':	pos += 1;	info.color = false;		comp = 5;	break;
+	case 'S':	pos += 1;	info.stencil = true;	comp = 6;	break;
+	case 'X':	pos += 1;	info.stencil = true;	comp = 6;	break;
 	}
 
-	if (std::isdigit(name[pos]))
-	{
-		const uint8_t width = parseNumber(name, pos);
-		info.swizzling[index++] = int8_t(comp);
-		info.componentBitSizes[comp] = width;
-		info.componentByteSizes[comp] = ROUNDUP(width, 8) / 8;
-	}
-	else if (std::isdigit(name[pos+1]))
-	{
-		switch (name[pos])
-		{
-		case 'D':	pos += 1;	info.color	= false;	comp = 0; break;
-		case 'S':	pos += 1;	info.stencil = true;	comp = 1; break;
-		case 'X':	pos += 1;	info.stencil = true;	comp = 1; break;
-		}
-	}
+	ASSERTMSG(std::isdigit(name[pos]), "Unexpected format: ", name);
+
+	const uint8_t width = parseNumber(name, pos);
+	info.swizzling[comp] = int8_t(swizz++);
+	info.componentBitSizes[comp] = width;
+	info.componentByteSizes[comp] = ROUNDUP(width, 8) / 8;
 
 	return true;
 }
 
 static void parseComponents (const char* const name, int& pos, ZFormatInfo& info)
 {
-	info.swizzling[0]
+	// name should point to something like this "R12A25B2R17"
+	  info.swizzling[0]
 	= info.swizzling[1]
 	= info.swizzling[2]
 	= info.swizzling[3] = -1;
 
-	info.componentBitSizes[0]
+	  info.componentBitSizes[0]
 	= info.componentBitSizes[1]
 	= info.componentBitSizes[2]
 	= info.componentBitSizes[3] = 0;
 
-	int			comp	= 0;
-	int			index	= 0;
+	  info.componentByteSizes[0]
+	= info.componentByteSizes[1]
+	= info.componentByteSizes[2]
+	= info.componentByteSizes[3] = 0;
 
-	while (parseComponents(name, pos, index, comp, info))
+	int swizz = 0;
+
+	while (parseComponent(name, pos, swizz, info))
 		{ /* do nothing */ }
 
-	info.componentCount = static_cast<uint32_t>(index);
-
-	{
-		int8_t swizzling[4];
-		for (index = 0; index < 4; ++index)
-		{
-			swizzling[index] = info.swizzling[index];
-			info.swizzling[index] = (-1);
-		}
-		for (index = 0; index < 4; ++index)
-		{
-			comp = swizzling[index];
-			if (comp >= 0)
-				info.swizzling[comp] = int8_t(index);
-		}
-	}
+	info.componentCount = static_cast<uint32_t>(swizz);
 }
 
 static ZFormatInfo makeFormatInfo (add_cptr<FormatAndName> const pFan)
@@ -345,6 +344,7 @@ static ZFormatInfo makeFormatInfo (add_cptr<FormatAndName> const pFan)
 	parseComponents(&pFan->name[10], pos, res);
 	parseType(&pFan->name[10], pos, res);
 	computePixelByteSize(res);
+	parsePack(&pFan->name[10], pos, res);
 
 	return res;
 }
@@ -369,11 +369,16 @@ namespace vtf
 ZFormatInfo::ZFormatInfo ()
 	: name(nullptr)
 	, format(VK_FORMAT_UNDEFINED)
-	, swizzling{}		// [3210] -> ABGR
+	// A swizzling table is a mapping that indicates the position of each specific component.
+	// For an imaginary format "ABG" the swizzling table [-1, 2, 1, 0] means that:
+	// swizzling[0] = -1 means that R doesn't exist, swizzling[1] = 2 that G is at 2,
+	// swizzling[2] = 1 that B is at 1 and swizzling[3] = 0 is at 0 in that format.
+	, swizzling{ -1, -1, -1, -1 }
 	, componentBitSizes{}	// in RGBA order
 	, componentByteSizes{}	// in RGBA order
 	, componentCount{}
 	, pixelByteSize{}
+	, pack{}
 	, isSigned{}
 	, normalized{}
 	, floating{}
@@ -394,7 +399,7 @@ const char* formatGetString (VkFormat format)
 ZFormatInfo	formatGetInfo (VkFormat format)
 {
 	add_cptr<FormatAndName> pFan = findFormatAndName(format);
-	ASSERTMSG(pFan, "Format not implemented");
+	ASSERTMSG(pFan, "Format not implemented", uint64_t(format));
 	if (nullptr == pFan) {
 		ZFormatInfo	res{};
 		res.format	= VK_FORMAT_UNDEFINED;

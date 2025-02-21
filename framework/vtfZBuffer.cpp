@@ -557,7 +557,46 @@ template<class T> float convertToFloat (void_cptr p)
 	return float(double(*((const T*)(p))) / double(std::numeric_limits<T>::max()));
 }
 
-Vec4 BufferTexelAccess_::asColor (uint32_t x, uint32_t y, uint32_t z) const
+float convertToFloat (const uint32_t component, add_cref<ZFormatInfo> info, void_cptr p)
+{
+	ASSERTION(info.pack > 0 && info.pack <= 64);
+
+	uint32_t shift = 0;
+	uint64_t color = 0;
+	std::memcpy(&color, p, (info.pack / 8));
+
+	std::array<uint32_t, 4> reordered;
+	reordered.fill(INVALID_UINT32);
+	for (uint32_t c = 0; c < info.componentCount; ++c)
+	{
+		const auto sw = info.swizzling[c];
+		if (sw >= 0)
+			reordered[3u - uint32_t(sw)] = c;
+	}
+
+	for (uint32_t r = 0; r < info.componentCount; ++r)
+	{
+		const uint32_t c = reordered[r];
+		if (c == INVALID_UINT32) continue;
+		const auto bw = info.componentBitSizes[c];
+		const uint64_t mask = (1ULL << bw) - 1;
+		const uint64_t value = (color >> shift) & mask;
+		shift += bw;
+
+		if (component == c)
+		{
+			const int den = (1 << (info.isSigned ? (bw - 1) : bw)) - 1;
+			if (den == 0) break;
+			const float nom = float(value);
+			const float res = nom / float(den);
+			return res;
+		}
+	}
+
+	return 0.0f;
+}
+
+Vec4 BufferTexelAccess_::asColor (VkFormat format, uint32_t x, uint32_t y, uint32_t z) const
 {
 	if (m_componentType == VK_COMPONENT_TYPE_MAX_ENUM_KHR)
 	{
@@ -566,6 +605,17 @@ Vec4 BufferTexelAccess_::asColor (uint32_t x, uint32_t y, uint32_t z) const
 
 	Vec4 result;
 	void_cptr p = at(x, y, z);
+
+	const ZFormatInfo fi = formatGetInfo(format);
+	if (fi.pack > 0)
+	{
+		result.r(convertToFloat(0, fi, p));
+		result.g(convertToFloat(1, fi, p));
+		result.b(convertToFloat(2, fi, p));
+		result.a(convertToFloat(3, fi, p));
+		return result;
+	}
+
 	const uint32_t componentCount = m_elementSize / getComponentByteSize(m_componentType);
 
 	for (uint32_t c = 0; c < componentCount; ++c)

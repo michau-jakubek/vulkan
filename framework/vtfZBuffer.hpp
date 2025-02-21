@@ -156,7 +156,7 @@ namespace namespace_hidden
 {
 struct BufferTexelAccess_
 {
-	Vec4 asColor (uint32_t x, uint32_t y, uint32_t z = 0) const;
+	Vec4 asColor (VkFormat format, uint32_t x, uint32_t y, uint32_t z = 0) const;
 
 protected:
 	BufferTexelAccess_ (ZBuffer buffer, uint32_t elementSize,

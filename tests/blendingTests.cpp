@@ -56,6 +56,7 @@ struct TestParams
 	Vec4					constColor;
 	Vec4					color0;
 	Vec4					color1;
+	Vec4					bkgDualSource;
 	uint32_t				colorOp;
 	uint32_t				alphaOp;
 	uint32_t				srcColorFactor;
@@ -66,7 +67,7 @@ struct TestParams
 	float					epsilon;
 	std::string				blendingState;
 	bool					noFlatenize;
-	bool					reverseAlpha;
+	bool					swapAlpha;
 	bool					enableDualSrcBlending;
 	bool					printBlendOps;
 	bool					printBlendFactors;
@@ -104,7 +105,7 @@ struct TestParams
 		{ VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA		, { "VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA", "1ms1a" }},
 	};
 
-	inline static const VkExtent2D	defaultExtent		= makeExtent2D(8,8);
+	inline static const VkExtent2D	defaultExtent		= makeExtent2D(32,32);
 	inline static const VkFormat	defaultColorFormat	= VK_FORMAT_R32G32B32A32_SFLOAT;
 };
 typedef std::tuple<TestParams, OptionParserState, std::string> TestParamsState;
@@ -130,6 +131,7 @@ TestParams::TestParams (ZPhysicalDevice physicalDevice, add_cref<std::string> as
 	, constColor			()
 	, color0				(1, 0, 0, 0.875)
 	, color1				(0, 1, 0, 0.125)
+	, bkgDualSource			(1, 1, 1, 1)
 	, colorOp				(VK_BLEND_OP_ADD)
 	, alphaOp				(VK_BLEND_OP_ADD)
 	, srcColorFactor		(VK_BLEND_FACTOR_SRC_COLOR)
@@ -140,7 +142,7 @@ TestParams::TestParams (ZPhysicalDevice physicalDevice, add_cref<std::string> as
 	, epsilon				(0.001f)
 	, blendingState			()
 	, noFlatenize			(false)
-	, reverseAlpha			(false)
+	, swapAlpha				(false)
 	, enableDualSrcBlending	(false)
 	, printBlendOps			(false)
 	, printBlendFactors		(false)
@@ -261,8 +263,9 @@ constexpr Option optionPrintBlendFactors("-print-blend-factors", 0);
 constexpr Option optionPrintColorFormats("-print-color-formats", 0);
 constexpr Option optionFile("-file", 1);
 constexpr Option optionDualSource("-dual-source", 0);
+constexpr Option optionBkgDualSource("-dual-source-bkg", 1);
 constexpr Option optionNoFlatenize("-no-flatenize", 0);
-constexpr Option optionReverseAlpha("-reverse-alpha", 0);
+constexpr Option optionswapAlpha("-swap-alpha", 0);
 constexpr Option optionConstColor("-const-color", 1);
 constexpr Option optionColor0("-color0", 1, __COUNTER__);
 constexpr Option optionColor1("-color1", 1, __COUNTER__);
@@ -590,12 +593,16 @@ OptionParser<TestParams> TestParams::getParser (bool includeHelp, bool includeFi
 	parser.addOption(&TestParams::noFlatenize, optionNoFlatenize,
 					"Prevent fom flatenize state for non-dual-source blending."
 					" Currently not implemented", { params.noFlatenize }, flags);
-	parser.addOption(&TestParams::reverseAlpha, optionReverseAlpha,
-					"Reverse alpha component meaning between src and dst and calculation",
-					{ params.reverseAlpha }, flags);
+	parser.addOption(&TestParams::swapAlpha, optionswapAlpha,
+					"Swap alpha component meaning between src and dst and calculation",
+					{ params.swapAlpha }, flags);
 	parser.addOption(&TestParams::constColor, optionConstColor, "Const color", { params.constColor }, flags);
 	parser.addOption(&TestParams::color0, optionColor0, "Blending color 0", { params.color0 }, flags);
 	parser.addOption(&TestParams::color1, optionColor1, "Blending color 1", { params.color1 }, flags);
+	parser.addOption(&TestParams::bkgDualSource, optionBkgDualSource,
+					"Dual-source blending background color. "
+					"It is valid if dual-source blending is available and -dual-source is enabled",
+					{ params.bkgDualSource }, flags);
 	parser.addOption(&TestParams::colorWriteMask, optionColorWriteMask, "Color write mask", { params.colorWriteMask }, flags);
 	parser.addOption(&TestParams::epsilon, optionEpsilon, "Epsilon for component comparing", { params.epsilon }, flags);
 	parser.addOption(&TestParams::blendingState, optionBlendingState, "Blending state, do not override any factors or ops",
@@ -893,8 +900,8 @@ auto makeClearParams(ZBuffer vertexBuffer, bool isFloatingFormat, add_cref<TestP
 	const VkClearAttachment clearAttachment
 	{
 		VK_IMAGE_ASPECT_COLOR_BIT, 0u, {
-			isFloatingFormat ? makeClearColorValue(Vec4(1))
-								: makeClearColorValue(UVec4(INVALID_UINT32))
+			isFloatingFormat ? makeClearColorValue(Vec4(currParams.bkgDualSource))
+								: makeClearColorValue(Vec4(currParams.bkgDualSource).cast<UVec4>())
 		}
 	};
 	std::vector<Vec2>		v(bufferGetElementCount<Vec2>(vertexBuffer));
@@ -942,7 +949,7 @@ void readColors (
 		transformDistance(-1.0f, +1.0f, p.x(), 0u, extent.width, c1.x(), false);
 		transformDistance(-1.0f, +1.0f, p.y(), 0u, extent.height, c1.y(), false);
 
-		p = barycenter(vertices.at(4), vertices.at(9), vertices.at(8));
+		p = barycenter(vertices.at(4), vertices.at(2), vertices.at(8));
 		transformDistance(-1.0f, +1.0f, p.x(), 0u, extent.width, c2.x(), false);
 		transformDistance(-1.0f, +1.0f, p.y(), 0u, extent.height, c2.y(), false);
 	}
@@ -962,6 +969,23 @@ void readColors (
 			v.emplace<1>(colorBuffer, extent.width * fi.componentCount, extent.height);
 		else
 			v.emplace<2>(colorBuffer, extent.width * fi.componentCount, extent.height);
+	}
+	else if (fi.pack)
+	{
+		switch (fi.pack)
+		{
+		case 32:
+			v.emplace<4>(colorBuffer, extent.width, extent.height);
+			break;
+		case 16:
+			v.emplace<6>(colorBuffer, extent.width, extent.height);
+			break;
+		case 8:
+			v.emplace<8>(colorBuffer, extent.width, extent.height);
+			break;
+		default:
+			ASSERTFALSE("Unknown format ", fi.name);
+		}
 	}
 	else
 	{
@@ -991,27 +1015,36 @@ void readColors (
 	std::visit([&](const auto& a) {
 		if constexpr (std::negation_v<std::is_same<std::monostate, std::decay_t<decltype(a)>>>)
 		{
-			switch (fi.componentCount)
+			if (fi.pack)
 			{
-			case 4:
-				color0.a(a.asColor((c0.x() * fi.componentCount) + 3, c0.y()).x());
-				color1.a(a.asColor((c1.x() * fi.componentCount) + 3, c1.y()).x());
-				color2.a(a.asColor((c2.x() * fi.componentCount) + 3, c2.y()).x());
-				[[fallthrough]];
-			case 3:
-				color0.b(a.asColor((c0.x() * fi.componentCount) + 2, c0.y()).x());
-				color1.b(a.asColor((c1.x() * fi.componentCount) + 2, c1.y()).x());
-				color2.b(a.asColor((c2.x() * fi.componentCount) + 2, c2.y()).x());
-				[[fallthrough]];
-			case 2:
-				color0.g(a.asColor((c0.x() * fi.componentCount) + 1, c0.y()).x());
-				color1.g(a.asColor((c1.x() * fi.componentCount) + 1, c1.y()).x());
-				color2.g(a.asColor((c2.x() * fi.componentCount) + 1, c2.y()).x());
-				[[fallthrough]];
-			case 1:
-				color0.r(a.asColor((c0.x() * fi.componentCount) + 0, c0.y()).x());
-				color1.r(a.asColor((c1.x() * fi.componentCount) + 0, c1.y()).x());
-				color2.r(a.asColor((c2.x() * fi.componentCount) + 0, c2.y()).x());
+				color0 = a.asColor(format, c0.x(), c0.y());
+				color1 = a.asColor(format, c1.x(), c1.y());
+				color2 = a.asColor(format, c2.x(), c2.y());
+			}
+			else
+			{
+				switch (fi.componentCount)
+				{
+				case 4:
+					color0.a(a.asColor(format, (c0.x() * fi.componentCount) + 3, c0.y()).x());
+					color1.a(a.asColor(format, (c1.x() * fi.componentCount) + 3, c1.y()).x());
+					color2.a(a.asColor(format, (c2.x() * fi.componentCount) + 3, c2.y()).x());
+					[[fallthrough]];
+				case 3:
+					color0.b(a.asColor(format, (c0.x() * fi.componentCount) + 2, c0.y()).x());
+					color1.b(a.asColor(format, (c1.x() * fi.componentCount) + 2, c1.y()).x());
+					color2.b(a.asColor(format, (c2.x() * fi.componentCount) + 2, c2.y()).x());
+					[[fallthrough]];
+				case 2:
+					color0.g(a.asColor(format, (c0.x() * fi.componentCount) + 1, c0.y()).x());
+					color1.g(a.asColor(format, (c1.x() * fi.componentCount) + 1, c1.y()).x());
+					color2.g(a.asColor(format, (c2.x() * fi.componentCount) + 1, c2.y()).x());
+					[[fallthrough]];
+				case 1:
+					color0.r(a.asColor(format, (c0.x() * fi.componentCount) + 0, c0.y()).x());
+					color1.r(a.asColor(format, (c1.x() * fi.componentCount) + 0, c1.y()).x());
+					color2.r(a.asColor(format, (c2.x() * fi.componentCount) + 0, c2.y()).x());
+				}
 			}
 		}
 	}, v);
@@ -1024,84 +1057,84 @@ class BlendEquation
 	const Vec4 m_color1;
 	const Vec4 m_color2;
 	const Vec4 m_colorC;
-	const bool m_reverseAlpha;
+	const bool m_swapAlpha;
 	const float m_epsilon;
 public:
-	BlendEquation(add_cref<VkPipelineColorBlendAttachmentState> state, bool reverseAlpha, float epsilon,
+	BlendEquation(add_cref<VkPipelineColorBlendAttachmentState> state, bool swapAlpha, float epsilon,
 		add_cref<Vec4> color0, add_cref<Vec4> color1, add_cref<Vec4> color2, add_cref<Vec4> colorC)
-		: m_state			(state)
-		, m_color0			(color0)
-		, m_color1			(color1)
-		, m_color2			(color2)
-		, m_colorC			(colorC)
-		, m_reverseAlpha	(reverseAlpha)
-		, m_epsilon			(epsilon) {}
-	std::string getText(add_ref<VecX<bool, 4>> matchingResult) const
+		: m_state		(state)
+		, m_color0		(color0)
+		, m_color1		(color1)
+		, m_color2		(color2)
+		, m_colorC		(colorC)
+		, m_swapAlpha	(swapAlpha)
+		, m_epsilon		(epsilon) {}
+	std::string getText(add_ref<BoolVec4> matchingResult) const
 	{
-		std::ostringstream lhs, rhs, res;
-		Vec3 color0, color1, color2;
-		const Vec3 mColor0 = m_color0.cast<Vec3>();
-		const Vec3 mColor1 = m_color1.cast<Vec3>();
-		const float mAlpha0 = m_reverseAlpha ? m_color1.a() : m_color0.a();
-		const float mAlpha1 = m_reverseAlpha ? m_color0.a() : m_color1.a();
+		std::ostringstream strSrcColorFactor, strDstColorFactor, res;
+		Vec3 srcColorFactor, dstColorFactor, color2;
+		const Vec3 mColorSrc = m_color0.cast<Vec3>();
+		const Vec3 mColorDst = m_color1.cast<Vec3>();
+		const float mAlphaSrc = m_swapAlpha ? m_color1.a() : m_color0.a();
+		const float mAlphaDst = m_swapAlpha ? m_color0.a() : m_color1.a();
 
 		switch (m_state.srcColorBlendFactor)
 		{
 		case VK_BLEND_FACTOR_ZERO:
-			color0 = Vec3();
-			lhs << Vec3();
+			srcColorFactor = Vec3();
+			strSrcColorFactor << Vec3();
 			break;
 		case VK_BLEND_FACTOR_ONE:
-			color0 = Vec3(1);
-			lhs << Vec3(1);
+			srcColorFactor = Vec3(1);
+			strSrcColorFactor << Vec3(1);
 			break;
 		case VK_BLEND_FACTOR_SRC_COLOR:
-			color0 = mColor0;
-			lhs << mColor0;
+			srcColorFactor = mColorSrc;
+			strSrcColorFactor << mColorSrc;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR:
-			color0 = Vec3(1) - mColor0;
-			lhs << '(' << Vec3(1) << " - " << mColor0 << ')';
+			srcColorFactor = Vec3(1) - mColorSrc;
+			strSrcColorFactor << '(' << Vec3(1) << " - " << mColorSrc << ')';
 			break;
 		case VK_BLEND_FACTOR_DST_COLOR:
 		case VK_BLEND_FACTOR_SRC1_COLOR:
-			color0 = mColor1;
-			lhs << mColor1;
+			srcColorFactor = mColorDst;
+			strSrcColorFactor << mColorDst;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR:
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR:
-			color0 = Vec3(1) - mColor1;
-			lhs << '(' << Vec3(1) << " - " << mColor1 << ')';
+			srcColorFactor = Vec3(1) - mColorDst;
+			strSrcColorFactor << '(' << Vec3(1) << " - " << mColorDst << ')';
 			break;
 		case VK_BLEND_FACTOR_CONSTANT_ALPHA:
-			color0 = m_colorC.a();
-			lhs << m_colorC.a();
+			srcColorFactor = m_colorC.a();
+			strSrcColorFactor << m_colorC.a();
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA:
-			color0 = (1.0f - m_colorC.a());
-			lhs << "(1.0 - " << m_colorC.a() << ")";
+			srcColorFactor = (1.0f - m_colorC.a());
+			strSrcColorFactor << "(1.0 - " << m_colorC.a() << ")";
 			break;
 		case VK_BLEND_FACTOR_SRC_ALPHA:
-			color0 = mAlpha0;
-			lhs << mAlpha0;
+			srcColorFactor = mAlphaSrc;
+			strSrcColorFactor << mAlphaSrc;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA:
-			color0 = (1.0f - mAlpha0);
-			lhs << "(1.0 - " << mAlpha0 << ")";
+			srcColorFactor = (1.0f - mAlphaSrc);
+			strSrcColorFactor << "(1.0 - " << mAlphaSrc << ")";
 			break;
 		case VK_BLEND_FACTOR_DST_ALPHA:
 		case VK_BLEND_FACTOR_SRC1_ALPHA:
-			color0 = mAlpha1;
-			lhs << mAlpha1;
+			srcColorFactor = mAlphaDst;
+			strSrcColorFactor << mAlphaDst;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA:
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA:
-			color0 = (1 - mAlpha1);
-			lhs << "(1.0 - " << mAlpha1 << ")";
+			srcColorFactor = (1 - mAlphaDst);
+			strSrcColorFactor << "(1.0 - " << mAlphaDst << ")";
 			break;
 		case VK_BLEND_FACTOR_SRC_ALPHA_SATURATE:
-			color0 = Vec3(std::min(mAlpha0, 1.0f - mAlpha1));
-			lhs << "min(" << Vec3(mAlpha0) << ", " << Vec3(1.0f - mAlpha1) << ")";
+			srcColorFactor = Vec3(std::min(mAlphaSrc, 1.0f - mAlphaDst));
+			strSrcColorFactor << "min(" << Vec3(mAlphaSrc) << ", " << Vec3(1.0f - mAlphaDst) << ")";
 			break;
 		default:
 			break;
@@ -1110,56 +1143,56 @@ public:
 		switch (m_state.dstColorBlendFactor)
 		{
 		case VK_BLEND_FACTOR_ZERO:
-			color1 = Vec3();
-			rhs << Vec3();
+			dstColorFactor = Vec3();
+			strDstColorFactor << Vec3();
 			break;
 		case VK_BLEND_FACTOR_ONE:
-			color1 = Vec3(1);
-			rhs << Vec3(1);
+			dstColorFactor = Vec3(1);
+			strDstColorFactor << Vec3(1);
 			break;
 		case VK_BLEND_FACTOR_SRC_COLOR:
-			color1 = mColor0;
-			rhs << mColor0;
+			dstColorFactor = mColorSrc;
+			strDstColorFactor << mColorSrc;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR:
-			color1 = Vec3(1) - mColor0;
-			rhs << '(' << Vec3(1) << " - " << mColor0 << ')';
+			dstColorFactor = Vec3(1) - mColorSrc;
+			strDstColorFactor << '(' << Vec3(1) << " - " << mColorSrc << ')';
 			break;
 		case VK_BLEND_FACTOR_DST_COLOR:
 		case VK_BLEND_FACTOR_SRC1_COLOR:
-			color1 = mColor1;
-			rhs << mColor1;
+			dstColorFactor = mColorDst;
+			strDstColorFactor << mColorDst;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR:
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR:
-			color1 = Vec3(1) - mColor1;
-			rhs << '(' << Vec3(1) << " - " << mColor1 << ')';
+			dstColorFactor = Vec3(1) - mColorDst;
+			strDstColorFactor << '(' << Vec3(1) << " - " << mColorDst << ')';
 			break;
 		case VK_BLEND_FACTOR_CONSTANT_ALPHA:
-			color1 = m_colorC.a();
-			rhs << m_colorC.a();
+			dstColorFactor = m_colorC.a();
+			strDstColorFactor << m_colorC.a();
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA:
-			color1 = (1.0f - m_colorC.a());
-			rhs << "(1.0 - " << m_colorC.a();
+			dstColorFactor = (1.0f - m_colorC.a());
+			strDstColorFactor << "(1.0 - " << m_colorC.a();
 			break;
 		case VK_BLEND_FACTOR_SRC_ALPHA:
-			color1 = mAlpha0;
-			rhs << mAlpha0;
+			dstColorFactor = mAlphaSrc;
+			strDstColorFactor << mAlphaSrc;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA:
-			color1 = (1.0f - mAlpha0);
-			rhs << "(1.0 - " << mAlpha0 << ')';
+			dstColorFactor = (1.0f - mAlphaSrc);
+			strDstColorFactor << "(1.0 - " << mAlphaSrc << ')';
 			break;
 		case VK_BLEND_FACTOR_DST_ALPHA:
 		case VK_BLEND_FACTOR_SRC1_ALPHA:
-			color1 = mAlpha1;
-			rhs << mAlpha1;
+			dstColorFactor = mAlphaDst;
+			strDstColorFactor << mAlphaDst;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA:
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA:
-			color1 = (1.0f - mAlpha1);
-			rhs << "(1.0 - " << mAlpha1 << ")";
+			dstColorFactor = (1.0f - mAlphaDst);
+			strDstColorFactor << "(1.0 - " << mAlphaDst << ")";
 			break;
 		default:
 			break;
@@ -1168,73 +1201,67 @@ public:
 		switch (m_state.colorBlendOp)
 		{
 		case VK_BLEND_OP_ADD:
-			color2 = color1 * mColor1 + color0 * mColor0;
-			res << rhs.str() << " * " << mColor1 << " + " << lhs.str() << " * " << mColor0;
+			color2 = srcColorFactor * mColorSrc + dstColorFactor * mColorDst;
+			res << strSrcColorFactor.str() << " * " << mColorSrc << " + " << strDstColorFactor.str() << " * " << mColorDst;
 			break;
 		case VK_BLEND_OP_SUBTRACT:
-			color2 = color1 * mColor1 - color0 * mColor0;
-			res << rhs.str() << " * " << mColor1 << " - " << lhs.str() << " * " << mColor0;
+			color2 = srcColorFactor * mColorSrc - dstColorFactor * mColorDst;
+			res << strSrcColorFactor.str() << " * " << mColorSrc << " - " << strDstColorFactor.str() << " * " << mColorDst;
 			break;
 		case VK_BLEND_OP_REVERSE_SUBTRACT:
-			color2 = color0 * mColor0 - color1 * mColor1;
-			res << lhs.str() << " * " << mColor0 << " - " << rhs.str() << " * " << mColor1;
+			color2 = dstColorFactor * mColorDst - srcColorFactor * mColorSrc;
+			res << strDstColorFactor.str() << " * " << mColorDst << " - " << strSrcColorFactor.str() << " * " << mColorSrc;
 			break;
 		case VK_BLEND_OP_MIN:
-			color2 = mColor0.min(mColor1);
-			res << "min(" << mColor1 << ", " << mColor0 << ")";
+			color2 = mColorSrc.min(mColorDst);
+			res << "min(" << mColorSrc << ", " << mColorDst << ")";
 			break;
 		case VK_BLEND_OP_MAX:
-			color2 = mColor0.max(mColor1);
-			res << "max(" << mColor1 << ", " << mColor0 << ")";
+			color2 = mColorSrc.max(mColorDst);
+			res << "max(" << mColorSrc << ", " << mColorDst << ")";
 			break;
 		default:
 			break;
 		}
 
-		float alpha0 = 0.0f, alpha1 = 0.0f;
-		std::ostringstream lhsAlpha, rhsAlpha;
+		float srcAlphaFactor = 0.0f, dstAlphaFactor = 0.0f;
+		std::ostringstream strSrcAlphaFactor, strDstAlphaFactor;
 
 		switch (m_state.srcAlphaBlendFactor)
 		{
 		case VK_BLEND_FACTOR_ZERO:
-			alpha0 = 0.0f; lhsAlpha << "0.0";
+			srcAlphaFactor = 0.0f; strSrcAlphaFactor << "0.0";
 			break;
 		case VK_BLEND_FACTOR_ONE:
-			alpha0 = 1.0f; lhsAlpha << "1.0";
+			srcAlphaFactor = 1.0f; strSrcAlphaFactor << "1.0";
 			break;
 		case VK_BLEND_FACTOR_SRC_ALPHA:
 		case VK_BLEND_FACTOR_SRC_COLOR:
-			//alpha0 = m_color0.a(); lhsAlpha << m_color0.a();
-			alpha0 = mAlpha0; lhsAlpha << mAlpha0;
+			srcAlphaFactor = mAlphaSrc; strSrcAlphaFactor << mAlphaSrc;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA:
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR:
-			//alpha0 = 1.0f - m_color0.a(); lhsAlpha << "(1.0 - " << m_color0.a() << ")";
-			alpha0 = 1.0f - mAlpha0; lhsAlpha << "(1.0 - " << mAlpha0 << ")";
+			srcAlphaFactor = 1.0f - mAlphaSrc; strSrcAlphaFactor << "(1.0 - " << mAlphaSrc << ")";
 			break;
 		case VK_BLEND_FACTOR_DST_ALPHA:
 		case VK_BLEND_FACTOR_DST_COLOR:
 		case VK_BLEND_FACTOR_SRC1_COLOR:
-			//alpha0 = m_color1.a(); lhsAlpha << m_color1.a();
-			alpha0 = mAlpha1; lhsAlpha << mAlpha1;
+			srcAlphaFactor = mAlphaDst; strSrcAlphaFactor << mAlphaDst;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA:
 		case VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR:
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR:
-			//alpha0 = 1.0f - m_color1.a(); lhsAlpha << "(1.0 - " << m_color1.a() << ")";
-			alpha0 = 1.0f - mAlpha1; lhsAlpha << "(1.0 - " << mAlpha1 << ")";
+			srcAlphaFactor = 1.0f - mAlphaDst; strSrcAlphaFactor << "(1.0 - " << mAlphaDst << ")";
 			break;
 		case VK_BLEND_FACTOR_SRC_ALPHA_SATURATE:
-			//alpha0 = std::min(m_color0.a(), 1.0f - m_color1.a());
-			//lhsAlpha << "min(" << m_color0.a() << ", 1.0 - " << m_color1.a() << ")";
-			alpha0 = std::min(mAlpha0, 1.0f - mAlpha1);
-			lhsAlpha << "min(" << mAlpha0 << ", 1.0 - " << mAlpha1 << ")";
+			srcAlphaFactor = std::min(mAlphaSrc, 1.0f - mAlphaDst);
+			strSrcAlphaFactor << "min(" << mAlphaSrc << ", 1.0 - " << mAlphaDst << ")";
 			break;
 		case VK_BLEND_FACTOR_CONSTANT_ALPHA:
-			alpha0 = m_colorC.a(); lhsAlpha << m_colorC.a();
+			srcAlphaFactor = m_colorC.a(); strSrcAlphaFactor << m_colorC.a();
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA:
-			alpha0 = 1.0f - m_colorC.a(); lhsAlpha << "(1.0 - " << m_colorC.a() << ")";
+			srcAlphaFactor = 1.0f - m_colorC.a(); strSrcAlphaFactor << "(1.0 - " << m_colorC.a() << ")";
 			break;
 		default:
 			break;
@@ -1243,38 +1270,34 @@ public:
 		switch (m_state.dstAlphaBlendFactor)
 		{
 		case VK_BLEND_FACTOR_ZERO:
-			alpha1 = 0.0f; rhsAlpha << "0.0";
+			dstAlphaFactor = 0.0f; strDstAlphaFactor << "0.0";
 			break;
 		case VK_BLEND_FACTOR_ONE:
-			alpha1 = 1.0f; rhsAlpha << "1.0";
+			dstAlphaFactor = 1.0f; strDstAlphaFactor << "1.0";
 			break;
 		case VK_BLEND_FACTOR_SRC_ALPHA:
 		case VK_BLEND_FACTOR_SRC_COLOR:
-			//alpha1 = m_color0.a(); rhsAlpha << m_color0.a();
-			alpha1 = mAlpha0; rhsAlpha << mAlpha0;
+			dstAlphaFactor = mAlphaSrc; strDstAlphaFactor << mAlphaSrc;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA:
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR:
-			//alpha1 = 1.0f - m_color0.a(); rhsAlpha << "(1.0 - " << m_color0.a() << ")";
-			alpha1 = 1.0f - mAlpha0; rhsAlpha << "(1.0 - " << mAlpha0 << ")";
+			dstAlphaFactor = 1.0f - mAlphaSrc; strDstAlphaFactor << "(1.0 - " << mAlphaSrc << ")";
 			break;
 		case VK_BLEND_FACTOR_DST_ALPHA:
 		case VK_BLEND_FACTOR_DST_COLOR:
 		case VK_BLEND_FACTOR_SRC1_COLOR:
-			//alpha1 = m_color1.a(); rhsAlpha << m_color1.a();
-			alpha1 = mAlpha1; rhsAlpha << mAlpha1;
+			dstAlphaFactor = mAlphaDst; strDstAlphaFactor << mAlphaDst;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA:
 		case VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR:
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR:
-			//alpha1 = 1.0f - m_color1.a(); rhsAlpha << "(1.0 - " << m_color1.a() << ")";
-			alpha1 = 1.0f - mAlpha1; rhsAlpha << "(1.0 - " << mAlpha1 << ")";
+			dstAlphaFactor = 1.0f - mAlphaDst; strDstAlphaFactor << "(1.0 - " << mAlphaDst << ")";
 			break;
 		case VK_BLEND_FACTOR_CONSTANT_ALPHA:
-			alpha1 = m_colorC.a(); rhsAlpha << m_colorC.a();
+			dstAlphaFactor = m_colorC.a(); strDstAlphaFactor << m_colorC.a();
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA:
-			alpha1 = 1.0f - m_colorC.a(); rhsAlpha << "(1.0 - " << m_colorC.a() << ")";
+			dstAlphaFactor = 1.0f - m_colorC.a(); strDstAlphaFactor << "(1.0 - " << m_colorC.a() << ")";
 			break;
 		default:
 			break;
@@ -1285,46 +1308,40 @@ public:
 		switch (m_state.alphaBlendOp)
 		{
 		case VK_BLEND_OP_ADD:
-			//alphaResult = alpha0 * m_color0.a() + alpha1 * m_color1.a();
-			//resAlpha << lhsAlpha.str() << " * " << m_color0.a() << " + " << rhsAlpha.str() << " * " << m_color1.a();
-			alphaResult = alpha0 * mAlpha0 + alpha1 * mAlpha1;
-			resAlpha << lhsAlpha.str() << " * " << mAlpha0 << " + " << rhsAlpha.str() << " * " << mAlpha1;
+			alphaResult = srcAlphaFactor * mAlphaSrc + dstAlphaFactor * mAlphaDst;
+			resAlpha << strSrcAlphaFactor.str() << " * " << mAlphaSrc << " + " << strDstAlphaFactor.str() << " * " << mAlphaDst;
 			break;
 		case VK_BLEND_OP_SUBTRACT:
-			//alphaResult = m_color1.a() * alpha1 - m_color0.a() * alpha0;
-			//resAlpha << rhsAlpha.str() << " * " << m_color1.a() << " - " << lhsAlpha.str() << " * " << m_color0.a();
-			if (m_reverseAlpha)
+			if (m_swapAlpha)
 			{
-				alphaResult = alpha0 * mAlpha0 - alpha1 * mAlpha1;
-				resAlpha << lhsAlpha.str() << " * " << mAlpha0 << " - " << rhsAlpha.str() << " * " << mAlpha1;
+				alphaResult = dstAlphaFactor * mAlphaDst - srcAlphaFactor * mAlphaSrc;
+				resAlpha << strDstAlphaFactor.str() << " * " << mAlphaDst << " - " << strSrcAlphaFactor.str() << " * " << mAlphaSrc;
 			}
 			else
 			{
-				alphaResult = alpha1 * mAlpha1 - alpha0 * mAlpha0;
-				resAlpha << rhsAlpha.str() << " * " << mAlpha1 << " - " << lhsAlpha.str() << " * " << mAlpha0;
+				alphaResult = srcAlphaFactor * mAlphaSrc - dstAlphaFactor * mAlphaDst;
+				resAlpha << strSrcAlphaFactor.str() << " * " << mAlphaSrc << " - " << strDstAlphaFactor.str() << " * " << mAlphaDst;
 			}
 			break;
 		case VK_BLEND_OP_REVERSE_SUBTRACT:
-			//alphaResult = m_color0.a() * alpha0 - m_color1.a() * alpha1;
-			//resAlpha << lhsAlpha.str() << " * " << m_color0.a() << " - " << rhsAlpha.str() << " * " << m_color1.a();
-			if (m_reverseAlpha)
+			if (m_swapAlpha)
 			{
-				alphaResult = alpha1 * mAlpha1 - alpha0 * mAlpha0;
-				resAlpha << rhsAlpha.str() << " * " << mAlpha1 << " - " << lhsAlpha.str() << " * " << mAlpha0;
+				alphaResult = srcAlphaFactor * mAlphaSrc - dstAlphaFactor * mAlphaDst;
+				resAlpha << strSrcAlphaFactor.str() << " * " << mAlphaSrc << " - " << strDstAlphaFactor.str() << " * " << mAlphaDst;
 			}
 			else
 			{
-				alphaResult = alpha0 * mAlpha0 - alpha1 * mAlpha1;
-				resAlpha << lhsAlpha.str() << " * " << mAlpha0 << " - " << rhsAlpha.str() << " * " << mAlpha1;
+				alphaResult = dstAlphaFactor * mAlphaDst - srcAlphaFactor * mAlphaSrc;
+				resAlpha << strDstAlphaFactor.str() << " * " << mAlphaDst << " - " << strSrcAlphaFactor.str() << " * " << mAlphaSrc;
 			}
 			break;
 		case VK_BLEND_OP_MIN:
-			alphaResult = std::min(alpha0, alpha1);
-			resAlpha << "min(" << lhsAlpha.str() << ", " << rhsAlpha.str() << ")";
+			alphaResult = std::min(srcAlphaFactor, dstAlphaFactor);
+			resAlpha << "min(" << strSrcAlphaFactor.str() << ", " << strDstAlphaFactor.str() << ")";
 			break;
 		case VK_BLEND_OP_MAX:
-			alphaResult = std::max(alpha0, alpha1);
-			resAlpha << "max(" << lhsAlpha.str() << ", " << rhsAlpha.str() << ")";
+			alphaResult = std::max(srcAlphaFactor, dstAlphaFactor);
+			resAlpha << "max(" << strSrcAlphaFactor.str() << ", " << strDstAlphaFactor.str() << ")";
 			break;
 		default:
 			break;
@@ -1339,10 +1356,12 @@ public:
 
 		const Vec4 colorResult(color2.r(), color2.g(), color2.b(), alphaResult);
 		const auto colorMatches = colorResult.matches(m_color2, DVec4(m_epsilon));
+		const bool colorMatchesState = colorMatches == BoolVec4(true);
 		eq << "Color: " << res.str() << " = " << colorResult << "; expected: " << m_color2 << std::endl;
 		eq << "Color comparison result: [";
 		eq << boolean(colorMatches.r()) << ", "	<< boolean(colorMatches.g()) << ", "
 			<< boolean(colorMatches.b()) << ", " << boolean(colorMatches.a()) << ']';
+		eq << ", " << (colorMatchesState ? " matches" : " DOESN'T MATCH");
 
 		matchingResult = colorMatches;
 
@@ -1441,22 +1460,16 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 		ZImageMemoryBarrier	dstPreBlit		(displayImage, VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
 															VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 		commandBufferBegin(displayCmd);
+			commandBufferClearColorImage(displayCmd, colorImage, makeClearColorValue(Vec4()));
 			commandBufferBindIndexBuffer(displayCmd, indexBuffer);
 			commandBufferBindVertexBuffers(displayCmd, vertices);
 			{
 				commandBufferPushConstants(displayCmd, colorLayout, pc);
 				commandBufferBindPipeline(displayCmd, backgroundPipeline);
 				auto rpbi = commandBufferBeginRenderPass(displayCmd, colorFB, 0);
-				vkCmdDrawIndexed(*displayCmd, 12, 1, 0, 0, 0);
-				vkCmdDrawIndexed(*displayCmd, 12, 1, 18, 0, 1);
-				if (useDualBlend)
-				{
-					vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 2);
-				}
-				else
-				{
-					vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 0);
-				}
+				vkCmdDrawIndexed(*displayCmd, 12, 1, 0, 0, 0);	// color0 sample
+				vkCmdDrawIndexed(*displayCmd, 12, 1, 18, 0, 1);	// color1 sample
+				vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 0);	// color0 blending area
 				commandBufferEndRenderPass(rpbi);
 			}
 			{
@@ -1495,7 +1508,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 
 	ZRenderPass swapRenderPass = createColorRenderPass(ctx.device, { ctx.surfaceFormat });
 
-	std::vector<VecX<bool, 4>> results(data_count(set));
+	std::vector<BoolVec4> results(data_count(set));
 	auto onAfterRecording = [&](add_ref<Canvas>) -> void
 	{
 		const uint32_t				testIndex	(ev.testCounter);
@@ -1511,7 +1524,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 		readColors(vertexBuffer, colorBuffer, TestParams::defaultExtent,
 					colorFormat, color0, color1, color2);
 
-		const BlendEquation beq(currParams.getState(false), currParams.reverseAlpha, currParams.epsilon,
+		const BlendEquation beq(currParams.getState(false), currParams.swapAlpha, currParams.epsilon,
 								color0, color1, color2, currParams.constColor);
 		std::cout << beq.getText(results[testIndex]) << std::endl;
 	};
@@ -1519,7 +1532,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 	ctx.run(onCommandRecording, swapRenderPass, std::ref(ev.swapTrigger), {/*onIdle()*/}, onAfterRecording);
 
 	uint32_t failCount = 0u;
-	for (add_cref<VecX<bool, 4>> res : results)
+	for (add_cref<BoolVec4> res : results)
 	{
 		if (false == (res.a() && res.g() && res.b() && res.a()))
 			failCount = failCount + 1u;
