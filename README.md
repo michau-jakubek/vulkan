@@ -13,7 +13,7 @@ Together with aforementioned ones some third-party libraries are used, these are
 - [STB license](https://github.com/nothings/stb/blob/master/LICENSE)
 - [STL_READER license](https://github.com/sreiter/stl_reader/blob/master/LICENSE)
 
-[Installation](help/installation.html), [building](help/building.html) and [launching](help/launching.html)
+[Installation](help/installation.md) and [launching](help/launching.html)
 ------------------------
 
 Shaders
