@@ -1,0 +1,56 @@
+
+set(VERDIR ${CMAKE_CURRENT_SOURCE_DIR}/getvkhver)
+execute_process(
+	COMMAND ${CMAKE_COMMAND} -B ${VERDIR}/build -S ${VERDIR} -DINC="${VULKAN_INCLUDE_DIR}"
+	OUTPUT_QUIET
+	ERROR_QUIET
+	RESULT_VARIABLE CONF_RESULT
+)
+if (NOT CONF_RESULT EQUAL 0)
+	message(FATAL_ERROR "Failed to configure getvkhver")
+endif()
+
+execute_process(
+	COMMAND ${CMAKE_COMMAND} --build ${VERDIR}/build --target getvkhver
+	OUTPUT_QUIET
+	ERROR_QUIET
+	RESULT_VARIABLE BUILD_RESULT
+)
+if (NOT BUILD_RESULT EQUAL 0)
+	message(FATAL_ERROR "Failed to build getvkhver")
+endif()
+
+file(GLOB_RECURSE GETVKHVER_EXECUTABLE
+	"${VERDIR}/*/getvkhver${CMAKE_EXECUTABLE_SUFFIX}"
+)
+#message(STATUS "############### ${GETVKHVER_EXECUTABLE}")
+if (NOT GETVKHVER_EXECUTABLE)
+	message(FATAL_ERROR "Failed to find getvkhver executable")
+endif()
+
+execute_process(
+	COMMAND ${GETVKHVER_EXECUTABLE}
+	OUTPUT_VARIABLE GETVKHVER_OUTPUT
+	ERROR_QUIET
+	RESULT_VARIABLE RUN_RESULT
+)
+if (NOT RUN_RESULT EQUAL 0)
+	message(FATAL_ERROR "Failed to run getvkhver")
+endif()
+message(STATUS "Found VK_HEADER_VERSION_COMPLETE=(${GETVKHVER_OUTPUT})")
+
+string(REGEX MATCH "([0-9]+),([0-9]+),([0-9]+),([0-9]+)" VERSION_MATCH "${GETVKHVER_OUTPUT}")
+if (VERSION_MATCH)
+	string(REGEX REPLACE "([0-9]+),([0-9]+),([0-9]+),([0-9]+)" "\\1" VULKAN_HEADER_VERSION_VARIANT "${VERSION_MATCH}")
+    string(REGEX REPLACE "([0-9]+),([0-9]+),([0-9]+),([0-9]+)" "\\2" VULKAN_HEADER_VERSION_MAJOR   "${VERSION_MATCH}")
+    string(REGEX REPLACE "([0-9]+),([0-9]+),([0-9]+),([0-9]+)" "\\3" VULKAN_HEADER_VERSION_MINOR   "${VERSION_MATCH}")
+    string(REGEX REPLACE "([0-9]+),([0-9]+),([0-9]+),([0-9]+)" "\\4" VULKAN_HEADER_VERSION_PATCH   "${VERSION_MATCH}")
+else()
+    message(FATAL_ERROR "Failed to parse VK_HEADER_VERSION_COMPLETE")
+endif()
+
+add_definitions(-DVULKAN_HEADER_VERSION_VARIANT=${VULKAN_HEADER_VERSION_VARIANT})
+add_definitions(-DVULKAN_HEADER_VERSION_MAJOR=${VULKAN_HEADER_VERSION_MAJOR})
+add_definitions(-DVULKAN_HEADER_VERSION_MINOR=${VULKAN_HEADER_VERSION_MINOR})
+add_definitions(-DVULKAN_HEADER_VERSION_PATCH=${VULKAN_HEADER_VERSION_PATCH})
+

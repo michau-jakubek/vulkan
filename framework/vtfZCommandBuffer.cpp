@@ -205,6 +205,15 @@ void commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkDeviceS
 	vkCmdBindIndexBuffer(*cmd, *buffer, offset, indexType);
 }
 
+void commandBufferBindDescriptorBuffer (ZCommandBuffer cmd, ZBuffer buffer)
+{
+	VkDescriptorBufferBindingInfoEXT info = makeVkStruct();
+	info.address = bufferGetAddress(buffer);
+	info.usage = buffer.getParamRef<VkBufferCreateInfo>().usage;
+	cmd.getParam<ZDevice>().getInterface()
+		.vkCmdBindDescriptorBuffersEXT(*cmd, 1u, &info);
+}
+
 static bool verifyPushConstants (
 	std::size_t										count,
 	add_cptr<std::size_t>							sizes,

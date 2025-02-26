@@ -31,6 +31,7 @@ static ZBuffer	createBuffer (ZDevice					device,
 	ZPhysicalDevice							phys		= device.getParam<ZPhysicalDevice>();
 	add_cref<VkPhysicalDeviceProperties>	pdp			= phys.getParamRef<VkPhysicalDeviceProperties>();
 	const bool								sparse		= flags.contain(VK_BUFFER_CREATE_SPARSE_BINDING_BIT);
+	const bool								devaddr		= usage.contain(VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 
 	if (VkBufferUsageFlags(usage) & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)
 	{
@@ -54,7 +55,7 @@ static ZBuffer	createBuffer (ZDevice					device,
 	VkMemoryRequirements memRequirements;
 	vkGetBufferMemoryRequirements(*device, handle, &memRequirements);
 
-	auto allocations = createMemory(device, memRequirements, VkMemoryPropertyFlags(properties), size, sparse);
+	auto allocations = createMemory(device, memRequirements, VkMemoryPropertyFlags(properties), size, sparse, devaddr);
 	if (false == sparse)
 	{
 		for (add_ref<ZDeviceMemory> alloc : allocations)
@@ -367,6 +368,26 @@ void bufferFlush (ZBuffer buffer)
 VkDeviceSize bufferGetSize (ZBuffer buffer)
 {
 	return buffer.getParam<VkDeviceSize>();
+}
+
+VkDeviceAddress	bufferGetAddress (ZBuffer buffer)
+{
+	const VkBufferUsageFlags usage = buffer.getParamRef<VkBufferCreateInfo>().usage;
+	ASSERTMSG((usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT),
+		"Buffer was not created with VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT flag");
+	VkBufferDeviceAddressInfo info = makeVkStruct();
+	info.buffer = *buffer;
+	ZDevice device = buffer.getParam<ZDevice>();
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	VkDeviceAddress addr = 0;
+	if (di.vkGetBufferDeviceAddress)
+		addr = di.vkGetBufferDeviceAddress(*device, &info);
+	else if (di.vkGetBufferDeviceAddressKHR)
+		addr = di.vkGetBufferDeviceAddress(*device, &info);
+	else if (di.vkGetBufferDeviceAddressEXT)
+		addr = di.vkGetBufferDeviceAddressEXT(*device, &info);
+	ASSERTMSG(addr, "Device address of buffer must not be zero");
+	return addr;
 }
 
 VkDeviceSize bufferGetMemorySize	(ZBuffer buffer, uint32_t index)

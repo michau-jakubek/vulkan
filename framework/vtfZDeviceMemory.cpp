@@ -22,13 +22,14 @@ uint32_t findMemoryTypeIndex (ZDevice device, uint32_t memoryTypeBits, VkMemoryP
 }
 
 std::vector<ZDeviceMemory> createMemory (ZDevice device, add_cref<VkMemoryRequirements> requirements,
-										VkMemoryPropertyFlags properties, VkDeviceSize desiredSize, bool sparse)
+										VkMemoryPropertyFlags properties, VkDeviceSize desiredSize,
+										bool sparse, bool deviceAddress)
 {
 	auto						callbacks		= device.getParam<VkAllocationCallbacksPtr>();
 	const uint32_t				chunkCount		= (uint32_t)(sparse ? ROUNDUP(desiredSize, requirements.alignment) / requirements.alignment : 1u);
 	const VkDeviceSize			allocationSize = sparse ? requirements.alignment : ROUNDUP(requirements.size, requirements.alignment);
 	const uint32_t				memoryTypeIndex = findMemoryTypeIndex(device, requirements.memoryTypeBits, properties);
-	add_ptr<void>				pNext			{ /* VkExternalMemoryBufferCreateInfo, VkExternalMemoryImageCreateInfo */ };
+	//add_ptr<void>				pNext			{ /* VkExternalMemoryBufferCreateInfo, VkExternalMemoryImageCreateInfo */ };
 	std::vector<ZDeviceMemory>	allocations		(chunkCount);
 
 	VkExternalMemoryImageCreateInfo ici{};
@@ -36,6 +37,10 @@ std::vector<ZDeviceMemory> createMemory (ZDevice device, add_cref<VkMemoryRequir
 	ibi.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT;
 	UNREF(ici);
 	UNREF(ibi);
+
+	VkMemoryAllocateFlagsInfo allocFlagsInfo = makeVkStruct();
+	allocFlagsInfo.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+	void_ptr pNext = deviceAddress ? &allocFlagsInfo : nullptr;
 
 	for (uint32_t chunk = 0u; chunk < chunkCount; ++chunk)
 	{

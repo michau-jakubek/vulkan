@@ -12,10 +12,10 @@ namespace vtf
 
 template<class> std::bad_typeid mkstype;
 
-//#define MKSTYPE_SELECT(what_, vkstructtype_, vkstructname_) \
+//#define MKSTYPE_SELECT(what_, vkstructtype_, vkstructname_)
 //	MKSTYPE_SELECT_IMPL(what_, vkstructtype_, vkstructname_)
 
-//#define MKSTYPE_SELECT_IMPL(what_, vkstructtype_, vkstructname_) \
+//#define MKSTYPE_SELECT_IMPL(what_, vkstructtype_, vkstructname_)
 //	MKSTYPE_SELECT_##what_(vkstructtype_, vkstructname_)
 
 #define MKSTYPE(vkstructtype_, vkstructname_) \
@@ -32,15 +32,15 @@ template<class> std::bad_typeid mkstype;
 
 #define MKSTYPE_EXTRACT_DEF(vkstructtype_, vkstructname_) ,vkstructtype_
 
-//#define MKSTYPE_SELECT_DEFINE_TYPE(vkstructtype_, vkstructname_) \
+//#define MKSTYPE_SELECT_DEFINE_TYPE(vkstructtype_, vkstructname_)
 //	template<> constexpr VkStructureType mkstype<vkstructtype_> = vkstructname_;
 
 //#define MKSTYPE_SELECT_EXTRACT_TYPE(vkstructtype_, vkstructname_) ,vkstructtype_
 
-//#define APPLY_DEFINE_TYPE(vkstructtype_, vkstructname_) \
+//#define APPLY_DEFINE_TYPE(vkstructtype_, vkstructname_)
 //	MKSTYPE_SELECT(DEFINE_TYPE, vkstructtype_, vkstructname_)
 
-//#define APPLY_EXTRACT_TYPE(vkstructtype_, vkstructname_) \
+//#define APPLY_EXTRACT_TYPE(vkstructtype_, vkstructname_)
 //    MKSTYPE_SELECT(EXTRACT_TYPE, vkstructtype_, vkstructname_)
 
 #define FEATURES_LIST(APPLY) \
@@ -58,7 +58,10 @@ APPLY(DEF, VkPhysicalDeviceSubgroupSizeControlFeatures, VK_STRUCTURE_TYPE_PHYSIC
 APPLY(DEF, VkPhysicalDeviceExtendedDynamicStateFeaturesEXT,	VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT) \
 APPLY(DEF, VkPhysicalDeviceShaderTerminateInvocationFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_TERMINATE_INVOCATION_FEATURES) \
 APPLY(DEF, VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DEMOTE_TO_HELPER_INVOCATION_FEATURES) \
-APPLY(DEF, VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR,	VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_UNIFORM_CONTROL_FLOW_FEATURES_KHR)
+APPLY(DEF, VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR,	VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_UNIFORM_CONTROL_FLOW_FEATURES_KHR) \
+APPLY(DEF, VkPhysicalDeviceDescriptorBufferFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT) \
+APPLY(DEF, VkPhysicalDeviceBufferDeviceAddressFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES)
+
 //APPLY(DEF, VkPhysicalDeviceFeatures, VK_STRUCTURE_TYPE_MAX_ENUM)
 MKSTYPE(VkPhysicalDeviceFeatures, VK_STRUCTURE_TYPE_MAX_ENUM);
 
@@ -131,6 +134,18 @@ MKSTYPE(VkCopyImageToBufferInfo2,					VK_STRUCTURE_TYPE_COPY_IMAGE_TO_BUFFER_INF
 MKSTYPE(VkCopyBufferToImageInfo2,					VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2);
 MKSTYPE(VkVertexInputAttributeDescription2EXT,		VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT);
 MKSTYPE(VkVertexInputBindingDescription2EXT,		VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT);
+MKSTYPE(VkMemoryAllocateFlagsInfo,					VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO);
+MKSTYPE(VkBufferDeviceAddressInfo,					VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO);
+MKSTYPE(VkDescriptorAddressInfoEXT,					VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT);
+MKSTYPE(VkDescriptorBufferBindingInfoEXT,			VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT);
+MKSTYPE(VkDescriptorBufferBindingPushDescriptorBufferHandleEXT, VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_PUSH_DESCRIPTOR_BUFFER_HANDLE_EXT);
+MKSTYPE(VkDescriptorGetInfoEXT,						VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT);
+MKSTYPE(VkBufferCaptureDescriptorDataInfoEXT,		VK_STRUCTURE_TYPE_BUFFER_CAPTURE_DESCRIPTOR_DATA_INFO_EXT);
+MKSTYPE(VkImageCaptureDescriptorDataInfoEXT,		VK_STRUCTURE_TYPE_IMAGE_CAPTURE_DESCRIPTOR_DATA_INFO_EXT);
+MKSTYPE(VkImageViewCaptureDescriptorDataInfoEXT,	VK_STRUCTURE_TYPE_IMAGE_VIEW_CAPTURE_DESCRIPTOR_DATA_INFO_EXT);
+MKSTYPE(VkSamplerCaptureDescriptorDataInfoEXT,		VK_STRUCTURE_TYPE_SAMPLER_CAPTURE_DESCRIPTOR_DATA_INFO_EXT);
+MKSTYPE(VkOpaqueCaptureDescriptorDataCreateInfoEXT,	VK_STRUCTURE_TYPE_OPAQUE_CAPTURE_DESCRIPTOR_DATA_CREATE_INFO_EXT);
+MKSTYPE(VkAccelerationStructureCaptureDescriptorDataInfoEXT, VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CAPTURE_DESCRIPTOR_DATA_INFO_EXT);
 
 struct makeVkStruct
 {

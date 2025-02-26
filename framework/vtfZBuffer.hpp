@@ -84,6 +84,7 @@ VkDeviceSize	bufferReadData	(ZBuffer buffer, uint8_t* dst, const VkBufferCopy& c
 VkDeviceSize	bufferReadData	(ZBuffer buffer, uint8_t* dst, VkDeviceSize size = VK_WHOLE_SIZE);
 
 VkDeviceSize	bufferGetSize		(ZBuffer buffer);
+VkDeviceAddress	bufferGetAddress	(ZBuffer buffer);
 ZDeviceMemory	bufferGetMemory		(ZBuffer buffer, uint32_t index);
 VkDeviceSize	bufferGetMemorySize	(ZBuffer buffer, uint32_t index = 0u);
 void			bufferBindMemory	(ZBuffer buffer, ZQueue sparseQueue);

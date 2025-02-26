@@ -174,7 +174,7 @@ ZImage createImage (ZDevice device, VkFormat format, VkImageType type, uint32_t 
 	VkMemoryRequirements memRequirements;
 	vkGetImageMemoryRequirements(*device, image, &memRequirements);
 
-	auto allocations = createMemory(device, memRequirements, properties(), memRequirements.size, false);
+	auto allocations = createMemory(device, memRequirements, properties(), memRequirements.size, false, false);
 
 	vkBindImageMemory(*device, image, *allocations.at(0), 0);
 

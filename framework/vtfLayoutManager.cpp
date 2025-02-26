@@ -4,6 +4,7 @@
 #include "vtfZBuffer.hpp"
 #include "vtfCUtils.hpp"
 #include "vtfStructUtils.hpp"
+#include "vtfTemplateUtils.hpp"
 
 static std::pair<VkDescriptorType, VkBufferUsageFlagBits>
 const DescriptorTypeToBufferUsage[]
@@ -257,7 +258,7 @@ ZDescriptorSetLayout LayoutManager::createDescriptorSetLayout (
 											descriptorSetLayout.setter()), "Failed to create descriptor set layout");
 
 	updateBuffersOffsets();
-	recreateUpdateBuffers(m_buffers, performUpdateDescriptorSets);
+	recreateUpdateBuffers(m_buffers, performUpdateDescriptorSets, false);
 
 	ZDescriptorSet					descriptorSet(VK_NULL_HANDLE, device, descriptorPool);
 	VkDescriptorSetAllocateInfo		allocInfo = makeVkStruct();
@@ -307,7 +308,8 @@ void LayoutManager::updateBuffersOffsets ()
 		}
 	}
 }
-void LayoutManager::recreateUpdateBuffers (std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers, bool performUpdateDescriptorSets)
+void LayoutManager::recreateUpdateBuffers (std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers,
+										   bool performUpdateDescriptorSets, bool descriptorBuffer)
 {
 	std::map<std::pair<VkDescriptorType, int>, VkDeviceSize>	sizes;
 
@@ -336,7 +338,8 @@ void LayoutManager::recreateUpdateBuffers (std::map<std::pair<VkDescriptorType, 
 									 [&size](const auto& x) { return x.first == size.first.first; });
 		ASSERTION(std::end(DescriptorTypeToBufferUsage) != usagePtr);
 
-		const ZBufferUsageFlags		usage	(usagePtr->second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+		const ZBufferUsageFlags		usage	(usagePtr->second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+											 (descriptorBuffer ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT : usagePtr->second));
 		const ZMemoryPropertyFlags	flags	(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		ZBuffer buffer;
@@ -488,7 +491,7 @@ void LayoutManager::updateDescriptorSet_	(ZDescriptorSet	descriptorSet,
 				range = b.size * b.elementCount;
 			}
 			bufferInfo.offset				= b.offset;
-			bufferInfo.range				= ROUNDUP( (b.size * b.elementCount), getDescriptorAlignment(b.descriptorType) );
+			//bufferInfo.range				= ROUNDUP( (b.size * b.elementCount), getDescriptorAlignment(b.descriptorType) );
 			bufferInfo.range				= range;
 			writeParams.pBufferInfo			= &bufferInfo;
 		}
@@ -694,6 +697,57 @@ void LayoutManager::getBinding_ (uint32_t binding, std::optional<ZBuffer>& resul
 	const ExtBinding& b = verifyGetExtBinding(binding);
 	const std::pair<VkDescriptorType, int> key(b.descriptorType, make_signed(binding));
 	result = m_buffers.at(key);
+}
+
+ZBuffer LayoutManager::createDescriptorBuffer ()
+{
+	updateBuffersOffsets();
+	recreateUpdateBuffers(m_buffers, true, true);
+
+	uint32_t index = 0u;
+	std::vector<VkDescriptorAddressInfoEXT> data(m_extbindings.size());
+
+	for (add_cref<VkDescriptorSetLayoutBindingAndType> b : m_extbindings)
+	{
+		if (isImageDescriptorType(b.descriptorType))
+		{
+		}
+		else if (isBufferDescriptorType(b.descriptorType))
+		{
+			ZBuffer buffer;
+			VkDeviceSize range = 0u;
+			VkDescriptorAddressInfoEXT addressInfo = makeVkStruct();
+			if (b.shared)
+			{
+				buffer = m_buffers.at({ b.descriptorType, UNIQUE_IBINDING });
+				range = ROUNDUP((b.size * b.elementCount), getDescriptorAlignment(b.descriptorType));
+			}
+			else
+			{
+				buffer = m_buffers.at({ b.descriptorType, static_cast<int>(b.binding) });
+				range = b.size * b.elementCount;
+			}
+			addressInfo.address = bufferGetAddress(buffer);
+			addressInfo.format = buffer.getParam<VkFormat>();
+			addressInfo.range = range;
+
+			data[index] = addressInfo;
+		}
+		else
+		{
+			ASSERTFALSE("");
+		}
+
+		++index;
+	}
+
+	const VkDeviceSize size = m_extbindings.size() * sizeof(VkDescriptorAddressInfoEXT);
+	ZBufferUsageFlags usage(VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT);
+
+	ZBuffer descBuffer = createBuffer(device, size, usage, ZMemoryPropertyHostFlags);
+	bufferWrite(descBuffer, data);
+
+	return descBuffer;
 }
 
 } // namespace vtf

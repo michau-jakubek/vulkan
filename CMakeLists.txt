@@ -124,6 +124,8 @@ if ("${VULKAN_DRIVER}" STREQUAL "")
 	endif()
 endif()
 
+include(getvkhver/getvkhver.cmake)
+
 add_subdirectory(pdriver)
 include_directories(pdriver)
 

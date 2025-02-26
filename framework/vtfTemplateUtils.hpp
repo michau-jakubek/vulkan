@@ -45,6 +45,55 @@ VecX<X, 2> barycenter (
 	);
 }
 
+namespace enumerator
+{
+
+template<typename X>
+class Enumerator {
+public:
+    using value_type = typename X::value_type;
+    Enumerator (X& container) : m_container(container) {}
+
+    class Iterator {
+    public:
+        Iterator (typename X::iterator it, size_t index) : m_it(it), m_index(index) {}
+
+        std::pair<size_t, add_ref<value_type>> operator*() {
+            return { m_index, *m_it };
+        }
+
+        Iterator& operator++ () {
+            ++m_it;
+            ++m_index;
+            return *this;
+        }
+
+        bool operator!= (const Iterator& other) const {
+            return m_it != other.m_it;
+        }
+
+    private:
+        typename X::iterator    m_it;
+        size_t                  m_index;
+    };
+
+    Iterator begin () {
+        return Iterator(m_container.begin(), 0);
+    }
+
+    Iterator end () {
+        return Iterator(m_container.end(), m_container.size());
+    }
+
+private:
+    X& m_container;
+};
+
+template<typename X>
+Enumerator<X> enumerate (X& container) { return Enumerator<X>(container); }
+
+} // namespace enumerator
+
 } // namesapce vtf
 
 #endif // __VTF_TEMPLATE_UTILS_HPP_INCLUDED__

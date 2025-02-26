@@ -13,7 +13,8 @@ namespace vtf
 
 uint32_t	findMemoryTypeIndex	(ZDevice device, uint32_t memoryTypeBits, VkMemoryPropertyFlags properties);
 auto		createMemory		(ZDevice device, add_cref<VkMemoryRequirements> requirements,
-								VkMemoryPropertyFlags properties, VkDeviceSize desiredSize, bool sparse) -> std::vector<ZDeviceMemory>;
+								 VkMemoryPropertyFlags properties, VkDeviceSize desiredSize,
+								 bool sparse, bool deviceAddress) -> std::vector<ZDeviceMemory>;
 auto		mapMemory			(ZDeviceMemory memory) -> add_ptr<uint8_t>;
 void		unmapMemory			(ZDeviceMemory memory);
 void		flushMemory			(ZDeviceMemory memory);

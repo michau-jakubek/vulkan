@@ -171,6 +171,8 @@ public:
 	template<class... PC__>	auto createPipelineLayout (const ZPushRange<PC__>&...) -> ZPipelineLayout;
 	template<class... PC__>	auto createPipelineLayout (ZDescriptorSetLayout, const ZPushRange<PC__>&...) -> ZPipelineLayout;
 
+	ZBuffer createDescriptorBuffer();
+
 private:	
 	typedef struct VkDescriptorSetLayoutBindingAndType : VkDescriptorSetLayoutBinding
 	{
@@ -206,9 +208,9 @@ private:
 	void				getBinding_				(uint32_t binding, std::optional<std::pair<ZImageView,ZSampler>>&) const;
 	VkDeviceSize		getDescriptorAlignment	(const VkDescriptorType type) const;
 	void				updateBuffersOffsets	();
-	void				recreateUpdateBuffers	(std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers, bool performUpdateDescriptorSets);
-	void				updateDescriptorSet_	(ZDescriptorSet	descriptorSet,
-																		 std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers) const;
+	void				recreateUpdateBuffers	(std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers,
+												 bool performUpdateDescriptorSets, bool descriptorBuffer);
+	void				updateDescriptorSet_	(ZDescriptorSet	descriptorSet, std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers) const;
 	ZPipelineLayout		createPipelineLayout_	(add_cref<ZPushConstants> pushConstants,
 												 std::initializer_list<ZDescriptorSetLayout> dsLayouts);
 

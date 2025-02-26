@@ -70,6 +70,7 @@ void			commandBufferBindVertexBuffers (ZCommandBuffer cmd, add_cref<VertexInput>
 												std::initializer_list<VkDeviceSize> offsets = {});
 void			commandBufferSetVertexInputEXT (ZCommandBuffer cmd, add_cref<VertexInput> input);
 void			commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkDeviceSize offset = 0);
+void			commandBufferBindDescriptorBuffer (ZCommandBuffer cmd, ZBuffer buffer);
 void			commandBufferDispatch (ZCommandBuffer cmd, const UVec3& workGroupCount = UVec3(1,1,1));
 
 ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZFramebuffer framebuffer,

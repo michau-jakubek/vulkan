@@ -46,6 +46,8 @@ set(tests_files
     shaderObjectTriangleTests.hpp
     shaderObjectComputeTests.cpp
     shaderObjectComputeTests.hpp
+	descriptorBufferTests.cpp
+	descriptorBufferTests.hpp
     )
 
 if(ENABLE_DAEMON_TEST)

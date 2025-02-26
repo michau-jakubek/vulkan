@@ -3,12 +3,18 @@
 
 #include "vtfVulkan.hpp"
 
+#if VULKAN_HEADER_VERSION_MAJOR * 10 + VULKAN_HEADER_VERSION_MINOR < 14
+typedef vk::DispatchLoaderDynamic DispatchLoaderDynamicClass;
+#else
+typedef vk::detail::DispatchLoaderDynamic DispatchLoaderDynamicClass;
+#endif
+
 namespace vtf
 {
 struct ZInstanceSingleton;
 struct ZDeviceSingleton;
 
-struct ZInstanceInterface : public vk::DispatchLoaderDynamic
+struct ZInstanceInterface : public DispatchLoaderDynamicClass
 {
 	friend	struct	ZInstanceSingleton;
 
@@ -18,7 +24,7 @@ protected:
 	bool	initialized;
 };
 
-struct ZDeviceInterface : public vk::DispatchLoaderDynamic
+struct ZDeviceInterface : public DispatchLoaderDynamicClass
 {
 	friend	struct	ZDeviceSingleton;
 
