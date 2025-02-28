@@ -250,12 +250,12 @@ TriLogicInt performTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 	const PushConstant		pc3				{ UVec4(v3x_3, v3y_3, v3z_3, 0),
 												y_3, a_3, UVec2(v2x_3, v2y_3), b_3 };
 	ZPipelineLayout			pipelineLayout = params.structPCmodule
-		? lm.createPipelineLayout(dsLayout, ZPushRange<PushConstant>(VK_SHADER_STAGE_COMPUTE_BIT))
-		: lm.createPipelineLayout(dsLayout, ZPushRange<UVec4>(VK_SHADER_STAGE_COMPUTE_BIT),
-											ZPushRange<int>(VK_SHADER_STAGE_COMPUTE_BIT),
-											ZPushRange<uint32_t>(VK_SHADER_STAGE_COMPUTE_BIT),
-											ZPushRange<UVec2>(VK_SHADER_STAGE_COMPUTE_BIT),
-											ZPushRange<uint32_t>(VK_SHADER_STAGE_COMPUTE_BIT));
+		? lm.createPipelineLayout({ dsLayout }, ZPushRange<PushConstant>(VK_SHADER_STAGE_COMPUTE_BIT))
+		: lm.createPipelineLayout({ dsLayout }, ZPushRange<UVec4>(VK_SHADER_STAGE_COMPUTE_BIT),
+												ZPushRange<int>(VK_SHADER_STAGE_COMPUTE_BIT),
+												ZPushRange<uint32_t>(VK_SHADER_STAGE_COMPUTE_BIT),
+												ZPushRange<UVec2>(VK_SHADER_STAGE_COMPUTE_BIT),
+												ZPushRange<uint32_t>(VK_SHADER_STAGE_COMPUTE_BIT));
 	ShaderObjectCollection	coll			(ctx.device, params.assets);
 	ShaderLink				l1				= coll.addFromFile(VK_SHADER_STAGE_COMPUTE_BIT, "compute1.glsl",
 																ShaderLink(), { "." }, "main1");
@@ -310,7 +310,7 @@ TriLogicInt performTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 		OneShotCommandBuffer	records(cmdPool);
 		ZCommandBuffer cmd = records.commandBuffer;
 
-		commandBufferBinDescriptorSets(cmd, pipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE);
+		commandBufferBindDescriptorSets(cmd, pipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE);
 
 		if (params.structPCobject)
 			commandBufferPushConstants(cmd, pipelineLayout, { s1 }, pc1);

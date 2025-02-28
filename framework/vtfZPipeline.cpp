@@ -2,6 +2,8 @@
 #include "vtfStructUtils.hpp"
 #include <array>
 
+#include <iostream>
+
 namespace vtf
 {
 
@@ -251,10 +253,15 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 		info.pDynamicState						= &settings.m_dynamicState;
 	}
 
+	if (settings.m_layout.getParam<bool>(/*enableDescriptorBuffer*/))
+	{
+		info.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+	}
+
 	info.layout				= *settings.m_layout;
 	info.renderPass			= settings.m_renderPass.has_handle() ? *settings.m_renderPass : VK_NULL_HANDLE;
 	info.basePipelineHandle	= VK_NULL_HANDLE;
-	info.basePipelineIndex	= 0u;
+	info.basePipelineIndex	= -1;
 
 	VkPipeline					pipelineHandle	= VK_NULL_HANDLE;
 	ZDevice						device			= settings.m_layout.getParam<ZDevice>();
@@ -266,8 +273,8 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 																			 &pipelineHandle);
 	VKASSERT(createStatus);
 
-	return ZPipeline::create(pipelineHandle, device, callbacks,
-							 settings.m_layout, settings.m_renderPass, VK_PIPELINE_BIND_POINT_GRAPHICS);
+	return ZPipeline::create(pipelineHandle, device, callbacks, settings.m_layout,
+							 settings.m_renderPass, VK_PIPELINE_BIND_POINT_GRAPHICS, info.flags);
 }
 
 void updateSettings (add_ref<GraphicPipelineSettings>) { /* end of template recursion */ }
@@ -506,14 +513,18 @@ ZPipeline createComputePipelineImpl (
 	sci.pName	= computeShaderModule.getParamRef<std::string>().c_str();
 	sci.pSpecializationInfo	= info.empty() ? nullptr : &specInfo;
 
+	const VkPipelineCreateFlags ciFlags = layout.getParam<bool>(/*enableDescriptorBuffer*/)
+											? VkPipelineCreateFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
+											: VkPipelineCreateFlags(0);
 	VkComputePipelineCreateInfo	ci = makeVkStruct();
-	ci.flags	= VkPipelineCreateFlags(0);
+	ci.flags	= ciFlags;
 	ci.stage	= sci;
 	ci.layout	= *layout;
 	ci.basePipelineHandle	= VK_NULL_HANDLE;
 	ci.basePipelineIndex	= 0;
 
-	ZPipeline	computePipeline (VK_NULL_HANDLE, aDevice, callbacks, layout, ZRenderPass(), VK_PIPELINE_BIND_POINT_COMPUTE);
+	ZPipeline	computePipeline (VK_NULL_HANDLE, aDevice, callbacks, layout, ZRenderPass(),
+								 VK_PIPELINE_BIND_POINT_COMPUTE, ci.flags);
 	VKASSERT(vkCreateComputePipelines(*aDevice, VkPipelineCache(VK_NULL_HANDLE), 1u, &ci, callbacks, computePipeline.setter()));
 
 	return computePipeline;

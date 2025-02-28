@@ -112,12 +112,12 @@ ZCommandPool VulkanContext::createComputeCommandPool ()
 	return createCommandPool(device, computeQueue);
 }
 
-ZImage	VulkanContext::createColorImage2D (VkFormat format, add_cref<VkExtent2D> extent) const
+ZImage	VulkanContext::createColorImage2D (VkFormat format, add_cref<VkExtent2D> extent, bool deviceAddress) const
 {
-	return createColorImage2D(format, extent.width, extent.height);
+	return createColorImage2D(format, extent.width, extent.height, deviceAddress);
 }
 
-ZImage	VulkanContext::createColorImage2D (VkFormat format, uint32_t width, uint32_t height) const
+ZImage	VulkanContext::createColorImage2D (VkFormat format, uint32_t width, uint32_t height, bool deviceAddress) const
 {
 	const ZImageUsageFlags usage = { VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 									 VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
@@ -128,7 +128,8 @@ ZImage	VulkanContext::createColorImage2D (VkFormat format, uint32_t width, uint3
 	const VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
 	const ZMemoryPropertyFlags properties = ZMemoryPropertyDeviceFlags;
 
-	return createImage(device, format, VK_IMAGE_TYPE_2D, width, height, usage, samples, mipLevels, layers, depth, properties);
+	return createImage(device, format, VK_IMAGE_TYPE_2D, width, height, usage, samples, mipLevels, layers, depth,
+						deviceAddress, properties);
 }
 
 } // namespace vtf

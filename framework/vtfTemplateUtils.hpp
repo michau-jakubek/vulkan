@@ -94,6 +94,33 @@ Enumerator<X> enumerate (X& container) { return Enumerator<X>(container); }
 
 } // namespace enumerator
 
+namespace subset
+{
+
+template<class UserData> struct Subset {
+	uint32_t start_index;
+	uint32_t length;
+	UserData user_data;
+	Subset () : start_index(0), length(0), user_data() {}
+	Subset (uint32_t start, uint32_t len) : start_index(start), length(len), user_data() {}
+	Subset (uint32_t start, uint32_t len, UserData user) : start_index(start), length(len), user_data(user) {}
+};
+template<class UserData> bool areDisjoint (add_cref<Subset<UserData>> a, add_cref<Subset<UserData>>b) {
+	return (a.start_index + a.length <= b.start_index) || (b.start_index + b.length <= a.start_index);
+}
+template<class UserData> bool checkSubsetsDisjoint (add_cref<std::vector<Subset<UserData>>> subsets) {
+	for (auto i = 0u; i < subsets.size(); ++i) {
+		for (auto j = i + 1u; j < subsets.size(); ++j) {
+			if (!areDisjoint<UserData>(subsets[i], subsets[j])) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+} // namespace subset
+
 } // namesapce vtf
 
 #endif // __VTF_TEMPLATE_UTILS_HPP_INCLUDED__

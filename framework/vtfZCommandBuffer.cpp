@@ -4,6 +4,8 @@
 #include "vtfZCommandBuffer.hpp"
 #include "vtfZImage.hpp"
 #include "vtfStructUtils.hpp"
+#include "vtfTemplateUtils.hpp"
+#include "vtfZPipeline.hpp"
 #include <memory>
 
 namespace vtf
@@ -127,7 +129,7 @@ VkResult commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFe
 	return waitResult;
 }
 
-void commandBufferBinDescriptorSets (ZCommandBuffer cmd, ZPipelineLayout layout,
+void commandBufferBindDescriptorSets (ZCommandBuffer cmd, ZPipelineLayout layout,
 									 VkPipelineBindPoint bindingPoint)
 {
 	add_ref<std::vector<ZDescriptorSetLayout>> descriptorLayouts
@@ -150,14 +152,17 @@ void commandBufferBinDescriptorSets (ZCommandBuffer cmd, ZPipelineLayout layout,
 	}
 }
 
-void commandBufferBindPipeline (ZCommandBuffer cmd, ZPipeline pipeline)
+void commandBufferBindPipeline (ZCommandBuffer cmd, ZPipeline pipeline, bool bindDescriptorSets)
 {
 	auto bindingPoint		= pipeline.getParam<VkPipelineBindPoint>();
 	auto pipelineLayout		= pipeline.getParam<ZPipelineLayout>();
 
 	vkCmdBindPipeline(*cmd, bindingPoint, *pipeline);
 
-	commandBufferBinDescriptorSets(cmd, pipelineLayout, bindingPoint);
+	if (bindDescriptorSets)
+	{
+		commandBufferBindDescriptorSets(cmd, pipelineLayout, bindingPoint);
+	}
 }
 
 void commandBufferBindVertexBuffers (ZCommandBuffer cmd, add_cref<VertexInput> input,
@@ -181,8 +186,6 @@ void commandBufferSetVertexInputEXT (ZCommandBuffer cmd, add_cref<VertexInput> i
 {
 	add_cref<ZDeviceInterface> di = cmd.getParamRef<ZDevice>().getInterface();
 
-	ASSERTMSG(di.isShaderObjectEnabled(), "ERROR: \"" VK_EXT_SHADER_OBJECT_EXTENSION_NAME "\" not supported");
-
 	ZVertexInput2EXT ext(input);
 	di.vkCmdSetVertexInputEXT(*cmd,
 							data_count(ext.bindingDescriptions),
@@ -194,7 +197,7 @@ void commandBufferSetVertexInputEXT (ZCommandBuffer cmd, add_cref<VertexInput> i
 void commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkDeviceSize offset)
 {
 	ASSERTMSG((buffer.getParamRef<VkBufferCreateInfo>().usage & VK_BUFFER_USAGE_INDEX_BUFFER_BIT),
-			  "Buffer must be created with VK_BUFFER_USAGE_INDEX_BUFFER_BIT");
+		"Buffer must be created with VK_BUFFER_USAGE_INDEX_BUFFER_BIT");
 	const type_index_with_default type = buffer.getParam<type_index_with_default>();
 	VkIndexType indexType = VK_INDEX_TYPE_MAX_ENUM;
 	if (type == type_index_with_default::make<uint32_t>())
@@ -205,13 +208,29 @@ void commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkDeviceS
 	vkCmdBindIndexBuffer(*cmd, *buffer, offset, indexType);
 }
 
-void commandBufferBindDescriptorBuffer (ZCommandBuffer cmd, ZBuffer buffer)
+void commandBufferBindDescriptorBuffers (
+	ZCommandBuffer					cmd,
+	ZPipeline						pipeline,
+	std::initializer_list<ZBuffer>	buffers)
 {
-	VkDescriptorBufferBindingInfoEXT info = makeVkStruct();
-	info.address = bufferGetAddress(buffer);
-	info.usage = buffer.getParamRef<VkBufferCreateInfo>().usage;
-	cmd.getParam<ZDevice>().getInterface()
-		.vkCmdBindDescriptorBuffersEXT(*cmd, 1u, &info);
+	add_cref<ZDeviceInterface>			di = cmd.getParamRef<ZDevice>().getInterface();
+	ZPipelineLayout						layout = pipeline.getParam<ZPipelineLayout>();
+	const VkPipelineBindPoint			bindPoint = pipeline.getParam<VkPipelineBindPoint>();
+	std::vector<VkDescriptorBufferBindingInfoEXT> infos(
+							buffers.size(), makeVkStructT<VkDescriptorBufferBindingInfoEXT>());
+	const std::vector<VkDeviceSize> offsets(buffers.size(), 0u);
+	std::vector<uint32_t> indices(buffers.size());
+	for (auto begin = buffers.begin(), b = begin; b != buffers.end(); ++b)
+	{
+		const uint32_t idx = uint32_t(std::distance(begin, b));
+		infos[idx].address = bufferGetAddress(*b);
+		infos[idx].usage = b->getParamRef<VkBufferCreateInfo>().usage;
+		indices[idx] = idx;
+	}
+	di.vkCmdBindPipeline(*cmd, bindPoint, *pipeline);
+	di.vkCmdBindDescriptorBuffersEXT(*cmd, uint32_t(buffers.size()), infos.data());
+	di.vkCmdSetDescriptorBufferOffsetsEXT(*cmd, bindPoint, *layout, 0u, uint32_t(buffers.size()), 
+											indices.data(), offsets.data());
 }
 
 static bool verifyPushConstants (
@@ -487,6 +506,59 @@ void commandBufferSetViewport (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> s
 void commandBufferSetScissor (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain)
 {
 	vkCmdSetScissor(*cmd, 0u, 1u, &swapchain.scissor);
+}
+
+void commandBufferSetDefaultDynamicStates (
+	ZCommandBuffer			cmdBuffer,
+	add_cref<VertexInput>	vertexInput,
+	add_cref<VkViewport>	viewport,
+	add_cptr<VkRect2D>		pScissor)
+{
+	add_cref<ZDeviceInterface> di = cmdBuffer.getParamRef<ZDevice>().getInterface();
+
+	// VkPipelineVertexInputStateCreateInfo
+	commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
+	commandBufferSetVertexInputEXT(cmdBuffer, vertexInput);
+
+	// VkPipelineInputAssemblyStateCreateInfo
+	di.vkCmdSetPrimitiveTopologyEXT(*cmdBuffer, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	di.vkCmdSetPrimitiveRestartEnableEXT(*cmdBuffer, VK_FALSE);
+
+	// VkPipelineViewportStateCreateInfo
+	di.vkCmdSetViewportWithCountEXT(*cmdBuffer, 1u, &viewport);
+	const VkRect2D scissor = pScissor
+		? *pScissor
+		: makeRect2D(uint32_t(viewport.width), uint32_t(viewport.height), int32_t(viewport.x), int32_t(viewport.y));
+	di.vkCmdSetScissorWithCountEXT(*cmdBuffer, 1u, &scissor);
+
+	// VkPipelineRasterizationStateCreateInfo
+	di.vkCmdSetDepthClampEnableEXT(*cmdBuffer, VK_FALSE);
+	di.vkCmdSetRasterizerDiscardEnableEXT(*cmdBuffer, VK_FALSE);
+	di.vkCmdSetPolygonModeEXT(*cmdBuffer, VK_POLYGON_MODE_FILL);
+	di.vkCmdSetCullModeEXT(*cmdBuffer, VK_CULL_MODE_BACK_BIT);
+	di.vkCmdSetFrontFaceEXT(*cmdBuffer, VK_FRONT_FACE_CLOCKWISE);
+	di.vkCmdSetDepthBiasEnableEXT(*cmdBuffer, VK_FALSE);
+
+	// VkPipelineDepthStencilStateCreateInfo
+	di.vkCmdSetDepthTestEnableEXT(*cmdBuffer, VK_FALSE);
+	di.vkCmdSetDepthWriteEnableEXT(*cmdBuffer, VK_FALSE);
+	di.vkCmdSetStencilTestEnableEXT(*cmdBuffer, VK_FALSE);
+
+	// VkPipelineMultisampleStateCreateInfo
+	di.vkCmdSetRasterizationSamplesEXT(*cmdBuffer, VK_SAMPLE_COUNT_1_BIT);
+	di.vkCmdSetSampleMaskEXT(*cmdBuffer, VK_SAMPLE_COUNT_1_BIT, makeQuickPtr(~0u));
+	di.vkCmdSetAlphaToCoverageEnableEXT(*cmdBuffer, VK_FALSE);
+
+	// VkPipelineColorBlendAttachmentState
+	di.vkCmdSetColorBlendEnableEXT(*cmdBuffer, 0u, 1u, makeQuickPtr(gpp::defaultBlendAttachmentState.blendEnable));
+	di.vkCmdSetColorBlendEquationEXT(*cmdBuffer, 0u, 1u, makeQuickPtr(makeColorBlendEquationExt(gpp::defaultBlendAttachmentState)));
+	di.vkCmdSetColorWriteMaskEXT(*cmdBuffer, 0u, 1u, makeQuickPtr(gpp::defaultBlendAttachmentColorWriteMask));
+
+	di.vkCmdSetConservativeRasterizationModeEXT(*cmdBuffer, VK_CONSERVATIVE_RASTERIZATION_MODE_DISABLED_EXT);
+	di.vkCmdSetSampleLocationsEnableEXT(*cmdBuffer, VK_FALSE);
+	di.vkCmdSetProvokingVertexModeEXT(*cmdBuffer, VK_PROVOKING_VERTEX_MODE_FIRST_VERTEX_EXT);
+
+	di.vkCmdSetTessellationDomainOriginEXT(*cmdBuffer, VK_TESSELLATION_DOMAIN_ORIGIN_UPPER_LEFT);
 }
 
 void commandBufferDrawIndirect (ZCommandBuffer cmd, ZBuffer buffer)

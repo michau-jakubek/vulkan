@@ -86,6 +86,8 @@ add_cref<VkPhysicalDeviceLimits>
 VkPhysicalDeviceFeatures2
 				deviceGetPhysicalFeatures2 (ZPhysicalDevice device, void* pNext = nullptr);
 ZPhysicalDevice	deviceGetPhysicalDevice (ZDevice device);
+ZInstance		deviceGetInstance (ZPhysicalDevice device);
+ZInstance		deviceGetInstance (ZDevice device);
 ZQueue			deviceGetNextQueue			(ZDevice device, VkQueueFlags queueFlags, bool mustSupportSurface);
 uint32_t		queueGetFamilyIndex			(ZQueue queue);
 uint32_t		queueGetIndex				(ZQueue queue);
@@ -134,12 +136,12 @@ protected:
 *                   otherwise attachment is considered as OP_LOAD.
 */
 ZRenderPass		createColorRenderPass (ZDevice device, add_cref<std::vector<VkFormat>> colorFormats,
-									   std::optional<std::vector<VkClearValue>> clearColors = {},
+									   std::vector<VkClearValue> clearColors = {},
 									   VkImageLayout initialColorLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 									   VkImageLayout finalColorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 									   std::initializer_list<ZSubpassDependency> deps = {});
 ZRenderPass		createMultiViewRenderPass (ZDevice device, add_cref<std::vector<VkFormat>> colorFormats,
-										   std::optional<std::vector<VkClearValue>> clearColors = {},
+										   std::vector<VkClearValue> clearColors = {},
 										   std::initializer_list<ZSubpassDependency> dependencies = {},
 										   VkImageLayout initialColorLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 										   VkImageLayout finalColorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);

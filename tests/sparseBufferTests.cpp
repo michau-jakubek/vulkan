@@ -79,7 +79,7 @@ TriLogicInt selfTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 	const uint32_t						binding				= lm.addBindingAsVector<Item>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, count);
 	ZDescriptorSetLayout				descriptorSetLayout	= lm.createDescriptorSetLayout(false);
 	ZDescriptorSet						descriptorSet		= lm.getDescriptorSet(descriptorSetLayout);
-	ZPipelineLayout						pipelineLayout		= lm.createPipelineLayout(descriptorSetLayout);
+	ZPipelineLayout						pipelineLayout		= lm.createPipelineLayout({descriptorSetLayout});
 	lm.updateDescriptorSet(descriptorSet, binding, buffer);
 
 	ZPipeline							pipeline			= createComputePipeline(pipelineLayout, shaderModule, UVec3(10,10,1));

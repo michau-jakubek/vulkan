@@ -469,6 +469,18 @@ VkViewport makeViewport (uint32_t width, uint32_t height, uint32_t x, uint32_t y
 	return port;
 }
 
+VkViewport makeViewport (add_cref<VkExtent2D> extent, float minDepth, float maxDepth)
+{
+	VkViewport port;
+	port.width = static_cast<float>(extent.width);
+	port.height = static_cast<float>(extent.height);
+	port.x = 0.0f;
+	port.y = 0.0f;
+	port.minDepth = minDepth;
+	port.maxDepth = maxDepth;
+	return port;
+}
+
 VkRect2D clampScissorToViewport (add_cref<VkViewport> viewport, add_ref<VkRect2D> inOutScissor)
 //(VkViewport viewport, VkRect2D inOutScissor)
 {
@@ -516,6 +528,18 @@ template<> VkClearColorValue makeClearColorValue<float> (add_cref<Vec4> color)
 	c.float32[2] = color[2];
 	c.float32[3] = color[3];
 	return c;
+}
+
+VkColorBlendEquationEXT makeColorBlendEquationExt(add_cref<VkPipelineColorBlendAttachmentState> state)
+{
+	VkColorBlendEquationEXT eq{};
+	eq.srcColorBlendFactor	= state.srcColorBlendFactor;
+	eq.dstColorBlendFactor	= state.dstColorBlendFactor;
+	eq.colorBlendOp			= state.colorBlendOp;
+	eq.srcAlphaBlendFactor	= state.srcAlphaBlendFactor;
+	eq.dstAlphaBlendFactor	= state.dstAlphaBlendFactor;
+	eq.alphaBlendOp = state.alphaBlendOp;
+	return eq;
 }
 
 } // namespace vtf

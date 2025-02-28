@@ -1,0 +1,4 @@
+-state color_da_1msc_add_alpha_1msc_1mdc_add -src 0,0.5,0,0.2
+-state color_s1a_1msc_add_alpha_1msc_1mdc_add -src 0,0.5,0,0.2 -src1 0,0,0,0.125 -dual-source
+-state color_dc_1ms1c_max_alpha_z_z_sub
+/r/vtf/build/app/Debug/app -l VK_LAYER_KHRONOS_validation -tmp /r/vtf/run/tempo/ -d 0 blending -state color_dc_1msc_max_alpha_z_z_sub -print-cpp-code                    -src 0.7,0.6,0.5,0.4 -src1 0.7,0.6,0.5,0.4 -dst 0.2,0.3,0.4,0.1-dual-source

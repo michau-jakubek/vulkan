@@ -10,6 +10,7 @@
 #include <type_traits>
 #include <fstream>
 #include <variant>
+#include <chrono>
 
 #include "vtfFilesystem.hpp"
 #include "vtfZDeletable.hpp"
@@ -398,6 +399,7 @@ template<class T, class E> struct expander
 
 template<class Y> add_cptr<Y> makeQuickPtr(Y&& y)
 {
+	//static_assert(std::is_rvalue_reference_v<decltype(y)>, "???");
 	return &static_cast<add_cref<Y>>(std::forward<Y>(y));
 }
 
@@ -420,6 +422,20 @@ struct TriLogicInt
 private:
 	int		m_value;
 	bool	m_hasValue;
+};
+
+struct FPS
+{
+	float fps, bestFPS, worstFPS, totalTime;
+	int frameCount;
+	using Printer = std::function<
+		void(float fps, float totalTime, float bestFPS, float worstFPS)>;
+	Printer printer;
+	std::chrono::high_resolution_clock::time_point startTime;
+	std::chrono::high_resolution_clock::time_point lastTime;
+	FPS (Printer callback);
+	void touch ();
+	void reset ();
 };
 
 } // namespace vtf

@@ -24,11 +24,12 @@ std::string makeShorterString (add_cref<std::string> name, uint32_t length = 20)
 void printUsage (add_ref<std::ostream> log)
 {
 	log << "Parameters:"													<< std::endl;
-	log << "  [-f <image_file> [-f <image_file>]]"							<< std::endl;
-	log << "      loads regular image file i.a. PNG, JPG, JPEG."			<< std::endl;
-	log << "  [-p <panorama_file> [-f <panorama_file>]]"					<< std::endl;
+	log << "  -f <image_file>"												<< std::endl;
+	log << "      loads regular image file e.g. PNG, JPG, JPEG."			<< std::endl;
+	log << "  -p <panorama_file>"											<< std::endl;
 	log << "      loads panorama image file i.a. PNG, JPG, JPEG."			<< std::endl;
 	log << "      Assume that image width is two times bigger than height"	<< std::endl;
+	log << "  Parameters -f and -p can appear multiple times"				<< std::endl;
 	log << "Navigation keys:"												<< std::endl;
 	log << "  Tab, Space: load|show next image"								<< std::endl;
 	log << "  Shift+Tab:  load|show prev image"								<< std::endl;
@@ -62,7 +63,7 @@ std::vector<ImageFileInfo> userReadImageFiles (add_cref<strings> params, add_cre
 
 	if ((regularCount + panoramaCount) == 0)
 	{
-		log << "[ERROR} As a param give a list of image files" << std::endl;
+		log << "[ERROR} Use the list of images to display as a parameter" << std::endl;
 		return {};
 	}
 
@@ -427,7 +428,7 @@ protected:
 	void phaseCreatePanoramaImage (add_ref<bool>)
 	{
 		ZDevice device = fileBuffer.getParam<ZDevice>();
-		panImage = createImageFromFileMetadata(device, fileBuffer, usage, ZMemoryPropertyDeviceFlags);
+		panImage = createImageFromFileMetadata(device, fileBuffer, usage);
 		format = imageGetFormat(panImage);
 		updateSplashImage(40);
 	}
@@ -469,13 +470,15 @@ protected:
 	{
 		ZDevice					device				= pool.getParam<ZDevice>();
 		ZImageView				panView				= createImageView(tmpImage.has_handle() ? tmpImage : panImage);
-								panBinding			= layout.addBinding(panView, ZSampler());
+								panBinding			= layout.addBinding(panView, ZSampler(),
+														VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		ZImage					cubeImage			= createImage(device, format, VK_IMAGE_TYPE_2D, faceSize, faceSize,
 																  usage, VK_SAMPLE_COUNT_1_BIT, 1u, 6u);
 		ZImageView				cubeView			= createImageView(cubeImage, 0u, 1u, 0u, 6u);
-								cubeBinding			= layout.addBinding(cubeView, ZSampler());
+								cubeBinding			= layout.addBinding(cubeView, ZSampler(),
+														VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		ZDescriptorSetLayout	descriptorSetLayout	= layout.createDescriptorSetLayout();
-		ZPipelineLayout			pipelineLayout		= layout.createPipelineLayout(descriptorSetLayout,
+		ZPipelineLayout			pipelineLayout		= layout.createPipelineLayout({ descriptorSetLayout },
 																					ZPushRange<PushContant>());
 
 		if (getGlobalAppFlags().verbose)
@@ -636,7 +639,7 @@ TriLogicInt runViewerSingleThread (add_ref<Canvas> cs, add_cref<std::string> ass
 		sampler	= createSampler(cs.device);
 		layoutMgr.addBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		ZDescriptorSetLayout	dsLayout	= layoutMgr.createDescriptorSetLayout(false);
-		ZPipelineLayout			panLayout	= layoutMgr.createPipelineLayout(dsLayout, ZPushRange<PushConstant>());
+		ZPipelineLayout			panLayout	= layoutMgr.createPipelineLayout({ dsLayout }, ZPushRange<PushConstant>());
 		panPipeline = createGraphicsPipeline(panLayout, renderPass, vertShader, fragShader, vertexInput,
 											 VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
 	};

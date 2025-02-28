@@ -5,44 +5,44 @@
 
 #include <Windows.h>
 
-HANDLE getWinConsoleTextHandle(std::ostream& stream)
+HANDLE getWinConsoleTextHandle (std::ostream& stream)
 {
     if (&stream == &std::cout)
         return GetStdHandle(STD_OUTPUT_HANDLE);
     else if (&stream == &std::cerr || &stream == &std::clog)
         return GetStdHandle(STD_ERROR_HANDLE);
-    return nullptr;
+    return INVALID_HANDLE_VALUE;
 }
 
 WORD defaultAttributes;
 HANDLE hConsole = INVALID_HANDLE_VALUE;
 
-void changeWinConsoleTextColorAttributes(std::ostream& stream, int foreground = (-1), int background = (-1))
+bool changeWinConsoleTextColorAttributes (std::ostream& stream, int foreground = (-1), int background = (-1))
 {
     if (INVALID_HANDLE_VALUE == hConsole)
     {
         hConsole = getWinConsoleTextHandle(stream);
         if (INVALID_HANDLE_VALUE == hConsole)
-            return;
+            return false;
     }
 
     if (0 == defaultAttributes)
     {
         CONSOLE_SCREEN_BUFFER_INFO info;
         if (!GetConsoleScreenBufferInfo(hConsole, &info))
-            return;
+            return false;
         defaultAttributes = info.wAttributes;
     }
 
     if (foreground == -1 && background == -1)
     {
         SetConsoleTextAttribute(hConsole, defaultAttributes);
-        return;
+        return false;
     }
 
     CONSOLE_SCREEN_BUFFER_INFO info;
     if (!GetConsoleScreenBufferInfo(hConsole, &info))
-        return;
+        return false;
 
     if (foreground != -1)
     {
@@ -57,6 +57,18 @@ void changeWinConsoleTextColorAttributes(std::ostream& stream, int foreground = 
     }
 
     SetConsoleTextAttribute(hConsole, info.wAttributes);
+
+    return true;
+}
+
+#else
+
+bool changeWinConsoleTextColorAttributes (std::ostream& stream, int foreground = (-1), int background = (-1))
+{
+    UNREF(stream);
+    UNREF(foreground);
+    UNREF(background);
+    return false;
 }
 
 #endif // SYSTEM_OS_WINDOWS
@@ -78,21 +90,29 @@ add_ref<std::ostream> operator<<(add_ref<std::ostream> str, add_cref<TermColor> 
 
 void TermColor::selfTest(add_ref<std::ostream> str)
 {
-	str << color(BLUE)		<< "BLUE"		<< color() << std::endl;
-	str << color(DBLUE)		<< "DBLUE"		<< color() << std::endl;
-	str << color(GREEN)		<< "GREEN"		<< color() << std::endl;
-	str << color(DGREEN)	<< "DGREEN"		<< color() << std::endl;
-	str << color(CYAN)		<< "CYAN"		<< color() << std::endl;
-	str << color(DCYAN)		<< "DCYAN"		<< color() << std::endl;
-	str << color(MAGENTA) 	<< "MAGEBTA"	<< color() << std::endl;
-	str << color(DMAGENTA)	<< "DMAGENTA"	<< color() << std::endl;
-	str << color(RED)		<< "RED"		<< color() << std::endl;
-	str << color(DRED)		<< "DRED"		<< color() << std::endl;
-	str << color(YELLOW)	<< "YELLOW"		<< color() << std::endl;
-	str << color(DYELLOW)	<< "DYELLOW"	<< color() << std::endl;
-	str << color(WHITE)		<< "WHITE"		<< color() << std::endl;
-	str << color(DWHITE)	<< "DWHITE"		<< color() << std::endl;
-	str << color(GRAY)		<< "GRAY"		<< color() << std::endl;
+	//str << color(BLUE)		<< "BLUE"		<< color() << std::endl;
+	//str << color(DBLUE)		<< "DBLUE"		<< color() << std::endl;
+	//str << color(GREEN)		<< "GREEN"		<< color() << std::endl;
+	//str << color(DGREEN)	<< "DGREEN"		<< color() << std::endl;
+	//str << color(CYAN)		<< "CYAN"		<< color() << std::endl;
+	//str << color(DCYAN)		<< "DCYAN"		<< color() << std::endl;
+	//str << color(MAGENTA) 	<< "MAGEBTA"	<< color() << std::endl;
+	//str << color(DMAGENTA)	<< "DMAGENTA"	<< color() << std::endl;
+	//str << color(RED)		<< "RED"		<< color() << std::endl;
+	//str << color(DRED)		<< "DRED"		<< color() << std::endl;
+	//str << color(YELLOW)	<< "YELLOW"		<< color() << std::endl;
+	//str << color(DYELLOW)	<< "DYELLOW"	<< color() << std::endl;
+	//str << color(WHITE)		<< "WHITE"		<< color() << std::endl;
+	//str << color(DWHITE)	<< "DWHITE"		<< color() << std::endl;
+	//str << color(GRAY)		<< "GRAY"		<< color() << std::endl;
+    str << colorize("BLUE", BLUE);
+}
+
+bool setConsoleColor (add_ref<std::ostream> console, TermColor::Color color)
+{
+    return (TermColor::Color::END == color)
+               ? changeWinConsoleTextColorAttributes(console)
+               : changeWinConsoleTextColorAttributes(console, color);
 }
 
 } // namespace vtf

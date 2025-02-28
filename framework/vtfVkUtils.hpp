@@ -193,9 +193,13 @@ VkExtent3D		makeExtent3D (uint32_t width = 0u, uint32_t height = 0u, uint32_t de
 VkOffset2D		makeOffset2D (int32_t x = 0, int32_t y = 0);
 VkOffset3D		makeOffset3D (int32_t x = 0, int32_t y = 0, int32_t z = 0);
 VkViewport		makeViewport (uint32_t width, uint32_t height, uint32_t x = 0, uint32_t y = 0, float minDepth = 0.0f, float maxDepth = +1.0);
+VkViewport		makeViewport (add_cref<VkExtent2D> extent, float minDepth = 0.0f, float maxDepth = +1.0);
 VkRect2D		clampScissorToViewport (add_cref<VkViewport> viewport, add_ref<VkRect2D> inOutScissor);
 template<class CompType> // int32_t: IVec4, uint32_t: UVec4, float: Vec4
 VkClearColorValue makeClearColorValue (const VecX<CompType,4>& color);
+template<class CompType> // int32_t: IVec4, uint32_t: UVec4, float: Vec4
+VkClearValue      makeClearColor(const VecX<CompType, 4>& color) { return VkClearValue{ makeClearColorValue(color) }; }
+VkColorBlendEquationEXT makeColorBlendEquationExt (add_cref<VkPipelineColorBlendAttachmentState> state);
 
 std::ostream&	operator<<(std::ostream& str, add_cref<ZDistType<QueueFlags, VkQueueFlags>> flags);
 std::ostream&	operator<<(std::ostream& str, add_cref<ZDeviceQueueCreateInfo> props);

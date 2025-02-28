@@ -48,8 +48,8 @@ public:
 
 	ZCommandPool	createGraphicsCommandPool	();
 	ZCommandPool	createComputeCommandPool	();
-	ZImage			createColorImage2D			(VkFormat format, add_cref<VkExtent2D> extent) const;
-	ZImage			createColorImage2D			(VkFormat format, uint32_t width, uint32_t height) const;
+	ZImage			createColorImage2D			(VkFormat format, add_cref<VkExtent2D> extent, bool deviceAddress = false) const;
+	ZImage			createColorImage2D			(VkFormat format, uint32_t width, uint32_t height, bool deviceAddress = false) const;
 
 protected:
 	VkAllocationCallbacksPtr			m_callbacks;

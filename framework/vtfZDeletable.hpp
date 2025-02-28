@@ -343,12 +343,13 @@ enum ZDistName
 	RequiredLayerExtensions,	AvailableLayerExtensions,
 	DesiredRequiredDeviceExtensions,	AvailableDeviceExtensions,
 	Width, Height, Depth,		PatchControlPoints, SubpassIndex,
+	LayoutIdentifier,
 	SizeFirst, SizeSecond, SizeThird,
 	VtfVer, ApiVer, VulkanVer, SpirvVer,
 	QueueFamilyIndex, QueueIndex, QueueFlags,
 	CullModeFlags, DepthTestEnable, DepthWriteEnable, StencilTestEnable,
 	LineWidth, AttachmentCount, SubpassCount, ViewportCount, ScissorCount,
-	SpecConstants, BlendAttachmentState, BlendConstants,
+	SpecConstants, BlendAttachmentState, BlendConstants, PipelineCreateFlags
 };
 template<ZDistName, class CType_>
 struct ZDistType
@@ -563,21 +564,24 @@ ZDescriptorSet;
 typedef ZDeletable<VkDescriptorSetLayout,
 	decltype(&vkDestroyDescriptorSetLayout), &vkDestroyDescriptorSetLayout,
 	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
-	ZDescriptorSet>
+	VkDescriptorSetLayoutCreateFlags, ZDescriptorSet,
+	ZDistType<LayoutIdentifier, uint32_t>>
 ZDescriptorSetLayout;
 
 typedef ZDeletable<VkPipelineLayout,
 	decltype(&vkDestroyPipelineLayout), &vkDestroyPipelineLayout,
 	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
+	VkPipelineLayoutCreateFlags,
 	std::vector<ZDescriptorSetLayout>,
 	std::vector<VkPushConstantRange>,
-	std::vector<type_index_with_default>>
+	std::vector<type_index_with_default>,
+	bool /*enableDescriptorBuffer*/>
 ZPipelineLayout;
 
 typedef ZDeletable<VkPipeline,
 	decltype(&vkDestroyPipeline), &vkDestroyPipeline,
 	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
-	ZPipelineLayout, ZRenderPass, VkPipelineBindPoint>
+	ZPipelineLayout, ZRenderPass, VkPipelineBindPoint, VkPipelineCreateFlags>
 ZPipeline;
 
 #endif // __VTF_ZDELETABLE_HPP_INCLUDED__

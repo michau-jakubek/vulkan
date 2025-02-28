@@ -1,4 +1,5 @@
 external/stb
 external/stl_reader
+external/glm
 getvkhver/build
 

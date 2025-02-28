@@ -171,7 +171,7 @@ VkRenderPassBeginInfo ZRenderPassBeginInfo::operator ()() const
 
 ZRenderPass	createRenderPassImpl (ZDevice device, void* pNext,
 								  add_cref<std::vector<VkFormat>> colorFormats,
-								  std::optional<std::vector<VkClearValue>> clearColors,
+								  add_cref<std::vector<VkClearValue>> clearColors,
 								  VkImageLayout initialColorLayout, VkImageLayout finalColorLayout,
 								  add_cref<std::vector<ZSubpassDependency>> deps)
 {
@@ -180,8 +180,8 @@ ZRenderPass	createRenderPassImpl (ZDevice device, void* pNext,
 	ASSERTMSG(deviceGetPhysicalLimits(device).maxColorAttachments > attachmentCount,
 			  "Attachments you want exceed maxAttachmens");
 
-	add_ptr<std::vector<VkClearValue>> pClearColors = clearColors.has_value() ? &clearColors.value() : nullptr;
-	const uint32_t clearColorCount = pClearColors ? uint32_t(clearColors->size()) : 0u;
+	add_cptr<std::vector<VkClearValue>> pClearColors = clearColors.size() ? &clearColors : nullptr;
+	const uint32_t clearColorCount = data_count(clearColors);
 
 	VkAttachmentDescription attachmentTemplate{};
 	attachmentTemplate.flags			= VkAttachmentDescriptionFlags(0);
@@ -316,7 +316,7 @@ ZRenderPass	createRenderPassImpl (ZDevice device, void* pNext,
 }
 
 ZRenderPass	createColorRenderPass (ZDevice device, add_cref<std::vector<VkFormat>> colorFormats,
-								   std::optional<std::vector<VkClearValue>> clearColors,
+								   std::vector<VkClearValue> clearColors,
 								   VkImageLayout initialColorLayout, VkImageLayout finalColorLayout,
 								   std::initializer_list<ZSubpassDependency> deps)
 {
@@ -324,7 +324,7 @@ ZRenderPass	createColorRenderPass (ZDevice device, add_cref<std::vector<VkFormat
 }
 
 ZRenderPass	createMultiViewRenderPass (ZDevice device, add_cref<std::vector<VkFormat>> colorFormats,
-									   std::optional<std::vector<VkClearValue>> clearColors,
+									   std::vector<VkClearValue> clearColors,
 									   std::initializer_list<ZSubpassDependency> dependencies,
 									   VkImageLayout initialColorLayout, VkImageLayout finalColorLayout)
 {
@@ -489,6 +489,11 @@ ZInstance createInstance (
 	// setup extensions
 	{
 		availableExtensions = enumerateInstanceExtensions();
+
+		if (containsString(availableExtensions, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME))
+		{
+			requiredExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+		}
 
 		if (portabilityDesired)
 		{
@@ -1002,6 +1007,17 @@ ZPhysicalDevice	deviceGetPhysicalDevice (ZDevice device)
 	return device.getParam<ZPhysicalDevice>();
 }
 
+ZInstance deviceGetInstance(ZPhysicalDevice device)
+{
+	return device.getParam<ZInstance>();
+}
+
+ZInstance deviceGetInstance(ZDevice device)
+{
+	return deviceGetInstance(deviceGetPhysicalDevice(device));
+}
+
+
 ZQueue deviceGetNextQueue (ZDevice device, VkQueueFlags queueFlags, bool mustSupportSurface)
 {
 	UNREF(device);
@@ -1050,7 +1066,11 @@ VkPhysicalDeviceProperties2 deviceGetPhysicalProperties2 (add_cref<ZDevice> devi
 {
 	ASSERTMSG(device.has_handle(), "Device must have handle");
 	VkPhysicalDeviceProperties2 props = makeVkStruct(pNext);
-	vkGetPhysicalDeviceProperties2(*device.getParam<ZPhysicalDevice>(), &props);
+	auto physicalDevice = deviceGetPhysicalDevice(device);
+	auto fn = deviceGetInstance(device).getInterface().vkGetPhysicalDeviceProperties2KHR;
+	if (fn)
+		fn(*physicalDevice, &props);
+	else vkGetPhysicalDeviceProperties2(*physicalDevice, &props);
 	return props;
 }
 

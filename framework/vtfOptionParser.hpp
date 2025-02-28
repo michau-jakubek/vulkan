@@ -164,6 +164,7 @@ struct OptionParserState
 	bool				hasWarnings;
 	std::ostringstream	messages;
 	OptionParserState	();
+	OptionParserState	(OptionParserState&&);
 	OptionParserState	(add_cref<OptionParserState>);
 	auto				messagesText () const -> std::string;
 	auto				operator= (add_cref<OptionParserState>) -> add_ref<OptionParserState>;
@@ -171,14 +172,13 @@ struct OptionParserState
 
 struct _OptionParserImpl
 {
-	typedef std::function<bool(std::shared_ptr<OptionInterface> option, add_cref<std::string> value, add_ref<OptionParserState> state)> parse_cb;
+	typedef std::function<bool(std::shared_ptr<OptionInterface> option, add_cref<std::string> value, add_ptr<OptionParserState> state)> parse_cb;
 
-	_OptionParserImpl (bool includeHelp = true);
+	_OptionParserImpl (std::unique_ptr<OptionParserState>, bool includeHelp = true);
 	_OptionParserImpl (_OptionParserImpl&& other) noexcept;
 	auto	parse (add_cref<strings> cmdLineParams, bool allMustBeConsumed = true, parse_cb = {}) -> strings;
 	void	printOptions (add_ref<std::ostream> str, uint32_t descWidth = 40u, uint32_t indent = 2u) const;
 	auto	getMaxOptionNameLength (bool includeTypeName = false, bool onlyTouched = false) const -> uint32_t;
-	auto	getState() const -> add_cref<OptionParserState> { return m_state; }
 	auto	getOptions () const -> _OptIPtrVec;
 	auto	getOptionByName (add_cref<std::string> name) const ->_OptIPtr;
 
@@ -186,16 +186,17 @@ protected:
 	void	addHelpOpts ();
 	void	verifyExistingOptions () const;
 
-	_OptIPtrVec			m_options;
-	OptionParserState	m_state;
-	const bool			m_includeHelp;
+	_OptIPtrVec							m_options;
+	const bool							m_includeHelp;
+	std::unique_ptr<OptionParserState>	m_state;
 };
 
-template<class UserParamsType>
+template<class UserParamsType, class OptionParserStateType = OptionParserState,
+	class = std::enable_if_t<std::is_constructible_v<OptionParserState*, OptionParserStateType*>>>
 struct OptionParser : public _OptionParserImpl
 {
 	typedef std::function<bool(add_ref<UserParamsType> parser,
-		std::shared_ptr<OptionInterface> option, add_cref<std::string> value, add_ref<OptionParserState> state)> parse_cb;
+		std::shared_ptr<OptionInterface> option, add_cref<std::string> value, add_ref<OptionParserStateType> state)> parse_cb;
 
 	OptionParser (OptionParser&& other) noexcept;
 	OptionParser (add_ref<UserParamsType> params, bool includeHelp = true);
@@ -205,23 +206,24 @@ struct OptionParser : public _OptionParserImpl
 	template<class X> _OptIPtr	addOption	(X UserParamsType::* storage, add_cref<std::string> name, uint32_t follows,
 											add_cref<std::string> desc = {}, std::optional<X> defaultValue = {}, OptionFlags flags = {},
 											typename OptionT<X>::parse_cb parseCallback = {}, typename OptionT<X>::format_cb formatCallback = {});
+	auto						getState	() const -> add_cref<OptionParserStateType>;
 private:
 	add_ref<UserParamsType>		m_params;
 };
-template<class UserParamsType>
-OptionParser<UserParamsType>::OptionParser (add_ref<UserParamsType> params, bool includeHelp)
-	: _OptionParserImpl	(includeHelp)
+template<class UserParamsType, class OptionParserStateType, class Enable>
+OptionParser<UserParamsType, OptionParserStateType, Enable>::OptionParser (add_ref<UserParamsType> params, bool includeHelp)
+	: _OptionParserImpl	(std::make_unique<OptionParserStateType>(), includeHelp)
 	, m_params			(params)
 {
 }
-template<class UserParamsType>
-OptionParser<UserParamsType>::OptionParser (OptionParser&& other) noexcept
+template<class UserParamsType, class OptionParserStateType, class Enable>
+OptionParser<UserParamsType, OptionParserStateType, Enable>::OptionParser (OptionParser&& other) noexcept
 	: _OptionParserImpl	(std::move(other))
 	, m_params			(other.m_params)
 {
 }
-template<class UPT_> template<class X> inline _OptIPtr
-OptionParser<UPT_>::addOption (X UPT_::* storage, add_cref<Option> opt, add_cref<std::string> desc, std::optional<X> defaultValue,
+template<class UPT_, class OPST_, class E_> template<class X> inline _OptIPtr
+OptionParser<UPT_, OPST_, E_>::addOption (X UPT_::* storage, add_cref<Option> opt, add_cref<std::string> desc, std::optional<X> defaultValue,
 								OptionFlags flags, typename OptionT<X>::parse_cb parseCallback, typename OptionT<X>::format_cb formatCallback)
 {
 	auto option = std::make_shared<OptionT<X>>(m_params.*storage, opt, desc, defaultValue, flags, parseCallback, formatCallback);
@@ -229,8 +231,8 @@ OptionParser<UPT_>::addOption (X UPT_::* storage, add_cref<Option> opt, add_cref
 	verifyExistingOptions();
 	return option;
 }
-template<class UPT_> template<class X> inline _OptIPtr
-OptionParser<UPT_>::addOption (X UPT_::* storage, add_cref<std::string> name, uint32_t follows, add_cref<std::string> desc,
+template<class UPT_, class OPST_, class E_> template<class X> inline _OptIPtr
+OptionParser<UPT_, OPST_, E_>::addOption (X UPT_::* storage, add_cref<std::string> name, uint32_t follows, add_cref<std::string> desc,
 								std::optional<X> defaultValue, OptionFlags flags, typename OptionT<X>::parse_cb parseCallback,
 								typename OptionT<X>::format_cb formatCallback)
 {
@@ -238,6 +240,11 @@ OptionParser<UPT_>::addOption (X UPT_::* storage, add_cref<std::string> name, ui
 	m_options.push_back(option);
 	verifyExistingOptions();
 	return option;
+}
+template<class UPT_, class OPST_, class E_> inline
+add_cref<OPST_> OptionParser<UPT_, OPST_, E_>::getState () const
+{
+	return *reinterpret_cast<add_cptr<OPST_>>(m_state.get());
 }
 
 template<class X>

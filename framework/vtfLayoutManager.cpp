@@ -5,6 +5,8 @@
 #include "vtfCUtils.hpp"
 #include "vtfStructUtils.hpp"
 #include "vtfTemplateUtils.hpp"
+#include <vulkan/vulkan_to_string.hpp>
+#include <iostream>
 
 static std::pair<VkDescriptorType, VkBufferUsageFlagBits>
 const DescriptorTypeToBufferUsage[]
@@ -31,11 +33,28 @@ static bool isBufferDescriptorType (const VkDescriptorType type)
 			 || type == VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER
 			 || type == VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER);
 }
+static bool isUniformDescriptorType (const VkDescriptorType type)
+{
+	return (	type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+			 || type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+			 || type == VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER
+			 || type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+			 || type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+}
+UNUSED static bool isStorageDescriptorType (const VkDescriptorType type)
+{
+	return (   type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+			|| type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
+			|| type == VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER
+			|| type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+}
 
 #define UNIQUE_IBINDING std::numeric_limits<int>::min()
 
 namespace vtf
 {
+
+uint32_t LayoutManager::m_counter;
 
 LayoutManager::LayoutManager (ZDevice device)
 	: device				(device)
@@ -45,6 +64,7 @@ LayoutManager::LayoutManager (ZDevice device)
 	, m_viewsAndSamplers	()
 	//, m_texelBuffers		()
 	, m_buffers				()
+	, m_identifier			(m_counter++)
 {
 }
 uint32_t LayoutManager::joinBindings_ (std::type_index		index,
@@ -58,7 +78,7 @@ uint32_t LayoutManager::joinBindings_ (std::type_index		index,
 	ASSERTMSG(isBufferDescriptorType(type),
 			  "Descriptor type must not be image, sampler nor combined image sampler");
 	const uint32_t binding = data_count(m_extbindings);
-	VkDescriptorSetLayoutBindingAndType b;
+	VkDescriptorSetLayoutBindingAndType b{};
 	for (uint32_t i = 0; i < count; ++i)
 	{
 		b.binding				= data_count(m_extbindings);
@@ -84,7 +104,7 @@ uint32_t LayoutManager::addBinding_ (std::type_index	index,
 									 VkShaderStageFlags	stages,
 									 uint32_t			elementCount)
 {
-	VkDescriptorSetLayoutBindingAndType b;
+	VkDescriptorSetLayoutBindingAndType b{};
 	const uint32_t binding = data_count(m_extbindings);
 	b.binding				= binding;
 	b.descriptorCount		= 1;
@@ -118,9 +138,15 @@ uint32_t LayoutManager::addBinding (ZImageView			view,
 		}
 		else if (view.has_handle())
 		{
-			descriptorType = (view.getParam<ZImage>().getParamRef<VkImageCreateInfo>().usage & VK_IMAGE_USAGE_STORAGE_BIT)
-				? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
-				: VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+			const VkImageUsageFlags usage = view.getParam<ZImage>().getParamRef<VkImageCreateInfo>().usage;
+			if (usage & VK_IMAGE_USAGE_SAMPLED_BIT)
+				descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+			else
+			{
+				ASSERTMSG((usage & VK_IMAGE_USAGE_STORAGE_BIT),
+					"VK_DESCRIPTOR_TYPE_STORAGE_IMAGE must have VK_IMAGE_USAGE_STORAGE_BIT");
+				descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			}
 		}
 		else
 		{
@@ -174,7 +200,7 @@ uint32_t LayoutManager::addBinding (VkDescriptorType	type,
 									VkImageLayout		imageLayout,
 									VkShaderStageFlags	stages)
 {
-	VkDescriptorSetLayoutBindingAndType b;
+	VkDescriptorSetLayoutBindingAndType b{};
 	const uint32_t binding = data_count(m_extbindings);
 	b.binding				= binding;
 	b.descriptorCount		= 1;
@@ -223,9 +249,18 @@ ZDescriptorSetLayout LayoutManager::createDescriptorSetLayout (
 {
 	VkAllocationCallbacksPtr					callbacks			= device.getParam<VkAllocationCallbacksPtr>();
 	ZDescriptorPool								descriptorPool		(VK_NULL_HANDLE, device, callbacks);
-	ZDescriptorSetLayout						descriptorSetLayout	(VK_NULL_HANDLE, device, callbacks, ZDescriptorSet());
+	ZDescriptorSetLayout						descriptorSetLayout	(VK_NULL_HANDLE, device, callbacks, layoutCreateFlags, ZDescriptorSet(), getIdentifier());
 	std::vector<VkDescriptorSetLayoutBinding>	bindings			(m_extbindings.size());
+	const bool									descriptorBuffer	= layoutCreateFlags & VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 
+	if (descriptorBuffer)
+	{
+		for (auto begin = m_extbindings.begin(), b = begin; b != m_extbindings.end(); ++b)
+		{
+			bindings[std::distance(begin, b)] = *b;
+		}
+	}
+	else
 	// build descriptor pool
 	{
 		std::vector<VkDescriptorPoolSize>		poolSizes;
@@ -239,15 +274,15 @@ ZDescriptorSetLayout LayoutManager::createDescriptorSetLayout (
 		}
 
 		for (const auto& typeNsize : typesNsizes)
-			poolSizes.push_back({typeNsize.first, typeNsize.second});
+			poolSizes.push_back({ typeNsize.first, typeNsize.second });
 
 		VkDescriptorPoolCreateInfo		poolCreateInfo = makeVkStruct();
-		poolCreateInfo.flags			= poolCreateFlags;
-		poolCreateInfo.maxSets			= 1;
-		poolCreateInfo.poolSizeCount	= data_count(poolSizes);
-		poolCreateInfo.pPoolSizes		= data_or_null(poolSizes);
+		poolCreateInfo.flags = poolCreateFlags;
+		poolCreateInfo.maxSets = 1;
+		poolCreateInfo.poolSizeCount = data_count(poolSizes);
+		poolCreateInfo.pPoolSizes = data_or_null(poolSizes);
 		VKASSERTMSG(vkCreateDescriptorPool(*device, &poolCreateInfo, callbacks,
-										   descriptorPool.setter()), "Unable to create descriptor pool");
+			descriptorPool.setter()), "Unable to create descriptor pool");
 	}
 
 	VkDescriptorSetLayoutCreateInfo		setLayoutCreateInfo = makeVkStruct();
@@ -258,25 +293,29 @@ ZDescriptorSetLayout LayoutManager::createDescriptorSetLayout (
 											descriptorSetLayout.setter()), "Failed to create descriptor set layout");
 
 	updateBuffersOffsets();
-	recreateUpdateBuffers(m_buffers, performUpdateDescriptorSets, false);
+	recreateUpdateBuffers(m_buffers, descriptorBuffer ? false : performUpdateDescriptorSets, descriptorBuffer);
 
-	ZDescriptorSet					descriptorSet(VK_NULL_HANDLE, device, descriptorPool);
-	VkDescriptorSetAllocateInfo		allocInfo = makeVkStruct();
-	allocInfo.descriptorPool		= *descriptorPool;
-	allocInfo.descriptorSetCount	= 1;
-	allocInfo.pSetLayouts			= descriptorSetLayout.ptr();
-	VKASSERTMSG(vkAllocateDescriptorSets(*device, &allocInfo,
-										 descriptorSet.setter()), "Failed to allocate descriptor set");
-
-	if (performUpdateDescriptorSets)
+	if (false == descriptorBuffer)
 	{
-		updateDescriptorSet_(descriptorSet, m_buffers);
-	}
+		ZDescriptorSet					descriptorSet(VK_NULL_HANDLE, device, descriptorPool);
+		VkDescriptorSetAllocateInfo		allocInfo = makeVkStruct();
+		allocInfo.descriptorPool = *descriptorPool;
+		allocInfo.descriptorSetCount = 1;
+		allocInfo.pSetLayouts = descriptorSetLayout.ptr();
+		VKASSERTMSG(vkAllocateDescriptorSets(*device, &allocInfo,
+			descriptorSet.setter()), "Failed to allocate descriptor set");
 
-	descriptorSetLayout.setParam<ZDescriptorSet>(descriptorSet);
+		if (performUpdateDescriptorSets)
+		{
+			updateDescriptorSet_(descriptorSet, m_buffers);
+		}
+
+		descriptorSetLayout.setParam<ZDescriptorSet>(descriptorSet);
+	}
 
 	return descriptorSetLayout;
 }
+
 VkDeviceSize LayoutManager::getDescriptorAlignment (const VkDescriptorType type) const
 {
 	VkDeviceSize alignment = 16u;
@@ -308,6 +347,7 @@ void LayoutManager::updateBuffersOffsets ()
 		}
 	}
 }
+
 void LayoutManager::recreateUpdateBuffers (std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers,
 										   bool performUpdateDescriptorSets, bool descriptorBuffer)
 {
@@ -332,23 +372,22 @@ void LayoutManager::recreateUpdateBuffers (std::map<std::pair<VkDescriptorType, 
 
 	buffers.clear();
 
-	for (const auto& size : sizes)
+	if (performUpdateDescriptorSets || descriptorBuffer)
 	{
-		auto usagePtr = std::find_if(std::begin(DescriptorTypeToBufferUsage), std::end(DescriptorTypeToBufferUsage),
-									 [&size](const auto& x) { return x.first == size.first.first; });
-		ASSERTION(std::end(DescriptorTypeToBufferUsage) != usagePtr);
-
-		const ZBufferUsageFlags		usage	(usagePtr->second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-											 (descriptorBuffer ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT : usagePtr->second));
-		const ZMemoryPropertyFlags	flags	(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-		ZBuffer buffer;
-		if (performUpdateDescriptorSets)
+		for (const auto& size : sizes)
 		{
-			buffer = createBuffer(device, size.second, usage, flags);
-		}
+			auto usagePtr = std::find_if(std::begin(DescriptorTypeToBufferUsage), std::end(DescriptorTypeToBufferUsage),
+				[&size](const auto& x) { return x.first == size.first.first; });
+			ASSERTION(std::end(DescriptorTypeToBufferUsage) != usagePtr);
 
-		buffers.emplace(size.first, buffer);
+			const ZBufferUsageFlags		usage(usagePtr->second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+				(descriptorBuffer ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT : usagePtr->second));
+			const ZMemoryPropertyFlags	flags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+			ZBuffer buffer = createBuffer(device, size.second, usage, flags);
+
+			buffers.emplace(size.first, buffer);
+		}
 	}
 }
 void LayoutManager::updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZBuffer buffer)
@@ -521,29 +560,42 @@ ZPipelineLayout	LayoutManager::createPipelineLayout (add_cref<ZPushConstants> pu
 {
 	return createPipelineLayout_(pushConstants, {});
 }
-ZPipelineLayout LayoutManager::createPipelineLayout (ZDescriptorSetLayout dsLayout,
-													 add_cref<ZPushConstants> pushConstants)
+ZPipelineLayout LayoutManager::createPipelineLayout (
+	std::initializer_list<ZDescriptorSetLayout>	dsLayouts,
+	add_cref<ZPushConstants>					pushConstants)
 {
-	ASSERTMSG(dsLayout.has_handle(), "DescriptorSetLayout must have a valid handle");
-	return createPipelineLayout_(pushConstants, { dsLayout });
+	return createPipelineLayout_(pushConstants, dsLayouts);
 }
 ZPipelineLayout LayoutManager::createPipelineLayout_ (add_cref<ZPushConstants> pushConstants,
 													  std::initializer_list<ZDescriptorSetLayout> dsLayouts)
 {
 	assertPushConstantSizeMax(device, pushConstants.size());
 
+	const VkPipelineLayoutCreateFlags flags		(0);
 	VkAllocationCallbacksPtr	callbacks		= device.getParam<VkAllocationCallbacksPtr>();
 	ZPipelineLayout				pipelineLayout	(VK_NULL_HANDLE, device, callbacks,
+												 flags,
 												 std::vector<ZDescriptorSetLayout>(dsLayouts.size()),
 												 pushConstants.ranges(),
-												 pushConstants.types());
+												 pushConstants.types(), false);
 
 	add_ref<std::vector<ZDescriptorSetLayout>>	zLayouts	= pipelineLayout.getParamRef<std::vector<ZDescriptorSetLayout>>();
 	std::vector<VkDescriptorSetLayout>			vkLayouts	(dsLayouts.size());
+	bool							enableDescriptorBuffer	= false;
 
 	for (auto i = dsLayouts.begin(); i != dsLayouts.end(); ++i)
 	{
 		const auto j = make_unsigned(std::distance(dsLayouts.begin(), i));
+		const bool descriptorBufferEnabled =
+			(i->getParam<VkDescriptorSetLayoutCreateFlags>() & VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT);
+		if (enableDescriptorBuffer)
+		{
+			ASSERTMSG(descriptorBufferEnabled, "All descriptor set layouts must have VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT flag");
+		}
+		else if (descriptorBufferEnabled)
+		{
+			enableDescriptorBuffer = true;
+		}
 		zLayouts[j] = *i;
 		vkLayouts[j] = **i;
 	}
@@ -552,7 +604,7 @@ ZPipelineLayout LayoutManager::createPipelineLayout_ (add_cref<ZPushConstants> p
 		pipelineLayout.getParamRef<std::vector<VkPushConstantRange>>();
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = makeVkStruct();
-	pipelineLayoutInfo.flags					= 0;
+	pipelineLayoutInfo.flags					= flags;
 	pipelineLayoutInfo.setLayoutCount			= data_count(vkLayouts);
 	pipelineLayoutInfo.pSetLayouts				= data_or_null(vkLayouts);
 	pipelineLayoutInfo.pushConstantRangeCount	= data_count(ranges);
@@ -560,6 +612,8 @@ ZPipelineLayout LayoutManager::createPipelineLayout_ (add_cref<ZPushConstants> p
 
 	VKASSERTMSG(vkCreatePipelineLayout(*device, &pipelineLayoutInfo, callbacks, pipelineLayout.setter()),
 										"failed to create pipeline layout!");
+
+	pipelineLayout.getParamRef<bool>() = enableDescriptorBuffer;
 
 	return pipelineLayout;
 }
@@ -699,53 +753,137 @@ void LayoutManager::getBinding_ (uint32_t binding, std::optional<ZBuffer>& resul
 	result = m_buffers.at(key);
 }
 
-ZBuffer LayoutManager::createDescriptorBuffer ()
+size_t getDescriptorBindingSize (add_cref<VkPhysicalDeviceDescriptorBufferPropertiesEXT> p)
 {
-	updateBuffersOffsets();
-	recreateUpdateBuffers(m_buffers, true, true);
+	return std::max({ p.samplerDescriptorSize
+					, p.combinedImageSamplerDescriptorSize
+					, p.sampledImageDescriptorSize
+					, p.storageImageDescriptorSize
+					, p.uniformTexelBufferDescriptorSize
+					, p.robustUniformTexelBufferDescriptorSize
+					, p.storageTexelBufferDescriptorSize
+					, p.robustStorageTexelBufferDescriptorSize
+					, p.uniformBufferDescriptorSize
+					, p.robustUniformBufferDescriptorSize
+					, p.storageBufferDescriptorSize
+					, p.robustStorageBufferDescriptorSize
+					, p.inputAttachmentDescriptorSize
+					, p.accelerationStructureDescriptorSize
+					});
+}
 
-	uint32_t index = 0u;
-	std::vector<VkDescriptorAddressInfoEXT> data(m_extbindings.size());
+ZBuffer LayoutManager::createDescriptorBuffer (ZDescriptorSetLayout dsLayout)
+{
+	const uint32_t myID = getIdentifier();
+	const uint32_t dsLayoutID = dsLayout.getParam<ZDistType<LayoutIdentifier, uint32_t>>();
+	ASSERTMSG(myID == dsLayoutID,
+		"Cannot create descriptor buffer for layout of LayoutManager ", dsLayoutID, " from LayoutManager ", myID);
+
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	ASSERTMSG(di.vkGetDescriptorEXT, "vkGetDescriptorEXT() must not be null");
+
+	VkPhysicalDeviceDescriptorBufferPropertiesEXT dbp = makeVkStruct();
+	deviceGetPhysicalProperties2(device, &dbp);
+
+	VkDeviceSize layoutSize = 0u;
+	di.vkGetDescriptorSetLayoutSizeEXT(*device, *dsLayout, &layoutSize);
+	ASSERTMSG(layoutSize, "vkGetDescriptorSetLayoutSizeEXT - layout size must not be zero");
+	layoutSize = ROUNDUP(layoutSize, dbp.descriptorBufferOffsetAlignment);
+	//const uint32_t bindingSize = uint32_t(layoutSize);
+	//layoutSize *= m_extbindings.size();
+
+	ZBufferUsageFlags usage(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+							VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+							VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
+							VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT);
+	ZBuffer descBuffer = createBuffer(device, layoutSize, usage, ZMemoryPropertyHostFlags);
+
+	uint8_t* data = nullptr;
+	ZDeviceMemory memory = bufferGetMemory(descBuffer, 0);
+	VKASSERT(vkMapMemory(*device, *memory, 0, layoutSize, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&data)));
+	std::fill_n(data, layoutSize, '\0');
 
 	for (add_cref<VkDescriptorSetLayoutBindingAndType> b : m_extbindings)
 	{
-		if (isImageDescriptorType(b.descriptorType))
+		VkDescriptorAddressInfoEXT	addressInfo			= makeVkStruct();
+		VkDescriptorGetInfoEXT		getInfo				= makeVkStruct();
+		VkDescriptorImageInfo		imageInfo			{};
+		VkDeviceSize				descriptorOffset	= 0;
+		size_t						writeDescriptorSize	= 0;
+
+		getInfo.type = b.descriptorType;
+		di.vkGetDescriptorSetLayoutBindingOffsetEXT(*device, *dsLayout, b.binding, &descriptorOffset);
+
+		if (isBufferDescriptorType(b.descriptorType))
 		{
-		}
-		else if (isBufferDescriptorType(b.descriptorType))
-		{
-			ZBuffer buffer;
-			VkDeviceSize range = 0u;
-			VkDescriptorAddressInfoEXT addressInfo = makeVkStruct();
-			if (b.shared)
+			ZBuffer buffer = b.shared
+				? m_buffers.at({ b.descriptorType, UNIQUE_IBINDING })
+				: m_buffers.at({ b.descriptorType, static_cast<int>(b.binding) });
+			addressInfo.address = bufferGetAddress(buffer);
+			addressInfo.range = bufferGetSize(buffer);
+			addressInfo.format = buffer.getParam<VkFormat>();
+			if (isUniformDescriptorType(b.descriptorType))
 			{
-				buffer = m_buffers.at({ b.descriptorType, UNIQUE_IBINDING });
-				range = ROUNDUP((b.size * b.elementCount), getDescriptorAlignment(b.descriptorType));
+				getInfo.data.pUniformBuffer = &addressInfo;
+				writeDescriptorSize = dbp.uniformBufferDescriptorSize;
 			}
 			else
 			{
-				buffer = m_buffers.at({ b.descriptorType, static_cast<int>(b.binding) });
-				range = b.size * b.elementCount;
+				getInfo.data.pStorageBuffer = &addressInfo;
+				writeDescriptorSize = dbp.storageBufferDescriptorSize;
 			}
-			addressInfo.address = bufferGetAddress(buffer);
-			addressInfo.format = buffer.getParam<VkFormat>();
-			addressInfo.range = range;
-
-			data[index] = addressInfo;
 		}
 		else
 		{
-			ASSERTFALSE("");
+			switch (b.descriptorType)
+			{
+			case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+			case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+			{
+				ZImageView	view = m_views[b.offset];
+				imageInfo.imageView = *view;
+				imageInfo.imageLayout = b.imageLayout;
+				if (b.descriptorType == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
+				{
+					getInfo.data.pStorageImage = &imageInfo;
+					writeDescriptorSize = dbp.storageImageDescriptorSize;
+				}
+				else
+				{
+					getInfo.data.pSampledImage = &imageInfo;
+					writeDescriptorSize = dbp.sampledImageDescriptorSize;
+				}
+			}
+			break;
+			case VK_DESCRIPTOR_TYPE_SAMPLER:
+			{
+				getInfo.data.pSampler = m_samplers[b.offset].ptr();
+				writeDescriptorSize = dbp.samplerDescriptorSize;
+			}
+			break;
+			case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+			{
+				ZImageView	view = m_viewsAndSamplers[b.offset].first;
+				ZSampler	samp = m_viewsAndSamplers[b.offset].second;
+				if (dbp.combinedImageSamplerDescriptorSingleArray)
+				{
+				}
+				imageInfo.sampler = *samp;
+				imageInfo.imageView = *view;
+				imageInfo.imageLayout = b.imageLayout;
+				getInfo.data.pCombinedImageSampler = &imageInfo;
+				writeDescriptorSize = dbp.combinedImageSamplerDescriptorSize;
+			}
+			break;
+			default:	ASSERT_NOT_IMPLEMENTED();
+			}
 		}
 
-		++index;
+		ASSERTMSG((descriptorOffset + writeDescriptorSize) <= layoutSize, "");
+		di.vkGetDescriptorEXT(*device, &getInfo, writeDescriptorSize, (data + descriptorOffset));
 	}
 
-	const VkDeviceSize size = m_extbindings.size() * sizeof(VkDescriptorAddressInfoEXT);
-	ZBufferUsageFlags usage(VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT);
-
-	ZBuffer descBuffer = createBuffer(device, size, usage, ZMemoryPropertyHostFlags);
-	bufferWrite(descBuffer, data);
+	vkUnmapMemory(*device, *memory);
 
 	return descBuffer;
 }

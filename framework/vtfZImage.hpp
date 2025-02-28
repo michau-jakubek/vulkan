@@ -17,17 +17,20 @@ VkSamplerCreateInfo makeSamplerCreateInfo	(VkSamplerAddressMode	wrapS		= VK_SAMP
 											 VkSamplerAddressMode	wrapT		= VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
 											 VkFilter				minFilter	= VK_FILTER_NEAREST,
 											 VkFilter				magFilter	= VK_FILTER_NEAREST,
-											 bool					normalized	= true);
+											 bool					normalized	= true,
+											 VkSamplerCreateFlags	flags		= VkSamplerCreateFlags(0));
 ZSampler			createSampler	(ZDevice device,
 									 VkFormat format = VK_FORMAT_R32G32B32A32_SFLOAT, uint32_t mipLevels = 1u,
 									 bool filterLinearORnearest = true, bool normalized = true,
-									 bool mipMapEnable = false, bool anisotropyEnable = false);
+									 bool mipMapEnable = false, bool anisotropyEnable = false,
+									 VkSamplerCreateFlags = VkSamplerCreateFlags(0));
 ZSampler			createSampler	(ZImageView view, bool filterLinearORnearest = true,
-									 bool normalized = true, bool mipMapEnable = false, bool anisotropyEnable = false);
+									 bool normalized = true, bool mipMapEnable = false, bool anisotropyEnable = false,
+									 VkSamplerCreateFlags	flags		= VkSamplerCreateFlags(0));
 ZImage				createImage		(ZDevice device, VkFormat format, VkImageType type, uint32_t width, uint32_t height,
 									 ZImageUsageFlags usage, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT,
 									 uint32_t mipLevels = 1, uint32_t layers = 1, uint32_t depth = 1,
-									 ZMemoryPropertyFlags properties = ZMemoryPropertyDeviceFlags);
+									 bool deviceAddress = false, ZMemoryPropertyFlags properties = ZMemoryPropertyDeviceFlags);
 
 VkImageViewType		imageTypeToViewType (VkImageType imageType);
 ZImageView			createImageView	(ZImage image,
@@ -53,13 +56,16 @@ VkImageSubresourceRange	imageMakeSubresourceRange (ZImage image,
 												   uint32_t baseArrayLayer = 0u, uint32_t arrayLayers = 1u);
 VkImageSubresourceLayers imageMakeSubresourceLayers (ZImage image, uint32_t mipLevel = 0u,
 													 uint32_t baseArrayLayer = 0u, uint32_t layerCount = 1u);
-bool	readImageFileMetadata		(add_cref<std::string> fileName, add_ref<VkFormat> format, add_ref<uint32_t> width, add_ref<uint32_t> height);
+bool	readImageFileMetadata		(add_cref<std::string> fileName, add_ref<VkFormat> format,
+									 add_ref<uint32_t> width, add_ref<uint32_t> height, int desiredChannelCount = 0);
 ZImage	createImageFromFileMetadata	(ZDevice device, add_cref<std::string> imageFileName,
 									 ZImageUsageFlags usage = ZImageUsageFlags(),
+									 bool deviceAddress = false,
 									 ZMemoryPropertyFlags memory = ZMemoryPropertyDeviceFlags,
 									 bool forceFourComponentFormat = true);
 ZImage	createImageFromFileMetadata	(ZDevice device, ZBuffer imageContentBuffer,
 									 ZImageUsageFlags usage = ZImageUsageFlags(),
+									 bool deviceAddress = false,
 									 ZMemoryPropertyFlags memory = ZMemoryPropertyDeviceFlags);
 
 ZImage	createCubeImageAndLoadFromFiles	(ZDevice device, ZCommandPool commandPool, const strings& fileNames,

@@ -105,8 +105,9 @@ public:
 	/**
 	 * Creates a descriptor set bind depending on parameters.
 	 * If both view and sampler have handles then descriptor be VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER.
-	 * If view has a handle and sampler don't then descriptor be VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE.
-	 * If an image connected to the view has VK_IMAGE_USAGE_STORAGE_BIT then VK_DESCRIPTOR_TYPE_STORAGE_IMAGE.
+	 * If the sampler has no handle and the view image has VK_IMAGE_USAGE_SAMPLED_BIT enabled, then the
+	 *   descriptor will be VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE. Otherwise be VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+	 *   and VK_IMAGE_USAGE_STORAGE_BIT must be enabled.
 	 * If view has no handle but sampler has then descriptor be VK_DESCRIPTOR_TYPE_SAMPLER.
 	 * Anyway you can specify descriptor type exactly by type parameter.
 	 * In the case of an image imageLayout parameter tells about a way how the descriptor will use that image.
@@ -146,9 +147,10 @@ public:
 	 * via addBinding*(...) methods. Automatically creates descriptor set
 	 * object and bind it to newly created descriptor set layout.
 	 * Additionaly performs an update on demand with newly created descriptor set.
-	 * Any time you can this descriptor with getDescriptorSet(...) and
-	 * update it manually.
+	 * Any time you can this descriptor with getDescriptorSet(...) and update it manually.
+	 * Each of descritor set has unique identifier of this LayoutManager.
 	 */
+	uint32_t								getIdentifier				() const { return m_identifier; }
 	ZDescriptorSetLayout					createDescriptorSetLayout	(bool performUpdateDescriptorSets = true,
 																		 VkDescriptorSetLayoutCreateFlags = VkDescriptorSetLayoutCreateFlags(0),
 																		 VkDescriptorPoolCreateFlags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
@@ -167,11 +169,11 @@ public:
 	void						 updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZBuffer buffer);
 	ZPipelineLayout				 createPipelineLayout ();
 	ZPipelineLayout				 createPipelineLayout (add_cref<ZPushConstants> pushConstants);
-	ZPipelineLayout				 createPipelineLayout (ZDescriptorSetLayout, add_cref<ZPushConstants>);
+	ZPipelineLayout				 createPipelineLayout (std::initializer_list<ZDescriptorSetLayout>, add_cref<ZPushConstants>);
 	template<class... PC__>	auto createPipelineLayout (const ZPushRange<PC__>&...) -> ZPipelineLayout;
-	template<class... PC__>	auto createPipelineLayout (ZDescriptorSetLayout, const ZPushRange<PC__>&...) -> ZPipelineLayout;
+	template<class... PC__>	auto createPipelineLayout (std::initializer_list<ZDescriptorSetLayout>, const ZPushRange<PC__>&...) -> ZPipelineLayout;
 
-	ZBuffer createDescriptorBuffer();
+	ZBuffer						 createDescriptorBuffer (ZDescriptorSetLayout dsLayout);
 
 private:	
 	typedef struct VkDescriptorSetLayoutBindingAndType : VkDescriptorSetLayoutBinding
@@ -215,12 +217,14 @@ private:
 												 std::initializer_list<ZDescriptorSetLayout> dsLayouts);
 
 private:
-	ExtBindings													m_extbindings;
-	std::vector<ZImageView>										m_views;
-	std::vector<ZSampler>										m_samplers;
-	std::vector<std::pair<ZImageView,ZSampler>>					m_viewsAndSamplers;
-	//std::vector<ZBuffer>										m_texelBuffers;
-	std::map<std::pair<VkDescriptorType, int>, ZBuffer>			m_buffers;
+	ExtBindings											m_extbindings;
+	std::vector<ZImageView>								m_views;
+	std::vector<ZSampler>								m_samplers;
+	std::vector<std::pair<ZImageView,ZSampler>>			m_viewsAndSamplers;
+	//std::vector<ZBuffer>								m_texelBuffers;
+	std::map<std::pair<VkDescriptorType, int>, ZBuffer>	m_buffers;
+	uint32_t											m_identifier;
+	static uint32_t										m_counter;
 };
 namespace hidden
 {
@@ -293,9 +297,9 @@ LayoutManager::createPipelineLayout (const ZPushRange<PC__>&... ranges)
 }
 
 template<class... PC__> ZPipelineLayout
-LayoutManager::createPipelineLayout (ZDescriptorSetLayout dsLayout, const ZPushRange<PC__>&... ranges)
+LayoutManager::createPipelineLayout (std::initializer_list<ZDescriptorSetLayout> dsLayouts, const ZPushRange<PC__>&... ranges)
 {
-	return createPipelineLayout_(ZPushConstants(ranges...), { dsLayout });
+	return createPipelineLayout_(ZPushConstants(ranges...), dsLayouts);
 }
 
 } // namespace vtf

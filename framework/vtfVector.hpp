@@ -157,6 +157,8 @@ public:
         return data[i];
     }
 
+	const T (&getData() const)[N] { return data; }
+
     template<class U>
 	VecX operator+(const VecX<U,N>& v) const
     {

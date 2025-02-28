@@ -44,11 +44,11 @@ struct TestParams
 {
 	uint32_t	threadCount;
 	bool		infinity;
-	bool		ignoreSoExtension;
-	bool		ignoreVulkanParam;
-	bool		ignoreApiParam;
-	bool		ignoreSpirvParam;
-	bool		enableSoLayer;
+	bool		dontIgnoreSoExtension;
+	bool		dontIgnoreVulkanParam;
+	bool		dontIgnoreApiParam;
+	bool		dontIgnoreSpirvParam;
+	bool		disableSoLayer;
 	bool		buildAlways;
 	bool		useLinkedShaders;
 
@@ -56,33 +56,33 @@ struct TestParams
 	VkBool32	dynamicRendering;
 	VkBool32	shaderObject;
 
-	Version		effectiveApiVersion;
-	Version		effectiveVkVersion;
-	Version		effectiveSpvVersion;
+	Version		usedApiVersion;
+	Version		usedVkVersion;
+	Version		usedSpvVersion;
 
 	void updateEffectiveVersions ()
 	{
-		if (ignoreVulkanParam)	effectiveVkVersion = Version(1, 3);
-		if (ignoreApiParam)		effectiveApiVersion = Version(1, 3);
-		if (ignoreSpirvParam)	effectiveSpvVersion = Version(1, 3);
+		if (false == dontIgnoreVulkanParam)	usedVkVersion = Version(1, 3);
+		if (false == dontIgnoreApiParam)	usedApiVersion = Version(1, 3);
+		if (false == dontIgnoreSpirvParam)	usedSpvVersion = Version(1, 3);
 	}
 
 	TestParams (add_cref<GlobalAppFlags> flags)
 		: threadCount		(1u)
 		, infinity			(false)
-		, ignoreSoExtension	(false)
-		, ignoreVulkanParam	(true)
-		, ignoreApiParam	(true)
-		, ignoreSpirvParam	(true)
-		, enableSoLayer		(true)
+		, dontIgnoreSoExtension	(false)
+		, dontIgnoreVulkanParam	(false)
+		, dontIgnoreApiParam	(false)
+		, dontIgnoreSpirvParam	(false)
+		, disableSoLayer		(false)
 		, buildAlways		(false)
 		, useLinkedShaders	(false)
 		, extendedDynamicState	(VK_FALSE)
 		, dynamicRendering		(VK_FALSE)
 		, shaderObject			(VK_FALSE)
-		, effectiveApiVersion	(flags.apiVer)
-		, effectiveVkVersion	(flags.vulkanVer)
-		, effectiveSpvVersion	(flags.spirvVer)
+		, usedApiVersion	(flags.apiVer)
+		, usedVkVersion		(flags.vulkanVer)
+		, usedSpvVersion	(flags.spirvVer)
 	{
 	}
 
@@ -91,11 +91,11 @@ struct TestParams
 };
 constexpr Option optionThreadCount			{ "-threads", 1 };
 constexpr Option optionInfinity				{ "--infinity", 0 };
-constexpr Option optionIgnoreSoExtension	{ "--ignore-so-extension", 0 };
-constexpr Option optionIgnoreGlobalApiVer	{ "--ignore-api-param", 0 };
-constexpr Option optionIgnoreGlobalVkVer	{ "--ignore-vulkan-param", 0 };
-constexpr Option optionIgnoreGlobalSpvVer	{ "--ignore-spirv-param", 0 };
-constexpr Option optionEnableSoLayer		{ "--enable-so-layer", 0 };
+constexpr Option optionDontIgnoreSoExtension	{ "--dont-ignore-so-extension", 0 };
+constexpr Option optionDontIgnoreGlobalApiVer	{ "--dont-ignore-api-param", 0 };
+constexpr Option optionDontIgnoreGlobalVkVer	{ "--dont-ignore-vulkan-param", 0 };
+constexpr Option optionDontIgnoreGlobalSpvVer	{ "--dont-ignore-spirv-param", 0 };
+constexpr Option optionDisableSoLayer		{ "--disable-so-layer", 0 };
 constexpr Option optionBuildAlways			{ "--build-always", 0 };
 constexpr Option optionUseLinkedShaders		{ "--linked-shaders", 0 };
 OptionParser<TestParams> TestParams::getParser ()
@@ -106,16 +106,16 @@ OptionParser<TestParams> TestParams::getParser ()
 		"Run the test on thread(s)", { threadCount }, flags);
 	parser.addOption(&TestParams::infinity, optionInfinity,
 		"Generate frames in the infinity loop", { infinity }, flags);
-	parser.addOption(&TestParams::ignoreApiParam, optionIgnoreGlobalApiVer,
-		"Ignore -api param, instead use 1.3 version", { ignoreApiParam }, flags);
-	parser.addOption(&TestParams::ignoreVulkanParam, optionIgnoreGlobalVkVer,
-		"Ignore -vulkan param, instead use 1.3 version", { ignoreVulkanParam }, flags);
-	parser.addOption(&TestParams::ignoreSpirvParam, optionIgnoreGlobalSpvVer,
-		"Ignore -spirv param, instead use 1.3 version", { ignoreSpirvParam }, flags);
-	parser.addOption(&TestParams::ignoreSoExtension, optionIgnoreSoExtension,
-		"Ignore " VK_EXT_SHADER_OBJECT_EXTENSION_NAME " extension", { ignoreSoExtension }, flags);
-	parser.addOption(&TestParams::enableSoLayer, optionEnableSoLayer,
-		"Enable " VK_LAYER_KHRONOS_SHADER_OBJECT_NAME " layer", { enableSoLayer }, flags);
+	parser.addOption(&TestParams::dontIgnoreApiParam, optionDontIgnoreGlobalApiVer,
+		"Don't ignore -api param, if ignored then 1.3 version will be used", { dontIgnoreApiParam }, flags);
+	parser.addOption(&TestParams::dontIgnoreVulkanParam, optionDontIgnoreGlobalVkVer,
+		"Don't ignore -vulkan param, if ignored then 1.3 version will be used", { dontIgnoreVulkanParam }, flags);
+	parser.addOption(&TestParams::dontIgnoreSpirvParam, optionDontIgnoreGlobalSpvVer,
+		"Don't ignore -spirv param, if ignored then 1.3 version will be used", { dontIgnoreSpirvParam }, flags);
+	parser.addOption(&TestParams::dontIgnoreSoExtension, optionDontIgnoreSoExtension,
+		"Don't ignore " VK_EXT_SHADER_OBJECT_EXTENSION_NAME " extension availability", { dontIgnoreSoExtension }, flags);
+	parser.addOption(&TestParams::disableSoLayer, optionDisableSoLayer,
+		"Disable " VK_LAYER_KHRONOS_SHADER_OBJECT_NAME " layer", { disableSoLayer }, flags);
 	parser.addOption(&TestParams::buildAlways, optionBuildAlways,
 		"Force to build the shaders always", { buildAlways }, flags);
 	parser.addOption(&TestParams::useLinkedShaders, optionUseLinkedShaders,
@@ -146,49 +146,40 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 		if (state.hasErrors) return {};
 	}
 
-	VkPhysicalDeviceShaderObjectFeaturesEXT shaderObjectFeatures = makeVkStruct();
-	VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures = makeVkStruct(&shaderObjectFeatures);
-	VkPhysicalDeviceExtendedDynamicStateFeaturesEXT dynamicStateFeatures = makeVkStruct(&dynamicRenderingFeatures);
 	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
-		caps.requiredExtension.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-		caps.requiredExtension.push_back("VK_EXT_extended_dynamic_state");
-		caps.requiredExtension.push_back("VK_EXT_extended_dynamic_state2");
-		caps.requiredExtension.push_back("VK_KHR_maintenance1");
-
-		deviceGetPhysicalFeatures2(caps.physicalDevice, &dynamicStateFeatures);
-
-		params.shaderObject = shaderObjectFeatures.shaderObject;
-		params.dynamicRendering = dynamicRenderingFeatures.dynamicRendering;
-		params.extendedDynamicState = dynamicStateFeatures.extendedDynamicState;
-
-		if (params.ignoreSoExtension)
+		caps.requiredExtension.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
+		params.shaderObject = caps.addUpdateFeatureIf(&VkPhysicalDeviceShaderObjectFeaturesEXT::shaderObject);
+		if (false == params.dontIgnoreSoExtension)
 		{
-			shaderObjectFeatures.shaderObject = VK_TRUE;
-			caps.requiredExtension.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
+			VkPhysicalDeviceShaderObjectFeaturesEXT sof{};
+			sof.shaderObject = VK_TRUE;
+			caps.addUpdateFeature(sof);
 		}
-		else if (shaderObjectFeatures.shaderObject != VK_FALSE)
+		else if (false == params.shaderObject)
 		{
-			caps.requiredExtension.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
+			ASSERTMSG(params.shaderObject, VK_EXT_SHADER_OBJECT_EXTENSION_NAME, " not supported by device");
 		}
 
-		VkPhysicalDeviceFeatures2 enabledFeatures = makeVkStruct(&dynamicStateFeatures);
-		enabledFeatures.features = {};
-
-		if (dynamicRenderingFeatures.dynamicRendering != VK_FALSE)
 		{
+			const auto f = caps.addUpdateFeatureIf(&VkPhysicalDeviceDynamicRenderingFeatures::dynamicRendering);
+			params.dynamicRendering = f;
+			f.checkNotSupported(&VkPhysicalDeviceDynamicRenderingFeatures::dynamicRendering,
+					true, "dynamicRendering not supported");
 			caps.requiredExtension.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
 		}
-		if (dynamicStateFeatures.extendedDynamicState != VK_FALSE)
+
 		{
+			const auto f = caps.addUpdateFeatureIf(&VkPhysicalDeviceExtendedDynamicStateFeaturesEXT::extendedDynamicState);
+			params.extendedDynamicState = f;
+			f.checkNotSupported(&VkPhysicalDeviceExtendedDynamicStateFeaturesEXT::extendedDynamicState,
+					true, "extendedDynamicState not supported");
 			caps.requiredExtension.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
 		}
-
-		return enabledFeatures;
 	};
 
 	strings layers = gf.layers;
-	if (params.enableSoLayer)
+	if (false == params.disableSoLayer)
 	{
 		layers.push_back(VK_LAYER_KHRONOS_SHADER_OBJECT_NAME);
 	}
@@ -197,29 +188,8 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 
 	CanvasStyle canvasStyle = Canvas::DefaultStyle;
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
-	Canvas cs(record.name, layers, strings(), strings(), canvasStyle, onEnablingFeatures, params.effectiveApiVersion);
+	Canvas cs(record.name, layers, strings(), strings(), canvasStyle, onEnablingFeatures, params.usedApiVersion);
 
-	if (shaderObjectFeatures.shaderObject != VK_TRUE)
-	{
-		std::cout << "ERROR: shaderObject feature aka "
-			VK_EXT_SHADER_OBJECT_EXTENSION_NAME
-			" is not supported by device" << std::endl;
-		return 1;
-	}
-	if (dynamicRenderingFeatures.dynamicRendering != VK_TRUE)
-	{
-		std::cout << "ERROR: dynamicRendering feature aka "
-			VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME
-			" is not supported by device" << std::endl;
-		return 1;
-	}
-	if (dynamicStateFeatures.extendedDynamicState != VK_TRUE)
-	{
-		std::cout << "ERROR: extendedDynamicState feature aka "
-			VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME
-			" is not supported by device" << std::endl;
-		return 1;
-	}
 	if (false == cs.device.getInterface().isShaderObjectEnabled())
 	{
 		std::cout << "ERROR: Unable to initialize Vulkan calls for shaderObject" << std::endl;
@@ -251,9 +221,9 @@ void TestParams::print (add_ref<std::ostream> str) const
 	str << VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME
 		<< " enabled: " << boolean(params.extendedDynamicState != VK_FALSE, true) << std::endl;
 
-	str << "Effective Api version: " << params.effectiveApiVersion << std::endl;
-	str << "Effective Vulkan version: " << params.effectiveVkVersion << std::endl;
-	str << "Effective SPIR-V version: " << params.effectiveSpvVersion << std::endl;
+	str << "Used Api version: "		<< params.usedApiVersion << std::endl;
+	str << "Used Vulkan version: "	<< params.usedVkVersion << std::endl;
+	str << "Used SPIR-V version: "	<< params.usedSpvVersion << std::endl;
 }
 
 void onResize (Canvas& cs, void* userData, int width, int height)
@@ -336,49 +306,11 @@ TriLogicInt runTriangeSingleThread (add_ref<Canvas> cs, add_cref<std::string> as
 	const VkClearValue			clearColor			{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
 	ZRenderPass					renderPass			= createColorRenderPass(cs.device, {format}, {{clearColor}});
 
-	ZPipelineLayout				pipelineLayout		= lm.createPipelineLayout(dsLayout); // push
+	ZPipelineLayout				pipelineLayout		= lm.createPipelineLayout({ dsLayout }); // push
 
 	int drawTrigger = 1;
 	cs.events().cbKey.set(onKey, nullptr);
 	cs.events().cbWindowSize.set(onResize, &drawTrigger);
-
-	auto setCommonDynamicStates = [&](ZCommandBuffer cmdBuffer) -> void
-	{
-		// VkPipelineVertexInputStateCreateInfo
-		commandBufferSetVertexInputEXT(cmdBuffer, vertexInput);
-
-		// VkPipelineInputAssemblyStateCreateInfo
-		di.vkCmdSetPrimitiveTopologyEXT(*cmdBuffer, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-		di.vkCmdSetPrimitiveRestartEnableEXT(*cmdBuffer, VK_FALSE);
-
-		// VkPipelineRasterizationStateCreateInfo
-		di.vkCmdSetDepthClampEnableEXT(*cmdBuffer, VK_FALSE);
-		di.vkCmdSetRasterizerDiscardEnableEXT(*cmdBuffer, VK_FALSE);
-		di.vkCmdSetPolygonModeEXT(*cmdBuffer, VK_POLYGON_MODE_FILL);
-		di.vkCmdSetCullModeEXT(*cmdBuffer, VK_CULL_MODE_BACK_BIT);
-		di.vkCmdSetFrontFaceEXT(*cmdBuffer, VK_FRONT_FACE_CLOCKWISE);
-		di.vkCmdSetDepthBiasEnableEXT(*cmdBuffer, VK_FALSE);
-
-		// VkPipelineDepthStencilStateCreateInfo
-		di.vkCmdSetDepthTestEnableEXT(*cmdBuffer, VK_FALSE);
-		di.vkCmdSetDepthWriteEnableEXT(*cmdBuffer, VK_FALSE);
-		di.vkCmdSetStencilTestEnableEXT(*cmdBuffer, VK_FALSE);
-
-		// VkPipelineMultisampleStateCreateInfo
-		di.vkCmdSetRasterizationSamplesEXT(*cmdBuffer, VK_SAMPLE_COUNT_1_BIT);
-		di.vkCmdSetSampleMaskEXT(*cmdBuffer, VK_SAMPLE_COUNT_1_BIT, makeQuickPtr(~0u));
-		di.vkCmdSetAlphaToCoverageEnableEXT(*cmdBuffer, VK_FALSE);
-
-		// VkPipelineColorBlendAttachmentState
-		const VkColorComponentFlags mask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
-											| VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-		di.vkCmdSetColorBlendEnableEXT(*cmdBuffer, 0u, 1u, makeQuickPtr(VK_FALSE));
-		di.vkCmdSetColorWriteMaskEXT(*cmdBuffer, 0u, 1u, &mask);
-
-		di.vkCmdSetConservativeRasterizationModeEXT(*cmdBuffer, VK_CONSERVATIVE_RASTERIZATION_MODE_DISABLED_EXT);
-		di.vkCmdSetSampleLocationsEnableEXT(*cmdBuffer, VK_FALSE);
-		di.vkCmdSetProvokingVertexModeEXT(*cmdBuffer, VK_PROVOKING_VERTEX_MODE_FIRST_VERTEX_EXT);
-	};
 
 	auto onAfterRecording = [&](add_ref<Canvas>)
 	{
@@ -396,15 +328,10 @@ TriLogicInt runTriangeSingleThread (add_ref<Canvas> cs, add_cref<std::string> as
 											VK_ACCESS_NONE, VK_ACCESS_NONE, VK_IMAGE_LAYOUT_GENERAL);
 
 		commandBufferBegin(cmdBuffer);
-//			commandBufferBinDescriptorSets(cmdBuffer, pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS);
-			commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
+			commandBufferBindDescriptorSets(cmdBuffer, pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS);
 			commandBufferBindShaders(cmdBuffer, { vertexShaderObject, fragmentShaderObject });
 
-			// VkPipelineViewportStateCreateInfo
-			di.vkCmdSetViewportWithCountEXT(*cmdBuffer, 1u, &swapchain.viewport);
-			di.vkCmdSetScissorWithCountEXT(*cmdBuffer, 1u, &swapchain.scissor);
-
-			setCommonDynamicStates(cmdBuffer);
+			commandBufferSetDefaultDynamicStates(cmdBuffer, vertexInput, swapchain.viewport, &swapchain.scissor);
 
 			commandBufferPipelineBarriers(cmdBuffer,
 				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, makeImageGeneral);

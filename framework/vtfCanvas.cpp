@@ -83,6 +83,13 @@ CanvasContext::~CanvasContext ()
 	}
 }
 
+void closeWindow(ZGLFWwindowPtr window);
+
+void CanvasContext::closeWindow ()
+{
+	::vtf::closeWindow(*cc_window);
+}
+
 Canvas::~Canvas	()
 {
 	if (getGlobalAppFlags().verbose)
@@ -104,6 +111,7 @@ const CanvasStyle Canvas::DefaultStyle
 };
 
 strings			getGlfwRequiredInstanceExtensions ();
+void			closeWindow (ZGLFWwindowPtr window);
 ZGLFWwindowPtr	createWindow (const CanvasStyle& style, const char* title, add_ptr<void> windowUserPointer);
 ZSurfaceKHR		createSurface (ZInstance instance, VkAllocationCallbacksPtr callbacks, ZGLFWwindowPtr window);
 ZGLFWwindowPtr	updateWindow (ZGLFWwindowPtr window, const CanvasStyle& style, const char* title, add_ptr<void> windowUserPointer);
@@ -251,6 +259,11 @@ strings getGlfwRequiredInstanceExtensions ()
 	for (uint32_t glfwExtIndex = 0; glfwExtIndex < glfwExtensionCount; ++glfwExtIndex)
 		extensions[glfwExtIndex] = glfwExtensions[glfwExtIndex];
 	return extensions;
+}
+
+void closeWindow (ZGLFWwindowPtr window)
+{
+	glfwSetWindowShouldClose(*window, GLFW_TRUE);
 }
 
 ZGLFWwindowPtr createWindow (const CanvasStyle& style, const char* title, add_ptr<void> windowUserPointer)
@@ -418,6 +431,7 @@ Canvas::Swapchain::Swapchain (add_cref<Canvas> aCanvas)
 	, bufferCount	(m_bufferCount)
 	, refreshCount	(m_refreshCount)
 	, renderPass	(m_renderPass)
+	, recreateFlag	(m_recreateFlag)
 	, m_handle		(VK_NULL_HANDLE)
 	, m_images		()
 	, m_framebuffers()
@@ -427,6 +441,7 @@ Canvas::Swapchain::Swapchain (add_cref<Canvas> aCanvas)
 	, m_extent		()
 	, m_bufferCount	()
 	, m_renderPass	()
+	, m_recreateFlag()
 {
 	m_viewport.x		= 0.0f;
 	m_viewport.y		= 0.0f;
@@ -596,6 +611,7 @@ void Canvas::Swapchain::recreate (ZRenderPass rp, uint32_t acquirableImageCount,
 
 	createFramebuffers(rp, m_bufferCount);
 	m_renderPass = rp;
+	m_recreateFlag = true;
 }
 
 void Canvas::updateExtent ()
@@ -743,6 +759,8 @@ bool Canvas::presentBackBuffer (add_cref<BackBuffer>				buffer,
 	{
 		readyBuffersQueue.push(buffer);
 	}
+
+	swapchain.resetRecreateFlag();
 
 	return (VK_SUCCESS == res);
 }

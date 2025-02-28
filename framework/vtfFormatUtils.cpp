@@ -303,7 +303,7 @@ static bool parseComponent (const char* const name, int& pos, int& swizz, ZForma
 	const uint8_t width = parseNumber(name, pos);
 	info.swizzling[comp] = int8_t(swizz++);
 	info.componentBitSizes[comp] = width;
-	info.componentByteSizes[comp] = ROUNDUP(width, 8) / 8;
+	info.componentByteSizes[comp] = static_cast<uint8_t>(ROUNDUP(width, 8u) / 8u);
 
 	return true;
 }

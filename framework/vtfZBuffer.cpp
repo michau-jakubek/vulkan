@@ -192,82 +192,12 @@ ZBuffer bufferDuplicate (ZBuffer buffer)
 						ZMemoryPropertyFlags::fromFlags(mprop));
 }
 
-ZBuffer createBufferAndLoadFromImageFile (ZDevice device, add_cref<std::string> imageFileName,
-										  ZBufferUsageFlags usage, bool forceFourComponentFormat)
+void bufferWriteData (ZBuffer buffer, add_cptr<uint8_t> src, add_cref<VkBufferCopy> copy, bool flush)
 {
-	VkFormat	format;
-	uint32_t	width, height;
-	std::remove_pointer_t<routine_arg_t<decltype(stbi_load), 1>>	sinkWidth	= 0;
-	std::remove_pointer_t<routine_arg_t<decltype(stbi_load), 2>>	sinkHeight	= 0;
-	std::remove_pointer_t<routine_arg_t<decltype(stbi_load), 3>>	sinkNcomp	= 0;
-
-	ASSERTION(readImageFileMetadata(imageFileName, format, width, height));
-
-	const uint32_t pixelCount = width * height;
-
-	ZBuffer		buffer = createBuffer(device,
-									  (forceFourComponentFormat ? VK_FORMAT_R8G8B8A8_UNORM : format),
-									  pixelCount, usage, ZMemoryPropertyHostFlags, ZBufferCreateFlags());
-	buffer.setParam<type_index_with_default>(type_index_with_default::make<std::string>());
-	add_ref<VkExtent3D> extent = buffer.getParamRef<VkExtent3D>();
-	extent.width	= width;
-	extent.height	= height;
-	extent.depth	= 1u;
-
-	routine_res_t<decltype(stbi_load)> data = stbi_load(imageFileName.c_str(), &sinkWidth, &sinkHeight, &sinkNcomp,
-														forceFourComponentFormat ? 4 : 0);
-	static_assert(std::is_pointer<decltype(data)>::value, "");
-	ASSERTION(make_unsigned(sinkWidth) <= width && make_unsigned(sinkHeight) <= height);
-	ASSERTION(data);
-	std::unique_ptr<stbi_uc, void(*)(routine_res_t<decltype(stbi_load)>)> k(data, [](auto ptr){ stbi_image_free(ptr); });
-	add_ptr<uint8_t> ptrData = static_cast<add_ptr<uint8_t>>(static_cast<add_ptr<void>>(k.get()));
-#if 0
-	if ((format != VK_FORMAT_R8G8B8A8_UNORM) && forceFourComponentFormat)
-	{
-		PixelBufferAccess<BVec4> pixels(buffer, width, height, 1u);
-		add_ptr<BVec3> fakeSrc3 = static_cast<add_ptr<BVec3>>(static_cast<add_ptr<void>>(k.get()));
-		add_ptr<BVec2> fakeSrc2 = static_cast<add_ptr<BVec2>>(static_cast<add_ptr<void>>(k.get()));
-		add_ptr<BVec1> fakeSrc1 = static_cast<add_ptr<BVec1>>(static_cast<add_ptr<void>>(k.get()));
-
-		for (uint32_t i = 0; i < pixelCount; ++i)
-		{
-			switch (sinkNcomp)
-			{
-			case 3: pixels.at(i, 0u, 0u) = BVec4(fakeSrc3[i].r(), fakeSrc3[i].g(), fakeSrc3[i].b(), 255u); break;
-			case 2: pixels.at(i, 0u, 0u) = BVec4(fakeSrc2[i].r(), fakeSrc2[i].g(), 0u, 255u); break;
-			case 1: pixels.at(i, 0u, 0u) = BVec4(fakeSrc1[i].r(), 0u, 0u, 255u); break;
-			default: ASSERTION(false);
-			}
-		}
-	}
-	else
-#endif
-	bufferWriteData(buffer, ptrData, VK_WHOLE_SIZE);
-
-	return buffer;
-}
-
-VkDeviceSize bufferWriteData (ZBuffer buffer, const uint8_t* src, VkDeviceSize size)
-{
-	const VkDeviceSize		bufferSize	= buffer.getParam<VkDeviceSize>();
-
-	if (VK_WHOLE_SIZE == size || bufferSize < size)
-		size = bufferSize;
-
-	VkBufferCopy copy{};
-	copy.srcOffset	= 0;
-	copy.dstOffset	= 0;
-	copy.size		= size;
-
-	return bufferWriteData(buffer, src, copy);
-}
-
-VkDeviceSize bufferWriteData (ZBuffer buffer, const uint8_t* src, const VkBufferCopy& copy, bool flush)
-{
-	ZDevice					device		= buffer.getParam<ZDevice>();
-	ZDeviceMemory			memory		= bufferGetMemory(buffer, 0);
-	VkMemoryPropertyFlags	props		= memory.getParam<VkMemoryPropertyFlags>();
-	const VkDeviceSize		bufferSize	= buffer.getParam<VkDeviceSize>();
+	ZDevice					device = buffer.getParam<ZDevice>();
+	ZDeviceMemory			memory = bufferGetMemory(buffer, 0);
+	VkMemoryPropertyFlags	props = memory.getParam<VkMemoryPropertyFlags>();
+	const VkDeviceSize		bufferSize = buffer.getParam<VkDeviceSize>();
 
 	ASSERTION(copy.size > 0);
 	ASSERTION(copy.dstOffset < bufferSize);
@@ -282,16 +212,99 @@ VkDeviceSize bufferWriteData (ZBuffer buffer, const uint8_t* src, const VkBuffer
 	if (flush && ((props & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))
 	{
 		VkMappedMemoryRange	range{};
-		range.sType		= VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-		range.memory	= *memory;
-		range.offset	= copy.dstOffset;
-		range.size		= copy.size;
+		range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+		range.memory = *memory;
+		range.offset = copy.dstOffset;
+		range.size = copy.size;
 		VKASSERT(vkFlushMappedMemoryRanges(*device, 1, &range));
 	}
 
 	vkUnmapMemory(*device, *memory);
+}
 
-	return (copy.size);
+VkDeviceSize bufferWriteData (
+	ZBuffer			buffer,
+	const uint8_t*	src,
+	std::size_t		elementSize,	// in bytes
+	std::size_t		elementCount,
+	uint32_t		dstIndex,		// in elements
+	uint32_t		srcIndex,		// in elements
+	uint32_t		count)			// in elements
+{
+	const VkDeviceSize cpySize = count * elementSize;
+	const VkDeviceSize srcSize = elementCount * elementSize;
+	const VkDeviceSize dstSize = buffer.getParam<VkDeviceSize>();
+
+	VkDeviceSize dstOffset = dstIndex * elementSize;
+	VkDeviceSize writeSize = dstOffset < dstSize ? dstSize - dstOffset : 0u;
+
+	VkDeviceSize srcOffset = srcIndex * elementSize;
+	VkDeviceSize readSize = srcOffset < srcSize ? srcSize - srcOffset : 0u;
+
+	if (const VkDeviceSize size = std::min(cpySize, std::min(readSize, writeSize)); size > 0u)
+	{
+		VkBufferCopy copy{};
+		copy.srcOffset	= srcOffset;
+		copy.dstOffset	= dstOffset;
+		copy.size		= size;
+		bufferWriteData(buffer, src, copy, true);
+
+		return size;
+	}
+
+	return 0u;
+}
+
+VkDeviceSize bufferWriteData (ZBuffer buffer, const uint8_t * src, VkDeviceSize size)
+{
+	const VkDeviceSize              bufferSize = buffer.getParam<VkDeviceSize>();
+
+	if (VK_WHOLE_SIZE == size || bufferSize < size)
+		size = bufferSize;
+
+	VkBufferCopy copy{};
+	copy.srcOffset = 0;
+	copy.dstOffset = 0;
+	copy.size = size;
+
+	bufferWriteData(buffer, src, copy);
+
+	return size;
+}
+
+ZBuffer createBufferAndLoadFromImageFile (ZDevice device, add_cref<std::string> imageFileName,
+										  ZBufferUsageFlags usage, int desiredChannelCount)
+{
+	VkFormat	format;
+	uint32_t	width, height;
+	std::remove_pointer_t<routine_arg_t<decltype(stbi_load), 1>>	sinkWidth	= 0;
+	std::remove_pointer_t<routine_arg_t<decltype(stbi_load), 2>>	sinkHeight	= 0;
+	std::remove_pointer_t<routine_arg_t<decltype(stbi_load), 3>>	sinkNcomp	= 0;
+
+	ASSERTION(readImageFileMetadata(imageFileName, format, width, height, desiredChannelCount));
+
+	const uint32_t pixelCount = width * height;
+
+	ZBuffer		buffer = createBuffer(device, format,
+									  pixelCount, usage, ZMemoryPropertyHostFlags, ZBufferCreateFlags());
+	buffer.setParam<type_index_with_default>(type_index_with_default::make<std::string>());
+	add_ref<VkExtent3D> extent = buffer.getParamRef<VkExtent3D>();
+	extent.width	= width;
+	extent.height	= height;
+	extent.depth	= 1u;
+
+	routine_res_t<decltype(stbi_load)> data = stbi_load(imageFileName.c_str(), &sinkWidth, &sinkHeight, &sinkNcomp,
+														desiredChannelCount);
+	static_assert(std::is_pointer<decltype(data)>::value, "");
+	ASSERTION(make_unsigned(sinkWidth) <= width && make_unsigned(sinkHeight) <= height);
+	ASSERTION(data);
+	std::unique_ptr<stbi_uc, void(*)(routine_res_t<decltype(stbi_load)>)> k(data, [](auto ptr){ stbi_image_free(ptr); });
+	add_ptr<uint8_t> ptrData = static_cast<add_ptr<uint8_t>>(static_cast<add_ptr<void>>(k.get()));
+
+	bufferWriteData(buffer, ptrData, VK_WHOLE_SIZE);
+	//bufferWriteData(buffer, ptrData, formatGetInfo(format).pixelByteSize, pixelCount, 0u, 0u, INVALID_UINT32);
+
+	return buffer;
 }
 
 VkDeviceSize bufferReadData (ZBuffer buffer, uint8_t* dst, VkDeviceSize size)
@@ -372,6 +385,7 @@ VkDeviceSize bufferGetSize (ZBuffer buffer)
 
 VkDeviceAddress	bufferGetAddress (ZBuffer buffer)
 {
+	ASSERTMSG(buffer.has_handle(), "Buffer must have valid handle");
 	const VkBufferUsageFlags usage = buffer.getParamRef<VkBufferCreateInfo>().usage;
 	ASSERTMSG((usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT),
 		"Buffer was not created with VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT flag");

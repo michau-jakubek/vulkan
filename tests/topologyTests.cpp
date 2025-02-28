@@ -514,7 +514,7 @@ TriLogicInt runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> asse
 		a.addBinding<U>(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 		a.addBinding<std::vector<Vec1>>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 100);
 		ZDescriptorSetLayout dsl = a.createDescriptorSetLayout();
-		ZPipelineLayout lay = a.createPipelineLayout(dsl);
+		ZPipelineLayout lay = a.createPipelineLayout({ dsl });
 		ZShaderModule m = shaders[2];
 		ZPipeline pipe = createComputePipeline(lay, m);
 		ZCommandPool pool = cs.createComputeCommandPool();
@@ -601,7 +601,7 @@ TriLogicInt runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> asse
 													};
 	const uint32_t				uniBinding			= lm.addBinding<Uniform>(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 	ZDescriptorSetLayout		dsLayout			= lm.createDescriptorSetLayout();
-	ZPipelineLayout				pipelineLayout		= lm.createPipelineLayout(dsLayout);
+	ZPipelineLayout				pipelineLayout		= lm.createPipelineLayout({dsLayout});
 	lm.writeBinding(uniBinding, uni);
 #endif
 	const VkFrontFace			fronFace			= params.ccwFronFace ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;

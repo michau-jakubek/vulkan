@@ -77,6 +77,14 @@ OptionParserState::OptionParserState ()
 {
 }
 
+OptionParserState::OptionParserState(OptionParserState&& src)
+	: hasHelp(src.hasHelp)
+	, hasErrors(src.hasErrors)
+	, hasWarnings(src.hasWarnings)
+	, messages(src.messagesText())
+{
+}
+
 OptionParserState::OptionParserState (add_cref<OptionParserState> src)
 	: hasHelp		(src.hasHelp)
 	, hasErrors		(src.hasErrors)
@@ -99,18 +107,18 @@ std::string OptionParserState::messagesText () const
 	return messages.str();
 }
 
-_OptionParserImpl::_OptionParserImpl (bool includeHelp)
+_OptionParserImpl::_OptionParserImpl (std::unique_ptr<OptionParserState> state, bool includeHelp)
 	: m_options		()
-	, m_state		()
 	, m_includeHelp	(includeHelp)
+	, m_state		(std::move(state))
 {
 	if (includeHelp) addHelpOpts();
 }
 
 _OptionParserImpl::_OptionParserImpl (_OptionParserImpl&& other) noexcept
 	: m_options		(other.m_options)
-	, m_state		(other.m_state)
 	, m_includeHelp	(other.m_includeHelp)
+	, m_state		(std::move(other.m_state))
 {
 	if (m_includeHelp)
 	{
@@ -124,9 +132,9 @@ _OptionParserImpl::_OptionParserImpl (_OptionParserImpl&& other) noexcept
 void _OptionParserImpl::addHelpOpts ()
 {
 	const std::string comment("print this help");
-	m_options.insert(m_options.begin(), std::make_shared<OptionT<bool>>(m_state.hasHelp, _optionLongHelp,
+	m_options.insert(m_options.begin(), std::make_shared<OptionT<bool>>(m_state->hasHelp, _optionLongHelp,
 		comment, false, OptionFlags(), typename OptionT<bool>::parse_cb(), typename OptionT<bool>::format_cb()));
-	m_options.insert(m_options.begin(), std::make_shared<OptionT<bool>>(m_state.hasHelp, _optionShortHelp,
+	m_options.insert(m_options.begin(), std::make_shared<OptionT<bool>>(m_state->hasHelp, _optionShortHelp,
 		comment, false, OptionFlags(), typename OptionT<bool>::parse_cb(), typename OptionT<bool>::format_cb()));
 }
 
@@ -140,16 +148,16 @@ strings _OptionParserImpl::parse (add_cref<strings> cmdLineParams, bool allMustB
 	{
 		if (consumeOptions(*opt, opts, args, sink) > 0)
 		{
-			if (false == (onParsing && onParsing(opt, (opt->follows == 0) ? truestring : sink.back(), m_state)))
+			if (false == (onParsing && onParsing(opt, (opt->follows == 0) ? truestring : sink.back(), m_state.get())))
 			{
-				opt->parse((opt->follows == 0) ? truestring : sink.back(), m_state);
+				opt->parse((opt->follows == 0) ? truestring : sink.back(), *m_state);
 			}
 		}
 	}
 	if (allMustBeConsumed && !args.empty())
 	{
-		m_state.messages << "ERROR: Unknown parameter " << std::quoted(args.front()) << std::endl;
-		m_state.hasErrors = true;
+		m_state->messages << "ERROR: Unknown parameter " << std::quoted(args.front()) << std::endl;
+		m_state->hasErrors = true;
 	}
 
 	return args;

@@ -1,15 +1,22 @@
 #version 450
-#extension GL_EXT_buffer_reference : require
-#extension GL_EXT_nonuniform_qualifier : require
 
-layout(buffer_reference, buffer_reference_align = 16) buffer StorageBuffer {
-    uint data[];
-};
-
-layout(set = 0, binding = 0) uniform StorageBuffer dataIn;
-layout(set = 0, binding = 1) uniform StorageBuffer dataOut;
+layout(binding = 0) uniform InData1 { uint inData1[64]; };
+layout(binding = 1, rgba8) uniform image2D sampledImage;
+layout(binding = 2) buffer OutData1 { uint outData1[64]; };
+layout(binding = 3) uniform sampler2D imageAndSampler;
+layout(binding = 4) buffer OutData2 { uint outData2[64]; };
+layout(binding = 5) uniform sampler2D onlySampler;
+layout(binding = 6) uniform InData2 { uint inData2[64]; };
+layout(binding = 7, r32ui) uniform uimage2D storageImage;
 
 void main()
 {
-    dataOut.data[0] = dataIn.data[0];
+	for (int i = 0; i < 64; ++i)
+	{
+		outData1[i] = inData1[i];
+		outData2[i] = inData2[i];
+	}
+
+	imageStore(storageImage, ivec2(0,0), uvec4(inData1[0]));
+	imageStore(storageImage, ivec2(1,0), uvec4(inData2[0]));
 }

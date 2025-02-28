@@ -17,6 +17,9 @@ struct GraphicPipelineSettings;
 namespace gpp // Graphics Pipeline Param
 {
 
+constexpr VkColorComponentFlags defaultBlendAttachmentColorWriteMask =
+	(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT);
+
 constexpr VkPipelineColorBlendAttachmentState defaultBlendAttachmentState = {
 	VK_FALSE,					// VkBool32                 blendEnable;
 	VK_BLEND_FACTOR_ZERO,		// VkBlendFactor            srcColorBlendFactor;
@@ -25,10 +28,7 @@ constexpr VkPipelineColorBlendAttachmentState defaultBlendAttachmentState = {
 	VK_BLEND_FACTOR_ZERO,		// VkBlendFactor            srcAlphaBlendFactor;
 	VK_BLEND_FACTOR_ZERO,		// VkBlendFactor            dstAlphaBlendFactor;
 	VK_BLEND_OP_ADD,			// VkBlendOp                alphaBlendOp;
-	(VK_COLOR_COMPONENT_R_BIT
-	| VK_COLOR_COMPONENT_G_BIT
-	| VK_COLOR_COMPONENT_B_BIT
-	| VK_COLOR_COMPONENT_A_BIT)	// VkColorComponentFlags    colorWriteMask;
+	defaultBlendAttachmentColorWriteMask	//				colorWriteMask;
 };
 
 using PatchControlPoints	= ZDistType<PatchControlPoints, uint32_t>;

@@ -383,4 +383,41 @@ template bool between (const int& paramValue, const int& paramMin, const int& pa
 template bool between (const float& paramValue, const float& paramMin, const float& paramMax);
 template bool between (const uint32_t& paramValue, const uint32_t& paramMin, const uint32_t& paramMax);
 
+FPS::FPS (Printer callback)
+	: fps		(0.0f)
+	, bestFPS	(0.0f)
+	, worstFPS	(99999.0f)
+	, totalTime	(0.0f)
+	, frameCount(0)
+	, printer	(callback)
+	, startTime	(std::chrono::high_resolution_clock::now())
+	, lastTime	(startTime) {}
+
+void FPS::touch() {
+	auto currentTime = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<float> deltaTime = currentTime - lastTime;
+	lastTime = currentTime;
+
+	totalTime += deltaTime.count();
+	frameCount++;
+
+	if (totalTime >= 1.0f) {
+		fps = float(frameCount) / totalTime;
+		bestFPS = std::max(fps, bestFPS);
+		worstFPS = std::min(fps, worstFPS);
+		if (printer) printer(fps, totalTime, bestFPS, worstFPS);
+		frameCount = 0;
+		totalTime = 0.0f;
+	}
+}
+void FPS::reset() {
+	fps = 0.0f;
+	frameCount = 0;
+	totalTime = 0.0f;
+	startTime = std::chrono::high_resolution_clock::now();
+	lastTime = startTime;
+	bestFPS = 0.0f;
+	worstFPS = 99999.0f;
+}
+
 } // namespace vtf

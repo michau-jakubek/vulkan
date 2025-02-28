@@ -172,7 +172,7 @@ int runTest (add_ref<VulkanContext> ctx, add_cref<Params> params,
 	programs.buildAndVerify(exeNum == 0 && params.buildAlways);
 	ZShaderModule		shaderModule	= programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT, (params.deviceLost ? 1u : 0u));
 
-	ZPipelineLayout		pipelineLayout	= lm.createPipelineLayout(lm.createDescriptorSetLayout(),
+	ZPipelineLayout		pipelineLayout	= lm.createPipelineLayout({lm.createDescriptorSetLayout()},
 																	ZPushRange<UVec2>(VK_SHADER_STAGE_COMPUTE_BIT));
 	ZPipeline			computePipeline	= createComputePipeline(pipelineLayout, shaderModule, UVec3(1));
 	ZCommandPool		compCommandPool = ctx.createComputeCommandPool();

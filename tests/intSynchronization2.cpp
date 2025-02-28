@@ -261,7 +261,7 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 
 	ZRenderPass			renderPass		= createColorRenderPass(ctx.device, { format });
 	ZFramebuffer		framebuffer		= createFramebuffer(renderPass, extent, { colorView });	
-	ZPipelineLayout		pipelineLayout	= lm.createPipelineLayout(lm.createDescriptorSetLayout());
+	ZPipelineLayout		pipelineLayout = lm.createPipelineLayout({ lm.createDescriptorSetLayout() });
 	ZPipeline			graphPipeline	= createGraphicsPipeline(pipelineLayout, renderPass,
 											extent, vertexInput, vertShader, fragShader);
 	ZPipeline			forwardPipeline	= createComputePipeline(pipelineLayout, forwardShader, UVec3(1));
@@ -283,7 +283,8 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 		0u,									// firstInstance					
 	});
 	*/
-	bufferWrite(indexBuffer, { 0u, 1u, 2u });
+	const uint32_t indexBufferContent[3]{ 0u, 1u, 2u };
+	bufferWrite(indexBuffer, indexBufferContent);
 	bufferWrite(indirectBuffer, VkDrawIndexedIndirectCommand{
 		bufferGetElementCount<uint32_t>(indexBuffer),	// indexCount
 		1u,												// instanceCount

@@ -74,10 +74,8 @@ ZBuffer			createBuffer	(ZImage image, ZBufferUsageFlags usage, ZMemoryPropertyFl
 ZBuffer			createIndexBuffer (ZDevice device, uint32_t indexCount, VkIndexType indexType);
 
 ZBuffer			createBufferAndLoadFromImageFile (ZDevice device, add_cref<std::string> imageFileName,
-												  ZBufferUsageFlags usage = {}, bool forceFourComponentFormat = true);
+												  ZBufferUsageFlags usage = {}, int desiredChannelCount = 0);
 ZBuffer			bufferDuplicate (ZBuffer buffer);
-VkDeviceSize	bufferWriteData	(ZBuffer buffer, const uint8_t* src, const VkBufferCopy& copy, bool flush = true);
-VkDeviceSize	bufferWriteData	(ZBuffer buffer, const uint8_t* src, VkDeviceSize size = VK_WHOLE_SIZE);
 void			bufferFlush		(ZBuffer buffer);
 
 VkDeviceSize	bufferReadData	(ZBuffer buffer, uint8_t* dst, const VkBufferCopy& copy);
@@ -94,23 +92,43 @@ template<class X, class Cast = uint32_t> Cast bufferGetElementCount (ZBuffer buf
 	return static_cast<Cast>(bufferGetSize(buffer) / sizeof(X));
 }
 
+void			bufferWriteData (ZBuffer buffer, add_cptr<uint8_t> src, add_cref<VkBufferCopy> copy, bool flush = true);
+VkDeviceSize	bufferWriteData (ZBuffer buffer, const uint8_t* src, VkDeviceSize size);
+
 template<template<class, class...> class C, class T, class... V>
-VkDeviceSize	bufferWrite (ZBuffer buffer, const C<T, V...>& c, uint32_t count = INVALID_UINT32)
+VkDeviceSize	bufferWrite (
+	ZBuffer buffer,
+	const C<T, V...>& c,
+	uint32_t dstIndex = 0u,
+	uint32_t srcIndex = 0u,
+	uint32_t count = INVALID_UINT32)
 {
-	if (count == INVALID_UINT32 || count > c.size()) count = static_cast<uint32_t>(c.size());
-	const VkDeviceSize	dataSize	= count * sizeof(T);
-	const VkDeviceSize	bufferSize	= buffer.getParam<VkDeviceSize>();
-	return bufferWriteData(buffer, reinterpret_cast<const uint8_t*>(c.data()), std::min(dataSize, bufferSize));
+	extern VkDeviceSize bufferWriteData(
+		ZBuffer buffer,
+		const uint8_t * src,
+		std::size_t elementSize,
+		std::size_t	elementCount,
+		uint32_t dstIndex,
+		uint32_t srcIndex,
+		uint32_t count);
+
+	return bufferWriteData(buffer, reinterpret_cast<const uint8_t*>(c.data()), sizeof(T), c.size(), dstIndex, srcIndex, count);
 }
 
 template<class T>
-VkDeviceSize	bufferWrite (ZBuffer buffer, const T& data)
+VkDeviceSize   bufferWrite (ZBuffer buffer, const T & data, uint32_t dstIndex = 0u)
 {
-	const VkDeviceSize	dataSize	= sizeof(T);
-	const VkDeviceSize	bufferSize	= buffer.getParam<VkDeviceSize>();
-	return bufferWriteData(buffer,
-						   static_cast<add_cptr<uint8_t>>(static_cast<add_cptr<void>>(&data)),
-						   std::min(dataSize, bufferSize));
+	extern VkDeviceSize bufferWriteData(
+		ZBuffer buffer,
+		const uint8_t * src,
+		std::size_t elementSize,
+		std::size_t	elementCount,
+		uint32_t dstIndex,
+		uint32_t srcIndex,
+		uint32_t count);
+
+	return bufferWriteData(buffer, static_cast<add_cptr<uint8_t>>(static_cast<add_cptr<void>>(&data)),
+							sizeof(T), dstIndex + 1u, dstIndex, 0u, 1u);
 }
 
 template<class T>
@@ -121,14 +139,6 @@ VkDeviceSize	bufferFill (ZBuffer buffer, add_cref<T> value)
 }
 
 template<class T, std::size_t N>
-VkDeviceSize	bufferWrite (ZBuffer buffer, T const (&table)[N])
-{
-	const VkDeviceSize	dataSize	= N * sizeof(T);
-	const VkDeviceSize	bufferSize	= buffer.getParam<VkDeviceSize>();
-	return bufferWriteData(buffer, reinterpret_cast<add_cptr<uint8_t>>(&table[0]), std::min(dataSize, bufferSize));
-}
-
-template<class T, std::size_t N>
 void bufferRead (ZBuffer buffer, T (&table)[N])
 {
 	const VkDeviceSize	bufferSize	= buffer.getParam<VkDeviceSize>();
@@ -136,6 +146,12 @@ void bufferRead (ZBuffer buffer, T (&table)[N])
 	ASSERTMSG(count <= N, "Array size must accomodate all buffer data");
 	const VkDeviceSize	readSize	= count * sizeof(T);
 	bufferReadData(buffer, reinterpret_cast<add_ptr<uint8_t>>(&table[0]), readSize);
+}
+
+template<class T>
+void bufferRead (ZBuffer buffer, T& data)
+{
+	bufferReadData(buffer, reinterpret_cast<add_ptr<uint8_t>>(&data), sizeof(T));
 }
 
 template<class T>

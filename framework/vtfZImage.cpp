@@ -19,12 +19,11 @@ VkSamplerCreateInfo makeSamplerCreateInfo(VkSamplerAddressMode	wrapS,
 										  VkSamplerAddressMode	wrapT,
 										  VkFilter				minFilter,
 										  VkFilter				magFilter,
-										  bool					normalized)
+										  bool					normalized,
+										  VkSamplerCreateFlags	flags)
 {
-	VkSamplerCreateInfo info{};
-	info.sType				= VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	info.pNext				= nullptr;
-	info.flags				= static_cast<VkSamplerCreateFlags>(0);
+	VkSamplerCreateInfo info = makeVkStruct();
+	info.flags				= flags;
 	info.magFilter			= magFilter;
 	info.minFilter			= minFilter;
 	info.addressModeU		= wrapS;
@@ -42,7 +41,15 @@ VkSamplerCreateInfo makeSamplerCreateInfo(VkSamplerAddressMode	wrapS,
 	return info;
 }
 
-ZSampler createSampler (ZDevice device, VkFormat format, uint32_t mipLevels, bool filterLinearORnearest, bool normalized, bool mipMapEnable, bool anisotropyEnable)
+ZSampler createSampler (
+	ZDevice		device,
+	VkFormat	format,
+	uint32_t	mipLevels,
+	bool	filterLinearORnearest,
+	bool	normalized,
+	bool	mipMapEnable,
+	bool	anisotropyEnable,
+	VkSamplerCreateFlags	flags)
 {
 	const ZPhysicalDevice			physDevice	= device.getParam<ZPhysicalDevice>();
 	const VkAllocationCallbacksPtr	callbacks	= device.getParam<VkAllocationCallbacksPtr>();
@@ -65,9 +72,8 @@ ZSampler createSampler (ZDevice device, VkFormat format, uint32_t mipLevels, boo
 		}
 	}
 
-	VkSamplerCreateInfo samplerInfo{};
-	samplerInfo.sType					= VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	samplerInfo.pNext					= nullptr;
+	VkSamplerCreateInfo samplerInfo = makeVkStruct();
+	samplerInfo.flags					= flags;
 	if (mipMapEnable)
 	{
 		samplerInfo.minLod				= 0.0f;
@@ -98,7 +104,7 @@ ZSampler createSampler (ZDevice device, VkFormat format, uint32_t mipLevels, boo
 	samplerInfo.minFilter				= filter;
 	samplerInfo.mipmapMode				= mipMapMode;
 	samplerInfo.compareEnable			= VK_FALSE;
-	samplerInfo.compareOp				= VK_COMPARE_OP_ALWAYS;
+	samplerInfo.compareOp				= VK_COMPARE_OP_NEVER;
 	samplerInfo.unnormalizedCoordinates	= normalized ? VK_FALSE : VK_TRUE;
 
 	ZSampler sampler(VK_NULL_HANDLE, device, callbacks, samplerInfo);
@@ -107,17 +113,25 @@ ZSampler createSampler (ZDevice device, VkFormat format, uint32_t mipLevels, boo
 	return sampler;
 }
 
-ZSampler createSampler (ZImageView view, bool filterLinearORnearest, bool normalized, bool mipMapEnable, bool anisotropyEnable)
+ZSampler createSampler (
+	ZImageView	view,
+	bool	filterLinearORnearest,
+	bool	normalized,
+	bool	mipMapEnable,
+	bool	anisotropyEnable,
+	VkSamplerCreateFlags	flags)
 {
 	const ZDevice	device		= view .getParam<ZDevice>();
 	const VkFormat	format		= view.getParamRef<VkImageViewCreateInfo>().format;
 	const uint32_t	mipLevels	= view.getParam<ZImage>().getParamRef<VkImageCreateInfo>().mipLevels;
-	return createSampler(device, format, mipLevels, filterLinearORnearest, normalized, mipMapEnable, anisotropyEnable);
+	return createSampler(device, format, mipLevels,
+						 filterLinearORnearest, normalized, mipMapEnable, anisotropyEnable, flags);
 }
 
 ZImage createImage (ZDevice device, VkFormat format, VkImageType type, uint32_t width, uint32_t height,
 					ZImageUsageFlags usage, VkSampleCountFlagBits samples,
-					uint32_t mipLevels, uint32_t layers, uint32_t depth, ZMemoryPropertyFlags properties)
+					uint32_t mipLevels, uint32_t layers, uint32_t depth,
+					bool deviceAddress, ZMemoryPropertyFlags properties)
 {
 	const auto availableLevels	= computeMipLevelCount(width, height);
 	const auto effectiveUsage	= VkImageUsageFlags(usage) | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -174,9 +188,9 @@ ZImage createImage (ZDevice device, VkFormat format, VkImageType type, uint32_t 
 	VkMemoryRequirements memRequirements;
 	vkGetImageMemoryRequirements(*device, image, &memRequirements);
 
-	auto allocations = createMemory(device, memRequirements, properties(), memRequirements.size, false, false);
+	auto allocations = createMemory(device, memRequirements, properties(), memRequirements.size, false, deviceAddress);
 
-	vkBindImageMemory(*device, image, *allocations.at(0), 0);
+	VKASSERT(vkBindImageMemory(*device, image, *allocations.at(0), 0));
 
 	return ZImage::create(image, device, callbacks, imageInfo, allocations.at(0), memRequirements.size);
 }
@@ -225,32 +239,31 @@ ZNonDeletableImage ZNonDeletableImage::create (VkImage image, ZDevice device,
 }
 
 bool readImageFileMetadata (add_cref<std::string> fileName, add_ref<VkFormat> format,
-							add_ref<uint32_t> width, add_ref<uint32_t> height)
+							add_ref<uint32_t> width, add_ref<uint32_t> height, int desiredChannelCount)
 {
-	bool result = false;
-	if (fs::exists(fs::path(fileName)))
+	ASSERTMSG(fs::exists(fs::path(fileName)), "File doesn't exist: ", std::quoted(fileName));
+
+	int ncomp = 0;
+
+	stbi_info(fileName.c_str(), (int32_t*)&width, (int32_t*)&height, (int32_t*)&ncomp);
+
+	if (desiredChannelCount) ncomp = desiredChannelCount;
+
+	switch (ncomp)
 	{
-		result = true;
-
-		int ncomp = 0;
-
-		stbi_info(fileName.c_str(), (int32_t*)&width, (int32_t*)&height, (int32_t*)&ncomp);
-
-		switch (ncomp)
-		{
-		case 1:	format = VK_FORMAT_R8_UNORM;		break;
-		case 2: format = VK_FORMAT_R8G8_UNORM;		break;
-		case 3: format = VK_FORMAT_R8G8B8_UNORM;	break;
-		case 4: format = VK_FORMAT_R8G8B8A8_UNORM;	break;
-		default:	result = false;
-		}
+	case 1:	format = VK_FORMAT_R8_UNORM;		break;
+	case 2: format = VK_FORMAT_R8G8_UNORM;		break;
+	case 3: format = VK_FORMAT_R8G8B8_UNORM;	break;
+	case 4: format = VK_FORMAT_R8G8B8A8_UNORM;	break;
+	default: ASSERTMSG(ncomp > 0 && ncomp <= 4, "There is no image format with ", ncomp, " channels.");
 	}
-	return result;
+
+	return true;
 }
 
 ZImage createImageFromFileMetadata	(ZDevice device, add_cref<std::string> fileName,
-									 ZImageUsageFlags usage, ZMemoryPropertyFlags memory,
-									 bool forceFourComponentFormat)
+									 ZImageUsageFlags usage, bool deviceAddress,
+									 ZMemoryPropertyFlags memory, bool forceFourComponentFormat)
 {
 	uint32_t	imageWidth	= 0;
 	uint32_t	imageHeight	= 0;
@@ -258,12 +271,13 @@ ZImage createImageFromFileMetadata	(ZDevice device, add_cref<std::string> fileNa
 	ASSERTION(readImageFileMetadata(fileName, imageFormat, imageWidth, imageHeight));
 	ZImage image = createImage(device,
 							   (forceFourComponentFormat ? VK_FORMAT_R8G8B8A8_UNORM : imageFormat),
-							   VK_IMAGE_TYPE_2D, imageWidth, imageHeight, usage, VK_SAMPLE_COUNT_1_BIT, 1u, 1u, 1u, memory);
+							   VK_IMAGE_TYPE_2D, imageWidth, imageHeight, usage, VK_SAMPLE_COUNT_1_BIT, 1u, 1u, 1u,
+							   deviceAddress, memory);
 	return image;
 }
 
 ZImage createImageFromFileMetadata	(ZDevice device, ZBuffer imageContentBuffer,
-									 ZImageUsageFlags usage, ZMemoryPropertyFlags memory)
+									 ZImageUsageFlags usage, bool deviceAddress, ZMemoryPropertyFlags memory)
 {
 	ASSERTMSG(imageContentBuffer.getParam<type_index_with_default>() == type_index_with_default::make<std::string>(),
 			  "Buffer must be created from a image file");
@@ -274,7 +288,7 @@ ZImage createImageFromFileMetadata	(ZDevice device, ZBuffer imageContentBuffer,
 	ASSERTMSG(computeBufferSize(imageFormat, imageWidth, imageHeight) == bufferSize,
 			  "Buffer must be created from a image file");
 	return createImage(device, imageFormat, VK_IMAGE_TYPE_2D, imageWidth, imageHeight,
-					   usage, VK_SAMPLE_COUNT_1_BIT, 1u, 1u, 1u, memory);
+					   usage, VK_SAMPLE_COUNT_1_BIT, 1u, 1u, 1u, deviceAddress, memory);
 }
 
 static bool adjustImageFileSizes (const strings& fileNames, const uint32_t minFileCount,
@@ -615,14 +629,16 @@ void imageCopyToBuffer (ZCommandBuffer commandBuffer,
 	const VkDeviceSize			minBufferSize		= imageCalcMipLevelsSize(image, baseLevel, levelCount) * layerCount;
 	ASSERTMSG(minBufferSize <= bufferGetSize(buffer), "Buffer must accomodate image data");
 
-	const uint32_t				pixelSize			= make_unsigned(computePixelByteSize(createInfo.format));
-	const VkImageAspectFlags	aspect				= formatGetAspectMask(createInfo.format);
-	const VkImageLayout			imageSavedLayout	= imageGetLayout(image);
+	const uint32_t				pixelSize		= make_unsigned(computePixelByteSize(createInfo.format));
+	const VkImageAspectFlags	aspect			= formatGetAspectMask(createInfo.format);
+	const VkImageLayout			preservedLayout	= imageGetLayout(image);
+	const VkImageLayout			newLayout		= (preservedLayout == VK_IMAGE_LAYOUT_UNDEFINED)
+													? VK_IMAGE_LAYOUT_GENERAL : preservedLayout;
 
 	ZImageMemoryBarrier			preImageBarrier		= makeImageMemoryBarrier(
 				image, srcImageAccess, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 	ZImageMemoryBarrier			postImageBarrier	= makeImageMemoryBarrier(
-				image, VK_ACCESS_TRANSFER_READ_BIT, dstImageAccess, imageSavedLayout);
+				image, VK_ACCESS_TRANSFER_READ_BIT, dstImageAccess, newLayout);
 	ZBufferMemoryBarrier		preBufferBarrier	= makeBufferMemoryBarrier(
 				buffer, srcBufferAccess, VK_ACCESS_TRANSFER_WRITE_BIT);
 	ZBufferMemoryBarrier		postBufferBarrier	= makeBufferMemoryBarrier(

@@ -53,6 +53,7 @@ def remove_directory_content(directory):
 available_repos = [
 	( "stb",		"https://github.com/nothings/stb.git",			"master",   False),
 	( "stl_reader",	"https://github.com/sreiter/stl_reader.git",	"master",   False),
+    ( "glm",        "https://github.com/g-truc/glm",                "master",   False),
 ]
 
 required_repos = []

@@ -1002,7 +1002,7 @@ TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, add_cref<std::string>
 	const uint32_t				bindingIinput	= lm.addBinding<std::vector<uint32_t>>(descType, data_count(params.inputIvalues), stage);
 	const uint32_t				bindingJinput	= lm.addBinding<std::vector<uint32_t>>(descType, data_count(params.inputJvalues), stage);
 	const uint32_t				bindingResult	= lm.addBinding<std::vector<uint32_t>>(descType, data_count(params.inputTypes), stage);
-	ZPipelineLayout				pipelineLayout	= lm.createPipelineLayout<PushConstant>(lm.createDescriptorSetLayout(), stage);
+	ZPipelineLayout				pipelineLayout	= lm.createPipelineLayout<PushConstant>({ lm.createDescriptorSetLayout() }, stage);
 
 	ZSpecializationInfo	specInfo;
 	specInfo.addEntries(ZSpecEntry<int32_t>(make_signed(params.localSize.x()), std::numeric_limits<int32_t>::max() - 3),	// 2147483644

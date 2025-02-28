@@ -1,9 +1,11 @@
 #include "blendingTests.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfOptionParser.hpp"
+#include "vtfTermColor.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfProgramCollection.hpp"
+#include "vtfShaderObjectCollection.hpp"
 #include "vtfLayoutManager.hpp"
 #include "vtfZPipeline.hpp"
 #include "vtfZCommandBuffer.hpp"
@@ -25,15 +27,22 @@ namespace
 using namespace vtf;
 using ostream_ref = add_ref<std::ostream>;
 
+struct OptionParserStateX : OptionParserState
+{
+	bool hasSrc0, hasSrc1, hasSrcTwice;
+	OptionParserStateX() : hasSrc0(false), hasSrc1(false), hasSrcTwice(false) {}
+};
+
 struct TestParams
 {
 	typedef std::map<uint32_t, std::pair<std::string, std::string>> Map;
 	typedef std::pair<const uint32_t, std::pair<std::string, std::string>> MapItem;
 
 			TestParams	(ZPhysicalDevice physicalDevice, add_cref<std::string> assets_);
-	auto	getParser	(bool includeHelp, bool includeFile) -> OptionParser<TestParams>;
-	void	print		(ostream_ref log, bool availableDualSourceBlend) const;
+	auto	getParser	(bool includeHelp, bool includeFile, bool includeColorTwice) -> OptionParser<TestParams, OptionParserStateX>;
+	void	print		(ostream_ref log, bool availableDualSourceBlend, add_cref<OptionParserStateX>) const;
 	void	printOps	(ostream_ref log) const;
+	void	printCpp	(ostream_ref log) const;
 	void	printFactors(ostream_ref log) const;
 	void	printFormats(ostream_ref log) const;
 	auto	parseEnum	(add_cref<std::string>			text,
@@ -44,9 +53,9 @@ struct TestParams
 	auto	formatEnum	(add_cref<OptionT<uint32_t>>	sender,
 						add_cref<Map>					map) const -> std::string;
 	bool	operator==	(add_cref<TestParams> other) const;
-	bool	parsing		(std::shared_ptr<OptionInterface>, add_cref<std::string> value, add_ref<OptionParserState> state);
-	auto	formatState	(add_cref<OptionT<std::string>>	sender) const -> std::string;
-	auto	getState	(bool flatenize) const -> VkPipelineColorBlendAttachmentState;
+	bool	parsing		(std::shared_ptr<OptionInterface>, add_cref<std::string> value, add_ptr<OptionParserState> state);
+	auto	formatState	(add_cref<OptionT<std::string>>	sender, bool owner) const -> std::string;
+	auto	getState	(add_ptr<VkBool32> flatenize = nullptr) const -> VkPipelineColorBlendAttachmentState;
 
 	ZPhysicalDevice			device;
 	add_cref<std::string>	assets;
@@ -54,9 +63,10 @@ struct TestParams
 	VkExtent2D				extent;
 	uint32_t				colorFormat;
 	Vec4					constColor;
-	Vec4					color0;
-	Vec4					color1;
-	Vec4					bkgDualSource;
+	Vec4					srcColor0;
+	Vec4					dstColor;
+	Vec4					srcTwiceColor;
+	Vec4					srcColor1;
 	uint32_t				colorOp;
 	uint32_t				alphaOp;
 	uint32_t				srcColorFactor;
@@ -66,12 +76,12 @@ struct TestParams
 	uint32_t				colorWriteMask;
 	float					epsilon;
 	std::string				blendingState;
-	bool					noFlatenize;
-	bool					swapAlpha;
 	bool					enableDualSrcBlending;
+	bool					enableShaderObject;
 	bool					printBlendOps;
 	bool					printBlendFactors;
 	bool					printColorFormats;
+	bool					printCppCode;
 
 	static inline const Map mapVkBlendOp
 	{
@@ -108,7 +118,7 @@ struct TestParams
 	inline static const VkExtent2D	defaultExtent		= makeExtent2D(32,32);
 	inline static const VkFormat	defaultColorFormat	= VK_FORMAT_R32G32B32A32_SFLOAT;
 };
-typedef std::tuple<TestParams, OptionParserState, std::string> TestParamsState;
+typedef std::tuple<TestParams, OptionParserStateX, std::string> TestParamsState;
 
 bool doesFormatSupportBlending (ZPhysicalDevice device, VkFormat format)
 {
@@ -129,9 +139,10 @@ TestParams::TestParams (ZPhysicalDevice physicalDevice, add_cref<std::string> as
 	, extent				(defaultExtent)
 	, colorFormat			(defaultColorFormat)
 	, constColor			()
-	, color0				(1, 0, 0, 0.875)
-	, color1				(0, 1, 0, 0.125)
-	, bkgDualSource			(1, 1, 1, 1)
+	, srcColor0				(0, 1, 0, 0.875)
+	, dstColor				(1, 0, 0, 0.125)
+	, srcTwiceColor			(srcColor0)
+	, srcColor1				(srcColor0)
 	, colorOp				(VK_BLEND_OP_ADD)
 	, alphaOp				(VK_BLEND_OP_ADD)
 	, srcColorFactor		(VK_BLEND_FACTOR_SRC_COLOR)
@@ -141,19 +152,19 @@ TestParams::TestParams (ZPhysicalDevice physicalDevice, add_cref<std::string> as
 	, colorWriteMask		(15)
 	, epsilon				(0.001f)
 	, blendingState			()
-	, noFlatenize			(false)
-	, swapAlpha				(false)
 	, enableDualSrcBlending	(false)
+	, enableShaderObject	(false)
 	, printBlendOps			(false)
 	, printBlendFactors		(false)
 	, printColorFormats		(false)
+	, printCppCode			(false)
 {
 }
-void TestParams::print (add_ref<std::ostream> log, bool availableDualSourceBlend) const
+void TestParams::print (add_ref<std::ostream> log, bool availableDualSourceBlend, add_cref<OptionParserStateX> state) const
 {
 	typedef routine_arg_t<decltype(std::setw), 0> sted_setw_0;
 	TestParams	params	(*this);
-	auto		parser	= params.getParser(true, true);
+	auto		parser	= params.getParser(true, true, state.hasSrcTwice);
 	const sted_setw_0 w = static_cast<sted_setw_0>(std::max(24u, parser.getMaxOptionNameLength()));
 
 	log << std::left << std::setw(w) << "Extent" << UVec2(extent.width, extent.height) << std::endl;
@@ -162,6 +173,11 @@ void TestParams::print (add_ref<std::ostream> log, bool availableDualSourceBlend
 	for (auto opt : parser.getOptions())
 	{
 		log << std::left << std::setw(w) << opt->getName() << opt->valueWriter() << std::endl;
+	}
+
+	if (printCppCode)
+	{
+		printCpp(log);
 	}
 }
 void TestParams::printOps (ostream_ref log) const
@@ -240,7 +256,8 @@ void onResize (add_ref<Canvas>, void* userData, int, int)
 
 TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams);
 TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
-						add_cref<std::vector<TestParamsState>> set, bool fromFile, bool availableDualSourceBlend);
+						add_cref<std::vector<TestParamsState>> set, bool fromFile,
+						bool availableDualSourceBlend, bool needShaderObject);
 
 bool TestParams::operator==	(add_cref<TestParams> other) const
 {
@@ -255,20 +272,22 @@ bool TestParams::operator==	(add_cref<TestParams> other) const
 			&& srcAlphaFactor			== other.srcAlphaFactor
 			&& dstAlphaFactor			== other.dstAlphaFactor
 			&& colorWriteMask			== other.colorWriteMask
-			&& enableDualSrcBlending	== other.enableDualSrcBlending;
+			&& enableDualSrcBlending	== other.enableDualSrcBlending
+			&& enableShaderObject		== other.enableShaderObject;
 }
 
 constexpr Option optionPrintBlenOps("-print-blend-ops", 0);
 constexpr Option optionPrintBlendFactors("-print-blend-factors", 0);
 constexpr Option optionPrintColorFormats("-print-color-formats", 0);
+constexpr Option optionPrintCppCode("-print-cpp-code", 0);
 constexpr Option optionFile("-file", 1);
 constexpr Option optionDualSource("-dual-source", 0);
-constexpr Option optionBkgDualSource("-dual-source-bkg", 1);
-constexpr Option optionNoFlatenize("-no-flatenize", 0);
-constexpr Option optionswapAlpha("-swap-alpha", 0);
+constexpr Option optionShaderObject("-shader-object", 0);
+constexpr Option optionSrcColor1("-src1", 1);
 constexpr Option optionConstColor("-const-color", 1);
-constexpr Option optionColor0("-color0", 1, __COUNTER__);
-constexpr Option optionColor1("-color1", 1, __COUNTER__);
+constexpr Option optionSrcColor0("-src", 1, __COUNTER__);
+constexpr Option optionSrcColorTwice("-src-twice", 1, __COUNTER__);
+constexpr Option optionDstColor("-dst", 1, __COUNTER__);
 constexpr Option optionColorFormat("-format", 1, __COUNTER__);
 constexpr Option optionColorOp("-color-op", 1, __COUNTER__);
 constexpr Option optionAlphaOp("-alpha-op", 1, __COUNTER__);
@@ -279,6 +298,58 @@ constexpr Option optionDstAlphaFactor("-dst-alpha-factor", 1, __COUNTER__);
 constexpr Option optionColorWriteMask("-color-write-mask", 1, __COUNTER__);
 constexpr Option optionBlendingState("-state", 1, __COUNTER__);
 constexpr Option optionEpsilon("-epsilon", 1, __COUNTER__);
+
+void TestParams::printCpp(ostream_ref log) const
+{
+	TestParams params(*this);
+	auto parser = params.getParser(false, false, false);
+	auto opt = parser.getOptionByName(optionPrintCppCode.name);
+	auto optt = std::dynamic_pointer_cast<OptionT<std::string>>(opt);
+
+	static const std::pair<VkColorComponentFlagBits, add_cptr<char>> bits[]{
+		{ VK_COLOR_COMPONENT_R_BIT, STRINGIZE(VK_COLOR_COMPONENT_R_BIT) },
+		{ VK_COLOR_COMPONENT_G_BIT,	STRINGIZE(VK_COLOR_COMPONENT_G_BIT) },
+		{ VK_COLOR_COMPONENT_B_BIT,	STRINGIZE(VK_COLOR_COMPONENT_B_BIT) },
+		{ VK_COLOR_COMPONENT_A_BIT,	STRINGIZE(VK_COLOR_COMPONENT_A_BIT) },
+	};
+
+	log << colorize("/********* CPP CODE BEGIN ************/\n", TermColor::YELLOW)
+		<< "const VkFormat format = " << formatGetInfo(VkFormat(colorFormat)).name << ";\n"
+		<< "const Vec4 dstColor(" << dstColor.r() << ", " << dstColor.g() << ", "
+								  << dstColor.b() << ", " << dstColor.a() << ");\n"
+		<< "const Vec4 color0(" << srcColor0.r() << ", " << srcColor0.g() << ", "
+								<< srcColor0.b() << ", " << srcColor0.a() << ");\n"
+		<< "const Vec4 color1(" << srcColor1.r() << ", " << srcColor1.g() << ", "
+								<< srcColor1.b() << ", " << srcColor1.a() << ");\n"
+		<< "const Vec4 constColor(" << constColor.r() << ", " << constColor.g() << ", "
+								<< constColor.b() << ", " << constColor.a() << ");\n"
+		<< "const char* state = \"" << formatState(*optt, false) << "\";\n"
+		<< "VkPipelineColorBlendAttachmentState s{};\n"
+		<< "s.blendEnable = VK_TRUE;\n"
+		<< "s.srcColorBlendFactor = " << mapVkBlendFactor.at(srcColorFactor).first << ";\n"
+		<< "s.dstColorBlendFactor = " << mapVkBlendFactor.at(dstColorFactor).first << ";\n"
+		<< "s.colorBlendOp = " << mapVkBlendOp.at(colorOp).first << ";\n"
+		<< "s.srcAlphaBlendFactor = " << mapVkBlendFactor.at(srcAlphaFactor).first << ";\n"
+		<< "s.dstAlphaBlendFactor = " << mapVkBlendFactor.at(dstAlphaFactor).first << ";\n"
+		<< "s.alphaBlendOp = " << mapVkBlendOp.at(alphaOp).first << ";\n"
+		<< "s.colorWriteMask = ";
+
+	bool any = false;
+	for (add_cref<std::pair<VkColorComponentFlagBits, add_cptr<char>>> bit : bits)
+	{
+		if (bit.first & colorWriteMask)
+		{
+			if (any) log << " | ";
+			log << bit.second;
+			any = true;
+		}
+	}
+	if (any)
+		log << ";\n";
+	else log << "VkColorComponentFlags(0);\n";
+
+	log << colorize("/********** CPP CODE END *************/\n", TermColor::YELLOW);
+}
 
 std::string TestParams::formatEnum (add_cref<OptionT<uint32_t>> sender,	add_cref<Map> map) const
 {
@@ -350,34 +421,40 @@ uint32_t TestParams::parseEnum	(
 	return bm;
 }
 
-VkPipelineColorBlendAttachmentState TestParams::getState (bool flatenize) const
+VkPipelineColorBlendAttachmentState TestParams::getState (add_ptr<VkBool32> flatenize) const
 {
-	UNREF(flatenize);
+	if (flatenize)
+	{
+		*flatenize = VK_FALSE;
+	}
+
 	auto flatenizeIf = [&](uint32_t factor)
 	{
-		VkBlendFactor flat = VkBlendFactor(factor);
-		/*
+		VkBlendFactor f = VkBlendFactor(factor);
 		if (flatenize)
-			switch (VkBlendFactor(factor))
+		{
+			switch (factor)
 			{
 			case VK_BLEND_FACTOR_SRC1_COLOR:
-				flat = VK_BLEND_FACTOR_DST_COLOR;
-				break;
-			case VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR:
-				flat = VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+				f = VK_BLEND_FACTOR_SRC_COLOR;
+				*flatenize |= VK_TRUE;
 				break;
 			case VK_BLEND_FACTOR_SRC1_ALPHA:
-				flat = VK_BLEND_FACTOR_DST_ALPHA;
+				f = VK_BLEND_FACTOR_SRC1_ALPHA;
+				*flatenize |= VK_TRUE;
+				break;
+			case VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR:
+				f = VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+				*flatenize |= VK_TRUE;
 				break;
 			case VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA:
-				flat = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+				f = VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA;
+				*flatenize |= VK_TRUE;
 				break;
-			default:
-				flat = VkBlendFactor(factor);
-				break;
+			default: break;
 			}
-			*/
-		return flat;
+		}
+		return f;
 	};
 
 	VkPipelineColorBlendAttachmentState s{};
@@ -392,10 +469,10 @@ VkPipelineColorBlendAttachmentState TestParams::getState (bool flatenize) const
 	return s;
 }
 
-std::string TestParams::formatState (add_cref<OptionT<std::string>>) const
+std::string TestParams::formatState (add_cref<OptionT<std::string>>, bool owner) const
 {
 	std::ostringstream os;
-	const VkPipelineColorBlendAttachmentState blendState = getState(false);
+	const VkPipelineColorBlendAttachmentState blendState = getState();
 
 	auto name = [&](auto field) -> std::string
 	{
@@ -419,7 +496,7 @@ std::string TestParams::formatState (add_cref<OptionT<std::string>>) const
 		<< "_"			<< name(blendState.dstAlphaBlendFactor)
 		<< "_"			<< name(blendState.alphaBlendOp);
 
-	if (blendingState.empty()) os << ' ' << "(*)";
+	if (owner && blendingState.empty()) os << ' ' << "(*)";
 
 	os.flush();
 	return os.str();
@@ -428,8 +505,10 @@ std::string TestParams::formatState (add_cref<OptionT<std::string>>) const
 bool TestParams::parsing (
 	std::shared_ptr<OptionInterface>	option,
 	add_cref<std::string>				value,
-	add_ref<OptionParserState>			state)
+	add_ptr<OptionParserState>			state)
 {
+	auto pState = static_cast<add_ptr<OptionParserStateX>>(state);
+
 	enum StateErr
 	{
 		Separator,
@@ -493,7 +572,33 @@ bool TestParams::parsing (
 			throw err;
 	};
 
-	if (*option == optionBlendingState)
+	auto colorsConflict = [&]()
+	{
+		pState->hasErrors = true;
+		pState->messages << "If params contains " << std::quoted(optionSrcColor0.name)
+						 << " and/or " << std::quoted(optionSrcColor1.name)
+						 << " the " << std::quoted(optionSrcColorTwice.name) << " must not be specified." << std::endl;
+	};
+
+	if (*option == optionSrcColor0)
+	{
+		pState->hasSrc0 = true;
+		if (pState->hasSrcTwice)
+			colorsConflict();
+	}
+	else if (*option == optionSrcColor1)
+	{
+		pState->hasSrc1 = true;
+		if (pState->hasSrcTwice)
+			colorsConflict();
+	}
+	else if (*option == optionSrcColorTwice)
+	{
+		pState->hasSrcTwice = true;
+		if (pState->hasSrc0 || pState->hasSrc1)
+			colorsConflict();
+	}
+	else if (*option == optionBlendingState)
 	{
 		try
 		{
@@ -531,8 +636,8 @@ bool TestParams::parsing (
 			case AlphaOp:			what = STRINGIZE(AlphaOp);			break;
 			}
 
-			state.hasErrors = true;
-			state.messages << "Unable to parse " << option->getName()
+			pState->hasErrors = true;
+			pState->messages << "Unable to parse " << option->getName()
 							<< " from " << std::quoted(value) << ", invalid " << what;
 		}
 
@@ -543,7 +648,7 @@ bool TestParams::parsing (
 	return false;
 }
 
-OptionParser<TestParams> TestParams::getParser (bool includeHelp, bool includeFile)
+OptionParser<TestParams, OptionParserStateX> TestParams::getParser (bool includeHelp, bool includeFile, bool includeColorTwice)
 {
 	typename OptionT<uint32_t>::format_cb formatVkBlendOp =
 		std::bind(&TestParams::formatEnum, this, std::placeholders::_1, mapVkBlendOp);
@@ -552,7 +657,7 @@ OptionParser<TestParams> TestParams::getParser (bool includeHelp, bool includeFi
 	typename OptionT<uint32_t>::format_cb formatVkFormat =
 		std::bind(&TestParams::formatEnum, this, std::placeholders::_1, Map());
 	typename OptionT<std::string>::format_cb formatBlendingState =
-		std::bind(&TestParams::formatState, this, std::placeholders::_1);
+		std::bind(&TestParams::formatState, this, std::placeholders::_1, true);
 
 	typename OptionT<uint32_t>::parse_cb parseVkBlendOp =
 		std::bind(&TestParams::parseEnum, this, std::placeholders::_1, std::placeholders::_2,
@@ -565,9 +670,9 @@ OptionParser<TestParams> TestParams::getParser (bool includeHelp, bool includeFi
 			std::placeholders::_3, std::placeholders::_4, Map());
 
 
-	OptionFlags			flags	(OptionFlag::PrintDefault);
-	add_ref<TestParams> params	= *this;
-	OptionParser<TestParams>	parser(params, includeHelp);
+	OptionFlags										flags	(OptionFlag::PrintDefault);
+	add_ref<TestParams>								params	= *this;
+	OptionParser<TestParams, OptionParserStateX>	parser	(params, includeHelp);
 
 	if (includeHelp)
 	{
@@ -577,6 +682,8 @@ OptionParser<TestParams> TestParams::getParser (bool includeHelp, bool includeFi
 			"Print available VkBlendFactor enum values", { params.printBlendOps }, flags);
 		parser.addOption(&TestParams::printColorFormats, optionPrintColorFormats,
 			"Print available VkFormat enum values", { params.printColorFormats }, flags);
+		parser.addOption(&TestParams::printCppCode, optionPrintCppCode,
+			"Print blending params as CPP code", { params.printCppCode }, flags);
 	}
 
 	if (includeFile)
@@ -589,35 +696,25 @@ OptionParser<TestParams> TestParams::getParser (bool includeHelp, bool includeFi
 		optFile->setTypeName("file");
 	}
 	parser.addOption(&TestParams::enableDualSrcBlending, optionDualSource,
-		"Enable dual source blending. Another shader with two outputs will be used.");
-	parser.addOption(&TestParams::noFlatenize, optionNoFlatenize,
-					"Prevent fom flatenize state for non-dual-source blending."
-					" Currently not implemented", { params.noFlatenize }, flags);
-	parser.addOption(&TestParams::swapAlpha, optionswapAlpha,
-					"Swap alpha component meaning between src and dst and calculation",
-					{ params.swapAlpha }, flags);
+		"Enable dual source blending. Another shader with two outputs will be used.",
+		{ params.enableDualSrcBlending }, flags);
+	parser.addOption(&TestParams::enableShaderObject, optionShaderObject,
+		"Run test with dynamic rendering and shader objects instead of regular pipeline",
+		{ params.enableShaderObject }, flags);
 	parser.addOption(&TestParams::constColor, optionConstColor, "Const color", { params.constColor }, flags);
-	parser.addOption(&TestParams::color0, optionColor0, "Blending color 0", { params.color0 }, flags);
-	parser.addOption(&TestParams::color1, optionColor1, "Blending color 1", { params.color1 }, flags);
-	parser.addOption(&TestParams::bkgDualSource, optionBkgDualSource,
-					"Dual-source blending background color. "
-					"It is valid if dual-source blending is available and -dual-source is enabled",
-					{ params.bkgDualSource }, flags);
+	parser.addOption(&TestParams::srcColor0, optionSrcColor0, "Source color 0", { params.srcColor0 }, flags);
+	parser.addOption(&TestParams::srcColor1, optionSrcColor1, "Source color 1", { params.srcColor1 }, flags);
+	if (includeColorTwice)
+	{
+		parser.addOption(&TestParams::srcTwiceColor, optionSrcColorTwice, "Concurrently sets scr and src1", { params.srcTwiceColor }, flags);
+	}
+	parser.addOption(&TestParams::dstColor, optionDstColor, "Desstination color", { params.dstColor }, flags);
 	parser.addOption(&TestParams::colorWriteMask, optionColorWriteMask, "Color write mask", { params.colorWriteMask }, flags);
 	parser.addOption(&TestParams::epsilon, optionEpsilon, "Epsilon for component comparing", { params.epsilon }, flags);
 	parser.addOption(&TestParams::blendingState, optionBlendingState, "Blending state, do not override any factors or ops",
 		{ params.blendingState }, flags, nullptr, formatBlendingState)->setDefault("\"\"");
 
 	const std::string typeNameText = "text";
-	{
-		parser.addOption(&TestParams::colorOp, optionColorOp, "Color blend op",
-			{ params.colorOp }, flags, parseVkBlendOp, formatVkBlendOp)
-			->setDefault(TestParams::mapVkBlendOp.at(params.colorOp).first)->setTypeName(typeNameText);
-
-		parser.addOption(&TestParams::alphaOp, optionAlphaOp, "Alpha blend op",
-			{ params.alphaOp }, flags, parseVkBlendOp, formatVkBlendOp)
-			->setDefault(TestParams::mapVkBlendOp.at(params.alphaOp).first)->setTypeName(typeNameText);
-	}
 	{
 		parser.addOption(&TestParams::srcColorFactor, optionSrcColorFactor, "Source color blend factor",
 			{ params.srcColorFactor }, flags, parseVkBlendFactor, formatVkBlendFactor)
@@ -627,6 +724,10 @@ OptionParser<TestParams> TestParams::getParser (bool includeHelp, bool includeFi
 			{ params.dstColorFactor }, flags, parseVkBlendFactor, formatVkBlendFactor)
 			->setDefault(TestParams::mapVkBlendFactor.at(params.dstColorFactor).first)->setTypeName(typeNameText);
 
+		parser.addOption(&TestParams::colorOp, optionColorOp, "Color blend op",
+			{ params.colorOp }, flags, parseVkBlendOp, formatVkBlendOp)
+			->setDefault(TestParams::mapVkBlendOp.at(params.colorOp).first)->setTypeName(typeNameText);
+
 		parser.addOption(&TestParams::srcAlphaFactor, optionSrcAlphaFactor, "Source alpha blend factor",
 			{ params.srcAlphaFactor }, flags, parseVkBlendFactor, formatVkBlendFactor)
 			->setDefault(TestParams::mapVkBlendFactor.at(params.srcAlphaFactor).first)->setTypeName(typeNameText);
@@ -634,6 +735,10 @@ OptionParser<TestParams> TestParams::getParser (bool includeHelp, bool includeFi
 		parser.addOption(&TestParams::dstAlphaFactor, optionDstAlphaFactor, "Destination alpha blend factor",
 			{ params.dstAlphaFactor }, flags, parseVkBlendFactor, formatVkBlendFactor)
 			->setDefault(TestParams::mapVkBlendFactor.at(params.dstAlphaFactor).first)->setTypeName(typeNameText);
+
+		parser.addOption(&TestParams::alphaOp, optionAlphaOp, "Alpha blend op",
+			{ params.alphaOp }, flags, parseVkBlendOp, formatVkBlendOp)
+			->setDefault(TestParams::mapVkBlendOp.at(params.alphaOp).first)->setTypeName(typeNameText);
 	}
 	{
 		parser.addOption(&TestParams::colorFormat, optionColorFormat, "Blending color format",
@@ -675,11 +780,12 @@ uint32_t processFile (
 			}
 
 			TestParams					params	(device, assets);
-			OptionParser<TestParams>	parser	(params.getParser(false, false));
+			OptionParser<TestParams,
+				OptionParserStateX>		parser	(params.getParser(false, false, true));
 
 			parser.parse(cmdLineParams, true, std::bind(&TestParams::parsing, &params,
 														std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-			OptionParserState			state	= parser.getState();
+			OptionParserStateX			state	= parser.getState();
 
 			set.emplace_back(std::move(params), std::move(state), line);
 			itemCount = itemCount + 1u;
@@ -697,11 +803,11 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 
 	bool							fromFile	(false);
 	std::vector<TestParamsState>	set			{ std::make_tuple(TestParams(physicalDevice, record.assets),
-													OptionParserState(), std::string()) };
+													OptionParserStateX(), std::string()) };
 	{
 		add_ref<TestParams>			params	(std::get<0>(set.at(0)));
-		add_ref<OptionParserState>	state	(std::get<1>(set.at(0)));
-		OptionParser<TestParams>	parser	= params.getParser(true, true);
+		add_ref<OptionParserStateX>	state	(std::get<1>(set.at(0)));
+		auto						parser	= params.getParser(true, true, true);
 		parser.parse(cmdLineParams, true, std::bind(&TestParams::parsing, &params,
 													std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 		state = parser.getState();
@@ -739,6 +845,12 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 			if (state.hasErrors) return {};
 		}
 
+		if (state.hasSrcTwice)
+		{
+			params.srcColor0 = params.srcTwiceColor;
+			params.srcColor1 = params.srcTwiceColor;
+		}
+
 		auto optFile = parser.getOptionByName(optionFile.name);
 		if (optFile && optFile->getTouched())
 		{
@@ -761,65 +873,152 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 	CanvasStyle					canvasStyle			= Canvas::DefaultStyle;
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
 
+	bool needShaderObject = false;
+	for (add_cref<TestParamsState> state : set)
+	{
+		if (std::get<TestParams>(state).enableShaderObject)
+		{
+			needShaderObject = true;
+			break;
+		}
+	}
+
 	bool availableDualSourceBlend = false;
 	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
 		availableDualSourceBlend = caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::dualSrcBlend);
+
+		if (needShaderObject)
+		{
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceShaderObjectFeaturesEXT::shaderObject)
+				.checkNotSupported(&VkPhysicalDeviceShaderObjectFeaturesEXT::shaderObject,
+					true, "shaderObject not supported by device");
+			caps.requiredExtension.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
+
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceDynamicRenderingFeatures::dynamicRendering)
+				.checkNotSupported(&VkPhysicalDeviceDynamicRenderingFeatures::dynamicRendering,
+					true, "dynamicRendering not supported");
+			caps.requiredExtension.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceExtendedDynamicStateFeaturesEXT::extendedDynamicState)
+				.checkNotSupported(&VkPhysicalDeviceExtendedDynamicStateFeaturesEXT::extendedDynamicState,
+					true, "extendedDynamicState not supported");
+			caps.requiredExtension.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
+
+			/*
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceColorWriteEnableFeaturesEXT::colorWriteEnable)
+				.checkNotSupported(&VkPhysicalDeviceColorWriteEnableFeaturesEXT::colorWriteEnable,
+					true, "colorWriteEnable not supported");
+			caps.requiredExtension.push_back(VK_EXT_COLOR_WRITE_ENABLE_EXTENSION_NAME);
+			*/
+		}
 	};
 
 	Canvas cs(physicalDevice, canvasStyle, onEnablingFeatures, appFlags.debugPrintfEnabled);
 
-	return runTests(cs, record.assets, set, fromFile, availableDualSourceBlend);
+	return runTests(cs, record.assets, set, fromFile, availableDualSourceBlend, needShaderObject);
 }
 
-std::tuple<ZShaderModule, ZShaderModule, ZShaderModule, ZShaderModule, ZShaderModule>
+std::tuple<ZShaderModule, ZShaderModule, ZShaderModule>
 buildProgram (ZDevice device, add_cref<std::string> assets, bool includeDualShaders)
 {
 	const GlobalAppFlags	flags			(getGlobalAppFlags());
 	ProgramCollection		program			(device, assets);
 
 	const std::string		vertexName			("common.vert");
-	const std::string		singleFragFloatName	("fsingle.frag");
-	const std::string		singleFragUintName	("usingle.frag");
-	const std::string		dualFragFloatName	("fdual.frag");
-	const std::string		dualFragUintName	("udual.frag");
+	const std::string		genericFragName		("generic.frag");
+	const std::string		dualFragName		("dual.frag");
 
 	program.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, vertexName);
-	program.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, singleFragFloatName);
-	program.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, singleFragUintName);
+	program.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, genericFragName);
 	if (includeDualShaders)
 	{
-		program.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, dualFragFloatName);
-		program.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, dualFragUintName);
+		program.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, dualFragName);
 	}
 
 	program.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, false, false);
 
-	ZShaderModule	vertex							= program.getShader(VK_SHADER_STAGE_VERTEX_BIT);
-	ZShaderModule	dualFragFloat, singleFragFloat	= program.getShader(VK_SHADER_STAGE_FRAGMENT_BIT, 0);
-	ZShaderModule	dualFragUint, singleFragUint	= program.getShader(VK_SHADER_STAGE_FRAGMENT_BIT, 1);
+	ZShaderModule	vertex					= program.getShader(VK_SHADER_STAGE_VERTEX_BIT);
+	ZShaderModule	dualFrag, genericFrag	= program.getShader(VK_SHADER_STAGE_FRAGMENT_BIT, 0);
 	if (includeDualShaders)
 	{
-		dualFragFloat	= program.getShader(VK_SHADER_STAGE_FRAGMENT_BIT, 2);
-		dualFragUint	= program.getShader(VK_SHADER_STAGE_FRAGMENT_BIT, 3);
+		dualFrag	= program.getShader(VK_SHADER_STAGE_FRAGMENT_BIT, 1);
 	}
 
 	vertex.name(vertexName);
-	singleFragFloat.name(singleFragFloatName);
-	singleFragUint.name(singleFragUintName);
+	genericFrag.name(genericFragName);
 	if (includeDualShaders)
 	{
-		dualFragFloat.name(dualFragFloatName);
-		dualFragUint.name(dualFragUintName);
+		dualFrag.name(dualFragName);
 	}
 
 	return
 	{
 		vertex,
-		singleFragFloat,
-		singleFragUint,
-		dualFragFloat,
-		dualFragUint
+		genericFrag,
+		dualFrag
+	};
+}
+
+template<class PC_>
+std::tuple<ZShaderObject, ZShaderObject, ZShaderObject>
+buildProgram(ZDevice device, add_cref<std::string> assets, bool includeDualShaders)
+{
+	const GlobalAppFlags	flags(getGlobalAppFlags());
+	ShaderObjectCollection	program(device, assets);
+
+	const std::string		vertexName("common.vert");
+	const std::string		genericFragName("generic.frag");
+	const std::string		dualFragName("dual.frag");
+
+	const ZPushRange<PC_> range(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+
+	using Link = ShaderObjectCollection::ShaderLink;
+	Link vertexLink				= program.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, vertexName);
+	Link dualLink, genericLink	= program.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, genericFragName);
+
+	/* 
+	 * ==================== WHY? =======================
+	 * VUID - vkCmdDrawIndexed - None - 08878(ERROR / SPEC)
+	 * type = VK_OBJECT_TYPE_COMMAND_BUFFER; | MessageID = 0xb422117d
+	 * Shaders VK_SHADER_STAGE_VERTEX_BIT and VK_SHADER_STAGE_FRAGMENT_BIT have different push constant ranges.
+	 * The Vulkan spec states : All bound graphics shader objects must have been created with identical or
+	 * identically defined push constant ranges
+	 * (https ://vulkan.lunarg.com/doc/view/1.4.304.1/windows/antora/spec/latest/chapters/drawing.html#VUID-vkCmdDrawIndexed-None-08878)
+	 */
+	if (includeDualShaders)
+	{
+		dualLink = program.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, dualFragName);
+		program.updateShaders({ vertexLink, genericLink, dualLink }, false, flags.spirvValidate, flags.genSpirvDisassembly);
+		program.updateShaders({ vertexLink, genericLink, dualLink }, range);
+	}
+	else
+	{
+		program.updateShaders({ vertexLink, genericLink }, false, flags.spirvValidate, flags.genSpirvDisassembly);
+		program.updateShaders({ vertexLink, genericLink }, range);
+	}
+
+	program.buildAndVerify();
+
+	ZShaderObject	vertex = program.getShader(VK_SHADER_STAGE_VERTEX_BIT);
+	ZShaderObject	dualFrag, genericFrag = program.getShader(VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+	if (includeDualShaders)
+	{
+		dualFrag = program.getShader(VK_SHADER_STAGE_FRAGMENT_BIT, 1);
+	}
+
+	vertex.name(vertexName);
+	genericFrag.name(genericFragName);
+	if (includeDualShaders)
+	{
+		dualFrag.name(dualFragName);
+	}
+
+	return
+	{
+		vertex,
+		genericFrag,
+		dualFrag
 	};
 }
 
@@ -829,23 +1028,25 @@ std::pair<ZBuffer, ZBuffer> genVertices (add_ref<VertexInput> vi)
 	{
 		{-0.75, -0.75}, {+0.50, -0.75}, {+0.50, +0.50}, {-0.75, +0.50},
 		{-0.50, -0.50}, {+0.75, -0.50}, {+0.75, +0.75}, {-0.50, +0.75},
-		                {-0.50, +0.50}, {+0.50, -0.50}
+		                {-0.50, +0.50}, {+0.50, -0.50},
+		                {+0.50, +0.75}, {+0.75, +0.50}
 	};
 	vi.binding(0).addAttributes(vertices);
 	ZBuffer bv = vi.binding(0).getBuffer();
 
 	const std::vector<uint32_t> indices
 	{
-		8,3,4, 4,3,0, 0,1,4, 4,1,9,
-		4,9,2, 2,8,4,
-		2,9,5, 5,6,2, 2,6,7, 7,8,2, 8,4,9, 9,2,8
+		8,3,4, 4,3,0, 0,1,4, 4,1,9,	// 0-12
+		4,9,2, 2,8,4,				// 12-6
+		2,9,5, 5,6,2, 2,6,7, 7,8,2, // 18-12
+		10,2,11, 11,6,10			// 30-6
 	};
 	ZBuffer bi = createIndexBuffer<uint32_t>(vi.device, indices);
 
 	return { bv, bi };
 }
 
-UNUSED bool isDualBlendAttachmentState (add_cref< VkPipelineColorBlendAttachmentState> s)
+[[maybe_unused]] bool isDualBlendAttachmentState (add_cref<VkPipelineColorBlendAttachmentState> s)
 {
 	const VkBlendFactor fs[]{
 		VK_BLEND_FACTOR_SRC1_COLOR,
@@ -868,61 +1069,40 @@ UNUSED bool isDualBlendAttachmentState (add_cref< VkPipelineColorBlendAttachment
 	return false;
 }
 
+/*
+void printFlatnizeWarning (add_ref<std::ostream> log, add_cref<TestParams> params, bool availableDualSourceBlend)
+{
+	if (isDualBlendAttachmentState(params.getState())
+		&& !(availableDualSourceBlend && params.enableDualSrcBlending))
+	{
+		std::ostringstream str;
+		str << "WARNING: " << std::quoted(optionDualSource.name) << " is not enabled "
+			<< "or dual-source blending is not available on this device, "
+			<< "generic factors will be applied";
+		log << colorize(str.str(), TermColor::DYELLOW) << std::endl;
+	}
+}
+*/
+
 ZPipeline makeBlendPipeline	(
 	add_cref<TestParamsState>	test,
 	ZPipelineLayout				layout,
 	ZRenderPass					renderPass,
 	add_cref<VertexInput>		vertices,
 	ZShaderModule				vertex,
-	ZShaderModule				singleFragmentFloat,
-	ZShaderModule				singleFragmentUint,
-	ZShaderModule				dualFragmentFloat,
-	ZShaderModule				dualFragmentUint,
-	bool						isFloatingFormat,
-	bool						createDual)
+	ZShaderModule				genericFragment,
+	ZShaderModule				dualFragment,
+	bool						availableDualSourceBlend)
 {
 	add_cref<TestParams> p(std::get<0>(test));
 	std::cout << std::get<1>(test).messagesText();
 
-	const VkPipelineColorBlendAttachmentState s = p.getState(false == createDual && false == p.noFlatenize);
-
-	ZShaderModule singleFragment = isFloatingFormat ? singleFragmentFloat : singleFragmentUint;
-	ZShaderModule dualFragment = isFloatingFormat ? dualFragmentFloat : dualFragmentUint;
-	ZShaderModule blendFragment = (createDual && p.enableDualSrcBlending) ? dualFragment : singleFragment;
+	const bool useDualSource = p.enableDualSrcBlending && availableDualSourceBlend;
+	const VkPipelineColorBlendAttachmentState s = p.getState();
+	ZShaderModule blendFragment = useDualSource ? dualFragment : genericFragment;
 	return createGraphicsPipeline(layout, renderPass, vertices, vertex, blendFragment, TestParams::defaultExtent,
 									gpp::BlendAttachmentState(std::make_pair(0u, s)),
 									gpp::BlendConstants(p.constColor));
-}
-
-auto makeClearParams(ZBuffer vertexBuffer, bool isFloatingFormat, add_cref<TestParams> currParams)
-	-> std::pair<VkClearAttachment, VkClearRect>
-{
-	const VkClearAttachment clearAttachment
-	{
-		VK_IMAGE_ASPECT_COLOR_BIT, 0u, {
-			isFloatingFormat ? makeClearColorValue(Vec4(currParams.bkgDualSource))
-								: makeClearColorValue(Vec4(currParams.bkgDualSource).cast<UVec4>())
-		}
-	};
-	std::vector<Vec2>		v(bufferGetElementCount<Vec2>(vertexBuffer));
-	//std::vector<uint32_t>	i(bufferGetElementCount<uint32_t>(indexBuffer));
-	bufferRead(vertexBuffer, v);
-	//bufferRead(indexBuffer, i);
-	UVec2 A, B, C, D;
-	transformDistance(-1.0f, +1.0f, v.at(4).x(), 0u, currParams.defaultExtent.width, A.x(), false);
-	transformDistance(-1.0f, +1.0f, v.at(4).y(), 0u, currParams.defaultExtent.height, A.y(), false);
-	transformDistance(-1.0f, +1.0f, v.at(9).x(), 0u, currParams.defaultExtent.width, B.x(), false);
-	transformDistance(-1.0f, +1.0f, v.at(9).y(), 0u, currParams.defaultExtent.height, B.y(), false);
-	transformDistance(-1.0f, +1.0f, v.at(2).x(), 0u, currParams.defaultExtent.width, C.x(), false);
-	transformDistance(-1.0f, +1.0f, v.at(2).y(), 0u, currParams.defaultExtent.height, C.y(), false);
-	transformDistance(-1.0f, +1.0f, v.at(8).x(), 0u, currParams.defaultExtent.width, D.x(), false);
-	transformDistance(-1.0f, +1.0f, v.at(8).y(), 0u, currParams.defaultExtent.height, D.y(), false);
-	const VkClearRect clearRect{ {
-			makeOffset2D(make_signed(A.x()), make_signed(A.y())),
-			makeExtent2D(B.x() - A.x(), C.y() - B.y())
-		}, 0u, 1u
-	};
-	return { clearAttachment, clearRect };
 }
 
 void readColors (
@@ -930,9 +1110,9 @@ void readColors (
 	ZBuffer					colorBuffer,
 	add_cref<VkExtent2D>	extent,
 	add_cref<VkFormat>		format,
-	add_ref<Vec4>			color0,
-	add_ref<Vec4>			color1,
-	add_ref<Vec4>			color2)
+	add_ref<Vec4>			dst,
+	add_ref<Vec4>			src,
+	add_ref<Vec4>			out)
 {
 	static UVec2 c2, c1, c0(INVALID_UINT32);
 	if (INVALID_UINT32 == c0.x())
@@ -1017,33 +1197,33 @@ void readColors (
 		{
 			if (fi.pack)
 			{
-				color0 = a.asColor(format, c0.x(), c0.y());
-				color1 = a.asColor(format, c1.x(), c1.y());
-				color2 = a.asColor(format, c2.x(), c2.y());
+				dst = a.asColor(format, c0.x(), c0.y());
+				src = a.asColor(format, c1.x(), c1.y());
+				out = a.asColor(format, c2.x(), c2.y());
 			}
 			else
 			{
 				switch (fi.componentCount)
 				{
 				case 4:
-					color0.a(a.asColor(format, (c0.x() * fi.componentCount) + 3, c0.y()).x());
-					color1.a(a.asColor(format, (c1.x() * fi.componentCount) + 3, c1.y()).x());
-					color2.a(a.asColor(format, (c2.x() * fi.componentCount) + 3, c2.y()).x());
+					dst.a(a.asColor(format, (c0.x() * fi.componentCount) + 3, c0.y()).x());
+					src.a(a.asColor(format, (c1.x() * fi.componentCount) + 3, c1.y()).x());
+					out.a(a.asColor(format, (c2.x() * fi.componentCount) + 3, c2.y()).x());
 					[[fallthrough]];
 				case 3:
-					color0.b(a.asColor(format, (c0.x() * fi.componentCount) + 2, c0.y()).x());
-					color1.b(a.asColor(format, (c1.x() * fi.componentCount) + 2, c1.y()).x());
-					color2.b(a.asColor(format, (c2.x() * fi.componentCount) + 2, c2.y()).x());
+					dst.b(a.asColor(format, (c0.x() * fi.componentCount) + 2, c0.y()).x());
+					src.b(a.asColor(format, (c1.x() * fi.componentCount) + 2, c1.y()).x());
+					out.b(a.asColor(format, (c2.x() * fi.componentCount) + 2, c2.y()).x());
 					[[fallthrough]];
 				case 2:
-					color0.g(a.asColor(format, (c0.x() * fi.componentCount) + 1, c0.y()).x());
-					color1.g(a.asColor(format, (c1.x() * fi.componentCount) + 1, c1.y()).x());
-					color2.g(a.asColor(format, (c2.x() * fi.componentCount) + 1, c2.y()).x());
+					dst.g(a.asColor(format, (c0.x() * fi.componentCount) + 1, c0.y()).x());
+					src.g(a.asColor(format, (c1.x() * fi.componentCount) + 1, c1.y()).x());
+					out.g(a.asColor(format, (c2.x() * fi.componentCount) + 1, c2.y()).x());
 					[[fallthrough]];
 				case 1:
-					color0.r(a.asColor(format, (c0.x() * fi.componentCount) + 0, c0.y()).x());
-					color1.r(a.asColor(format, (c1.x() * fi.componentCount) + 0, c1.y()).x());
-					color2.r(a.asColor(format, (c2.x() * fi.componentCount) + 0, c2.y()).x());
+					dst.r(a.asColor(format, (c0.x() * fi.componentCount) + 0, c0.y()).x());
+					src.r(a.asColor(format, (c1.x() * fi.componentCount) + 0, c1.y()).x());
+					out.r(a.asColor(format, (c2.x() * fi.componentCount) + 0, c2.y()).x());
 				}
 			}
 		}
@@ -1055,28 +1235,30 @@ class BlendEquation
 	const VkPipelineColorBlendAttachmentState m_state;
 	const Vec4 m_color0;
 	const Vec4 m_color1;
-	const Vec4 m_color2;
+	const Vec4 m_colorDst;
+	const Vec4 m_colorOut;
 	const Vec4 m_colorC;
-	const bool m_swapAlpha;
 	const float m_epsilon;
 public:
-	BlendEquation(add_cref<VkPipelineColorBlendAttachmentState> state, bool swapAlpha, float epsilon,
-		add_cref<Vec4> color0, add_cref<Vec4> color1, add_cref<Vec4> color2, add_cref<Vec4> colorC)
+	BlendEquation (add_cref<VkPipelineColorBlendAttachmentState> state, float epsilon, add_cref<Vec4> colorDst,
+				   add_cref<Vec4> color0, add_cref<Vec4> color1, add_cref<Vec4> colorOut, add_cref<Vec4> colorC)
 		: m_state		(state)
 		, m_color0		(color0)
 		, m_color1		(color1)
-		, m_color2		(color2)
+		, m_colorDst	(colorDst)
+		, m_colorOut	(colorOut)
 		, m_colorC		(colorC)
-		, m_swapAlpha	(swapAlpha)
 		, m_epsilon		(epsilon) {}
 	std::string getText(add_ref<BoolVec4> matchingResult) const
 	{
 		std::ostringstream strSrcColorFactor, strDstColorFactor, res;
 		Vec3 srcColorFactor, dstColorFactor, color2;
-		const Vec3 mColorSrc = m_color0.cast<Vec3>();
-		const Vec3 mColorDst = m_color1.cast<Vec3>();
-		const float mAlphaSrc = m_swapAlpha ? m_color1.a() : m_color0.a();
-		const float mAlphaDst = m_swapAlpha ? m_color0.a() : m_color1.a();
+		const Vec3 mColorSrc0 = m_color0.cast<Vec3>();
+		const Vec3 mColorSrc1 = m_color1.cast<Vec3>();
+		const Vec3 mColorDst = m_colorDst.cast<Vec3>();
+		const float mAlphaSrc0 = m_color0.a();
+		const float mAlphaSrc1 = m_color1.a();
+		const float mAlphaDst = m_colorDst.a();
 
 		switch (m_state.srcColorBlendFactor)
 		{
@@ -1089,22 +1271,28 @@ public:
 			strSrcColorFactor << Vec3(1);
 			break;
 		case VK_BLEND_FACTOR_SRC_COLOR:
-			srcColorFactor = mColorSrc;
-			strSrcColorFactor << mColorSrc;
+			srcColorFactor = mColorSrc0;
+			strSrcColorFactor << mColorSrc0;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR:
-			srcColorFactor = Vec3(1) - mColorSrc;
-			strSrcColorFactor << '(' << Vec3(1) << " - " << mColorSrc << ')';
+			srcColorFactor = Vec3(1) - mColorSrc0;
+			strSrcColorFactor << '(' << Vec3(1) << " - " << mColorSrc0 << ')';
 			break;
 		case VK_BLEND_FACTOR_DST_COLOR:
-		case VK_BLEND_FACTOR_SRC1_COLOR:
 			srcColorFactor = mColorDst;
 			strSrcColorFactor << mColorDst;
 			break;
+		case VK_BLEND_FACTOR_SRC1_COLOR:
+			srcColorFactor = mColorSrc1;
+			strSrcColorFactor << mColorSrc1;
+			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR:
-		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR:
 			srcColorFactor = Vec3(1) - mColorDst;
 			strSrcColorFactor << '(' << Vec3(1) << " - " << mColorDst << ')';
+			break;
+		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR:
+			srcColorFactor = Vec3(1) - mColorSrc1;
+			strSrcColorFactor << '(' << Vec3(1) << " - " << mColorSrc1 << ')';
 			break;
 		case VK_BLEND_FACTOR_CONSTANT_ALPHA:
 			srcColorFactor = m_colorC.a();
@@ -1115,26 +1303,32 @@ public:
 			strSrcColorFactor << "(1.0 - " << m_colorC.a() << ")";
 			break;
 		case VK_BLEND_FACTOR_SRC_ALPHA:
-			srcColorFactor = mAlphaSrc;
-			strSrcColorFactor << mAlphaSrc;
+			srcColorFactor = mAlphaSrc0;
+			strSrcColorFactor << mAlphaSrc0;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA:
-			srcColorFactor = (1.0f - mAlphaSrc);
-			strSrcColorFactor << "(1.0 - " << mAlphaSrc << ")";
+			srcColorFactor = (1.0f - mAlphaSrc0);
+			strSrcColorFactor << "(1.0 - " << mAlphaSrc0 << ")";
 			break;
 		case VK_BLEND_FACTOR_DST_ALPHA:
-		case VK_BLEND_FACTOR_SRC1_ALPHA:
 			srcColorFactor = mAlphaDst;
 			strSrcColorFactor << mAlphaDst;
 			break;
+		case VK_BLEND_FACTOR_SRC1_ALPHA:
+			srcColorFactor = mAlphaSrc1;
+			strSrcColorFactor << mAlphaSrc1;
+			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA:
-		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA:
 			srcColorFactor = (1 - mAlphaDst);
 			strSrcColorFactor << "(1.0 - " << mAlphaDst << ")";
 			break;
+		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA:
+			srcColorFactor = (1 - mAlphaSrc1);
+			strSrcColorFactor << "(1.0 - " << mAlphaSrc1 << ")";
+			break;
 		case VK_BLEND_FACTOR_SRC_ALPHA_SATURATE:
-			srcColorFactor = Vec3(std::min(mAlphaSrc, 1.0f - mAlphaDst));
-			strSrcColorFactor << "min(" << Vec3(mAlphaSrc) << ", " << Vec3(1.0f - mAlphaDst) << ")";
+			srcColorFactor = Vec3(std::min(mAlphaSrc0, 1.0f - mAlphaDst));
+			strSrcColorFactor << "min(" << Vec3(mAlphaSrc0) << ", " << Vec3(1.0f - mAlphaDst) << ")";
 			break;
 		default:
 			break;
@@ -1151,22 +1345,28 @@ public:
 			strDstColorFactor << Vec3(1);
 			break;
 		case VK_BLEND_FACTOR_SRC_COLOR:
-			dstColorFactor = mColorSrc;
-			strDstColorFactor << mColorSrc;
+			dstColorFactor = mColorSrc0;
+			strDstColorFactor << mColorSrc0;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR:
-			dstColorFactor = Vec3(1) - mColorSrc;
-			strDstColorFactor << '(' << Vec3(1) << " - " << mColorSrc << ')';
+			dstColorFactor = Vec3(1) - mColorSrc0;
+			strDstColorFactor << '(' << Vec3(1) << " - " << mColorSrc0 << ')';
 			break;
 		case VK_BLEND_FACTOR_DST_COLOR:
-		case VK_BLEND_FACTOR_SRC1_COLOR:
 			dstColorFactor = mColorDst;
 			strDstColorFactor << mColorDst;
 			break;
+		case VK_BLEND_FACTOR_SRC1_COLOR:
+			dstColorFactor = mColorSrc1;
+			strDstColorFactor << mColorSrc1;
+			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR:
-		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR:
 			dstColorFactor = Vec3(1) - mColorDst;
 			strDstColorFactor << '(' << Vec3(1) << " - " << mColorDst << ')';
+			break;
+		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR:
+			dstColorFactor = Vec3(1) - mColorSrc1;
+			strDstColorFactor << '(' << Vec3(1) << " - " << mColorSrc1 << ')';
 			break;
 		case VK_BLEND_FACTOR_CONSTANT_ALPHA:
 			dstColorFactor = m_colorC.a();
@@ -1177,22 +1377,28 @@ public:
 			strDstColorFactor << "(1.0 - " << m_colorC.a();
 			break;
 		case VK_BLEND_FACTOR_SRC_ALPHA:
-			dstColorFactor = mAlphaSrc;
-			strDstColorFactor << mAlphaSrc;
+			dstColorFactor = mAlphaSrc0;
+			strDstColorFactor << mAlphaSrc0;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA:
-			dstColorFactor = (1.0f - mAlphaSrc);
-			strDstColorFactor << "(1.0 - " << mAlphaSrc << ')';
+			dstColorFactor = (1.0f - mAlphaSrc0);
+			strDstColorFactor << "(1.0 - " << mAlphaSrc0 << ')';
 			break;
 		case VK_BLEND_FACTOR_DST_ALPHA:
-		case VK_BLEND_FACTOR_SRC1_ALPHA:
 			dstColorFactor = mAlphaDst;
 			strDstColorFactor << mAlphaDst;
 			break;
+		case VK_BLEND_FACTOR_SRC1_ALPHA:
+			dstColorFactor = mAlphaSrc1;
+			strDstColorFactor << mAlphaSrc1;
+			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA:
-		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA:
 			dstColorFactor = (1.0f - mAlphaDst);
 			strDstColorFactor << "(1.0 - " << mAlphaDst << ")";
+			break;
+		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA:
+			dstColorFactor = (1.0f - mAlphaSrc1);
+			strDstColorFactor << "(1.0 - " << mAlphaSrc1 << ")";
 			break;
 		default:
 			break;
@@ -1201,24 +1407,27 @@ public:
 		switch (m_state.colorBlendOp)
 		{
 		case VK_BLEND_OP_ADD:
-			color2 = srcColorFactor * mColorSrc + dstColorFactor * mColorDst;
-			res << strSrcColorFactor.str() << " * " << mColorSrc << " + " << strDstColorFactor.str() << " * " << mColorDst;
+			color2 = srcColorFactor * mColorSrc0 + dstColorFactor * mColorDst;
+			res << strSrcColorFactor.str() << " * " << mColorSrc0 << " + " << strDstColorFactor.str() << " * " << mColorDst;
+			res << " = " << (srcColorFactor * mColorSrc0) << " + " << (dstColorFactor * mColorDst);
 			break;
 		case VK_BLEND_OP_SUBTRACT:
-			color2 = srcColorFactor * mColorSrc - dstColorFactor * mColorDst;
-			res << strSrcColorFactor.str() << " * " << mColorSrc << " - " << strDstColorFactor.str() << " * " << mColorDst;
+			color2 = srcColorFactor * mColorSrc0 - dstColorFactor * mColorDst;
+			res << strSrcColorFactor.str() << " * " << mColorSrc0 << " - " << strDstColorFactor.str() << " * " << mColorDst;
+			res << " = " << (srcColorFactor * mColorSrc0) << " - " << (dstColorFactor * mColorDst);
 			break;
 		case VK_BLEND_OP_REVERSE_SUBTRACT:
-			color2 = dstColorFactor * mColorDst - srcColorFactor * mColorSrc;
-			res << strDstColorFactor.str() << " * " << mColorDst << " - " << strSrcColorFactor.str() << " * " << mColorSrc;
+			color2 = dstColorFactor * mColorDst - srcColorFactor * mColorSrc0;
+			res << strDstColorFactor.str() << " * " << mColorDst << " - " << strSrcColorFactor.str() << " * " << mColorSrc0;
+			res << " = " << (dstColorFactor * mColorDst) << " - " << (srcColorFactor * mColorSrc0);
 			break;
 		case VK_BLEND_OP_MIN:
-			color2 = mColorSrc.min(mColorDst);
-			res << "min(" << mColorSrc << ", " << mColorDst << ")";
+			color2 = (mColorSrc0).min(mColorDst);
+			res << "min(" << mColorSrc0 << ", " << mColorDst << ")";
 			break;
 		case VK_BLEND_OP_MAX:
-			color2 = mColorSrc.max(mColorDst);
-			res << "max(" << mColorSrc << ", " << mColorDst << ")";
+			color2 = (mColorSrc0).max(mColorDst);
+			res << "max(" << mColorSrc0 << ", " << mColorDst << ")";
 			break;
 		default:
 			break;
@@ -1237,25 +1446,31 @@ public:
 			break;
 		case VK_BLEND_FACTOR_SRC_ALPHA:
 		case VK_BLEND_FACTOR_SRC_COLOR:
-			srcAlphaFactor = mAlphaSrc; strSrcAlphaFactor << mAlphaSrc;
+			srcAlphaFactor = mAlphaSrc0; strSrcAlphaFactor << mAlphaSrc0;
+			break;
+		case VK_BLEND_FACTOR_SRC1_ALPHA:
+		case VK_BLEND_FACTOR_SRC1_COLOR:
+			srcAlphaFactor = mAlphaSrc1; strSrcAlphaFactor << mAlphaSrc1;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA:
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR:
-			srcAlphaFactor = 1.0f - mAlphaSrc; strSrcAlphaFactor << "(1.0 - " << mAlphaSrc << ")";
+			srcAlphaFactor = 1.0f - mAlphaSrc0; strSrcAlphaFactor << "(1.0 - " << mAlphaSrc0 << ")";
+			break;
+		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA:
+		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR:
+			srcAlphaFactor = 1.0f - mAlphaSrc1; strSrcAlphaFactor << "(1.0 - " << mAlphaSrc1 << ")";
 			break;
 		case VK_BLEND_FACTOR_DST_ALPHA:
 		case VK_BLEND_FACTOR_DST_COLOR:
-		case VK_BLEND_FACTOR_SRC1_COLOR:
 			srcAlphaFactor = mAlphaDst; strSrcAlphaFactor << mAlphaDst;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA:
 		case VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR:
-		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR:
 			srcAlphaFactor = 1.0f - mAlphaDst; strSrcAlphaFactor << "(1.0 - " << mAlphaDst << ")";
 			break;
 		case VK_BLEND_FACTOR_SRC_ALPHA_SATURATE:
-			srcAlphaFactor = std::min(mAlphaSrc, 1.0f - mAlphaDst);
-			strSrcAlphaFactor << "min(" << mAlphaSrc << ", 1.0 - " << mAlphaDst << ")";
+			srcAlphaFactor = std::min(mAlphaSrc0, 1.0f - mAlphaDst);
+			strSrcAlphaFactor << "min(" << mAlphaSrc0 << ", 1.0 - " << mAlphaDst << ")";
 			break;
 		case VK_BLEND_FACTOR_CONSTANT_ALPHA:
 			srcAlphaFactor = m_colorC.a(); strSrcAlphaFactor << m_colorC.a();
@@ -1277,20 +1492,26 @@ public:
 			break;
 		case VK_BLEND_FACTOR_SRC_ALPHA:
 		case VK_BLEND_FACTOR_SRC_COLOR:
-			dstAlphaFactor = mAlphaSrc; strDstAlphaFactor << mAlphaSrc;
+			dstAlphaFactor = mAlphaSrc0; strDstAlphaFactor << mAlphaSrc0;
+			break;
+		case VK_BLEND_FACTOR_SRC1_ALPHA:
+		case VK_BLEND_FACTOR_SRC1_COLOR:
+			dstAlphaFactor = mAlphaSrc1; strDstAlphaFactor << mAlphaSrc1;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA:
 		case VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR:
-			dstAlphaFactor = 1.0f - mAlphaSrc; strDstAlphaFactor << "(1.0 - " << mAlphaSrc << ")";
+			dstAlphaFactor = 1.0f - mAlphaSrc0; strDstAlphaFactor << "(1.0 - " << mAlphaSrc0 << ")";
+			break;
+		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA:
+		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR:
+			dstAlphaFactor = 1.0f - mAlphaSrc1; strDstAlphaFactor << "(1.0 - " << mAlphaSrc1 << ")";
 			break;
 		case VK_BLEND_FACTOR_DST_ALPHA:
 		case VK_BLEND_FACTOR_DST_COLOR:
-		case VK_BLEND_FACTOR_SRC1_COLOR:
 			dstAlphaFactor = mAlphaDst; strDstAlphaFactor << mAlphaDst;
 			break;
 		case VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA:
 		case VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR:
-		case VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR:
 			dstAlphaFactor = 1.0f - mAlphaDst; strDstAlphaFactor << "(1.0 - " << mAlphaDst << ")";
 			break;
 		case VK_BLEND_FACTOR_CONSTANT_ALPHA:
@@ -1308,32 +1529,16 @@ public:
 		switch (m_state.alphaBlendOp)
 		{
 		case VK_BLEND_OP_ADD:
-			alphaResult = srcAlphaFactor * mAlphaSrc + dstAlphaFactor * mAlphaDst;
-			resAlpha << strSrcAlphaFactor.str() << " * " << mAlphaSrc << " + " << strDstAlphaFactor.str() << " * " << mAlphaDst;
+			alphaResult = srcAlphaFactor * mAlphaSrc0 + dstAlphaFactor * mAlphaDst;
+			resAlpha << strSrcAlphaFactor.str() << " * " << mAlphaSrc0 << " + " << strDstAlphaFactor.str() << " * " << mAlphaDst;
 			break;
 		case VK_BLEND_OP_SUBTRACT:
-			if (m_swapAlpha)
-			{
-				alphaResult = dstAlphaFactor * mAlphaDst - srcAlphaFactor * mAlphaSrc;
-				resAlpha << strDstAlphaFactor.str() << " * " << mAlphaDst << " - " << strSrcAlphaFactor.str() << " * " << mAlphaSrc;
-			}
-			else
-			{
-				alphaResult = srcAlphaFactor * mAlphaSrc - dstAlphaFactor * mAlphaDst;
-				resAlpha << strSrcAlphaFactor.str() << " * " << mAlphaSrc << " - " << strDstAlphaFactor.str() << " * " << mAlphaDst;
-			}
+			alphaResult = srcAlphaFactor * mAlphaSrc0 - dstAlphaFactor * mAlphaDst;
+			resAlpha << strSrcAlphaFactor.str() << " * " << mAlphaSrc0 << " - " << strDstAlphaFactor.str() << " * " << mAlphaDst;
 			break;
 		case VK_BLEND_OP_REVERSE_SUBTRACT:
-			if (m_swapAlpha)
-			{
-				alphaResult = srcAlphaFactor * mAlphaSrc - dstAlphaFactor * mAlphaDst;
-				resAlpha << strSrcAlphaFactor.str() << " * " << mAlphaSrc << " - " << strDstAlphaFactor.str() << " * " << mAlphaDst;
-			}
-			else
-			{
-				alphaResult = dstAlphaFactor * mAlphaDst - srcAlphaFactor * mAlphaSrc;
-				resAlpha << strDstAlphaFactor.str() << " * " << mAlphaDst << " - " << strSrcAlphaFactor.str() << " * " << mAlphaSrc;
-			}
+			alphaResult = dstAlphaFactor * mAlphaDst - srcAlphaFactor * mAlphaSrc0;
+			resAlpha << strDstAlphaFactor.str() << " * " << mAlphaDst << " - " << strSrcAlphaFactor.str() << " * " << mAlphaSrc0;
 			break;
 		case VK_BLEND_OP_MIN:
 			alphaResult = std::min(srcAlphaFactor, dstAlphaFactor);
@@ -1349,50 +1554,61 @@ public:
 
 		std::ostringstream eq;
 
-		const bool alphaMatches = std::abs(alphaResult - m_color2.a()) < m_epsilon;
-		eq << "Alpha: " << resAlpha.str() << " = " << alphaResult << "; expected: " << m_color2.a();
+		const Vec3 mColorOut = m_colorOut.cast<Vec3>();
+		const auto colorMatches = color2.matches(mColorOut, DVec3(m_epsilon));
+		eq << "Color: " << res.str() << " = " << color2 << "; screen: " << mColorOut;
+		eq << ", " << ((colorMatches == BoolVec3(true)) ? " matches" : " DOESN'T MATCH");
+		eq << std::endl;
+
+		const bool alphaMatches = std::abs(alphaResult - m_colorOut.a()) < m_epsilon;
+		eq << "Alpha: " << resAlpha.str() << " = " << alphaResult << "; screen: " << m_colorOut.a();
 		eq << ", " << (alphaMatches ? " matches" : " DOESN'T MATCH");
 		eq << std::endl;
 
+		const BoolVec4 fullMatches(colorMatches.x(), colorMatches.y(), colorMatches.z(), alphaMatches);
 		const Vec4 colorResult(color2.r(), color2.g(), color2.b(), alphaResult);
-		const auto colorMatches = colorResult.matches(m_color2, DVec4(m_epsilon));
-		const bool colorMatchesState = colorMatches == BoolVec4(true);
-		eq << "Color: " << res.str() << " = " << colorResult << "; expected: " << m_color2 << std::endl;
 		eq << "Color comparison result: [";
-		eq << boolean(colorMatches.r()) << ", "	<< boolean(colorMatches.g()) << ", "
-			<< boolean(colorMatches.b()) << ", " << boolean(colorMatches.a()) << ']';
-		eq << ", " << (colorMatchesState ? " matches" : " DOESN'T MATCH");
+		eq << boolean(fullMatches.r()) << ", "	<< boolean(fullMatches.g()) << ", "
+			<< boolean(fullMatches.b()) << ", " << boolean(fullMatches.a()) << ']';
+		//eq << ", " << (colorMatchesState ? " matches" : " DOESN'T MATCH");
 
-		matchingResult = colorMatches;
+		matchingResult = fullMatches;
 
 		return eq.str();
 	}
 };
 
 TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
-						add_cref<std::vector<TestParamsState>> set, bool fromFile, bool availableDualSourceBlend)
+						add_cref<std::vector<TestParamsState>> set, bool fromFile,
+						bool availableDualSourceBlend, bool needShaderObject)
 {
-	ZShaderModule				commonVert;
-	ZShaderModule				singleFragFloat;
-	ZShaderModule				singleFragUint;
-	ZShaderModule				dualFragFloat;
-	ZShaderModule				dualFragUint;
-	std::tie(commonVert,
-			singleFragFloat, singleFragUint,
-			dualFragFloat, dualFragUint) = buildProgram(ctx.device, assets, availableDualSourceBlend);
+	add_cref<ZDeviceInterface>	di = ctx.device.getInterface();
 
-	ZBuffer						vertexBuffer;
-	ZBuffer						indexBuffer;
-	VertexInput					vertices	(ctx.device);
-	std::tie(vertexBuffer, indexBuffer) = genVertices(vertices);
+	ZShaderModule				commonVert;
+	ZShaderModule				genericFrag;
+	ZShaderModule				dualFrag;
+	std::tie(commonVert, genericFrag, dualFrag) = buildProgram(ctx.device, assets, availableDualSourceBlend);
 
 	struct PushConstant
 	{
 		Vec4	 fColor0;
 		Vec4	 fColor1;
-		UVec4	 uColor0;
-		UVec4	 uColor1;
+		Vec4	 fColor2;
 	}							pc;
+
+	ZShaderObject				soCommonVert;
+	ZShaderObject				soGenericFrag;
+	ZShaderObject				soDualFrag;
+	if (needShaderObject)
+	{
+		std::tie(soCommonVert, soGenericFrag, soDualFrag) =
+			buildProgram<PushConstant>(ctx.device, assets, availableDualSourceBlend);
+	}
+
+	ZBuffer						vertexBuffer;
+	ZBuffer						indexBuffer;
+	VertexInput					vertexInput	(ctx.device);
+	std::tie(vertexBuffer, indexBuffer) = genVertices(vertexInput);
 
 	LayoutManager				lm				(ctx.device);
 	ZPipelineLayout				colorLayout		= lm.createPipelineLayout(ZPushRange<PushConstant>());
@@ -1404,6 +1620,8 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 	ZBuffer						colorBuffer;
 	ZPipeline					backgroundPipeline;
 	ZPipeline					blendPipeline;
+	ZShaderObject				backgroundShader;
+	ZShaderObject				blendShader;
 
 	EventData ev(data_count(set));
 	ctx.events().cbKey.set(onKey, &ev);
@@ -1420,7 +1638,6 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 													: std::get<0>(set.at(ev.testCounter - 1u)));
 		const bool	useDualBlend	= availableDualSourceBlend && currParams.enableDualSrcBlending;
 		const bool	paramsChanged	(!(currParams == prevParams)); UNREF(paramsChanged);
-		const bool	isFloatingFormat(true);
 
 		if (lastTextIndex != ev.testCounter)
 		{
@@ -1431,27 +1648,33 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 				std::cout << "Perform test: " << ev.testCounter << std::endl;
 				std::cout << "Command line: " << std::get<2>(test) << std::endl;
 			}
-			currParams.print(std::cout, availableDualSourceBlend);
+			currParams.print(std::cout, availableDualSourceBlend, std::get<1>(test));
+			//printFlatnizeWarning(std::cout, currParams, availableDualSourceBlend);
 		}
 
 		const VkFormat colorFormat = VkFormat(currParams.colorFormat);
-		colorRenderPass = createColorRenderPass(ctx.device, { colorFormat });
-		colorImage = ctx.createColorImage2D(colorFormat, TestParams::defaultExtent);
-		colorView = createImageView(colorImage);
-		colorFB = createFramebuffer(colorRenderPass, TestParams::defaultExtent, { colorView });
-		colorBuffer = createBuffer(colorImage, ZBufferUsageStorageFlags, ZMemoryPropertyHostFlags);
-		backgroundPipeline = createGraphicsPipeline(colorLayout, colorRenderPass,
-										TestParams::defaultExtent, vertices, commonVert,
-										(isFloatingFormat ? singleFragFloat : singleFragUint));
-		blendPipeline = makeBlendPipeline(test, colorLayout, colorRenderPass, vertices,
-										commonVert, singleFragFloat, singleFragUint,
-										dualFragFloat, dualFragUint, isFloatingFormat,
-										useDualBlend);
+		colorImage			= ctx.createColorImage2D(colorFormat, TestParams::defaultExtent);
+		colorView			= createImageView(colorImage);
+		colorRenderPass		= createColorRenderPass(ctx.device, { colorFormat });
+		colorFB				= createFramebuffer(colorRenderPass, TestParams::defaultExtent, { colorView });
+		colorBuffer			= createBuffer(colorImage, ZBufferUsageStorageFlags, ZMemoryPropertyHostFlags);
 
-		pc.fColor0 = currParams.color0;
-		pc.fColor1 = currParams.color1;
-		pc.uColor0 = currParams.color0.cast<UVec4>();
-		pc.uColor1 = currParams.color1.cast<UVec4>();
+		if (currParams.enableShaderObject)
+		{
+			backgroundShader = soGenericFrag;
+			blendShader = useDualBlend ? soDualFrag : soGenericFrag;
+		}
+		else
+		{
+			backgroundPipeline = createGraphicsPipeline(colorLayout, colorRenderPass,
+				TestParams::defaultExtent, vertexInput, commonVert, genericFrag);
+			blendPipeline = makeBlendPipeline(test, colorLayout, colorRenderPass, vertexInput,
+				commonVert, genericFrag, dualFrag, useDualBlend);
+		}
+
+		pc.fColor0 = currParams.dstColor;
+		pc.fColor1 = currParams.srcColor0;
+		pc.fColor2 = currParams.srcColor1;
 		bufferFill<Vec4>(colorBuffer, Vec4());
 
 		ZImage				displayImage	= framebufferGetImage(displayFB);
@@ -1462,35 +1685,58 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 		commandBufferBegin(displayCmd);
 			commandBufferClearColorImage(displayCmd, colorImage, makeClearColorValue(Vec4()));
 			commandBufferBindIndexBuffer(displayCmd, indexBuffer);
-			commandBufferBindVertexBuffers(displayCmd, vertices);
+			commandBufferBindVertexBuffers(displayCmd, vertexInput);
+			commandBufferPushConstants(displayCmd, colorLayout, pc);
 			{
-				commandBufferPushConstants(displayCmd, colorLayout, pc);
-				commandBufferBindPipeline(displayCmd, backgroundPipeline);
-				auto rpbi = commandBufferBeginRenderPass(displayCmd, colorFB, 0);
-				vkCmdDrawIndexed(*displayCmd, 12, 1, 0, 0, 0);	// color0 sample
-				vkCmdDrawIndexed(*displayCmd, 12, 1, 18, 0, 1);	// color1 sample
-				vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 0);	// color0 blending area
-				commandBufferEndRenderPass(rpbi);
+				if (currParams.enableShaderObject)
+				{
+					commandBufferSetDefaultDynamicStates(displayCmd, vertexInput, makeViewport(currParams.defaultExtent));
+					commandBufferBindShaders(displayCmd, { soCommonVert, backgroundShader });
+					commandBufferBeginRendering(displayCmd, { colorView });
+					vkCmdDrawIndexed(*displayCmd, 12, 1, 0, 0, 0);  // dst color sample
+					vkCmdDrawIndexed(*displayCmd, 12, 1, 18, 0, 1); // src color sample
+					vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 0);  // dst color blending area
+					if (useDualBlend) { vkCmdDrawIndexed(*displayCmd, 6, 1, 30, 0, 2); } // src1 color sample
+					commandBufferEndRendering(displayCmd);
+				}
+				else
+				{
+					commandBufferBindPipeline(displayCmd, backgroundPipeline);
+					auto rpbi = commandBufferBeginRenderPass(displayCmd, colorFB, 0);
+					vkCmdDrawIndexed(*displayCmd, 12, 1, 0, 0, 0);  // dst color sample
+					vkCmdDrawIndexed(*displayCmd, 12, 1, 18, 0, 1); // src color sample
+					vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 0);  // dst color blending area
+					if (useDualBlend) { vkCmdDrawIndexed(*displayCmd, 6, 1, 30, 0, 2); } // src1 color sample
+					commandBufferEndRenderPass(rpbi);
+				}
 			}
 			{
 				ZImageMemoryBarrier srcColorReady(colorImage, VK_ACCESS_NONE, VK_ACCESS_NONE,
-					VK_IMAGE_LAYOUT_GENERAL);
+													VK_IMAGE_LAYOUT_GENERAL);
 
-				commandBufferPipelineBarriers(displayCmd,
-						VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
-											srcColorReady);
-				commandBufferPushConstants(displayCmd, colorLayout, pc);
-				commandBufferBindPipeline(displayCmd, blendPipeline);
-				auto rpbi = commandBufferBeginRenderPass(displayCmd, colorFB, 0);
-				if (useDualBlend)
+				commandBufferPipelineBarriers(displayCmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+														  VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+														  srcColorReady);
+				if (currParams.enableShaderObject)
 				{
-					VkClearRect clearRect;
-					VkClearAttachment clearAttachment;
-					std::tie(clearAttachment, clearRect) = makeClearParams(vertexBuffer, isFloatingFormat, currParams);
-					vkCmdClearAttachments(*displayCmd, 1u, &clearAttachment, 1u, &clearRect);
+					const VkPipelineColorBlendAttachmentState state = currParams.getState();
+					commandBufferSetDefaultDynamicStates(displayCmd, vertexInput, makeViewport(currParams.defaultExtent));
+					di.vkCmdSetColorBlendEnableEXT(*displayCmd, 0u, 1u, makeQuickPtr(VK_TRUE));
+					di.vkCmdSetColorBlendEquationEXT(*displayCmd, 0u, 1u, makeQuickPtr(makeColorBlendEquationExt(state)));
+					di.vkCmdSetColorWriteMaskEXT(*displayCmd, 0u, 1u, &state.colorWriteMask);
+					di.vkCmdSetBlendConstants(*displayCmd, currParams.constColor.getData());
+					commandBufferBindShaders(displayCmd, { soCommonVert, blendShader });
+					commandBufferBeginRendering(displayCmd, { colorView });
+					vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 1);
+					commandBufferEndRendering(displayCmd);
 				}
-				vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 1);
-				commandBufferEndRenderPass(rpbi);
+				else
+				{
+					commandBufferBindPipeline(displayCmd, blendPipeline);
+					auto rpbi = commandBufferBeginRenderPass(displayCmd, colorFB, 0);
+					vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 1);
+					commandBufferEndRenderPass(rpbi);
+				}
 			}
 
 			imageCopyToBuffer(displayCmd, colorImage, colorBuffer,
@@ -1520,12 +1766,12 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 		std::vector<float> data(dataSize);
 		bufferRead(colorBuffer, data);
 
-		Vec4 color0, color1, color2;
+		Vec4 dstColor, srcColor, outColor;
 		readColors(vertexBuffer, colorBuffer, TestParams::defaultExtent,
-					colorFormat, color0, color1, color2);
+					colorFormat, dstColor, srcColor, outColor);
 
-		const BlendEquation beq(currParams.getState(false), currParams.swapAlpha, currParams.epsilon,
-								color0, color1, color2, currParams.constColor);
+		const BlendEquation beq(currParams.getState(), currParams.epsilon,
+								dstColor, srcColor, currParams.srcColor1, outColor, currParams.constColor);
 		std::cout << beq.getText(results[testIndex]) << std::endl;
 	};
 

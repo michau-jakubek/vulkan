@@ -38,7 +38,6 @@ struct CanvasStyle
 	VkFormatFeatureFlags	surfaceFormatFlags;
 };
 
-
 struct CanvasContext
 {
 	VkAllocationCallbacksPtr	cc_callbacks;
@@ -63,6 +62,7 @@ struct CanvasContext
 					 add_cref<CanvasStyle>	style,
 					 add_ptr<Canvas>		canvas);
 	virtual ~CanvasContext();
+	void closeWindow ();
 };
 
 class Canvas : public CanvasContext, public VulkanContext
@@ -98,10 +98,12 @@ public:
 		add_cref<uint32_t>			refreshCount;
 		add_cref<ZRenderPass>		renderPass;	// accessible after recreation
 		void recreate (ZRenderPass rp, uint32_t acquirableImageCount, uint32_t hintWidth = 0, uint32_t hintHeight = 0, bool force = false);
+		add_cref<bool> recreateFlag;
 	private:
 		// If rp has no handle then creates only images, otherwise views and framebuffers as well
 		void createFramebuffers (ZRenderPass rp, uint32_t minImageCount);
 		void destroyFramebuffers ();
+		void resetRecreateFlag () { m_recreateFlag = false; }
 		VkSwapchainKHR				m_handle;
 		Images						m_images;
 		Framebuffers				m_framebuffers;
@@ -111,6 +113,7 @@ public:
 		VkExtent2D					m_extent;
 		uint32_t					m_bufferCount;
 		ZRenderPass					m_renderPass;
+		bool						m_recreateFlag;
 	};
 
 	struct BackBuffer

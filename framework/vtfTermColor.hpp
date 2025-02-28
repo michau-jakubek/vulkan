@@ -54,11 +54,31 @@ struct TermColor
 	TermColor(Color color = END) : color_(color) {}
 	static void selfTest(add_ref<std::ostream> str);
 };
-inline TermColor color(TermColor::Color color = TermColor::END) {
-	return TermColor(color);
-}
 
-add_ref<std::ostream> operator<<(add_ref<std::ostream> str, add_cref<TermColor> color);
+//inline TermColor color(TermColor::Color color = TermColor::END) {
+//	return TermColor(color);
+//}
+//add_ref<std::ostream> operator<<(add_ref<std::ostream> str, add_cref<TermColor> color);
+
+template<class X> struct Colorizer
+{
+	add_cref<X> y;
+	TermColor::Color color;
+	bool restoreColor;
+	Colorizer (const X& x, TermColor::Color c, bool rc) : y(x), color(c), restoreColor(rc) {}
+};
+bool setConsoleColor (add_ref<std::ostream> console, TermColor::Color color);
+template<class X> add_ref<std::ostream> operator<< (add_ref<std::ostream> str, const Colorizer<X>& c)
+{
+	setConsoleColor(str, c.color);
+	str << c.y;
+	if (c.restoreColor) setConsoleColor(str, TermColor::Color::END);
+	return str;
+}
+template<class X> Colorizer<X> colorize (const X& x, TermColor::Color color, bool restoreColor = true)
+{
+	return Colorizer<X>(x, color, restoreColor);
+}
 
 } // namespace vtf
 

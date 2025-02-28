@@ -113,7 +113,7 @@ TriLogicInt runIntMatrixSingleThread (VulkanContext& ctx, const std::string& ass
 
 	const uint32_t			inOutBinding	= pl.addBinding<Binding>();
 	ZDescriptorSetLayout	dsLayout		= pl.createDescriptorSetLayout();
-	ZPipelineLayout			pipelineLayout	= pl.createPipelineLayout(dsLayout);
+	ZPipelineLayout			pipelineLayout	= pl.createPipelineLayout({ dsLayout });
 	ZPipeline				pipeline		= createComputePipeline(pipelineLayout, compShaderModule);
 	ZCommandPool			cmdPool			= createCommandPool(ctx.device, ctx.computeQueue);
 	ZCommandBuffer			cmdBuff			= allocateCommandBuffer(cmdPool);

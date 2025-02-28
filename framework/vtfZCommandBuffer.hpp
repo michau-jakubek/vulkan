@@ -62,15 +62,15 @@ VkResult		commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintF
  * Implicitly binds any descritor sets if these
  * have been created when pipeline layout was created.
  */
-void			commandBufferBindPipeline (ZCommandBuffer cmd, ZPipeline pipeline);
-void			commandBufferBinDescriptorSets (ZCommandBuffer cmd, ZPipelineLayout layout,
+void			commandBufferBindPipeline (ZCommandBuffer cmd, ZPipeline pipeline, bool bindDescriptorSets = true);
+void			commandBufferBindDescriptorSets (ZCommandBuffer cmd, ZPipelineLayout layout,
 												VkPipelineBindPoint bindingPoint);
 void			commandBufferBindVertexBuffers (ZCommandBuffer cmd, add_cref<VertexInput> input,
 												std::initializer_list<ZBuffer> externalBuffers = {},
 												std::initializer_list<VkDeviceSize> offsets = {});
 void			commandBufferSetVertexInputEXT (ZCommandBuffer cmd, add_cref<VertexInput> input);
 void			commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkDeviceSize offset = 0);
-void			commandBufferBindDescriptorBuffer (ZCommandBuffer cmd, ZBuffer buffer);
+void			commandBufferBindDescriptorBuffers (ZCommandBuffer, ZPipeline, std::initializer_list<ZBuffer>);
 void			commandBufferDispatch (ZCommandBuffer cmd, const UVec3& workGroupCount = UVec3(1,1,1));
 
 ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZFramebuffer framebuffer,
@@ -80,11 +80,13 @@ ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZRenderPa
 bool				 commandBufferNextSubpass (add_ref<ZRenderPassBeginInfo> beginInfo);
 void				 commandBufferEndRenderPass (add_cref<ZRenderPassBeginInfo> beginInfo);
 void				 commandBufferBeginRendering (ZCommandBuffer cmd, std::initializer_list<ZImageView> attachments,
-												  std::optional<std::vector<VkClearValue>> clearColors,
+												  std::optional<std::vector<VkClearValue>> clearColors = {},
 												  ZRenderingFlags renderingFlags = ZRenderingFlags());
 void				 commandBufferEndRendering (ZCommandBuffer cmd);
 void				 commandBufferSetViewport (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain);
 void				 commandBufferSetScissor (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain);
+void				 commandBufferSetDefaultDynamicStates (ZCommandBuffer cmdBuffer, add_cref<VertexInput> vertexInput,
+															add_cref<VkViewport> viewport, add_cptr<VkRect2D> pScissor = nullptr);
 
 void				commandBufferDrawIndirect (ZCommandBuffer cmd, ZBuffer buffer);
 void				commandBufferDrawIndexedIndirect (ZCommandBuffer cmd, ZBuffer buffer);

@@ -226,7 +226,7 @@ TriLogicInt runMultiViewSingleThread (Canvas& cs, const std::string& assets, con
 	struct						Binding1Type		{ Mat4 translateMatrix, scaleMatrix; } binding1Data;
 	const uint32_t				binding1Number		= pl.addBinding<Binding1Type>();
 	ZDescriptorSetLayout		dsLayout			= pl.createDescriptorSetLayout();
-	ZPipelineLayout				pipelineLayout		= pl.createPipelineLayout(dsLayout);
+	ZPipelineLayout				pipelineLayout		= pl.createPipelineLayout({dsLayout});
 	ZPipelineCreateFlags		pipelineCreateFlags	= useDeviceIndex
 														? ZPipelineCreateFlags(VK_PIPELINE_CREATE_VIEW_INDEX_FROM_DEVICE_INDEX_BIT)
 														: ZPipelineCreateFlags();
