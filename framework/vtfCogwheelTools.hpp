@@ -9,13 +9,25 @@ namespace vtf
 
 struct CogwheelDescription
 {
-	float D;
-	uint32_t Z;
-	float Ha;
-	float Hf;
+	float mainDiameter;
+	uint32_t toothCount;
+	float toothHeadHeight;
+	float toothFootHeight;
+	float toothToSpaceFactor; // 0>x>1, 0.5?
+	float angleStep; // 0.01 = 3.6 grad
+	float wholeDiameter;
 };
 
-std::vector<Vec2> makeCogwheel (add_cref<CogwheelDescription> cd, VkPrimitiveTopology topology);
+Vec2	involute	(float baseRadius, float theta, bool ccw = false, float angleOffset = 0.0f);
+Vec2	circle		(float radius, float theta, float cx = 0.0f, float cy = 0.0f);
+Vec2	rotate		(add_cref<Vec2> p, float angle);
+float	distance	(add_cref<Vec2> a, add_cref<Vec2> b);
+
+std::vector<Vec2> generateCogwheelOutlinePoints (add_cref<CogwheelDescription> cd);
+std::vector<Vec4> generateCogwheelPrimitives (add_cref<std::vector<Vec2>> outlinePoints, float componentZ,
+												VkPrimitiveTopology topology, VkFrontFace ff = VK_FRONT_FACE_CLOCKWISE);
+std::vector<Vec4> generateCogwheelToothSurface(add_cref<std::vector<Vec2>> outlinePoints, float frontZ, float backZ,
+												VkPrimitiveTopology topology, VkFrontFace ff = VK_FRONT_FACE_CLOCKWISE);
 
 /*
 * s_t - szerokosc zeba

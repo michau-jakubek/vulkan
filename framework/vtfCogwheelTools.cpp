@@ -7,7 +7,7 @@
 namespace vtf
 {
 
-Vec2 involute (float baseRadius, float theta, bool ccw = false, float angleOffset = 0.0f)
+Vec2 involute (float baseRadius, float theta, bool ccw, float angleOffset)
 {
 	const float dir = ccw ? -1.0f : +1.0f;
 	const float angle = theta + angleOffset;
@@ -16,7 +16,7 @@ Vec2 involute (float baseRadius, float theta, bool ccw = false, float angleOffse
 	return { x, y };
 }
 
-Vec2 circle (float radius, float theta, float cx = 0.0f, float cy = 0.0f)
+Vec2 circle (float radius, float theta, float cx, float cy)
 {
 	const float x = cx + radius * std::cos(theta);
 	const float y = cy + radius * std::sin(theta);
@@ -48,22 +48,25 @@ float distance (add_cref<Vec2> a, add_cref<Vec2> b)
 // pitch circle diameter (PCD)
 // dedendum circle diameter (root diameter) (D_f)
 
-std::vector<Vec2> makeCogwheel (add_cref<CogwheelDescription> cd, VkPrimitiveTopology topology)
+std::vector<Vec2> generateCogwheelOutlinePoints (add_cref<CogwheelDescription> cd)
 {
-	UNREF(topology);
-
 	std::vector<Vec4> t;
-	const float baseRadius = cd.D / 2.0f;
-	const float addenRadius = baseRadius + cd.Ha;
-	const float dedenRadius = baseRadius - cd.Hf;
+	const float baseRadius = cd.mainDiameter / 2.0f;
+	const float addenRadius = baseRadius + cd.toothHeadHeight;
+	const float dedenRadius = baseRadius - cd.toothFootHeight;
 
-	const float toothAndGapAngle = glm::two_pi<float>() / float(cd.Z);
-	const float addenToothAndGapArcLength = (glm::two_pi<float>() * addenRadius) / float(cd.Z);
-	const float addenToothArcLength = addenToothAndGapArcLength / 2.0f;
-	//const float addenToothArcAngle = addenToothArcLength / addenRadius;
+	const float toothAndGapAngle = glm::two_pi<float>() / float(cd.toothCount);
+	const float addenToothAndGapArcLength = toothAndGapAngle * addenRadius;
+	const float addenToothArcLength = addenToothAndGapArcLength * cd.toothToSpaceFactor;
+	const bool hasAxis = cd.wholeDiameter > 0.0f;
 
-	const float angleStep = 0.01f;
+	const float angleStep = cd.angleStep;
 	float phi = 0.0;
+
+	if (hasAxis)
+	{
+		//t.push_back(circle(cd.wholeDiameter, 0.0f).cast<Vec4>(cd.wholeDiameter, 0.0f));
+	}
 
 	// punkt na kole podstaw
 	t.push_back(circle(dedenRadius, 0.0f).cast<Vec4>(dedenRadius, 0.0f));
@@ -120,14 +123,119 @@ std::vector<Vec2> makeCogwheel (add_cref<CogwheelDescription> cd, VkPrimitiveTop
 	}
 
 	std::vector<Vec2> out;
+	out.reserve(t.size() * cd.toothCount);
 
-	for (uint32_t i = 0u; i < cd.Z; ++i)
+	for (uint32_t i = 0u; i < cd.toothCount; ++i)
 	{
-		std::transform(t.begin(), t.end(), std::back_inserter(out), 
+		std::transform(t.begin(), t.end(), std::back_inserter(out),
 			[&](add_cref<Vec4> v) { return rotate(v.cast<Vec2>(), float(i) * toothAndGapAngle); });
 	}
 
 	return out;
+}
+
+std::vector<Vec4> generateCogwheelPrimitives (add_cref<std::vector<Vec2>> outlinePoints, float componentZ,
+												VkPrimitiveTopology topology, VkFrontFace ff)
+{
+	if (VK_PRIMITIVE_TOPOLOGY_POINT_LIST == topology || VK_PRIMITIVE_TOPOLOGY_LINE_STRIP == topology)
+	{
+		std::vector<Vec4> v(outlinePoints.size());
+		std::transform(outlinePoints.begin(), outlinePoints.end(), v.begin(),
+			[&](add_cref<Vec2> u) { return Vec4(u.x(), u.y(), componentZ, 1.0f); });
+		return v;
+	}
+	else if (VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN == topology)
+	{
+		std::vector<Vec4> v(outlinePoints.size() + 1u);
+		v[0] = Vec4(0.0f, 0.0f, componentZ, 1.0f);
+		std::transform(outlinePoints.begin(), outlinePoints.end(), std::next(v.begin()),
+			[&](add_cref<Vec2> u) { return Vec4(u.x(), u.y(), componentZ, 1.0f); });
+		return v;
+	}
+	else if (VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST == topology)
+	{
+		const uint32_t pc = data_count(outlinePoints);
+		const uint32_t pcMax = pc ? (pc - 1u) : 0u;
+		std::vector<Vec4> v(pc * 3u);
+
+		for (uint32_t i = 0u; i < pcMax; ++i)
+		{
+			v[i * 3u] = Vec4(0.0f, 0.0f, componentZ, 1.0f);
+			if (VK_FRONT_FACE_CLOCKWISE == ff)
+			{
+				v[i * 3u + 1u] = Vec4(outlinePoints[i][0u], outlinePoints[i][1u], componentZ, 1.0f);
+				v[i * 3u + 2u] = Vec4(outlinePoints[i + 1u][0u], outlinePoints[i + 1u][1u], componentZ, 1.0f);
+			}
+			else
+			{
+				v[i * 3u + 1u] = Vec4(outlinePoints[i + 1u][0u], outlinePoints[i + 1u][1u], componentZ, 1.0f);
+				v[i * 3u + 2u] = Vec4(outlinePoints[i][0u], outlinePoints[i][1u], componentZ, 1.0f);
+			}
+		}
+		if (pcMax)
+		{
+			v[pcMax * 3u] = Vec4(0.0f, 0.0f, componentZ, 1.0f);
+			if (VK_FRONT_FACE_CLOCKWISE == ff)
+			{
+				v[pcMax * 3u + 1u] = Vec4(outlinePoints[pcMax][0u], outlinePoints[pcMax][1u], componentZ, 1.0f);
+				v[pcMax * 3u + 2u] = Vec4(outlinePoints[0u][0u], outlinePoints[0u][1u], componentZ, 1.0f);
+			}
+			else
+			{
+				v[pcMax * 3u + 1u] = Vec4(outlinePoints[0u][0u], outlinePoints[0u][1u], componentZ, 1.0f);
+				v[pcMax * 3u + 2u] = Vec4(outlinePoints[pcMax][0u], outlinePoints[pcMax][1u], componentZ, 1.0f);
+			}
+		}
+		return v;
+	}
+	else
+	{
+		ASSERTFALSE("Unknown topology");
+	}
+	return {};
+}
+
+
+std::vector<Vec4> generateCogwheelToothSurface(add_cref<std::vector<Vec2>> outlinePoints, float frontZ, float backZ,
+	VkPrimitiveTopology topology, VkFrontFace ff)
+{
+	if (VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST == topology)
+	{
+		const uint32_t pc = data_count(outlinePoints);
+		const uint32_t pcMax = pc ? (pc - 1u) : 0u;
+		std::vector<Vec4> v(pc * 6u);
+
+		for (uint32_t i = 0u; i < pcMax; ++i)
+		{
+			if (VK_FRONT_FACE_CLOCKWISE == ff)
+			{
+				v[i * 6u] = Vec4(outlinePoints[i].x(), outlinePoints[i].y(), frontZ, 1.0f);
+				v[i * 6u + 1u] = Vec4(outlinePoints[i].x(), outlinePoints[i].y(), backZ, 1.0f);
+				v[i * 6u + 2u] = Vec4(outlinePoints[i + 1u].x(), outlinePoints[i + 1u].y(), backZ, 1.0f);
+				v[i * 6u + 3u] = Vec4(outlinePoints[i + 1u].x(), outlinePoints[i + 1u].y(), backZ, 1.0f);
+				v[i * 6u + 4u] = Vec4(outlinePoints[i + 1u].x(), outlinePoints[i + 1u].y(), frontZ, 1.0f);
+				v[i * 6u + 5u] = Vec4(outlinePoints[i].x(), outlinePoints[i].y(), frontZ, 1.0f);
+			}
+		}
+		if (pcMax)
+		{
+			if (VK_FRONT_FACE_CLOCKWISE == ff)
+			{
+				v[pcMax * 6u] = Vec4(outlinePoints[pcMax].x(), outlinePoints[pcMax].y(), frontZ, 1.0f);
+				v[pcMax * 6u + 1u] = Vec4(outlinePoints[pcMax].x(), outlinePoints[pcMax].y(), backZ, 1.0f);
+				v[pcMax * 6u + 2u] = Vec4(outlinePoints[0u].x(), outlinePoints[0u].y(), backZ, 1.0f);
+				v[pcMax * 6u + 3u] = Vec4(outlinePoints[0u].x(), outlinePoints[0u].y(), backZ, 1.0f);
+				v[pcMax * 6u + 4u] = Vec4(outlinePoints[0u].x(), outlinePoints[0u].y(), frontZ, 1.0f);
+				v[pcMax * 6u + 5u] = Vec4(outlinePoints[pcMax].x(), outlinePoints[pcMax].y(), frontZ, 1.0f);
+			}
+		}
+		return v;
+	}
+	else
+	{
+		ASSERTFALSE("Unknown topology");
+	}
+	return {};
 }
 
 } // namespace vtf
