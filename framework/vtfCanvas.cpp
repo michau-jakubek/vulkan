@@ -560,7 +560,7 @@ void Canvas::Swapchain::recreate (ZRenderPass rp, uint32_t acquirableImageCount,
 	const VkCompositeAlphaFlagBitsKHR compositeAlpha = (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR)
 														? VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR
 														: VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-	VkPresentModeKHR mode = select_if(canvas.surfaceDetails.modes, VK_PRESENT_MODE_FIFO_KHR,
+	const VkPresentModeKHR mode = select_if(canvas.surfaceDetails.modes, VK_PRESENT_MODE_FIFO_KHR,
 									  [](const auto& m) { return (m == VK_PRESENT_MODE_MAILBOX_KHR || m == VK_PRESENT_MODE_IMMEDIATE_KHR); });
 
 	VkSwapchainCreateInfoKHR swapchainCreateInfo = {};
@@ -606,7 +606,7 @@ void Canvas::Swapchain::recreate (ZRenderPass rp, uint32_t acquirableImageCount,
 	{
 		++m_refreshCount;
 		VKASSERT(vkDeviceWaitIdle(*canvas.device));
-		vkDestroySwapchainKHR(*canvas.device, swapchainCreateInfo.oldSwapchain, canvas.callbacks);
+		di.vkDestroySwapchainKHR(*canvas.device, swapchainCreateInfo.oldSwapchain, canvas.callbacks);
 	}
 
 	createFramebuffers(rp, m_bufferCount);

@@ -118,16 +118,18 @@ public:
 
     using Features = std::vector<FeaturesVar>;
     DeviceCaps(add_cref<strings> extensions, ZPhysicalDevice device);
+    DeviceCaps(add_cref<DeviceCaps> other);
 
     bool hasPhysicalDeviceFeatures10 () const;
     bool hasPhysicalDeviceFeatures20 () const;
-    void updateDeviceCreateInfo (add_ref<VkDeviceCreateInfo> createInfo,
-                                 add_cref<VkPhysicalDeviceFeatures> merge, add_ref<Features> aux) const;
+    Features updateDeviceCreateInfo (add_ref<VkDeviceCreateInfo> createInfo) const;
     auto assertAlreadyExists (VkStructureType sType, FeaturesVar&& var) -> add_ref<FeaturesVar>;
 
+    uint32_t getFeatureCount () const { return data_count(m_features); }
     bool removeFeature (VkStructureType sType);
     template<typename FeatureStructure>
     bool removeFeature ()
+
     {
         return removeFeature(mkstype<FeatureStructure>);
     }

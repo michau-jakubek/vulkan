@@ -587,20 +587,33 @@ void commandBufferDrawIndexedIndirect (ZCommandBuffer cmd, ZBuffer buffer)
 												uint32_t(sizeof(VkDrawIndexedIndirectCommand)));
 }
 
-void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image, add_cref<VkClearColorValue> clearValue)
+void commandBufferResetQueryPool (ZCommandBuffer cmd, ZQueryPool queryPool)
 {
-	commandBufferClearColorImage(cmd, image, clearValue, imageMakeSubresourceRange(image));
+	const uint32_t queryCount = queryPool.getParam<uint32_t>();
+	vkCmdResetQueryPool(*cmd, *queryPool, 0u, queryCount);
+}
+
+ZQueryPoolBeginInfo commandBufferBeginQuery (ZCommandBuffer cmd, ZQueryPool pool, uint32_t query, VkQueryControlFlags flags)
+{
+	vkCmdBeginQuery(*cmd, *pool, query, flags);
+	return { cmd, pool, query };
+}
+
+void commandBufferEndQuery (add_cref<ZQueryPoolBeginInfo> queryPoolBeginInfo)
+{
+	vkCmdEndQuery(*queryPoolBeginInfo.cmd, *queryPoolBeginInfo.pool, queryPoolBeginInfo.query);
+}
+
+void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image, add_cref<VkClearColorValue> clearValue, VkImageLayout finalLayout)
+{
+	commandBufferClearColorImage(cmd, image, clearValue, imageMakeSubresourceRange(image), finalLayout);
 }
 
 void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image,
 								   add_cref<VkClearColorValue> clearValue,
-								   add_cref<VkImageSubresourceRange> range)
+								   add_cref<VkImageSubresourceRange> range,
+								   VkImageLayout finalLayout)
 {
-	const VkImageLayout layout = imageGetLayout(image);
-	const VkImageLayout finalLayout = (layout == VK_IMAGE_LAYOUT_GENERAL
-									   || layout == VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR
-									   || layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-										? layout : VK_IMAGE_LAYOUT_GENERAL;
 	ZImageMemoryBarrier prepare(image, VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
 								VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, range);
 	ZImageMemoryBarrier verify(image, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_NONE,

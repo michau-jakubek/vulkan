@@ -6,13 +6,12 @@
 namespace vtf
 {
 
-void				imageCopyToBuffer	(ZCommandPool commandPool, ZImage image, ZBuffer buffer,
-										 uint32_t baseLevel = 0u, uint32_t levels = 1u,
-										 uint32_t baseLayer = 0u, uint32_t layers = 1u);
+void				imageCopyToBuffer	(ZCommandPool commandPool, ZImage image, ZBuffer buffer);
 void				imageCopyToBuffer	(ZCommandBuffer commandBuffer, ZImage image, ZBuffer buffer,
 										 VkAccessFlags srcImageAccess, VkAccessFlags dstImageAccess,
 										 VkAccessFlags srcBufferAccess, VkAccessFlags dstBufferAccess,
 										 VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage,
+										 VkImageLayout targetImageLayout = VK_IMAGE_LAYOUT_MAX_ENUM,
 										 uint32_t baseLevel = 0u, uint32_t levelCount = 1u,
 										 uint32_t baseLayer = 0u, uint32_t layerCount = 1u);
 void				imageCopyToBuffer2 (ZCommandBuffer commandBuffer,
@@ -34,7 +33,7 @@ void				bufferCopyToImage	(ZCommandBuffer cmdBuffer, ZBuffer buffer, ZImage imag
 										 VkAccessFlags srcBufferAccess, VkAccessFlags dstBufferAccess,
 										 VkAccessFlags srcImageAccess, VkAccessFlags dstImageAccess,
 										 VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage,
-										 VkImageLayout finalImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+										 VkImageLayout finalImageLayout = VK_IMAGE_LAYOUT_GENERAL,
 										 uint32_t baseLevel = 0u, uint32_t levelCount = 1u,
 										 uint32_t baseLayer = 0u, uint32_t layerCount = 1u);
 void				imageCopyToImage	(ZCommandBuffer cmdBuffer, ZImage srcImage, ZImage dstImage,

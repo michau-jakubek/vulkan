@@ -383,25 +383,25 @@ template bool between (const int& paramValue, const int& paramMin, const int& pa
 template bool between (const float& paramValue, const float& paramMin, const float& paramMax);
 template bool between (const uint32_t& paramValue, const uint32_t& paramMin, const uint32_t& paramMax);
 
-FPS::FPS (Printer callback)
+FPS::FPS (Printer callback, float triggerInSeconds)
 	: fps		(0.0f)
 	, bestFPS	(0.0f)
 	, worstFPS	(99999.0f)
 	, totalTime	(0.0f)
+	, trigger	(triggerInSeconds)
 	, frameCount(0)
 	, printer	(callback)
-	, startTime	(std::chrono::high_resolution_clock::now())
-	, lastTime	(startTime) {}
+	, lastTime	(std::chrono::high_resolution_clock::now()) {}
 
 void FPS::touch() {
 	auto currentTime = std::chrono::high_resolution_clock::now();
-	std::chrono::duration<float> deltaTime = currentTime - lastTime;
+	std::chrono::duration<float, std::ratio<1>> deltaTime = currentTime - lastTime;
 	lastTime = currentTime;
 
 	totalTime += deltaTime.count();
 	frameCount++;
 
-	if (totalTime >= 1.0f) {
+	if (totalTime >= trigger) {
 		fps = float(frameCount) / totalTime;
 		bestFPS = std::max(fps, bestFPS);
 		worstFPS = std::min(fps, worstFPS);
@@ -414,8 +414,7 @@ void FPS::reset() {
 	fps = 0.0f;
 	frameCount = 0;
 	totalTime = 0.0f;
-	startTime = std::chrono::high_resolution_clock::now();
-	lastTime = startTime;
+	lastTime = std::chrono::high_resolution_clock::now();
 	bestFPS = 0.0f;
 	worstFPS = 99999.0f;
 }

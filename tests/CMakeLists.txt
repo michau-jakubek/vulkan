@@ -48,6 +48,10 @@ set(tests_files
     shaderObjectComputeTests.hpp
 	descriptorBufferTests.cpp
 	descriptorBufferTests.hpp
+	intGeomTests.cpp
+	intGeomTests.hpp
+	cogWheelsTests.cpp
+	cogWheelsTests.hpp
     )
 
 if(ENABLE_DAEMON_TEST)

@@ -138,6 +138,13 @@ DeviceCaps::DeviceCaps (add_cref<strings> extensions, ZPhysicalDevice device)
 {
 }
 
+DeviceCaps::DeviceCaps(add_cref<DeviceCaps> other)
+    : m_features(other.m_features)
+    , availableExtensions(other.availableExtensions)
+    , physicalDevice(other.physicalDevice)
+{
+}
+
 VkBool32 DeviceCaps::checkNotSupportedFeature (
     add_cref<std::string> structName,
     add_cptr<char> fieldNameAndDescription,
@@ -306,88 +313,51 @@ bool DeviceCaps::hasPhysicalDeviceFeatures20 () const
     return info.address;
 }
 
-void DeviceCaps::updateDeviceCreateInfo (add_ref<VkDeviceCreateInfo> createInfo,
-                                         add_cref<VkPhysicalDeviceFeatures> merge, add_ref<Features> aux) const
+DeviceCaps::Features DeviceCaps::updateDeviceCreateInfo (add_ref<VkDeviceCreateInfo> createInfo) const
 {
-    int featureCount = static_cast<int>(m_features.size());
+    FeatureInfo auxInfo;
+    DeviceCaps tmp(*this);
+    Features aux(traverseFeatures(FeatureVisitor::Mode::Chaining, tmp.m_features, VkStructureType(0), auxInfo));
 
-    const FeatureInfo info10 = getFeatureInfo(VK_STRUCTURE_TYPE_MAX_ENUM, m_features);
-    const FeatureInfo info20 = getFeatureInfo(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, m_features);
+    const FeatureInfo info10 = getFeatureInfo(VK_STRUCTURE_TYPE_MAX_ENUM, aux);
+    const FeatureInfo info20 = getFeatureInfo(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, aux);
 
     const bool has10 = (nullptr != info10.address);
     const bool has20 = (nullptr != info20.address);
 
-    if (has10) featureCount = featureCount - 1;
-    if (has20) featureCount = featureCount - 1;
-
-    if (has10 && has20)
+    if (has10)
     {
-        ASSERTFALSE("Only one extension, F1 or F2 can be added to the list");
-    }
+        const uint32_t fc = uint32_t(sizeof(VkPhysicalDeviceFeatures) / sizeof(VkBool32));
 
-    if (has20 && (featureCount <= 0))
-    {
-        ASSERTFALSE("F2 cannot appear in the list if no other string extensions are defined");
-    }
-
-    bool use20 = false;
-    DeviceCaps tmp(*this);
-    if (false == has20)
-    {
-        if (featureCount > 0)
+        if (has20)
         {
-            VkPhysicalDeviceFeatures2 f2{};
+            add_cptr<VkPhysicalDeviceFeatures> fsrc =
+                reinterpret_cast<add_cptr<VkPhysicalDeviceFeatures>>(info10.address);
+            add_ptr<VkPhysicalDeviceFeatures> fdst =
+                &reinterpret_cast<add_ptr<VkPhysicalDeviceFeatures2>>(info20.address)->features;
 
-            if (has10)
+            auto src = reinterpret_cast<add_cptr<VkBool32>>(fsrc);
+            auto dst = reinterpret_cast<add_ptr<VkBool32>>(fdst);
+            for (uint32_t fi = 0u; fi < fc; ++fi)
             {
-                f2.features = *reinterpret_cast<add_cptr<VkPhysicalDeviceFeatures>>(info10.address);
-                const uint32_t fc = uint32_t(sizeof(merge) / sizeof(VkBool32));
-                auto src = reinterpret_cast<add_cptr<VkBool32>>(&merge);
-                auto dst = reinterpret_cast<add_ptr<VkBool32>>(&f2.features);
-                for (uint32_t fi = 0u; fi < fc; ++fi)
-                {
-                    if (src[fi] != VK_FALSE)
-                        dst[fi] = src[fi];
-                }
-                tmp.removeFeature(VK_STRUCTURE_TYPE_MAX_ENUM);
-            }
-            else
-            {
-                f2.features = merge;
+                if (dst[fi])    dst[fi] = VK_TRUE;
+                if (src[fi])   dst[fi] = VK_TRUE;
             }
 
-            tmp.addUpdateFeature(f2);
-            use20 = true;
+            createInfo.pNext = auxInfo.address;
+            createInfo.pEnabledFeatures = nullptr;
         }
-        else if (false == has10)
+        else
         {
-            tmp.addUpdateFeature(merge);
-            use20 = false;
+            add_ptr<VkPhysicalDeviceFeatures> fdst =
+                reinterpret_cast<add_ptr<VkPhysicalDeviceFeatures>>(info10.address);
+
+            createInfo.pNext = auxInfo.address;
+            createInfo.pEnabledFeatures = fdst;
         }
     }
-    else if (false == has10)
-    {
-        use20 = false;
-        tmp.addUpdateFeature(merge);
-    }
 
-    FeatureInfo tmpInfo20;
-    aux = traverseFeatures(FeatureVisitor::Mode::Chaining, tmp.m_features, VkStructureType(0), tmpInfo20);
-    FeatureInfo tmpInfo10 = getFeatureInfo(VK_STRUCTURE_TYPE_MAX_ENUM, aux);
-
-    if (use20)
-    {
-        ASSERTION(tmpInfo20.address);
-        ASSERTION(nullptr == tmpInfo10.address);
-    }
-    else
-    {
-        ASSERTION(nullptr == tmpInfo20.address);
-        ASSERTION(tmpInfo10.address);
-    }
-
-    createInfo.pNext = tmpInfo20.address;
-    createInfo.pEnabledFeatures = reinterpret_cast<add_ptr<VkPhysicalDeviceFeatures>>(tmpInfo10.address);
+    return aux;
 }
 
 } // namespace vtf

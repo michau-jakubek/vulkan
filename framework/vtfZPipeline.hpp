@@ -44,6 +44,7 @@ using AttachmentCount		= ZDistType<AttachmentCount, uint32_t>;
 using BlendAttachmentState	= ZDistType<BlendAttachmentState, std::pair<uint32_t, VkPipelineColorBlendAttachmentState>>;
 using BlendConstants		= ZDistType<BlendConstants, Vec4>;
 using SpecConstants			= ZDistType<SpecConstants, std::pair<VkShaderStageFlagBits, add_ref<ZSpecializationInfo>>>;
+using PrimitiveRestart		= ZDistType<PrimitiveRestart, bool>;
 
 	// VkExtent2D	sets both viewport and scissor
 	// VkViewport	sets viewport only
@@ -76,6 +77,7 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::Attach
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::BlendAttachmentState>	blendAttachmentState);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::BlendConstants>		blendConstants);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::SpecConstants>		specConstants);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::PrimitiveRestart>		primitiveRestartEnable);
 
 // end of template recursion
 void updateSettings (add_ref<GraphicPipelineSettings>);

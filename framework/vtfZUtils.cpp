@@ -208,22 +208,16 @@ ZRenderPass	createRenderPassImpl (ZDevice device, void* pNext,
 		desc.format	= colorFormats.at(attachment);
 		if (attachment < clearColorCount)
 		{
-			if (0u != pClearColors->at(attachment).color.uint32[3])
-			{
-				desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-				desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-				desc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-			}
-			else
-			{
-				desc.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-				desc.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
-				desc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-			}
+			desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		}
-		else if (initialColorLayout != VK_IMAGE_LAYOUT_UNDEFINED)
+		else if (initialColorLayout == VK_IMAGE_LAYOUT_MAX_ENUM)
 		{
-			desc.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+			desc.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			desc.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+		}
+		else
+		{
+			desc.loadOp =  VK_ATTACHMENT_LOAD_OP_LOAD;
 		}
 		references.at(attachment).attachment = attachment;
 	}
@@ -887,7 +881,6 @@ ZDevice createLogicalDevice	(
 	add_cref<strings>	availableExtensions(physDevice.getParamRef<ZDistType<AvailableDeviceExtensions, strings>>().get());
 	add_cref<strings>	desiredExtensions(physDevice.getParamRef<ZDistType<DesiredRequiredDeviceExtensions, strings>>().get());
 
-	DeviceCaps::Features deviceCapsFeatures;
 	DeviceCaps deviceCaps(availableExtensions, physDevice);
 
 	add_ref<strings> requiredExtensions(deviceCaps.requiredExtension);
@@ -896,8 +889,11 @@ ZDevice createLogicalDevice	(
 
 	if (onEnablingFeatures)
 	{
-		onEnablingFeatures(deviceCaps);
+		onEnablingFeatures(std::ref(deviceCaps));
 	}
+	deviceCaps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::fragmentStoresAndAtomics);
+	deviceCaps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::vertexPipelineStoresAndAtomics);
+
 
 	//if (enableDebugPrintf)
 	//{
@@ -919,14 +915,7 @@ ZDevice createLogicalDevice	(
 	createInfo.enabledLayerCount		= data_count(layers);
 	createInfo.ppEnabledLayerNames		= data_or_null(layers);
 
-	VkPhysicalDeviceFeatures merge{};
-	{
-		VkPhysicalDeviceFeatures tmp{};
-		ii.vkGetPhysicalDeviceFeatures(*physDevice, &tmp);
-		merge.vertexPipelineStoresAndAtomics = tmp.vertexPipelineStoresAndAtomics;
-		merge.fragmentStoresAndAtomics = tmp.fragmentStoresAndAtomics;
-	}
-	deviceCaps.updateDeviceCreateInfo(createInfo, merge, deviceCapsFeatures);
+	DeviceCaps::Features deviceCapsFeatures(deviceCaps.updateDeviceCreateInfo(createInfo));
 
 	if (getGlobalAppFlags().verbose)
 	{
@@ -1223,6 +1212,29 @@ ZSemaphore createSemaphore (ZDevice device)
 	VKASSERT(vkCreateSemaphore(*device, &semInfo, callbacks, &handle));
 
 	return ZSemaphore::create(handle, device, callbacks);
+}
+
+ZQueryPool createQueryPool (ZDevice device, VkQueryType type, VkQueryPipelineStatisticFlags stats,
+							uint32_t count, VkQueryPoolCreateFlags flags)
+{
+	auto		callbacks = device.getParam<VkAllocationCallbacksPtr>();
+	VkQueryPool	queryPool = VK_NULL_HANDLE;
+	VkQueryPoolCreateInfo	queryPoolInfo{};
+	queryPoolInfo.sType					= VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+	queryPoolInfo.flags					= flags;
+	queryPoolInfo.queryType				= type;
+	queryPoolInfo.pipelineStatistics	= stats;
+	queryPoolInfo.queryCount			= count;
+	//add_cref<ZDeviceInterface> di = device.getInterface();
+	VKASSERT(vkCreateQueryPool(*device, &queryPoolInfo, callbacks, &queryPool));
+	// VUID - vkCmdCopyQueryPoolResults - None - 09402(ERROR / SPEC) : msgNum : -1161729443 - Validation Error :
+	// [VUID - vkCmdCopyQueryPoolResults - None - 09402] Object 0 : type = VK_OBJECT_TYPE_QUERY_POOL;
+	// | MessageID = 0xbac16a5d | vkCmdCopyQueryPoolResults() :
+	// query not reset.After query pool creation, each query must be reset before it is used.
+	// Queries must also be reset between uses. The Vulkan spec states:
+	// All queries used by the command must not be uninitialized when the command is executed.
+	//di.vkResetQueryPool(*device, queryPool, 0u, count);
+	return ZQueryPool::create(queryPool, device, callbacks, count);
 }
 
 ZImageView framebufferGetView (ZFramebuffer framebuffer, uint32_t index)

@@ -607,7 +607,7 @@ bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 	const fs::path binPath(pathName + ".spvbin");
 	const fs::path asmPath(pathName + ".spvasm");
 	const std::string compilerExecutable = getCompilerExecutable();
-	if (!fs::exists(textPath))
+	if (buildAlways || !fs::exists(textPath))
 	{
 		if (shaderCode.empty())
 		{

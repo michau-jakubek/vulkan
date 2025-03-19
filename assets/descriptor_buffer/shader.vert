@@ -6,9 +6,10 @@ layout(location = 0) out vec2 outCoords;
 layout(location = 1) out uint model;
 layout(binding = 0) uniform InData1 { uint inData1[64]; };
 layout(binding = 6) uniform InData2 { uint inData2[64]; };
-//layout(binding = 7, r32ui) uniform uimage2D storageImage;
 
+layout(set = 0, binding = 7, r32ui) uniform uimage2D storageImage1;
 layout(set = 1, binding = 0, r32ui) uniform uimage2D storageImage2;
+
 layout(set = 1, binding = 1) uniform Mats {
 	mat4 model1, model2;
 	mat4 view, projection;
@@ -27,7 +28,7 @@ void main()
 
 	if (gl_VertexIndex == 0)
 	{
-		imageStore(storageImage2, ivec2(0,1), uvec4(inData1[1]));
+		imageStore(storageImage1, ivec2(0,1), uvec4(inData1[1]));
 		imageStore(storageImage2, ivec2(1,1), uvec4(inData2[1]));
 	}
 }

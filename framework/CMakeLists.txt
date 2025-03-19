@@ -84,6 +84,8 @@ set(framework_files
 	vtfZSpecializationInfo.hpp
 	vtfZPushConstants.cpp
 	vtfZPushConstants.hpp
+	vtfCogwheelTools.cpp
+	vtfCogwheelTools.hpp
 )
 
 set(framework_libs pdriver driver)

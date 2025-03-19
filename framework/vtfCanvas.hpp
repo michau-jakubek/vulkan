@@ -171,7 +171,7 @@ public:
 	// Extension list is a full list of the extensions achieved from physical device so basically you
 	// might need to remove particular extension string instead of add new one.
 	// Typically a signature and a body of that callback would look like this:
-	// auto onEnablingFeatures = [](ZPhysicalDevice physicalDevice, add_ref<strings> extensions)
+	// auto onEnablingFeatures = [](add_ref<DeviceCaps> caps) -> void
 	// {
 	// };
 	Canvas	(add_cptr<char>			appName,

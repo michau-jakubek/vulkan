@@ -1655,7 +1655,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 		const VkFormat colorFormat = VkFormat(currParams.colorFormat);
 		colorImage			= ctx.createColorImage2D(colorFormat, TestParams::defaultExtent);
 		colorView			= createImageView(colorImage);
-		colorRenderPass		= createColorRenderPass(ctx.device, { colorFormat });
+		colorRenderPass		= createColorRenderPass(ctx.device, { colorFormat }, {}, VK_IMAGE_LAYOUT_GENERAL);
 		colorFB				= createFramebuffer(colorRenderPass, TestParams::defaultExtent, { colorView });
 		colorBuffer			= createBuffer(colorImage, ZBufferUsageStorageFlags, ZMemoryPropertyHostFlags);
 
@@ -1752,7 +1752,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 		commandBufferEnd(displayCmd);
 	};
 
-	ZRenderPass swapRenderPass = createColorRenderPass(ctx.device, { ctx.surfaceFormat });
+	ZRenderPass swapRenderPass = createColorRenderPass(ctx.device, { ctx.surfaceFormat }, {}, VK_IMAGE_LAYOUT_MAX_ENUM);
 
 	std::vector<BoolVec4> results(data_count(set));
 	auto onAfterRecording = [&](add_ref<Canvas>) -> void

@@ -141,6 +141,7 @@ public:
 	 */
 	template<class Data__> void				readBinding					(uint32_t binding, Data__& data) const;
 	uint32_t								getBindingElementCount		(uint32_t binding) const;
+	bool									containsSamplers			() const;
 	VarDescriptorInfo						getDescriptorInfo			(uint32_t binding) const;
 	/**
 	 * Creates descriptor set layout object based on bindings collected

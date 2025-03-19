@@ -343,7 +343,7 @@ enum ZDistName
 	RequiredLayerExtensions,	AvailableLayerExtensions,
 	DesiredRequiredDeviceExtensions,	AvailableDeviceExtensions,
 	Width, Height, Depth,		PatchControlPoints, SubpassIndex,
-	LayoutIdentifier,
+	LayoutIdentifier, PrimitiveRestart,
 	SizeFirst, SizeSecond, SizeThird,
 	VtfVer, ApiVer, VulkanVer, SpirvVer,
 	QueueFamilyIndex, QueueIndex, QueueFlags,
@@ -583,6 +583,12 @@ typedef ZDeletable<VkPipeline,
 	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
 	ZPipelineLayout, ZRenderPass, VkPipelineBindPoint, VkPipelineCreateFlags>
 ZPipeline;
+
+typedef ZDeletable<VkQueryPool,
+	decltype(&vkDestroyQueryPool), &vkDestroyQueryPool,
+	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
+	uint32_t>
+ZQueryPool;
 
 #endif // __VTF_ZDELETABLE_HPP_INCLUDED__
  

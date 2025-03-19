@@ -91,6 +91,16 @@ void				 commandBufferSetDefaultDynamicStates (ZCommandBuffer cmdBuffer, add_cre
 void				commandBufferDrawIndirect (ZCommandBuffer cmd, ZBuffer buffer);
 void				commandBufferDrawIndexedIndirect (ZCommandBuffer cmd, ZBuffer buffer);
 
+struct ZQueryPoolBeginInfo
+{
+	ZCommandBuffer	cmd;
+	ZQueryPool		pool;
+	uint32_t		query;
+};
+void				commandBufferResetQueryPool (ZCommandBuffer cmd, ZQueryPool queryPool);
+ZQueryPoolBeginInfo	commandBufferBeginQuery (ZCommandBuffer cmd, ZQueryPool pool, uint32_t query, VkQueryControlFlags = 0);
+void				commandBufferEndQuery (add_cref<ZQueryPoolBeginInfo> queryPoolBeginInfo);
+
 template<std::size_t I>
 bool __verifyPushConstants (add_cref<std::vector<type_index_with_default>>,
 							add_cref<std::vector<VkPushConstantRange>>)
@@ -158,9 +168,10 @@ void commandBufferPushConstants (ZCommandBuffer cmd, ZPipelineLayout layout, PC_
 
 void commandBufferBindShaders (ZCommandBuffer cmd, std::initializer_list<ZShaderObject> shaders);
 void commandBufferUnbindShaders (ZCommandBuffer cmd, std::initializer_list<ZShaderObject> shaders);
-void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image, add_cref<VkClearColorValue> clearValue);
-void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image,
-								   add_cref<VkClearColorValue> clearValue, add_cref<VkImageSubresourceRange> range);
+void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image, add_cref<VkClearColorValue> clearValue,
+									VkImageLayout finalLayout = VK_IMAGE_LAYOUT_GENERAL);
+void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image, add_cref<VkClearColorValue> clearValue,
+									add_cref<VkImageSubresourceRange> range, VkImageLayout finalLayout = VK_IMAGE_LAYOUT_GENERAL);
 void commandBufferBlitImage			(ZCommandBuffer cmd, ZImage srcImage, ZImage dstImage, VkFilter = VK_FILTER_LINEAR);
 void commandBufferBlitImage			(ZCommandBuffer cmd, ZImage srcImage, ZImage dstImage,
 									 VkImageSubresourceLayers srcSubresource,

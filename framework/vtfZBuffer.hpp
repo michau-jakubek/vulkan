@@ -142,7 +142,7 @@ template<class T, std::size_t N>
 void bufferRead (ZBuffer buffer, T (&table)[N])
 {
 	const VkDeviceSize	bufferSize	= buffer.getParam<VkDeviceSize>();
-	const uint32_t		count		= bufferSize / sizeof(T);
+	const uint32_t		count		= uint32_t(bufferSize / sizeof(T));
 	ASSERTMSG(count <= N, "Array size must accomodate all buffer data");
 	const VkDeviceSize	readSize	= count * sizeof(T);
 	bufferReadData(buffer, reinterpret_cast<add_ptr<uint8_t>>(&table[0]), readSize);

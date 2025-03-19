@@ -599,17 +599,14 @@ VkImageSubresourceLayers imageMakeSubresourceLayers (ZImage image, uint32_t mipL
 	return res;
 }
 
-void imageCopyToBuffer (ZCommandPool commandPool, ZImage image, ZBuffer buffer,
-						uint32_t baseLevel, uint32_t levels,
-						uint32_t baseLayer, uint32_t layers)
+void imageCopyToBuffer (ZCommandPool commandPool, ZImage image, ZBuffer buffer)
 {
 	auto shotCommand = createOneShotCommandBuffer(commandPool);
 	imageCopyToBuffer(shotCommand->commandBuffer, image, buffer,
 					  VK_ACCESS_NONE, VK_ACCESS_NONE,
 					  VK_ACCESS_NONE, VK_ACCESS_NONE,
 					  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-					  baseLevel, levels,
-					  baseLayer, layers);
+					  VK_IMAGE_LAYOUT_GENERAL);
 }
 
 void imageCopyToBuffer (ZCommandBuffer commandBuffer,
@@ -617,6 +614,7 @@ void imageCopyToBuffer (ZCommandBuffer commandBuffer,
 						VkAccessFlags srcImageAccess, VkAccessFlags dstImageAccess,
 						VkAccessFlags srcBufferAccess, VkAccessFlags dstBufferAccess,
 						VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage,
+						VkImageLayout targetImageLayout,
 						uint32_t baseLevel, uint32_t levelCount,
 						uint32_t baseLayer, uint32_t layerCount)
 {
@@ -631,7 +629,8 @@ void imageCopyToBuffer (ZCommandBuffer commandBuffer,
 
 	const uint32_t				pixelSize		= make_unsigned(computePixelByteSize(createInfo.format));
 	const VkImageAspectFlags	aspect			= formatGetAspectMask(createInfo.format);
-	const VkImageLayout			preservedLayout	= imageGetLayout(image);
+	const VkImageLayout			preservedLayout	= (VK_IMAGE_LAYOUT_MAX_ENUM == targetImageLayout)
+													? imageGetLayout(image) : targetImageLayout;
 	const VkImageLayout			newLayout		= (preservedLayout == VK_IMAGE_LAYOUT_UNDEFINED)
 													? VK_IMAGE_LAYOUT_GENERAL : preservedLayout;
 

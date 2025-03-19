@@ -105,6 +105,9 @@ void			resetFences		(std::vector<ZFence> fences);
 bool			fenceStatus		(ZFence fence);
 ZSemaphore		createSemaphore	(ZDevice device);
 
+ZQueryPool		createQueryPool	(ZDevice device, VkQueryType type, VkQueryPipelineStatisticFlags stats,
+								 uint32_t count = 1u, VkQueryPoolCreateFlags flags = 0);
+
 ZShaderModule	createShaderModule (ZDevice device, VkShaderStageFlagBits stage,
                                     add_cref<std::vector<char>> code, add_cref<std::string> entryName);
 

@@ -772,6 +772,19 @@ size_t getDescriptorBindingSize (add_cref<VkPhysicalDeviceDescriptorBufferProper
 					});
 }
 
+bool LayoutManager::containsSamplers () const
+{
+	for (add_cref<VkDescriptorSetLayoutBindingAndType> b : m_extbindings)
+	{
+		if (b.descriptorType == VK_DESCRIPTOR_TYPE_SAMPLER ||
+			b.descriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 ZBuffer LayoutManager::createDescriptorBuffer (ZDescriptorSetLayout dsLayout)
 {
 	const uint32_t myID = getIdentifier();
@@ -792,10 +805,11 @@ ZBuffer LayoutManager::createDescriptorBuffer (ZDescriptorSetLayout dsLayout)
 	//const uint32_t bindingSize = uint32_t(layoutSize);
 	//layoutSize *= m_extbindings.size();
 
-	ZBufferUsageFlags usage(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-							VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+	ZBufferUsageFlags usage(VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 							VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
-							VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT);
+							containsSamplers()
+								? VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT
+								: VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT);
 	ZBuffer descBuffer = createBuffer(device, layoutSize, usage, ZMemoryPropertyHostFlags);
 
 	uint8_t* data = nullptr;

@@ -325,6 +325,11 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gp
 	settings.m_shaderPerStageSpecs[specConstants.get().first] = &specConstants.get().second;
 }
 
+void updateKnownSettings(add_ref<GraphicPipelineSettings> settings, add_cref<gpp::PrimitiveRestart> primitiveRestartEnable)
+{
+	settings.m_assemblyState.primitiveRestartEnable = primitiveRestartEnable ? VK_TRUE : VK_FALSE;
+}
+
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZRenderPass renderPass)
 {
 	settings.m_renderPass = renderPass;

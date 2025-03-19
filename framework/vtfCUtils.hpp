@@ -426,14 +426,13 @@ private:
 
 struct FPS
 {
-	float fps, bestFPS, worstFPS, totalTime;
+	float fps, bestFPS, worstFPS, totalTime, trigger;
 	int frameCount;
 	using Printer = std::function<
 		void(float fps, float totalTime, float bestFPS, float worstFPS)>;
 	Printer printer;
-	std::chrono::high_resolution_clock::time_point startTime;
 	std::chrono::high_resolution_clock::time_point lastTime;
-	FPS (Printer callback);
+	FPS (Printer callback, float triggerInSeconds = 1.0f);
 	void touch ();
 	void reset ();
 };

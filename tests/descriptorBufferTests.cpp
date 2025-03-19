@@ -311,6 +311,7 @@ void makeVertices (add_ref<VertexInput> input)
 
 TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 {
+	const VkFormat stoFormat = VK_FORMAT_R32_UINT;
 	const std::string face1FileName = (fs::path(params.m_assets) / "dice_texture.png").string();
 	{
 		uint32_t	imageWidth = 0;
@@ -321,6 +322,10 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 			(formatGetProperties(deviceGetPhysicalDevice(canvas.device), imageFormat)
 				.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT);
 		ASSERTMSG(samplingSupported, formatGetInfo(imageFormat).name, " doesn't support sampling");
+		const bool storingSupported = 0 !=
+			(formatGetProperties(deviceGetPhysicalDevice(canvas.device), imageFormat)
+				.optimalTilingFeatures & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT);
+		ASSERTMSG(storingSupported, formatGetInfo(imageFormat).name, " doesn't support storing");
 	}
 
 	const bool calcFrameRate = params.m_fps;
@@ -335,14 +340,14 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 	ZBuffer				face1Data	= createBufferAndLoadFromImageFile(canvas.device,
 											face1FileName, ZBufferUsageStorageFlags, 4);
 	ZImage				face1Image	= createImageFromFileMetadata(canvas.device, face1Data, faceUsage,
-											(false == useDescriptorSet));
+																	(false == useDescriptorSet));
 	ZImageView			face1View	= createImageView(face1Image);
 	ZSampler			sampler		= createSampler(face1View, true, true, false, params.m_samplerAnisotropy);
-	ZImage				stoImage	= createImage(canvas.device, VK_FORMAT_R32_UINT, VK_IMAGE_TYPE_2D, 2, 3,
+	ZImage				stoImage	= createImage(canvas.device, stoFormat, VK_IMAGE_TYPE_2D, 2, 3,
 													stoUsage, VK_SAMPLE_COUNT_1_BIT, 1u, 1u, 1u, (false == useDescriptorSet));
 	ZImageView			stoView		= createImageView(stoImage);
 
-	VertexInput				vertexInput	(canvas.device);
+	VertexInput			vertexInput	(canvas.device);
 	makeVertices(vertexInput);
 
 	ProgramCollection	prg			(canvas.device, params.m_assets);
@@ -394,7 +399,8 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 	ZPipeline				compPline	= createComputePipeline(pLayout, compShader);
 	ZBuffer					desc0Buffer	= useDescriptorSet ? ZBuffer() : set0.createDescriptorBuffer(ds0Layout);
 	ZBuffer					desc1Buffer = useDescriptorSet ? ZBuffer() : set1.createDescriptorBuffer(ds1Layout);
-	ZRenderPass				renderPass	= createColorRenderPass(canvas.device, { canvas.surfaceFormat });
+	ZRenderPass				renderPass	= createColorRenderPass(canvas.device, { canvas.surfaceFormat },
+																{ makeClearColor(Vec4(0,0,0,1)) });
 	ZPipeline				graphPline	= createGraphicsPipeline(pLayout, renderPass, vertShader, fragShader, vertexInput,
 																VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR,
 																gpp::DepthTestEnable(true));
@@ -416,6 +422,17 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 		std::fill(stoData.begin(), stoData.end(), (startElem1 + startElem2));
 		bufferWrite(inStoBuffer, stoData);
 	}
+	{
+		OneShotCommandBuffer shot(canvas.device, canvas.graphicsQueue);
+		bufferCopyToImage(shot.commandBuffer, face1Data, face1Image,
+			VK_ACCESS_NONE, VK_ACCESS_NONE,
+			VK_ACCESS_NONE, VK_ACCESS_NONE,
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+		bufferCopyToImage(shot.commandBuffer, inStoBuffer, stoImage,
+			VK_ACCESS_NONE, VK_ACCESS_NONE,
+			VK_ACCESS_NONE, VK_ACCESS_NONE,
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+	}
 
 	MULTI_UNREF(inBinding1, inBinding2, outBinding1, outBinding2, samBinding, imgBinding, stoBinding, compBinding);
 
@@ -434,28 +451,17 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 	{
 		swapchainRecretaed = swapchain.recreateFlag;
 		commandBufferBegin(cmd);
-		bufferCopyToImage(cmd, face1Data, face1Image,
-			VK_ACCESS_NONE, VK_ACCESS_NONE,
-			VK_ACCESS_NONE, VK_ACCESS_SHADER_READ_BIT,
-			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-			VK_IMAGE_LAYOUT_GENERAL);
-		bufferCopyToImage(cmd, inStoBuffer, stoImage,
-			VK_ACCESS_NONE, VK_ACCESS_NONE,
-			VK_ACCESS_NONE, (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT),
-			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-			VK_IMAGE_LAYOUT_GENERAL);
 		if (useDescriptorSet)
 			commandBufferBindPipeline(cmd, compPline, useDescriptorSet);
 		else commandBufferBindDescriptorBuffers(cmd, compPline, { desc0Buffer, desc1Buffer });
 		commandBufferDispatch(cmd);
 		imageCopyToBuffer(cmd, stoImage, outStoBuffer,
-			(VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT), VK_ACCESS_NONE,
+			VK_ACCESS_SHADER_WRITE_BIT, (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT),
 			VK_ACCESS_NONE, VK_ACCESS_NONE,
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT);
 		if (useDescriptorSet)
 			commandBufferBindPipeline(cmd, graphPline, useDescriptorSet);
 		else commandBufferBindDescriptorBuffers(cmd, graphPline, { desc0Buffer, desc1Buffer });
-		commandBufferClearColorImage(cmd, framebufferGetImage(framebuffer), makeClearColorValue(Vec4()));
 		commandBufferBindVertexBuffers(cmd, vertexInput);
 		vkCmdSetViewport(*cmd, 0, 1, &swapchain.viewport);
 		vkCmdSetScissor(*cmd, 0, 1, &swapchain.scissor);

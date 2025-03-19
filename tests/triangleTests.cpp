@@ -140,7 +140,8 @@ TriLogicInt runTriangeSingleThread (Canvas& cs, const std::string& assets, bool 
 	cs.events().cbKey.set(onKey, nullptr);
 	cs.events().cbWindowSize.set(onResize, &drawTrigger);
 
-	auto onCommandRecording = [&](add_ref<Canvas>, add_cref<Canvas::Swapchain> swapchain, ZCommandBuffer cmdBuffer, ZFramebuffer framebuffer)
+	auto onCommandRecording = [&](add_ref<Canvas>, add_cref<Canvas::Swapchain> swapchain,
+									ZCommandBuffer cmdBuffer, ZFramebuffer framebuffer)
 	{
 		if (infinityRepeat)
 		{
