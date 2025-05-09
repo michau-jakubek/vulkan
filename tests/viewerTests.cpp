@@ -474,7 +474,8 @@ protected:
 														VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		ZImage					cubeImage			= createImage(device, format, VK_IMAGE_TYPE_2D, faceSize, faceSize,
 																  usage, VK_SAMPLE_COUNT_1_BIT, 1u, 6u);
-		ZImageView				cubeView			= createImageView(cubeImage, 0u, 1u, 0u, 6u);
+		ZImageView				cubeView			= createImageView(cubeImage, VK_FORMAT_UNDEFINED, VK_IMAGE_VIEW_TYPE_MAX_ENUM,
+																		VK_IMAGE_ASPECT_FLAG_BITS_MAX_ENUM, 0u, 1u, 0u, 6u);
 								cubeBinding			= layout.addBinding(cubeView, ZSampler(),
 														VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		ZDescriptorSetLayout	descriptorSetLayout	= layout.createDescriptorSetLayout();

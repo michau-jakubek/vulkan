@@ -31,6 +31,8 @@ public:
 	const ZCommandBuffer&	commandBuffer;
 	const ZCommandPool&		commandPool;
 
+	operator ZCommandBuffer () { return m_commandBuffer; }
+
 	OneShotCommandBuffer	(ZCommandPool pool);
 	OneShotCommandBuffer	(ZDevice device, ZQueue queue);
 	OneShotCommandBuffer	(const OneShotCommandBuffer&) = delete;

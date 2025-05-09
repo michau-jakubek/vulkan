@@ -89,6 +89,8 @@ VkComponentMapping	makeComponentMapping (const ZFormatInfo& info);
 VkFormatProperties	formatGetProperties	(ZPhysicalDevice device, VkFormat format);
 bool				formatSupportsLinearFlags (ZPhysicalDevice device, VkFormat format, VkFormatFeatureFlags);
 bool				formatSupportsLinearFilter (ZPhysicalDevice device, VkFormat format);
+/* <is-depth-or-stencli, is-stencil-also> */
+std::pair<bool, bool> formatIsDepthStencil (ZPhysicalDevice device, VkFormat format, bool checkOptimalTilingSupport = false);
 
 enum FmtMask
 {

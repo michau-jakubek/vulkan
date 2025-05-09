@@ -432,9 +432,18 @@ struct FPS
 		void(float fps, float totalTime, float bestFPS, float worstFPS)>;
 	Printer printer;
 	std::chrono::high_resolution_clock::time_point lastTime;
-	FPS (Printer callback, float triggerInSeconds = 1.0f);
+	FPS (Printer callback, const float triggerInSeconds = 1.0f);
+	FPS (add_ref<float> triggerInSeconds, Printer callback);
 	void touch ();
 	void reset ();
+
+private:
+	struct Ref
+	{
+		Ref (add_ref<float> ref)
+			: value(ref) {}
+		add_ref<float> value;
+	} triggerRef;
 };
 
 } // namespace vtf

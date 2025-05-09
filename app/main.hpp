@@ -3,7 +3,7 @@
 
 #include "vtfVkUtils.hpp"
 
-constexpr vtf::Version CurrentVtfVersion(1, 3, 7, 0);
+constexpr vtf::Version CurrentVtfVersion(1, 3, 7, 1);
 
 // 2024-04-10, 1.1.0.0, "Add versioning"
 // 2024-04-15, 1.1.1.0, "Some fixes in int_compute test."
@@ -31,5 +31,6 @@ constexpr vtf::Version CurrentVtfVersion(1, 3, 7, 0);
 // 2025-02-28, 1.3.5.0, "Make buildable with SDK 1.4.304.1"
 // 2025-03-18, 1.3.6.0, "VK_EXT_descriptor_buffer (experimental)"
 // 2025-04-29, 1.3.7.0, "Cogwheels introduction"
+// 2025-05-14, 1.3.7.1, "Cogwheels and few features"
 
 #endif  // __MAIN_HPP_INCLUDED__

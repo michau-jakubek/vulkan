@@ -64,7 +64,7 @@ VkPipelineDepthStencilStateCreateInfo makeDepthStencilStateCreateInfo ()
 	VkPipelineDepthStencilStateCreateInfo	depthStencilState = makeVkStruct();
 	depthStencilState.depthTestEnable		= VK_FALSE;
 	depthStencilState.depthWriteEnable		= VK_FALSE;
-	depthStencilState.depthCompareOp		= VK_COMPARE_OP_LESS_OR_EQUAL;
+	depthStencilState.depthCompareOp		= VK_COMPARE_OP_LESS;
 	depthStencilState.depthBoundsTestEnable	= VK_FALSE;
 	depthStencilState.minDepthBounds		= 0.0f;
 	depthStencilState.maxDepthBounds		= 1.0f;
@@ -419,19 +419,19 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<Vk
 	settings.m_viewport = vieport;
 }
 
-void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::DepthTestEnable> depthTestEnable)
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::DepthTestEnable> enableDepthTest)
 {
-	settings.m_depthStencilState.depthTestEnable = depthTestEnable ? VK_TRUE : VK_FALSE;
+	settings.m_depthStencilState.depthTestEnable = enableDepthTest ? VK_TRUE : VK_FALSE;
 }
 
-void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::DepthWriteEnable> depthTestMask)
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::DepthWriteEnable> enableDepthWrite)
 {
-	settings.m_depthStencilState.depthWriteEnable = depthTestMask ? VK_TRUE : VK_FALSE;
+	settings.m_depthStencilState.depthWriteEnable = enableDepthWrite ? VK_TRUE : VK_FALSE;
 }
 
-void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::StencilTestEnable> stencilTestEnable)
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::StencilTestEnable> enableStencilTest)
 {
-	settings.m_depthStencilState.stencilTestEnable = stencilTestEnable ? VK_TRUE : VK_FALSE;
+	settings.m_depthStencilState.stencilTestEnable = enableStencilTest ? VK_TRUE : VK_FALSE;
 }
 
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::SubpassIndex> subpassIndex)

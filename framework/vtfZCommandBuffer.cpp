@@ -399,10 +399,7 @@ void commandBufferDispatch (ZCommandBuffer cmd, const UVec3& workGroupCount)
 ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZRenderPass renderPass, ZFramebuffer framebuffer,
 												   uint32_t subpass, VkSubpassContents contents)
 {
-	const uint32_t	countOfAttachments	= renderPass.getParam<ZDistType<AttachmentCount, uint32_t>>();
-	const uint32_t	subpassCount		= renderPass.getParam<ZDistType<SubpassCount, uint32_t>>();
-	const bool differs = framebuffer.getParamRef<std::vector<ZImageView>>().size() != countOfAttachments;
-	ASSERTMSG(!differs, "Attachment count from renderPas and framebuffer differs");
+	const uint32_t subpassCount = renderPass.getParam<ZDistType<SubpassCount, uint32_t>>();
 	ASSERTMSG(subpass < subpassCount, "Subpass index exceeds renderPass subpasses amount");
 	ZRenderPassBeginInfo	renderPassBegin(cmd, renderPass, framebuffer, subpass, contents);
 	VkRenderPassBeginInfo	info = renderPassBegin();

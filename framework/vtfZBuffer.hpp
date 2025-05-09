@@ -27,7 +27,7 @@ ZBuffer			createBuffer	(ZDevice device, VkDeviceSize size, ZBufferUsageFlags usa
 								ZBufferCreateFlags flags = ZBufferCreateFlags());
 
 template<class X>
-ZBuffer			createBuffer	(ZDevice device,
+ZBuffer			createBuffer	(ZDevice device, uint32_t elements = 1u,
 								 ZBufferUsageFlags usage = ZBufferUsageFlags(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT),
 								 ZMemoryPropertyFlags properties = ZMemoryPropertyHostFlags,
 								 ZBufferCreateFlags flags = ZBufferCreateFlags())
@@ -35,7 +35,7 @@ ZBuffer			createBuffer	(ZDevice device,
 	extern ZBuffer createTypedBuffer (ZDevice, type_index_with_default, VkDeviceSize,
 									  ZBufferUsageFlags, ZMemoryPropertyFlags, ZBufferCreateFlags);
 
-	return createTypedBuffer(device, type_index_with_default::make<X>(), sizeof(X), usage, properties, flags);
+	return createTypedBuffer(device, type_index_with_default::make<X>(), elements * sizeof(X), usage, properties, flags);
 }
 
 /**
@@ -98,7 +98,7 @@ VkDeviceSize	bufferWriteData (ZBuffer buffer, const uint8_t* src, VkDeviceSize s
 template<template<class, class...> class C, class T, class... V>
 VkDeviceSize	bufferWrite (
 	ZBuffer buffer,
-	const C<T, V...>& c,
+	const C<T, V...>& source,
 	uint32_t dstIndex = 0u,
 	uint32_t srcIndex = 0u,
 	uint32_t count = INVALID_UINT32)
@@ -112,7 +112,7 @@ VkDeviceSize	bufferWrite (
 		uint32_t srcIndex,
 		uint32_t count);
 
-	return bufferWriteData(buffer, reinterpret_cast<const uint8_t*>(c.data()), sizeof(T), c.size(), dstIndex, srcIndex, count);
+	return bufferWriteData(buffer, reinterpret_cast<const uint8_t*>(source.data()), sizeof(T), source.size(), dstIndex, srcIndex, count);
 }
 
 template<class T>

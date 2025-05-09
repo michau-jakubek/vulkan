@@ -208,7 +208,7 @@ TriLogicInt runMultiViewSingleThread (Canvas& cs, const std::string& assets, con
 																  multiImageWidth, multiImageHeight,
 																  ZImageUsageFlags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_USAGE_SAMPLED_BIT),
 																  VK_SAMPLE_COUNT_1_BIT, /*mipLevels*/1u, /*layers*/multiLayerCount);
-	ZImageView					multiImageView		= createImageView(multiImage, 0u, 1u, 0u, multiLayerCount, format, VK_IMAGE_VIEW_TYPE_2D_ARRAY);
+	ZImageView					multiImageView		= createImageView(multiImage, format, VK_IMAGE_VIEW_TYPE_2D_ARRAY, VK_IMAGE_ASPECT_FLAG_BITS_MAX_ENUM, 0u, 1u, 0u, multiLayerCount);
 	ZImageMemoryBarrier			multiImagePreBlit	(multiImage, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
 													 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 													 imageMakeSubresourceRange(multiImage, 0u, 1u, 0u, multiLayerCount));

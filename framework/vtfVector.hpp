@@ -266,11 +266,12 @@ public:
 	 *              -->
 	 *            || u ||
 	 */
-	void normalize ()
+	VecX<T, N>& normalize ()
 	{
 		T value = length();
 		if (value != static_cast<T>(0))
 			operator/=(value);
+		return *this;
 	}
 
 	/**

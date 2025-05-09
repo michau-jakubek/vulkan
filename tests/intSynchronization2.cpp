@@ -272,7 +272,7 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 	ZBuffer				buffer2			= std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(buffer2binding)).buffer;
 	ZBuffer				buffer3			= std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(buffer3binding)).buffer;
 	ZBuffer				indirectBuffer	= createBuffer<VkDrawIndexedIndirectCommand>(
-												ctx.device, ZBufferUsageFlags(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT));
+												ctx.device, 1u, ZBufferUsageFlags(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT));
 	ZBuffer				indexBuffer		= createIndexBuffer(ctx.device, 3, VK_INDEX_TYPE_UINT32);
 	
 	/*

@@ -421,27 +421,29 @@ uint32_t Canvas::getPresentQueueFamilyIndex () const
 }
 
 Canvas::Swapchain::Swapchain (add_cref<Canvas> aCanvas)
-	: canvas		(aCanvas)
-	, handle		(m_handle)
-	, viewport		(m_viewport)
-	, scissor		(m_scissor)
-	, extent		(m_extent)
-	, images		(m_images)
-	, framebuffers	(m_framebuffers)
-	, bufferCount	(m_bufferCount)
-	, refreshCount	(m_refreshCount)
-	, renderPass	(m_renderPass)
-	, recreateFlag	(m_recreateFlag)
-	, m_handle		(VK_NULL_HANDLE)
-	, m_images		()
-	, m_framebuffers()
-	, m_refreshCount()
-	, m_viewport	()
-	, m_scissor		()
-	, m_extent		()
-	, m_bufferCount	()
-	, m_renderPass	()
-	, m_recreateFlag()
+	: canvas				(aCanvas)
+	, handle				(m_handle)
+	, viewport				(m_viewport)
+	, scissor				(m_scissor)
+	, extent				(m_extent)
+	, images				(m_images)
+	, framebuffers			(m_framebuffers)
+	, bufferCount			(m_bufferCount)
+	, refreshCount			(m_refreshCount)
+	, renderPass			(m_renderPass)
+	, recreateFlag			(m_recreateFlag)
+	, m_handle				(VK_NULL_HANDLE)
+	, m_images				()
+	, m_framebuffers		()
+	, m_refreshCount		()
+	, m_viewport			()
+	, m_scissor				()
+	, m_extent				()
+	, m_bufferCount			()
+	, m_renderPass			()
+	, m_depthStencilImage	()
+	, m_depthStencilView	()
+	, m_recreateFlag		()
 {
 	m_viewport.x		= 0.0f;
 	m_viewport.y		= 0.0f;
@@ -478,6 +480,8 @@ void Canvas::Swapchain::destroyFramebuffers ()
 {
 	m_images.resize(0);
 	m_framebuffers.resize(0);
+	m_depthStencilImage = ZImage();
+	m_depthStencilView = ZImageView();
 }
 
 // If rp has no handle then creates only images, otherwise views and framebuffers as well
@@ -491,6 +495,16 @@ void Canvas::Swapchain::createFramebuffers (ZRenderPass rp, uint32_t minImageCou
 	const VkFormat				format = canvas.surfaceDetails.formats[canvas.surfaceFormatIndex].format;
 	const ZImageUsageFlags		usage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 
+	bool enableDepthStencil = false;
+	if (const VkFormat dsf = rp.getParam<VkFormat>(); dsf != VK_FORMAT_UNDEFINED)
+	{
+		enableDepthStencil = true;
+		m_depthStencilImage = createImage(canvas.device, dsf, VK_IMAGE_TYPE_2D, m_extent.width, m_extent.height,
+											ZImageUsageFlags(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT));
+		m_depthStencilView = createImageView(m_depthStencilImage, dsf, VK_IMAGE_VIEW_TYPE_MAX_ENUM,
+												(VK_IMAGE_ASPECT_DEPTH_BIT /*| VK_IMAGE_ASPECT_STENCIL_BIT*/));
+	}
+
 	minImageCount = std::min(minImageCount, imageCount);
 	for (uint32_t i = 0; i < minImageCount; ++i)
 	{
@@ -499,7 +513,9 @@ void Canvas::Swapchain::createFramebuffers (ZRenderPass rp, uint32_t minImageCou
 		if (rp.has_handle())
 		{
 			ZImageView view = ::vtf::createImageView(image);
-			m_framebuffers.emplace_back(createFramebuffer(rp, m_extent.width, m_extent.height, { view }));
+			if (enableDepthStencil)
+				m_framebuffers.emplace_back(createFramebuffer(rp, m_extent.width, m_extent.height, { view, m_depthStencilView }));
+			else m_framebuffers.emplace_back(createFramebuffer(rp, m_extent.width, m_extent.height, { view }));
 		}
 	}
 }

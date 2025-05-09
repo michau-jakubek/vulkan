@@ -143,6 +143,16 @@ ZRenderPass		createColorRenderPass (ZDevice device, add_cref<std::vector<VkForma
 									   VkImageLayout initialColorLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 									   VkImageLayout finalColorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 									   std::initializer_list<ZSubpassDependency> deps = {});
+/*
+* If depthStencilFormat is not VK_FORMAT_UNDEFINED then depth-stencil attachment
+* will be automatically added to the end of the list of all color attachments
+*/
+ZRenderPass		createColorRenderPass (ZDevice device, VkFormat depthStencilFormat,
+									   add_cref<std::vector<VkFormat>> colorFormats,
+									   std::vector<VkClearValue> clearColors = {},
+									   VkImageLayout initialColorLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+									   VkImageLayout finalColorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+									   std::initializer_list<ZSubpassDependency> deps = {});
 ZRenderPass		createMultiViewRenderPass (ZDevice device, add_cref<std::vector<VkFormat>> colorFormats,
 										   std::vector<VkClearValue> clearColors = {},
 										   std::initializer_list<ZSubpassDependency> dependencies = {},

@@ -113,6 +113,8 @@ public:
 		VkExtent2D					m_extent;
 		uint32_t					m_bufferCount;
 		ZRenderPass					m_renderPass;
+		ZImage						m_depthStencilImage;
+		ZImageView					m_depthStencilView;
 		bool						m_recreateFlag;
 	};
 

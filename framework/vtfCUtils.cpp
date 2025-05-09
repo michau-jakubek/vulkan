@@ -383,7 +383,7 @@ template bool between (const int& paramValue, const int& paramMin, const int& pa
 template bool between (const float& paramValue, const float& paramMin, const float& paramMax);
 template bool between (const uint32_t& paramValue, const uint32_t& paramMin, const uint32_t& paramMax);
 
-FPS::FPS (Printer callback, float triggerInSeconds)
+FPS::FPS (Printer callback, const float triggerInSeconds)
 	: fps		(0.0f)
 	, bestFPS	(0.0f)
 	, worstFPS	(99999.0f)
@@ -391,7 +391,19 @@ FPS::FPS (Printer callback, float triggerInSeconds)
 	, trigger	(triggerInSeconds)
 	, frameCount(0)
 	, printer	(callback)
-	, lastTime	(std::chrono::high_resolution_clock::now()) {}
+	, lastTime	(std::chrono::high_resolution_clock::now())
+	, triggerRef(trigger) {}
+
+FPS::FPS (add_ref<float> triggerInSeconds, Printer callback)
+	: fps		(0.0f)
+	, bestFPS	(0.0f)
+	, worstFPS	(99999.0f)
+	, totalTime	(0.0f)
+	, trigger	(triggerInSeconds)
+	, frameCount(0)
+	, printer	(callback)
+	, lastTime	(std::chrono::high_resolution_clock::now())
+	, triggerRef(triggerInSeconds) {}
 
 void FPS::touch() {
 	auto currentTime = std::chrono::high_resolution_clock::now();
@@ -401,7 +413,7 @@ void FPS::touch() {
 	totalTime += deltaTime.count();
 	frameCount++;
 
-	if (totalTime >= trigger) {
+	if (totalTime >= triggerRef.value) {
 		fps = float(frameCount) / totalTime;
 		bestFPS = std::max(fps, bestFPS);
 		worstFPS = std::min(fps, worstFPS);

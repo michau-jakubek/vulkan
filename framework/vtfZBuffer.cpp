@@ -207,7 +207,7 @@ void bufferWriteData (ZBuffer buffer, add_cptr<uint8_t> src, add_cref<VkBufferCo
 	VKASSERT(vkMapMemory(*device, *memory, copy.dstOffset, copy.size, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&dst)));
 	ASSERTION(dst != nullptr);
 
-	std::copy(src, std::next(src, make_signed(copy.size)), dst);
+	std::copy(src + copy.srcOffset, src + copy.srcOffset + copy.size, dst);
 
 	if (flush && ((props & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))
 	{

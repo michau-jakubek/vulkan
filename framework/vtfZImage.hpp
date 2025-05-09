@@ -33,11 +33,11 @@ ZImage				createImage		(ZDevice device, VkFormat format, VkImageType type, uint3
 									 bool deviceAddress = false, ZMemoryPropertyFlags properties = ZMemoryPropertyDeviceFlags);
 
 VkImageViewType		imageTypeToViewType (VkImageType imageType);
-ZImageView			createImageView	(ZImage image,
+ZImageView			createImageView	(ZImage image, VkFormat format = VK_FORMAT_UNDEFINED,
+									 VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_MAX_ENUM,
+									 VkImageAspectFlags aspect = VK_IMAGE_ASPECT_FLAG_BITS_MAX_ENUM,
 									 uint32_t baseMipLevel = 0u, uint32_t mipLevels = 1u,
-									 uint32_t baseArrayLayer = 0u, uint32_t arrayLayers = 1u,
-									 VkFormat format = VK_FORMAT_UNDEFINED, VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_MAX_ENUM,
-									 VkImageAspectFlags aspect = VK_IMAGE_ASPECT_FLAG_BITS_MAX_ENUM);
+									 uint32_t baseArrayLayer = 0u, uint32_t arrayLayers = 1u);
 ZImage				imageViewGetImage (ZImageView view);
 VkImageLayout		imageGetLayout	 (ZImage image);
 VkImageLayout		imageResetLayout (ZImage image, VkImageLayout layout);

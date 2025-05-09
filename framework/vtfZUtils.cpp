@@ -169,11 +169,16 @@ VkRenderPassBeginInfo ZRenderPassBeginInfo::operator ()() const
 	return info;
 }
 
-ZRenderPass	createRenderPassImpl (ZDevice device, void* pNext,
-								  add_cref<std::vector<VkFormat>> colorFormats,
-								  add_cref<std::vector<VkClearValue>> clearColors,
-								  VkImageLayout initialColorLayout, VkImageLayout finalColorLayout,
-								  add_cref<std::vector<ZSubpassDependency>> deps)
+static ZRenderPass	createRenderPassImpl
+(
+	ZDevice device,
+	void* pNext, 
+	VkFormat depthStencilFormat,
+	add_cref<std::vector<VkFormat>> colorFormats,
+	add_cref<std::vector<VkClearValue>> clearColors,
+	VkImageLayout initialColorLayout, VkImageLayout finalColorLayout,
+	add_cref<std::vector<ZSubpassDependency>> deps
+)
 {
 	const uint32_t attachmentCount = data_count(colorFormats);
 	ASSERTMSG(colorFormats.size(), "pColorAttachments must contain at least one element");
@@ -183,23 +188,48 @@ ZRenderPass	createRenderPassImpl (ZDevice device, void* pNext,
 	add_cptr<std::vector<VkClearValue>> pClearColors = clearColors.size() ? &clearColors : nullptr;
 	const uint32_t clearColorCount = data_count(clearColors);
 
-	VkAttachmentDescription attachmentTemplate{};
-	attachmentTemplate.flags			= VkAttachmentDescriptionFlags(0);
-	attachmentTemplate.format			= VK_FORMAT_UNDEFINED;
-	attachmentTemplate.samples			= VK_SAMPLE_COUNT_1_BIT;
-	attachmentTemplate.loadOp			= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachmentTemplate.storeOp			= VK_ATTACHMENT_STORE_OP_STORE;
-	attachmentTemplate.stencilLoadOp	= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachmentTemplate.stencilStoreOp	= VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachmentTemplate.initialLayout	= initialColorLayout;
-	attachmentTemplate.finalLayout		= finalColorLayout;
+	VkAttachmentDescription colorDescTemplate{};
+	colorDescTemplate.flags				= VkAttachmentDescriptionFlags(0);
+	colorDescTemplate.format			= VK_FORMAT_UNDEFINED;
+	colorDescTemplate.samples			= VK_SAMPLE_COUNT_1_BIT;
+	colorDescTemplate.loadOp			= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	colorDescTemplate.storeOp			= VK_ATTACHMENT_STORE_OP_STORE;
+	colorDescTemplate.stencilLoadOp		= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	colorDescTemplate.stencilStoreOp	= VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	colorDescTemplate.initialLayout		= initialColorLayout;
+	colorDescTemplate.finalLayout		= finalColorLayout;
 
-	VkAttachmentReference	referenceTemplate{};
-	referenceTemplate.attachment	= 0u;
-	referenceTemplate.layout		= finalColorLayout;
+	bool enableDepthStencil = false;
+	VkAttachmentDescription depthStencilDescTemplate{};
+	VkAttachmentReference	depthStencilRefTemplate{};
+	if (VK_FORMAT_UNDEFINED != depthStencilFormat)
+	{
+		const std::pair<bool, bool> isDS = formatIsDepthStencil(device.getParam<ZPhysicalDevice>(), depthStencilFormat, true);
+		if (false == isDS.first)
+		{
+			ASSERTFALSE("depthStencilFormat is not Depth or Stencil format or is not supported by device");
+		}
+		enableDepthStencil = true;
+		depthStencilDescTemplate.flags			= VkAttachmentDescriptionFlags(0);
+		depthStencilDescTemplate.format			= depthStencilFormat;
+		depthStencilDescTemplate.samples		= VK_SAMPLE_COUNT_1_BIT;
+		depthStencilDescTemplate.loadOp			= VK_ATTACHMENT_LOAD_OP_CLEAR;
+		depthStencilDescTemplate.storeOp		= VK_ATTACHMENT_STORE_OP_STORE;
+		depthStencilDescTemplate.stencilLoadOp	= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		depthStencilDescTemplate.stencilStoreOp	= VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		depthStencilDescTemplate.initialLayout	= VK_IMAGE_LAYOUT_UNDEFINED;
+		depthStencilDescTemplate.finalLayout	= VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-	std::vector<VkAttachmentDescription>	descriptions(attachmentCount, attachmentTemplate);
-	std::vector<VkAttachmentReference>		references(attachmentCount, referenceTemplate);
+		depthStencilRefTemplate.attachment = attachmentCount;
+		depthStencilRefTemplate.layout = depthStencilDescTemplate.finalLayout;
+	}
+
+	VkAttachmentReference	colorRefTemplate{};
+	colorRefTemplate.attachment	= 0u;
+	colorRefTemplate.layout		= finalColorLayout;
+
+	std::vector<VkAttachmentDescription>	descriptions(attachmentCount, colorDescTemplate);
+	std::vector<VkAttachmentReference>		references(attachmentCount, colorRefTemplate);
 
 	for (uint32_t attachment = 0; attachment < attachmentCount; ++attachment)
 	{
@@ -222,12 +252,17 @@ ZRenderPass	createRenderPassImpl (ZDevice device, void* pNext,
 		references.at(attachment).attachment = attachment;
 	}
 
+	if (enableDepthStencil)
+	{
+		descriptions.emplace_back(depthStencilDescTemplate);
+	}
+
 	VkSubpassDescription subpassTemplate;
 	subpassTemplate.flags					= VkSubpassDescriptionFlags(0);
 	subpassTemplate.pipelineBindPoint		= VK_PIPELINE_BIND_POINT_GRAPHICS;
 	subpassTemplate.colorAttachmentCount	= data_count(references);
 	subpassTemplate.pColorAttachments		= data_or_null(references);
-	subpassTemplate.pDepthStencilAttachment	= nullptr;
+	subpassTemplate.pDepthStencilAttachment = enableDepthStencil ? &depthStencilRefTemplate : nullptr;
 	subpassTemplate.inputAttachmentCount	= 0;
 	subpassTemplate.pInputAttachments		= nullptr;
 	subpassTemplate.preserveAttachmentCount	= 0;
@@ -286,7 +321,7 @@ ZRenderPass	createRenderPassImpl (ZDevice device, void* pNext,
 	VkRenderPassCreateInfo renderPassInfo = makeVkStruct();
 	renderPassInfo.pNext			= pNext;
 	renderPassInfo.flags			= VkRenderPassCreateFlags(0);
-	renderPassInfo.attachmentCount	= attachmentCount;
+	renderPassInfo.attachmentCount	= data_count(descriptions);
 	renderPassInfo.pAttachments		= data_or_null(descriptions);
 	renderPassInfo.subpassCount		= data_count(subpasses);
 	renderPassInfo.pSubpasses		= data_or_null(subpasses);
@@ -297,13 +332,19 @@ ZRenderPass	createRenderPassImpl (ZDevice device, void* pNext,
 	const VkAllocationCallbacksPtr	callbacks	= device.getParam<VkAllocationCallbacksPtr>();
 	ZRenderPass	renderPass = ZRenderPass::create(VK_NULL_HANDLE, device, callbacks,
 												 attachmentCount, renderPassInfo.subpassCount,
-												 {/*clearValues*/}, false, finalColorLayout);
+												 {/*clearValues*/}, depthStencilFormat, finalColorLayout);
 	VKASSERT(vkCreateRenderPass(*device, &renderPassInfo, callbacks, renderPass.setter()));
 
-	if (pClearColors)
+	add_ref<std::vector<VkClearValue>> clearValues = renderPass.getParamRef<std::vector<VkClearValue>>();
+	clearValues.resize(renderPassInfo.attachmentCount);
+	for (uint32_t a = 0u; a < renderPassInfo.attachmentCount; ++a)
 	{
-		add_ref<std::vector<VkClearValue>> clearValues = renderPass.getParamRef<std::vector<VkClearValue>>();
-		clearValues.insert(clearValues.end(), pClearColors->begin(), pClearColors->end());
+		if (pClearColors && (a < pClearColors->size()))
+			clearValues[a] = pClearColors->at(a);
+	}
+	if (enableDepthStencil)
+	{
+		clearValues.back().depthStencil.depth = 1.0f;
 	}
 
 	return renderPass;
@@ -314,7 +355,16 @@ ZRenderPass	createColorRenderPass (ZDevice device, add_cref<std::vector<VkFormat
 								   VkImageLayout initialColorLayout, VkImageLayout finalColorLayout,
 								   std::initializer_list<ZSubpassDependency> deps)
 {
-	return createRenderPassImpl(device, nullptr, colorFormats, clearColors, initialColorLayout, finalColorLayout, deps);
+	return createRenderPassImpl(device, nullptr, VK_FORMAT_UNDEFINED, colorFormats, clearColors, initialColorLayout, finalColorLayout, deps);
+}
+
+ZRenderPass	createColorRenderPass (ZDevice device, VkFormat depthStencilFormat,
+								   add_cref<std::vector<VkFormat>> colorFormats,
+								   std::vector<VkClearValue> clearColors,
+								   VkImageLayout initialColorLayout, VkImageLayout finalColorLayout,
+								   std::initializer_list<ZSubpassDependency> deps)
+{
+	return createRenderPassImpl(device, nullptr, depthStencilFormat, colorFormats, clearColors, initialColorLayout, finalColorLayout, deps);
 }
 
 ZRenderPass	createMultiViewRenderPass (ZDevice device, add_cref<std::vector<VkFormat>> colorFormats,
@@ -363,7 +413,7 @@ ZRenderPass	createMultiViewRenderPass (ZDevice device, add_cref<std::vector<VkFo
 	info.correlationMaskCount	= 0u;
 	info.pCorrelationMasks		= nullptr;
 
-	return createRenderPassImpl(device, &info, colorFormats, clearColors, initialColorLayout, finalColorLayout, dependencies);
+	return createRenderPassImpl(device, &info, VK_FORMAT_UNDEFINED, colorFormats, clearColors, initialColorLayout, finalColorLayout, dependencies);
 }
 
 ZRenderPass framebufferGetRenderPass (ZFramebuffer framebuffer)

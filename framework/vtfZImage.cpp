@@ -457,9 +457,10 @@ VkImageViewType imageTypeToViewType (VkImageType imageType)
 	return res;
 }
 
-ZImageView createImageView (ZImage image, uint32_t baseMipLevel, uint32_t mipLevels,
-							uint32_t baseArrayLayer, uint32_t arrayLayers, VkFormat format,
-							VkImageViewType viewType, VkImageAspectFlags aspect)
+ZImageView createImageView (ZImage image, VkFormat format,
+							VkImageViewType viewType, VkImageAspectFlags aspect,
+							uint32_t baseMipLevel, uint32_t mipLevels,
+							uint32_t baseArrayLayer, uint32_t arrayLayers)
 
 {
 	VkImageView					imageView	= VK_NULL_HANDLE;

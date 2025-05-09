@@ -515,7 +515,7 @@ typedef ZDeletable<VkRenderPass,
 	ZDistType<AttachmentCount, uint32_t>,
 	ZDistType<SubpassCount, uint32_t>,
 	std::vector<VkClearValue>,
-	bool, /*enable depth attachment*/
+	VkFormat, /*depth-stencli attachment format*/
 	VkImageLayout /*finalLayout*/>
 ZRenderPass;
 

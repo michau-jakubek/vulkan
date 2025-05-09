@@ -455,6 +455,36 @@ bool formatSupportsLinearFlags (ZPhysicalDevice device, VkFormat format, VkForma
 	return (p.linearTilingFeatures & flags) == flags;
 }
 
+std::pair<bool, bool> formatIsDepthStencil (ZPhysicalDevice device, VkFormat format, bool checkOptimalTilingSupport)
+{
+	static const VkFormat dfs[]{ VK_FORMAT_D16_UNORM, VK_FORMAT_D32_SFLOAT };
+	static const VkFormat dsfs[] { VK_FORMAT_D16_UNORM_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_D32_SFLOAT_S8_UINT };
+	std::pair<bool, bool> result{};
+	for (const VkFormat f : dfs)
+	{
+		if (f == format)
+		{
+			result.first = true;
+			break;
+		}
+	}
+	for (const VkFormat f : dsfs)
+	{
+		if (f == format)
+		{
+			result.first = true;
+			result.second = true;
+			break;
+		}
+	}
+	if (result.first && checkOptimalTilingSupport)
+	{
+		VkFormatProperties p = formatGetProperties(device, format);
+		result.first = ((p.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0);
+	}
+	return result;
+}
+
 ZFormatInfoIterator::ZFormatInfoIterator ()
 {
 	reset();
