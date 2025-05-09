@@ -227,10 +227,11 @@ void onKey (add_ref<Canvas> cs, add_ptr<void> userData, const int key, int scanc
 	}
 	if (key == GLFW_KEY_S && action == GLFW_PRESS)
 	{
-		auto prec = std::cout.precision();
+		//typedef routine_arg_t<decltype(std::setprecision), 0> prec_t;
+		//const prec_t prec = static_cast<prec_t>(std::cout.precision());
 		std::cout << "Vertices: " << ui->queryResult[0]
 			<< ", Primitives: " << ui->queryResult[1]
-			<< ", K: " << std::fixed << std::setprecision(10) << ui->rotOffset << std::setprecision(prec) << std::defaultfloat
+			//<< ", K: " << std::fixed << std::setprecision(10) << ui->rotOffset << std::setprecision(prec) << std::defaultfloat
 			<< std::endl;
 	}
 	if (key == GLFW_KEY_K && action == GLFW_PRESS)
@@ -345,7 +346,7 @@ template<class X>
 void copyByStaging(const std::vector<X>& src, ZBuffer dst, uint32_t startIndex, ZQueue queue, uint32_t chunkSize = 1048576u)
 {
 	static_assert(std::is_reference_v<decltype(src)>, "???");
-	const uint32_t chunkOptimalSize = ROUNDUP(chunkSize, sizeof(X));
+	const uint32_t chunkOptimalSize = ROUNDUP(chunkSize, uint32_t(sizeof(X)));
 	const uint32_t elemsPerChunk = chunkOptimalSize / sizeof(X);
 	const uint32_t numChunks = uint32_t(data_byte_length(src) / chunkOptimalSize);
 	const uint32_t dstOffset = uint32_t(startIndex * sizeof(X));
