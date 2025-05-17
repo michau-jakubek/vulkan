@@ -14,6 +14,7 @@
 #include "vtfStructUtils.hpp"
 #include "vtfCopyUtils.hpp"
 #include "vtfTemplateUtils.hpp"
+#include "vtfOptionParser.hpp"
 
 #include <iostream>
 #include <vector>
@@ -30,14 +31,42 @@ struct Params
 	VkPrimitiveTopology topology;
 	bool geometryRequired;
 	bool buildAlways;
+	bool enableFPS;
 	Params (add_cref<std::string> assets_)
 		: assets(assets_)
 		, topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
 		, geometryRequired(false)
 		, buildAlways(false)
+		, enableFPS(false)
 	{
 	}
+	OptionParser<Params> getParser ();
+	void printHelp (add_cref<Params> defaultValue, add_ref<std::ostream> str) const;
 };
+constexpr Option optionFPS("-fps", 0);
+OptionParser<Params> Params::getParser ()
+{
+	OptionFlags          flags(OptionFlag::PrintDefault);
+	OptionParser<Params> parser(*this);
+
+	parser.addOption(&Params::enableFPS, optionFPS, "Print FPS", { enableFPS }, flags);
+
+	return parser;
+}
+void Params::printHelp (add_cref<Params> defaultValue, add_ref<std::ostream> str) const
+{
+	Params def(defaultValue);
+	auto parser = def.getParser();
+	str << "Navigation:\n"
+		"  Esc         - quit this app immediately\n"
+		"  Space       - pause/run\n"
+		"  Scroll      - zoom in/out\n"
+		"  Shift+Mouse - move scene\n"
+		"  Ctrl+Mouse  - rotate X & Y\n"
+		"  S           - print statistics\n"
+		"Parameters:\n";
+	parser.printOptions(std::cout, 70);
+}
 
 TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params);
 
@@ -46,6 +75,20 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 	UNREF(cmdLineParams);
 
 	Params params(record.assets);
+	auto parser = params.getParser();
+	auto unresolvedParams = parser.parse(cmdLineParams); UNREF(unresolvedParams);
+	OptionParserState state = parser.getState();
+	if (state.hasErrors)
+	{
+		std::cout << state.messagesText() << std::endl;
+		return {};
+	}
+	if (state.hasHelp)
+	{
+		params.printHelp(Params(record.assets), std::cout);
+		return {};
+	}
+
 
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 
@@ -64,6 +107,7 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 	};
 
 	CanvasStyle canvasStyle = Canvas::DefaultStyle;
+	canvasStyle.acquirableImageCount = 10;
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
 
 	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFeatures, gf.apiVer, gf.debugPrintfEnabled);
@@ -132,8 +176,10 @@ struct UserData
 	bool leftMicePressed = false;
 	bool rightMicePressed = false;
 	bool shiftPressed = false;
+	bool zRotateMode = false;
 	float xRotate = 0.0f;
 	float yRotate = 0.0f;
+	float zRotate = 0.0f;
 	float cameraZ = 3.0f;
 	float offsetX = 0.0f;
 	float offsetY = 0.0f;
@@ -177,7 +223,7 @@ void updateMatrices (add_ref<Canvas> cs, add_cref<UserData> ui)
 	mvp.model1 *= rotYX;
 	mvp.model1 = glm::translate(mvp.model1, glm::vec3(0.0f, 0.0f, 0.0f));
 	mvp.model1 = glm::translate(mvp.model1, glm::vec3(ui.offsetX, ui.offsetY, 0.0f));
-	mvp.model1 = glm::rotate(mvp.model1, -bigRotate, glm::vec3(0.0f, 0.0f, 1.0f));
+	mvp.model1 = glm::rotate(mvp.model1, ui.zRotate - bigRotate, glm::vec3(0.0f, 0.0f, 1.0f));
 
 
 	mvp.model2 *= rotYX;
@@ -185,21 +231,21 @@ void updateMatrices (add_ref<Canvas> cs, add_cref<UserData> ui)
 	const Vec2 start2 = rotate(Vec2(37.5f, 0), glm::pi<float>() * 0.75f);
 	mvp.model2 = glm::translate(mvp.model2, glm::vec3(start2.x(), start2.y(), 0.0f));
 	mvp.model2 = glm::translate(mvp.model2, glm::vec3(ui.offsetX, ui.offsetY, 0.0f));
-	mvp.model2 = glm::rotate(mvp.model2, smallRotate + rotCorrect2, glm::vec3(0.0f, 0.0f, 1.0f));
+	mvp.model2 = glm::rotate(mvp.model2, smallRotate + rotCorrect2 + ui.zRotate, glm::vec3(0.0f, 0.0f, 1.0f));
 
 	mvp.model3 *= rotYX;
 	const float rotCorrect3 = 0.5f;
 	const Vec2 start3 = rotate(Vec2(37.5f, 0), glm::pi<float>() * 0.25f);
 	mvp.model3 = glm::translate(mvp.model3, glm::vec3(start3.x(), start3.y(), 0.0f));
 	mvp.model3 = glm::translate(mvp.model3, glm::vec3(ui.offsetX, ui.offsetY, 0.0f));
-	mvp.model3 = glm::rotate(mvp.model3, smallRotate + rotCorrect3, glm::vec3(0.0f, 0.0f, 1.0f));
+	mvp.model3 = glm::rotate(mvp.model3, smallRotate + rotCorrect3 + ui.zRotate, glm::vec3(0.0f, 0.0f, 1.0f));
 
 	mvp.model4 *= rotYX;
 	const Vec2 start4(0, -37.5f);
 	const float rotCorrect4 = 0.335f;
 	mvp.model4 = glm::translate(mvp.model4, glm::vec3(start4.x(), start4.y(), 0.0f));
 	mvp.model4 = glm::translate(mvp.model4, glm::vec3(ui.offsetX, ui.offsetY, 0.0f));
-	mvp.model4 = glm::rotate(mvp.model4, smallRotate + rotCorrect4, glm::vec3(0.0f, 0.0f, 1.0f));
+	mvp.model4 = glm::rotate(mvp.model4, smallRotate + rotCorrect4 + ui.zRotate, glm::vec3(0.0f, 0.0f, 1.0f));
 
 	bufferWrite(ui.mvpBuffer, mvp);
 }
@@ -592,7 +638,10 @@ TriLogicInt runTests (Canvas& cs, add_cref<Params> params)
 		bufferRead(queryResults, userData.queryResult);
 		userData.drawTrigger += 1;
 		stableRedraw.touch();
-		fps.touch();
+		if (params.enableFPS)
+		{
+			fps.touch();
+		}
 	};
 
 	return cs.run(onCommandRecording, renderPass, std::ref(userData.drawTrigger), {}, onAfterRecording);

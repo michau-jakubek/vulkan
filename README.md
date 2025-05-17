@@ -46,6 +46,22 @@ Demote invocation test
 As you probably know, the fragment shader has absolutely different execution model from the other shaders. Additionally it has special invocations called helper invocations. More over, we can make the helper invocation from existing regular one by demoting it to the helper invocation. Since SPIR-V 1.3 we have a *demote*, new keyword in the GLSL language that exactly demotes invocation being processed. There are some implementations that don't support helper invocations at all but they also can demote any invocation. The single difference is that we cannot query about given invocation is helper or not and therefore whether it has been demoted - but it is small detail.  
 This test allows you to demote/disable arbitral invocation or quad. Additionally you can see online which subgroup the invocation belongs to and what happened with it after clicking it by right mouse button. Finally, you can provide your own values by changing the shader and see them on the console output.
 
+Descriptor buffer test
+----------------------
+
+![](descriptor_buffer.png)
+
+In my opinion the extension **VK_EXT_descriptor_buffer** is a big step forward. We no longer need
+a pool of descriptors and we need to define a separate buffer consisting of fragments with descriptors.
+I decided to implement this functionality in my framework. Please see how easy it is to use this extension.
+
+Cogwheels test
+--------------
+
+![](cogwheels.png)
+
+Just cogwheels. Nothing more but an algorithm that generates cogwheel points.
+
 Panorma viewer test
 -------------------
 

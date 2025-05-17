@@ -32,8 +32,6 @@
 #endif
 #endif
 
-#define MAX_BACK_BUFFER_COUNT 2
-
 namespace vtf
 {
 
@@ -107,7 +105,9 @@ const CanvasStyle Canvas::DefaultStyle
 	1.0f,	// maxDepth
 	true,	// visible
 	true,	// resizable
-	0		// surfaceFormatFlags
+	0,		// surfaceFormatFlags
+	3,		// acquirableImageCount
+	true,	// submitRenderWithFence
 };
 
 strings			getGlfwRequiredInstanceExtensions ();
@@ -192,6 +192,7 @@ Canvas::Canvas	(add_cptr<char>			appName,
 	, m_surfaceFormat			(VK_FORMAT_UNDEFINED)
 	, m_width					(style.width)
 	, m_height					(style.height)
+	, m_currentFrame			(0u)
 	, m_presentQueue			(queueSupportSwapchain(graphicsQueue)
 									? graphicsQueue
 									: deviceGetNextQueue(device, VK_QUEUE_GRAPHICS_BIT, true))
@@ -224,6 +225,7 @@ Canvas::Canvas	(ZPhysicalDevice		physicalDevice,
 	, m_surfaceFormat		(VK_FORMAT_UNDEFINED)
 	, m_width				(style.width)
 	, m_height				(style.height)
+	, m_currentFrame		(0u)
 	, m_presentQueue		(queueSupportSwapchain(graphicsQueue)
 								? graphicsQueue
 								: deviceGetNextQueue(device, VK_QUEUE_GRAPHICS_BIT, true))
@@ -325,6 +327,7 @@ Canvas::SurfaceDetails::SurfaceDetails ()
 {
 }
 
+// Called once from Canvas::construct() within Canvas constructor body.
 void Canvas::SurfaceDetails::update (ZPhysicalDevice physDevice, ZSurfaceKHR surfaceKHR)
 {
 	VKASSERT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*physDevice, *surfaceKHR, &caps));
@@ -428,7 +431,7 @@ Canvas::Swapchain::Swapchain (add_cref<Canvas> aCanvas)
 	, extent				(m_extent)
 	, images				(m_images)
 	, framebuffers			(m_framebuffers)
-	, bufferCount			(m_bufferCount)
+	, framebufferCount		(m_framebufferCount)
 	, refreshCount			(m_refreshCount)
 	, renderPass			(m_renderPass)
 	, recreateFlag			(m_recreateFlag)
@@ -439,7 +442,7 @@ Canvas::Swapchain::Swapchain (add_cref<Canvas> aCanvas)
 	, m_viewport			()
 	, m_scissor				()
 	, m_extent				()
-	, m_bufferCount			()
+	, m_framebufferCount	()
 	, m_renderPass			()
 	, m_depthStencilImage	()
 	, m_depthStencilView	()
@@ -559,15 +562,9 @@ void Canvas::Swapchain::recreate (ZRenderPass rp, uint32_t acquirableImageCount,
 	m_extent			= caps.currentExtent;
 
 	{
-		uint32_t	minImageCount = acquirableImageCount + 1;
-		// avoid caps.maxImageCount is 0, it means no limit
-		if (caps.maxImageCount == 0)
-			minImageCount = acquirableImageCount + 1;
-		else if ((acquirableImageCount + 1) < caps.minImageCount)
-			minImageCount = caps.minImageCount;
-		else if ((acquirableImageCount + 1) > caps.maxImageCount)
-			minImageCount = caps.maxImageCount;
-		m_bufferCount = minImageCount;
+		m_framebufferCount = acquirableImageCount;
+		if (caps.maxImageCount > 0 && acquirableImageCount > caps.maxImageCount)
+			m_framebufferCount = caps.maxImageCount;
 	}
 
 	ASSERTION(caps.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
@@ -584,7 +581,7 @@ void Canvas::Swapchain::recreate (ZRenderPass rp, uint32_t acquirableImageCount,
 	//swapchainCreateInfo.pNext:			default
 	//swapchainCreateInfo.flags:			default
 	swapchainCreateInfo.surface				= *canvas.surface;
-	swapchainCreateInfo.minImageCount		= m_bufferCount;
+	swapchainCreateInfo.minImageCount		= m_framebufferCount;
 	swapchainCreateInfo.imageFormat			= canvas.surfaceFormat;
 	swapchainCreateInfo.imageColorSpace		= canvas.surfaceDetails.formats[canvas.surfaceFormatIndex].colorSpace;
 	swapchainCreateInfo.imageExtent			= m_extent;
@@ -625,7 +622,7 @@ void Canvas::Swapchain::recreate (ZRenderPass rp, uint32_t acquirableImageCount,
 		di.vkDestroySwapchainKHR(*canvas.device, swapchainCreateInfo.oldSwapchain, canvas.callbacks);
 	}
 
-	createFramebuffers(rp, m_bufferCount);
+	createFramebuffers(rp, m_framebufferCount);
 	m_renderPass = rp;
 	m_recreateFlag = true;
 }
@@ -638,15 +635,18 @@ void Canvas::updateExtent ()
 	m_height = caps.currentExtent.height;
 }
 
-Canvas::BackBuffer Canvas::acquireBackBuffer (add_ref<std::queue<BackBuffer>>	buffers,
-											 add_ptr<std::mutex>				buffersMutex,
-											 add_ref<Swapchain>					swapchain,
-											 uint32_t							acquirableImageCount)
+add_ptr<Canvas::BackBuffer> Canvas::acquireBackBuffer (
+	add_ref<std::vector<BackBuffer>>	buffers,
+	add_ptr<std::mutex>				buffersMutex,
+	add_ref<Swapchain>					swapchain,
+	uint32_t				acquirableImageCount)
 {
-	std::optional<BackBuffer> buffer;
+	//std::optional<BackBuffer> buffer;
+	add_ptr<BackBuffer> buffer = nullptr;
 
 	if (buffersMutex)
 	{
+		/*
 		bool open = false;
 		do
 		{
@@ -660,17 +660,18 @@ Canvas::BackBuffer Canvas::acquireBackBuffer (add_ref<std::queue<BackBuffer>>	bu
 			else if (open)
 			{
 				buffer = buffers.front();
-				buffers.pop();
+				//buffers.pop();
 				buffersMutex->unlock();
 				break;
 			}
 		}
 		while (!open);
+		*/
 	}
 	else
 	{
-		buffer = buffers.front();
-		buffers.pop();
+		m_currentFrame = (m_currentFrame + 1u) % data_count(buffers);
+		buffer = &buffers.data()[m_currentFrame];
 	}
 
 	VkResult res = VK_ERROR_UNKNOWN;
@@ -686,12 +687,13 @@ Canvas::BackBuffer Canvas::acquireBackBuffer (add_ref<std::queue<BackBuffer>>	bu
 		 * member of pAcquireInfo, the timeout member of pAcquireInfo must not be UINT64_MAX
 		 * (https://vulkan.lunarg.com/doc/view/1.3.243.0/linux/1.3-extensions/vkspec.html#VUID-vkAcquireNextImageKHR-surface-07783)
 		 */
-		const auto timeout = std::chrono::microseconds( 5s ).count();
+		const auto timeout = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::seconds(5)).count();
 		res = vkAcquireNextImageKHR(*device,
 									swapchain.handle,
 									timeout, *buffer->acquireSemaphore,
 									(VkFence)VK_NULL_HANDLE,
 									&buffer->imageIndex);
+
 		if (VK_ERROR_OUT_OF_DATE_KHR == res || VK_SUBOPTIMAL_KHR == res)
 		{
 			if (getGlobalAppFlags().verbose > 9)
@@ -714,15 +716,15 @@ Canvas::BackBuffer Canvas::acquireBackBuffer (add_ref<std::queue<BackBuffer>>	bu
 		logger << "Acquire: " << buffer->imageIndex << ", Width: " << m_width << ", Height: " << m_height << std::endl;
 	}
 
-	return *buffer;
+	return buffer;
 }
 
 bool Canvas::presentBackBuffer (add_cref<BackBuffer>				buffer,
 								add_ref<Swapchain>					swapchain,
-								add_ptr<std::queue<BackBuffer>>		readyBuffersStack,
+								add_ptr<std::vector<BackBuffer>>	readyBuffersStack,
 								add_ptr<std::mutex>					readyBuffersStackMutex,
 								add_ptr<std::condition_variable>	readyBufferCondition,
-								add_ref<std::queue<BackBuffer>>		readyBuffersQueue,
+								add_ref<std::vector<BackBuffer>>	readyBuffersQueue,
 								const bool							silent)
 {
 	ZFence		presentFence		= buffer.presentFence;
@@ -730,50 +732,33 @@ bool Canvas::presentBackBuffer (add_cref<BackBuffer>				buffer,
 	ZSemaphore	renderSemaphore		= buffer.renderSemaphore;
 
 	VkPresentInfoKHR presentInfo{};
-	presentInfo.sType				= VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	presentInfo.pNext				= nullptr;
-	presentInfo.waitSemaphoreCount	= 1;
-	presentInfo.pWaitSemaphores		= renderSemaphore.ptr();
-	presentInfo.swapchainCount		= 1;
-	presentInfo.pSwapchains			= &swapchain.handle;
-	presentInfo.pImageIndices		= &buffer.imageIndex;
-	presentInfo.pResults			= nullptr;
-
-	const VkPipelineStageFlags waitDstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-			| VK_PIPELINE_STAGE_TRANSFER_BIT;
-			//VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType				= VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.waitSemaphoreCount	= 1;
-	submitInfo.pWaitSemaphores		= renderSemaphore.ptr();
-	submitInfo.pWaitDstStageMask	= &waitDstStageMask;
-	submitInfo.signalSemaphoreCount	= 1;
-	submitInfo.pSignalSemaphores	= acquireSemaphore.ptr();
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.pNext = nullptr;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = renderSemaphore.ptr();
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &swapchain.handle;
+	presentInfo.pImageIndices = &buffer.imageIndex;
+	presentInfo.pResults = nullptr;
 
 	VkResult res = VK_SUCCESS;
 	if (silent)
 	{
-		VKASSERT(vkQueueSubmit(*graphicsQueue, 1, &submitInfo, (VkFence)VK_NULL_HANDLE));
+		// Intentionally do nothing
 	}
 	else
 	{
 		res = vkQueuePresentKHR(*presentQueue, &presentInfo);
-		VKASSERT(vkQueueSubmit(*presentQueue, 0, (const VkSubmitInfo*)nullptr, *presentFence));
-
-		waitForFence(presentFence);
-		resetFence(presentFence);
 	}
 
+	ASSERTMSG(nullptr == readyBuffersStackMutex, "readyBuffersStackMutex must be null - not implemented yet");
 	if (readyBuffersStackMutex)
 	{
-		std::lock_guard<std::mutex> lk(*readyBuffersStackMutex);
-		readyBuffersStack->emplace(buffer);
-		readyBufferCondition->notify_one();
-		UNREF(lk);
-	}
-	else
-	{
-		readyBuffersQueue.push(buffer);
+		MULTI_UNREF(readyBuffersQueue, readyBufferCondition, readyBuffersStack);
+		//std::lock_guard<std::mutex> lk(*readyBuffersStackMutex);
+		//readyBuffersStack->emplace(buffer);
+		//readyBufferCondition->notify_one();
+		//UNREF(lk);
 	}
 
 	swapchain.resetRecreateFlag();
@@ -782,15 +767,16 @@ bool Canvas::presentBackBuffer (add_cref<BackBuffer>				buffer,
 }
 
 void Canvas::render	(add_ref<Swapchain>					swapchain,
-					 uint32_t							acquirableImageCount,
-					 add_ref<std::queue<BackBuffer>>	buffersQueue,
+					 uint32_t							backBufferCount,
+					 add_ref<std::vector<BackBuffer>>	backBuffers,
 					 add_ptr<std::mutex>				buffersQueueMutex,
-					 add_ptr<std::queue<BackBuffer>>	readyBuffersStack,
+					 add_ptr<std::vector<BackBuffer>>	readyBuffersStack,
 					 add_ptr<std::mutex>				readyBuffersStackMutex,
 					 add_ptr<std::condition_variable>	readyBufferCondition,
 					 OnCommandRecording					onCommandRecording)
 {
-	BackBuffer	buffer = acquireBackBuffer(buffersQueue, buffersQueueMutex, swapchain, acquirableImageCount);
+	add_ptr<BackBuffer>	pBuffer = acquireBackBuffer(backBuffers, buffersQueueMutex, swapchain, backBufferCount);
+	add_ref<BackBuffer> buffer(*pBuffer);
 
 	VkPipelineStageFlags	singleRenderStageMask;
 	VkPipelineStageFlags	multiRenderStageMask;
@@ -867,13 +853,14 @@ void Canvas::render	(add_ref<Swapchain>					swapchain,
 		renderSubmitInfo.pNext					= nullptr;
 		renderSubmitInfo.commandBufferCount		= 1;
 		renderSubmitInfo.pCommandBuffers		= buffer.renderCommand.ptr();
+		renderSubmitInfo.pWaitDstStageMask		= &singleRenderStageMask;
 		renderSubmitInfo.waitSemaphoreCount		= 1;
 		renderSubmitInfo.pWaitSemaphores		= buffer.acquireSemaphore.ptr();
-		renderSubmitInfo.pWaitDstStageMask		= &singleRenderStageMask;
 		renderSubmitInfo.signalSemaphoreCount	= 1;
 		renderSubmitInfo.pSignalSemaphores		= buffer.renderSemaphore.ptr();
 
 		ZFramebuffer framebuffer(swapchain.framebuffers[buffer.imageIndex]);
+		commandBufferReset(buffer.renderCommand);
 		onCommandRecording(std::ref(*this), swapchain, buffer.renderCommand, framebuffer);
 		imageResetLayout(framebufferGetImage(framebuffer), VK_IMAGE_LAYOUT_UNDEFINED);
 
@@ -885,9 +872,13 @@ void Canvas::render	(add_ref<Swapchain>					swapchain,
 					  << std::endl;
 		}
 		ZQueue queue = buffer.renderCommand.getParam<ZCommandPool>().getParam<ZQueue>();
-		VKASSERT(vkQueueSubmit(*queue, 1u, &renderSubmitInfo, *buffer.renderFence));
-		VKASSERT(vkWaitForFences(*device, 1u, buffer.renderFence.ptr(), VK_TRUE, INVALID_UINT64));
-		resetFence(buffer.renderFence);
+		VkFence submitFence = style.submitRenderWithFence ? *buffer.renderFence : VK_NULL_HANDLE;
+		VKASSERT(vkQueueSubmit(*queue, 1u, &renderSubmitInfo, submitFence));
+		if (style.submitRenderWithFence)
+		{
+			VKASSERT(vkWaitForFences(*device, 1u, buffer.renderFence.ptr(), VK_TRUE, INVALID_UINT64));
+			resetFence(buffer.renderFence);
+		}
 	}
 
 	if (getGlobalAppFlags().verbose > 9)
@@ -895,7 +886,7 @@ void Canvas::render	(add_ref<Swapchain>					swapchain,
 		logger << "After waiting blitCommand is " << buffer.blitCommand << std::endl;
 	}
 
-	presentBackBuffer(buffer, swapchain, readyBuffersStack, readyBuffersStackMutex, readyBufferCondition, buffersQueue, false);
+	presentBackBuffer(buffer, swapchain, readyBuffersStack, readyBuffersStackMutex, readyBufferCondition, backBuffers, false);
 }
 
 void thread_body	(add_ref<std::queue<Canvas::BackBuffer>>	readyBufferStack,
@@ -996,6 +987,8 @@ void thread_body	(add_ref<std::queue<Canvas::BackBuffer>>	readyBufferStack,
 
 int Canvas::run (OnSubcommandRecordingThenBlit onCommandRecordingThenBlit, add_cref<std::vector<ZQueue>> threadQueues)
 {
+	MULTI_UNREF(onCommandRecordingThenBlit, threadQueues);
+	/*
 	ASSERTMSG(threadQueues.size() <= std::thread::hardware_concurrency(),
 			  "Queue count exceeds maximum system threads");
 	ZCommandPool				blitPool				= createGraphicsCommandPool();
@@ -1008,7 +1001,7 @@ int Canvas::run (OnSubcommandRecordingThenBlit onCommandRecordingThenBlit, add_c
 				  "All of thread queues must ne unique");
 	}
 	Swapchain					swapchain				(*this);
-	const uint32_t				acquirableImageCount	= MAX_BACK_BUFFER_COUNT;
+	const uint32_t				acquirableImageCount	= style.acquirableImageCount;
 	strings						threadErrors			(threadQueues.size());
 	bool						doContinue				(true);
 	ZRenderPass					renderPass;
@@ -1076,6 +1069,8 @@ int Canvas::run (OnSubcommandRecordingThenBlit onCommandRecordingThenBlit, add_c
 					   [](add_cref<std::string> e) { return e.empty(); })
 		? 0
 		: 1;
+		*/
+	return 1;
 }
 
 int Canvas::run (OnCommandRecording				onCommandRecording,
@@ -1084,15 +1079,15 @@ int Canvas::run (OnCommandRecording				onCommandRecording,
 				 OnIdle							onIdle,
 				 OnAfterRecording				onAfterRecording)
 {
-	Swapchain				swapchain				(*this);
-	const uint32_t			acquirableImageCount	= MAX_BACK_BUFFER_COUNT;
-	ZCommandPool			graphicsPool			= createGraphicsCommandPool();
-	std::queue<BackBuffer>	backBuffersQueue;
+	Swapchain				swapchain			(*this);
+	const uint32_t			backBufferCount		= m_surfaceDetails.caps.minImageCount + style.acquirableImageCount;
+	ZCommandPool			graphicsPool		= createGraphicsCommandPool();
+	std::vector<BackBuffer>	backBuffers;
 
-	swapchain.recreate(renderPass, acquirableImageCount, 0, 0, true);
-	for (uint32_t i = 0; i < acquirableImageCount; ++i)
+	swapchain.recreate(renderPass, backBufferCount, 0, 0, true);
+	for (uint32_t i = 0; i < backBufferCount; ++i)
 	{
-		backBuffersQueue.emplace(graphicsPool, graphicsPool);
+		backBuffers.emplace_back(graphicsPool, graphicsPool);
 	}
 
 	if (style.visible) glfwShowWindow(*cc_window);
@@ -1117,8 +1112,8 @@ int Canvas::run (OnCommandRecording				onCommandRecording,
 		}
 
 		render	(swapchain,
-				 acquirableImageCount,
-				 backBuffersQueue,
+				 backBufferCount,
+				 backBuffers,
 				 nullptr, // buffersQueueMutex
 				 nullptr, // readyBuffersStack
 				 nullptr, // readyBuffersStackMutex
@@ -1130,6 +1125,14 @@ int Canvas::run (OnCommandRecording				onCommandRecording,
 			onAfterRecording(*this);
 		}
 	}
+
+	vkQueueWaitIdle(*presentQueue);
+
+	/*
+	* Depends on VK_KHR_PRESENT_WAIT_EXTENSION_NAME, "VK_KHR_present_wait"
+	device.getInterface().vkWaitForPresentKHR(
+		*device, swapchain.handle, getPresentQueueFamilyIndex(), INVALID_UINT64);
+	*/
 
 	return 0;
 }

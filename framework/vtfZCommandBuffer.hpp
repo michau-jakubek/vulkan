@@ -48,6 +48,7 @@ ZCommandPool	createCommandPool (ZDevice device, ZQueue queue, VkCommandPoolCreat
 ZCommandBuffer	allocateCommandBuffer (ZCommandPool commandPool, bool primary = true, const void* pNext = nullptr);
 ZCommandBuffer	createCommandBuffer (ZCommandPool commandPool, bool primary = true, const void* pNext = nullptr);
 ZCommandPool	commandBufferGetCommandPool (ZCommandBuffer commandBuffer);
+void			commandBufferReset (ZCommandBuffer commandBuffer);
 void			commandBufferEnd (ZCommandBuffer commandBuffer);
 void			commandBufferBegin	(ZCommandBuffer commandBuffer,
 									VkCommandBufferUsageFlags usage = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,

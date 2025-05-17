@@ -149,9 +149,9 @@ void bufferRead (ZBuffer buffer, T (&table)[N])
 }
 
 template<class T>
-void bufferRead (ZBuffer buffer, T& data)
+VkDeviceSize bufferRead (ZBuffer buffer, T& data)
 {
-	bufferReadData(buffer, reinterpret_cast<add_ptr<uint8_t>>(&data), sizeof(T));
+	return bufferReadData(buffer, reinterpret_cast<add_ptr<uint8_t>>(&data), sizeof(T));
 }
 
 template<class T>

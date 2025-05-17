@@ -102,7 +102,8 @@ uint32_t LayoutManager::addBinding_ (std::type_index	index,
 									 bool				isVector,
 									 VkDescriptorType	type,
 									 VkShaderStageFlags	stages,
-									 uint32_t			elementCount)
+									 uint32_t			elementCount,
+									 uint32_t			cloneOfBinding)
 {
 	VkDescriptorSetLayoutBindingAndType b{};
 	const uint32_t binding = data_count(m_extbindings);
@@ -118,8 +119,19 @@ uint32_t LayoutManager::addBinding_ (std::type_index	index,
 	b.isVector				= isVector;
 	b.shared				= false;
 	b.imageLayout			= VK_IMAGE_LAYOUT_UNDEFINED;
+	b.cloneOfBinding		= cloneOfBinding;
 	m_extbindings.emplace_back(b);
 	return binding;
+}
+uint32_t LayoutManager::cloneBinding_ (std::type_index		index,
+									   VkDeviceSize			size,
+									   bool					isVector,
+									   uint32_t				cloneOfBinding)
+{
+	add_cref<ExtBinding> b = verifyGetExtBinding(cloneOfBinding);
+	ASSERTMSG(isBufferDescriptorType(b.descriptorType), "Cloning descriptor must be buffer or uniform");
+	uint32_t elementCount = uint32_t((b.elementCount * b.size) / size);
+	return addBinding_(index, size, isVector, b.descriptorType, b.stageFlags, elementCount, cloneOfBinding);
 }
 uint32_t LayoutManager::addBinding (ZImageView			view,
 									ZSampler			sampler,
@@ -351,7 +363,7 @@ void LayoutManager::updateBuffersOffsets ()
 void LayoutManager::recreateUpdateBuffers (std::map<std::pair<VkDescriptorType, int>, ZBuffer>& buffers,
 										   bool performUpdateDescriptorSets, bool descriptorBuffer)
 {
-	std::map<std::pair<VkDescriptorType, int>, VkDeviceSize>	sizes;
+	std::map<std::pair<VkDescriptorType, int>, std::pair<VkDeviceSize, uint32_t>>	sizes;
 
 	for (add_ref<collection_element_t<decltype(m_extbindings)>> b : m_extbindings)
 	{
@@ -359,13 +371,15 @@ void LayoutManager::recreateUpdateBuffers (std::map<std::pair<VkDescriptorType, 
 		{
 			if (b.shared)
 			{
-				sizes[{b.descriptorType, UNIQUE_IBINDING}] +=
+				sizes[{b.descriptorType, UNIQUE_IBINDING}].first +=
 						ROUNDUP( (b.size * b.elementCount), getDescriptorAlignment(b.descriptorType) );
+				sizes[{b.descriptorType, UNIQUE_IBINDING}].second = b.cloneOfBinding;
 			}
 			else
 			{
-				sizes[{b.descriptorType, static_cast<int>(b.binding)}] =
+				sizes[{b.descriptorType, static_cast<int>(b.binding)}].first =
 						ROUNDUP( (b.size * b.elementCount), getDescriptorAlignment(b.descriptorType) );
+				sizes[{b.descriptorType, static_cast<int>(b.binding)}].second = b.cloneOfBinding;
 			}
 		}
 	}
@@ -376,17 +390,27 @@ void LayoutManager::recreateUpdateBuffers (std::map<std::pair<VkDescriptorType, 
 	{
 		for (const auto& size : sizes)
 		{
-			auto usagePtr = std::find_if(std::begin(DescriptorTypeToBufferUsage), std::end(DescriptorTypeToBufferUsage),
-				[&size](const auto& x) { return x.first == size.first.first; });
-			ASSERTION(std::end(DescriptorTypeToBufferUsage) != usagePtr);
+			if (size.second.second == INVALID_UINT32)
+			{
+				auto usagePtr = std::find_if(std::begin(DescriptorTypeToBufferUsage), std::end(DescriptorTypeToBufferUsage),
+					[&size](const auto& x) { return x.first == size.first.first; });
+				ASSERTION(std::end(DescriptorTypeToBufferUsage) != usagePtr);
 
-			const ZBufferUsageFlags		usage(usagePtr->second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-				(descriptorBuffer ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT : usagePtr->second));
-			const ZMemoryPropertyFlags	flags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+				const ZBufferUsageFlags		usage(usagePtr->second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+					(descriptorBuffer ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT : usagePtr->second));
+				const ZMemoryPropertyFlags	flags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-			ZBuffer buffer = createBuffer(device, size.second, usage, flags);
+				ZBuffer buffer = createBuffer(device, size.second.first, usage, flags);
 
-			buffers.emplace(size.first, buffer);
+				buffers.emplace(size.first, buffer);
+			}
+			else
+			{
+				const std::pair<VkDescriptorType, int> bufferBinding(size.first.first, make_signed(size.second.second));
+				auto bufferPtr = buffers.find(bufferBinding);
+				ASSERTMSG(buffers.end() != bufferPtr, "Cannot find source binding ", size.second.second);
+				buffers.emplace(size.first, bufferPtr->second);
+			}
 		}
 	}
 }
@@ -669,13 +693,13 @@ VarDescriptorInfo LayoutManager::getDescriptorInfo (uint32_t binding) const
 const LayoutManager::ExtBinding& LayoutManager::verifyGetExtBinding (uint32_t binding) const
 {
 	auto ptr = std::find_if(m_extbindings.begin(), m_extbindings.end(), [&](const auto& b){ return b.binding == binding; });
-	ASSERTMSG(ptr != m_extbindings.end(), "Mismatch type binding");
+	ASSERTMSG(ptr != m_extbindings.end(), "Binding ", binding, " not found");
 	return *ptr;
 }
 const LayoutManager::ExtBinding& LayoutManager::verifyGetExtBinding (std::type_index index, uint32_t binding) const
 {
 	const collection_element_t<decltype(m_extbindings)>& b = verifyGetExtBinding(binding);
-	ASSERTMSG(b.index == index, "Mismatch type binding");
+	ASSERTMSG(b.index == index, "Mismatch type binding (", binding, ")");
 	return b;
 }
 uint32_t LayoutManager::getBindingElementCount (uint32_t binding) const

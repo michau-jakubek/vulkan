@@ -107,6 +107,10 @@ void onKey (Canvas& cs, void* userData, const int key, int scancode, int action,
 	{
 		glfwSetWindowShouldClose(*cs.window, GLFW_TRUE);
 	}
+	if (key == GLFW_KEY_R && action == GLFW_PRESS)
+	{
+		*((int*)userData) += 1;
+	}
 }
 
 TriLogicInt runTriangeSingleThread (Canvas& cs, const std::string& assets, bool infinityRepeat)
@@ -137,7 +141,7 @@ TriLogicInt runTriangeSingleThread (Canvas& cs, const std::string& assets, bool 
 															VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
 
 	int drawTrigger = 1;
-	cs.events().cbKey.set(onKey, nullptr);
+	cs.events().cbKey.set(onKey, &drawTrigger);
 	cs.events().cbWindowSize.set(onResize, &drawTrigger);
 
 	auto onCommandRecording = [&](add_ref<Canvas>, add_cref<Canvas::Swapchain> swapchain,

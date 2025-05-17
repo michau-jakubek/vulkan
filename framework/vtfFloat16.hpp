@@ -11,6 +11,11 @@ class Float16;
 float float16ToFloat32 (const Float16&);
 Float16 float32ToFloat16 (float f32);
 
+#ifdef _MSC_VER
+// warning C4324: '': structure was padded due to alignment specifier
+#pragma warning(disable: 4324)
+#endif
+
 class Float16
 {
 	uint16_t m_data;
@@ -33,6 +38,10 @@ public:
 	}
 };
 
+#ifdef _MSC_VER
+// warning C4324: '': structure was padded due to alignment specifier
+#pragma warning(default: 4324)
+#endif
 
 } // namespace vtf
 

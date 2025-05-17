@@ -35,12 +35,6 @@ using void_ptr = add_ptr<void>;
 
 template<class X> struct add_extent	{ typedef X type[]; };
 
-// glslang	9a415ad3c69eae445b84ee9647c10e46d42dc25d
-// headers	6782ffb1a16d3485d6f17ca919729d8a9b75d990
-// tools	c4dd14909e60c3b2d0be035d84e232496cb2e7ab
-// docs	0a10fc1caae9a95de0fb304ca4a778fbd7936ba0
-
-
 VkAllocationCallbacks* getAllocationCallbacks();
 void deletable_selfTest ();
 

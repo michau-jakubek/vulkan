@@ -46,7 +46,7 @@ float float16ToFloat32(const Float16& f16)
         }
     }
 
-    exponent = exponent + (127 - 15);
+    exponent = exponent + (127 - 15); 
     mantissa = mantissa << 13;
 
     uint32_t result = sign | (exponent << 23) | mantissa;
@@ -57,26 +57,23 @@ Float16 float32ToFloat16 (float f)
 {
     uint32_t bits = bit_cast<uint32_t>(f);
     uint32_t sign = (bits & 0x80000000) >> 16;
-    uint32_t exponent = (bits & 0x7F800000) >> 23;
-    uint32_t mantissa = bits & 0x007FFFFF;
+    int32_t  exponent = ((bits & 0x7F800000) >> 23) - 127 + 15;
+    uint32_t mantissa = (bits & 0x007FFFFF) >> 13;
 
-    if (exponent == 0xFF) {
-        if (mantissa == 0) {
-            return Float16::construct(uint16_t(sign | 0x7C00));
+    if (exponent <= 0) {
+        // subnormal or zero
+        if (exponent < -10) {
+            // return 0.0;
+            return Float16::construct(uint16_t(sign));
         }
-        else {
-            return Float16::construct(uint16_t(sign | 0x7C00 | (mantissa >> 13)));
-        }
+        mantissa |= 0x0400; // add hidden bit
+        mantissa >>= (1 - exponent);
+        return Float16::construct(uint16_t(sign | mantissa));
     }
-    else if (exponent > 0x70) {
-        return Float16::construct(uint16_t(sign | 0x7C00));
+    else if (exponent >= 31) {
+        // inifinite or NaN
+        return Float16::construct(uint16_t(sign | 0x7C00 | (mantissa ? 0x03FF : 0)));
     }
-    else if (exponent < 0x71) {
-        return Float16::construct(uint16_t(sign));
-    }
-
-    exponent = exponent - (127 - 15);
-    mantissa = mantissa >> 13;
 
     return Float16::construct(uint16_t(sign | (exponent << 10) | mantissa));
 }

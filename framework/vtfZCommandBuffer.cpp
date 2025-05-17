@@ -54,6 +54,11 @@ ZCommandPool commandBufferGetCommandPool (ZCommandBuffer commandBuffer)
 	return commandBuffer.getParam<ZCommandPool>();
 }
 
+void commandBufferReset (ZCommandBuffer commandBuffer)
+{
+	vkResetCommandBuffer(*commandBuffer, VkCommandBufferResetFlagBits(0));
+}
+
 void commandBufferEnd (ZCommandBuffer commandBuffer)
 {
 	VKASSERT(vkEndCommandBuffer(*commandBuffer));

@@ -1,8 +1,76 @@
 #version 450
 
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+
 layout(local_size_x=1, local_size_y=1, local_size_z=1) in;
+
+layout(binding=0, std430) buffer InData {
+	float16_t p;
+	f16vec2 q;
+	float16_t r;
+	f16vec2 s;
+	float16_t t;
+	float16_t u;
+	f16vec4 a;
+	f16vec4 b;
+	f16vec3 c;
+	f16vec2 d;
+	float16_t e;
+} inData_1;
+layout(binding=1, std430) buffer OutData {
+	float16_t p;
+	f16vec2 q;
+	float16_t r;
+	f16vec2 s;
+	float16_t t;
+	float16_t u;
+	f16vec4 a;
+	f16vec4 b;
+	f16vec3 c;
+	f16vec2 d;
+	float16_t e;
+} outData_1;
+layout(binding=2) buffer InClone { float16_t data[]; } inClone;
+layout(binding=3) buffer OutClone { float16_t data[]; } outClone;
 
 void main()
 {
+	for (uint i = 0; i < 30; ++i)
+	{
+		outClone.data[i] = float16_t(111);
+	}
+/*
+	{
+		outData_1.p = inData_1.p;
+		outData_1.q = inData_1.q;
+		outData_1.r = inData_1.r;
+		outData_1.s = inData_1.s;
+		outData_1.t = inData_1.t;
+		outData_1.u = inData_1.u;
+		outData_1.a = inData_1.a;
+		outData_1.b = inData_1.b; + float16_t(100);
+		outData_1.c = inData_1.c;
+		outData_1.d = inData_1.d;
+		outData_1.e = inData_1.e;
+
+		outData_1.d.x = float16_t(100);
+		outData_1.b.z = float16_t(101);
+	}
+	outClone.data[15] = float16_t(222);
+	outClone.data[16] = float16_t(223);
+	*/
+
+	outData_1.p = float16_t(1);
+	outData_1.q = f16vec2(2,3);
+	outData_1.r = float16_t(4);
+	outData_1.s = f16vec2(5,6);
+	outData_1.t = float16_t(7);
+	outData_1.u = float16_t(8);
+
+	outData_1.a = f16vec4(9,10,11,12);
+	outData_1.b = f16vec4(13,14,15,16);
+	outData_1.c = f16vec3(17,18,19);
+	outData_1.d = f16vec2(20,21);
+	outData_1.e = float16_t(22);
 }
 

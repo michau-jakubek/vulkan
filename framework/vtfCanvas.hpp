@@ -36,6 +36,8 @@ struct CanvasStyle
 	bool					visible;
 	bool					resizable;
 	VkFormatFeatureFlags	surfaceFormatFlags;
+	uint32_t				acquirableImageCount;
+	bool					submitRenderWithFence;
 };
 
 struct CanvasContext
@@ -94,7 +96,7 @@ public:
 		add_cref<VkExtent2D>		extent;
 		add_cref<Images>			images;
 		add_cref<Framebuffers>		framebuffers;
-		add_cref<uint32_t>			bufferCount;
+		add_cref<uint32_t>			framebufferCount;
 		add_cref<uint32_t>			refreshCount;
 		add_cref<ZRenderPass>		renderPass;	// accessible after recreation
 		void recreate (ZRenderPass rp, uint32_t acquirableImageCount, uint32_t hintWidth = 0, uint32_t hintHeight = 0, bool force = false);
@@ -111,7 +113,7 @@ public:
 		VkViewport					m_viewport;
 		VkRect2D					m_scissor;
 		VkExtent2D					m_extent;
-		uint32_t					m_bufferCount;
+		uint32_t					m_framebufferCount;
 		ZRenderPass					m_renderPass;
 		ZImage						m_depthStencilImage;
 		ZImageView					m_depthStencilView;
@@ -227,26 +229,26 @@ public:
 
 protected:
 
-	BackBuffer			acquireBackBuffer		(add_ref<std::queue<BackBuffer>>	buffers,
-												 add_ptr<std::mutex>				buffersMutex,
-												 add_ref<Swapchain>					swapchain,
-												 uint32_t							acquirableImageCount);
-	bool				presentBackBuffer		(add_cref<BackBuffer>				buffer,
-												 add_ref<Swapchain>					swapchain,
-												 add_ptr<std::queue<BackBuffer>>	readyBuffersStack,
-												 add_ptr<std::mutex>				readyBuffersStackMutex,
-												 add_ptr<std::condition_variable>	readyBufferCondition,
-												 add_ref<std::queue<BackBuffer>>	readyBuffersQueue,
-												 const bool							silent);
-	void				render					(add_ref<Swapchain>					swapchain,
-												 uint32_t							acquirableImageCount,
-												 add_ref<std::queue<BackBuffer>>	buffersQueue,
-												 add_ptr<std::mutex>				buffersQueueMutex,
-												 add_ptr<std::queue<BackBuffer>>	readyBuffersStack,
-												 add_ptr<std::mutex>				readyBuffersStackMutex,
-												 add_ptr<std::condition_variable>	readyBufferCondition,
-												 OnCommandRecording					onCommandRecording);
-	void				construct				();
+	add_ptr<BackBuffer>	acquireBackBuffer	(add_ref<std::vector<BackBuffer>>	buffers,
+											 add_ptr<std::mutex>				buffersMutex,
+											 add_ref<Swapchain>					swapchain,
+											 uint32_t							acquirableImageCount);
+	bool				presentBackBuffer	(add_cref<BackBuffer>				buffer,
+											 add_ref<Swapchain>					swapchain,
+											 add_ptr<std::vector<BackBuffer>>	readyBuffersStack,
+											 add_ptr<std::mutex>				readyBuffersStackMutex,
+											 add_ptr<std::condition_variable>	readyBufferCondition,
+											 add_ref<std::vector<BackBuffer>>	readyBuffersQueue,
+											 const bool							silent);
+	void				render				(add_ref<Swapchain>					swapchain,
+											 uint32_t							acquirableImageCount,
+											 add_ref<std::vector<BackBuffer>>	backBuffers,
+											 add_ptr<std::mutex>				buffersQueueMutex,
+											 add_ptr<std::vector<BackBuffer>>	readyBuffersStack,
+											 add_ptr<std::mutex>				readyBuffersStackMutex,
+											 add_ptr<std::condition_variable>	readyBufferCondition,
+											 OnCommandRecording					onCommandRecording);
+	void				construct			();
 
 	friend struct GLFWEvents;
 
@@ -255,6 +257,7 @@ protected:
 	VkFormat						m_surfaceFormat;
 	uint32_t						m_width;
 	uint32_t						m_height;
+	uint32_t						m_currentFrame;
 	ZQueue							m_presentQueue;
 	std::unique_ptr<GLFWEvents>		m_events;
 	void*							m_timerUserData;

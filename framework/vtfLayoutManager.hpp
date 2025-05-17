@@ -102,6 +102,7 @@ public:
 	 */
 	template<class ElemType> uint32_t		addBindingAsVector			(VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, uint32_t elementCount = 1, VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
 	template<class ElemType> uint32_t		addBindingAsVector			(const std::vector<ElemType>& vector, VkDescriptorType type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VkShaderStageFlags stages = VK_SHADER_STAGE_ALL);
+	template<class ElemType> uint32_t		cloneBindingAsVector		(uint32_t binding);
 	/**
 	 * Creates a descriptor set bind depending on parameters.
 	 * If both view and sampler have handles then descriptor be VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER.
@@ -184,6 +185,7 @@ private:
 			, size			(0)
 			, offset		(0)
 			, elementCount	(1)
+			, cloneOfBinding(INVALID_UINT32)
 			, imageLayout	(VK_IMAGE_LAYOUT_UNDEFINED)
 			, isVector		(false)
 			, shared		(false) {}
@@ -191,6 +193,7 @@ private:
 		VkDeviceSize	size;
 		VkDeviceSize	offset;
 		uint32_t		elementCount;
+		uint32_t		cloneOfBinding;
 		VkImageLayout	imageLayout;
 		bool			isVector;
 		bool			shared;
@@ -200,7 +203,9 @@ private:
 	uint32_t			joinBindings_			(std::type_index index, VkDeviceSize size, bool isVector,
 												 VkDescriptorType type, VkShaderStageFlags stages, uint32_t count);
 	uint32_t			addBinding_				(std::type_index index, VkDeviceSize size, bool isVector,
-												 VkDescriptorType type, VkShaderStageFlags stages, uint32_t elementCount);
+												 VkDescriptorType type, VkShaderStageFlags stages, uint32_t elementCount,
+												 uint32_t cloneOfBinding = INVALID_UINT32);
+	uint32_t			cloneBinding_			(std::type_index index, VkDeviceSize size, bool isVector, uint32_t cloneOfBinding);
 	const ExtBinding&	verifyGetExtBinding		(uint32_t binding) const;
 	const ExtBinding&	verifyGetExtBinding		(std::type_index index, uint32_t binding) const;
 	void				writeBinding_			(std::type_index index, uint32_t binding, const uint8_t* data, VkDeviceSize bytes);
@@ -266,6 +271,11 @@ template<class X> uint32_t LayoutManager::addBindingAsVector (const std::vector<
 {
 	auto index = std::type_index(typeid(typename add_extent<std::vector<X>>::type));
 	return addBinding_(index, sizeof(X), true, type, stages, std::max(static_cast<uint32_t>(vector.size()), 1u));
+}
+template<class X> uint32_t LayoutManager::cloneBindingAsVector (uint32_t binding)
+{
+	auto index = std::type_index(typeid(typename add_extent<std::vector<X>>::type));
+	return cloneBinding_(index, sizeof(X), true, binding);
 }
 template<class Data__> void LayoutManager::writeBinding (uint32_t binding, const Data__& data)
 {

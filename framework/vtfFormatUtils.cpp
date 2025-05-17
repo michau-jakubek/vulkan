@@ -15,15 +15,6 @@ struct FormatAndName
 }
 const formatAndNames[]
 {
-	/*
-		VK_FORMAT_D16_UNORM = 124,,
-		VK_FORMAT_X8_D24_UNORM_PACK32 = 125,
-		VK_FORMAT_D32_SFLOAT = 126,
-		VK_FORMAT_S8_UINT = 127,
-		VK_FORMAT_D16_UNORM_S8_UINT = 128,
-		VK_FORMAT_D24_UNORM_S8_UINT = 129,
-		VK_FORMAT_D32_SFLOAT_S8_UINT = 130,
-	*/
 	MKFN(VK_FORMAT_R4G4_UNORM_PACK8),
 	MKFN(VK_FORMAT_R4G4B4A4_UNORM_PACK16),
 	MKFN(VK_FORMAT_B4G4R4A4_UNORM_PACK16),
@@ -146,6 +137,13 @@ const formatAndNames[]
 	MKFN(VK_FORMAT_R64G64B64A64_SINT),
 	MKFN(VK_FORMAT_R64G64B64A64_SFLOAT),
 	MKFN(VK_FORMAT_B10G11R11_UFLOAT_PACK32),
+
+	MKFN(VK_FORMAT_D16_UNORM),
+	MKFN(VK_FORMAT_D32_SFLOAT),
+	MKFN(VK_FORMAT_S8_UINT),
+	MKFN(VK_FORMAT_D16_UNORM_S8_UINT),
+	MKFN(VK_FORMAT_D24_UNORM_S8_UINT),
+	MKFN(VK_FORMAT_D32_SFLOAT_S8_UINT),
 };
 
 enum ParseStates
@@ -166,7 +164,7 @@ void computePixelByteSize (ZFormatInfo& info)
 	info.pixelByteSize = ROUNDUP(bitsSize, 8) / 8;
 }
 
-static uint8_t parseNumber(const char* const name, int& pos)
+static uint8_t parseNumber (const char* const name, int& pos)
 {
 	int num[8];
 	int mag = 0;
@@ -293,9 +291,6 @@ static bool parseComponent (const char* const name, int& pos, int& swizz, ZForma
 	case 'G':	pos += 1;	info.color	= true;		comp = 1;	break;
 	case 'B':	pos += 1;	info.color	= true;		comp = 2;	break;
 	case 'A':	pos += 1;	info.color	= true;		comp = 3;	break;
-	case 'D':	pos += 1;	info.color = false;		comp = 5;	break;
-	case 'S':	pos += 1;	info.stencil = true;	comp = 6;	break;
-	case 'X':	pos += 1;	info.stencil = true;	comp = 6;	break;
 	}
 
 	ASSERTMSG(std::isdigit(name[pos]), "Unexpected format: ", name);
@@ -349,6 +344,56 @@ static ZFormatInfo makeFormatInfo (add_cptr<FormatAndName> const pFan)
 	return res;
 }
 
+static ZFormatInfo makeFormatInfoDS (VkFormat format, const char* name)
+{
+	ZFormatInfo i{};
+	i.name = name;
+	switch (format)
+	{
+	case VK_FORMAT_D16_UNORM:
+		i.componentBitSizes[0] = 16;
+		i.componentByteSizes[0] = 2;
+		i.integral = true;
+		i.pixelByteSize = 2;
+		i.normalized = true;
+		break;
+	case VK_FORMAT_D32_SFLOAT:
+		i.componentBitSizes[0] = 32;
+		i.componentByteSizes[0] = 4;
+		i.floating = true;
+		i.pixelByteSize = 4;
+		i.normalized = true;
+		break;
+	case VK_FORMAT_D16_UNORM_S8_UINT:
+		i.componentBitSizes[0] = 16;
+		i.componentBitSizes[1] = 8;
+		i.componentByteSizes[0] = 2;
+		i.componentByteSizes[1] = 1;
+		i.integral = true;
+		i.stencil = true;
+		break;
+	case VK_FORMAT_D24_UNORM_S8_UINT:
+		i.componentBitSizes[0] = 24;
+		i.componentBitSizes[1] = 8;
+		i.componentByteSizes[0] = 3;
+		i.componentByteSizes[1] = 1;
+		i.integral = true;
+		i.stencil = true;
+		break;
+	case VK_FORMAT_D32_SFLOAT_S8_UINT:
+		i.componentBitSizes[0] = 32;
+		i.componentBitSizes[1] = 8;
+		i.componentByteSizes[0] = 4;
+		i.componentByteSizes[1] = 1;
+		i.floating = true;
+		i.integral = true;
+		i.stencil = true;
+		break;
+	default: ASSERTFALSE("Unknown DS format ", format);
+	}
+	return i;
+}
+
 static add_cptr<FormatAndName> findFormatAndName (VkFormat format)
 {
 	add_cptr<FormatAndName> pFan = nullptr;
@@ -396,16 +441,19 @@ const char* formatGetString (VkFormat format)
 	return pFan ? pFan->name : nullptr;
 }
 
+
 ZFormatInfo	formatGetInfo (VkFormat format)
 {
-	add_cptr<FormatAndName> pFan = findFormatAndName(format);
-	ASSERTMSG(pFan, "Format not implemented", uint64_t(format));
-	if (nullptr == pFan) {
+	add_cptr<FormatAndName> pFormatAndName = findFormatAndName(format);
+	ASSERTMSG(pFormatAndName, "Format not implemented ", uint64_t(format));
+	if (nullptr == pFormatAndName) {
 		ZFormatInfo	res{};
 		res.format	= VK_FORMAT_UNDEFINED;
 		return res;
 	}
-	return makeFormatInfo(pFan);
+	return formatIsDepthStencil(ZPhysicalDevice(), format, false).first
+			? makeFormatInfoDS(format, pFormatAndName->name)
+			: makeFormatInfo(pFormatAndName);
 }
 
 VkImageAspectFlags formatGetAspectMask (VkFormat format)
