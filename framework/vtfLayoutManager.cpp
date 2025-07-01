@@ -820,7 +820,7 @@ ZBuffer LayoutManager::createDescriptorBuffer (ZDescriptorSetLayout dsLayout)
 	ASSERTMSG(di.vkGetDescriptorEXT, "vkGetDescriptorEXT() must not be null");
 
 	VkPhysicalDeviceDescriptorBufferPropertiesEXT dbp = makeVkStruct();
-	deviceGetPhysicalProperties2(device, &dbp);
+	deviceGetPhysicalProperties2(device.getParam<ZPhysicalDevice>(), &dbp);
 
 	VkDeviceSize layoutSize = 0u;
 	di.vkGetDescriptorSetLayoutSizeEXT(*device, *dsLayout, &layoutSize);

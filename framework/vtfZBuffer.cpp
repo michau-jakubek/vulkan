@@ -554,12 +554,14 @@ void	bufferCopyToImage	(ZCommandBuffer cmdBuffer, ZBuffer buffer, ZImage image,
 namespace namespace_hidden
 {
 BufferTexelAccess_::BufferTexelAccess_ (ZBuffer buffer, uint32_t elementSize,
-										uint32_t width, uint32_t height, uint32_t depth, VkComponentTypeKHR componentType)
+										uint32_t width, uint32_t height, uint32_t depth,
+										uint32_t off, VkComponentTypeKHR componentType)
 	: m_buffer			(buffer)
 	, m_elementSize		(elementSize)
 	, m_componentType	(componentType)
 	, m_bufferSize		(bufferGetSize(buffer))
 	, m_size			(width, height, depth)
+	, m_offset			(off)
 	, m_data			(nullptr)
 {
 	ASSERTION(width != 0 && height != 0 && depth != 0 && (VkDeviceSize(elementSize) * width * height * depth) <= m_bufferSize);
@@ -576,13 +578,13 @@ BufferTexelAccess_::~BufferTexelAccess_ ()
 }
 add_ptr<void> BufferTexelAccess_::at (uint32_t x, uint32_t y, uint32_t z)
 {
-	const std::size_t address = static_cast<std::size_t>(m_elementSize * ((z * m_size.x() * m_size.y()) + (y * m_size.x()) + x));
+	const std::size_t address = static_cast<std::size_t>(m_elementSize * (m_offset + (z * m_size.x() * m_size.y()) + (y * m_size.x()) + x));
 	ASSERTION(address < m_bufferSize);
 	return &m_data[address];
 }
 add_cptr<void> BufferTexelAccess_::at (uint32_t x, uint32_t y, uint32_t z) const
 {
-	const std::size_t address = static_cast<std::size_t>(m_elementSize * ((z * m_size.x() * m_size.y()) + (y * m_size.x()) + x));
+	const std::size_t address = static_cast<std::size_t>(m_elementSize * (m_offset + (z * m_size.x() * m_size.y()) + (y * m_size.x()) + x));
 	ASSERTION(address < m_bufferSize);
 	return &m_data[address];
 }

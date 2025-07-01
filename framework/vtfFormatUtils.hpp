@@ -213,6 +213,26 @@ template<> inline constexpr VkComponentTypeKHR ctype_to_vk_component_type<uint16
 template<> inline constexpr VkComponentTypeKHR ctype_to_vk_component_type<uint32_t>	= VK_COMPONENT_TYPE_UINT32_KHR;
 template<> inline constexpr VkComponentTypeKHR ctype_to_vk_component_type<uint64_t>	= VK_COMPONENT_TYPE_UINT64_KHR;
 
+template<VkComponentTypeKHR> struct vK_component_type_to_ctype_impl;
+#define VKCOMPONENTTOTYPEIMPL(comp_, cpptype_)				\
+	template<> struct vK_component_type_to_ctype_impl<comp_> { typedef cpptype_ type; }
+
+VKCOMPONENTTOTYPEIMPL(VK_COMPONENT_TYPE_FLOAT16_KHR,	Float16);
+VKCOMPONENTTOTYPEIMPL(VK_COMPONENT_TYPE_BFLOAT16_KHR,	BrainFloat16);
+VKCOMPONENTTOTYPEIMPL(VK_COMPONENT_TYPE_FLOAT32_KHR,	float);
+VKCOMPONENTTOTYPEIMPL(VK_COMPONENT_TYPE_FLOAT64_KHR,	double);
+VKCOMPONENTTOTYPEIMPL(VK_COMPONENT_TYPE_SINT8_KHR,		int8_t);
+VKCOMPONENTTOTYPEIMPL(VK_COMPONENT_TYPE_SINT16_KHR,		int16_t);
+VKCOMPONENTTOTYPEIMPL(VK_COMPONENT_TYPE_SINT32_KHR,		int32_t);
+VKCOMPONENTTOTYPEIMPL(VK_COMPONENT_TYPE_SINT64_KHR,		int64_t);
+VKCOMPONENTTOTYPEIMPL(VK_COMPONENT_TYPE_UINT8_KHR,		uint8_t);
+VKCOMPONENTTOTYPEIMPL(VK_COMPONENT_TYPE_UINT16_KHR,		uint16_t);
+VKCOMPONENTTOTYPEIMPL(VK_COMPONENT_TYPE_UINT32_KHR,		uint32_t);
+VKCOMPONENTTOTYPEIMPL(VK_COMPONENT_TYPE_UINT64_KHR,		uint32_t);
+
+template<VkComponentTypeKHR comp_> using vK_component_type_to_ctype =
+	typename vK_component_type_to_ctype_impl<comp_>::type;
+
 } // vtf
 
 #endif // __VTF_FORMAT_UTILS_HPP_INCLUDED__

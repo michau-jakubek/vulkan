@@ -125,7 +125,7 @@ std::string readFile (const std::string& filename, bool* status)
 
 	if (!file.is_open()) {
 		if (nullptr == status || !(*status))
-			throw std::runtime_error("failed to open file! " + filename);
+			throw std::runtime_error("failed to open file! " + filename + "\n");
 		else
 		{
 			*status = false;

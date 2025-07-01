@@ -56,7 +56,7 @@ ZDevice			createLogicalDevice	(ZPhysicalDevice		physDevice,
 									 bool					enableDebugPrintf = false);
 add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (add_cref<ZDevice> device);
 add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (add_cref<ZPhysicalDevice> device);
-VkPhysicalDeviceProperties2			 deviceGetPhysicalProperties2 (add_cref<ZDevice> device, add_ptr<void> pNext = nullptr);
+VkPhysicalDeviceProperties2			 deviceGetPhysicalProperties2 (add_cref<ZPhysicalDevice> device, add_ptr<void> pNext = nullptr);
 template<typename  PropertiesType, typename FieldType, typename MaskType>
 FieldType deviceCheckProperties (
 	ZPhysicalDevice dev,

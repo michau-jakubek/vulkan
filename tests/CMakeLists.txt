@@ -52,6 +52,8 @@ set(tests_files
 	intGeomTests.hpp
 	cogWheelsTests.cpp
 	cogWheelsTests.hpp
+	cooperativeMatrixTests.cpp
+	cooperativeMatrixTests.hpp
     )
 
 if(ENABLE_DAEMON_TEST)

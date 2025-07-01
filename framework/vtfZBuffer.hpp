@@ -177,7 +177,7 @@ struct BufferTexelAccess_
 
 protected:
 	BufferTexelAccess_ (ZBuffer buffer, uint32_t elementSize,
-						uint32_t width, uint32_t height, uint32_t depth, VkComponentTypeKHR componentType);
+						uint32_t width, uint32_t height, uint32_t depth, uint32_t off, VkComponentTypeKHR componentType);
 	virtual ~BufferTexelAccess_ ();
 	add_ptr<void>	at (uint32_t x, uint32_t y, uint32_t z = 0);
 	add_cptr<void>	at (uint32_t x, uint32_t y, uint32_t z = 0) const;
@@ -187,6 +187,7 @@ protected:
 	const VkComponentTypeKHR	m_componentType;
 	const VkDeviceSize			m_bufferSize;
 	const UVec3					m_size;
+	const uint32_t              m_offset;
 	add_ptr<uint8_t>			m_data;
 };
 
@@ -207,8 +208,8 @@ struct BufferTexelAccess_ComponentType<VecX<ElementType, N>>
 template<class ElementType>
 struct BufferTexelAccess : namespace_hidden::BufferTexelAccess_
 {
-	BufferTexelAccess (ZBuffer buffer, uint32_t width, uint32_t height, uint32_t depth = 1u)
-		: BufferTexelAccess_ (buffer, static_cast<uint32_t>(sizeof(ElementType)), width, height, depth, 
+	BufferTexelAccess (ZBuffer buffer, uint32_t width, uint32_t height, uint32_t depth = 1u, uint32_t startElement = 0u)
+		: BufferTexelAccess_ (buffer, static_cast<uint32_t>(sizeof(ElementType)), width, height, depth, startElement,
 							  namespace_hidden::BufferTexelAccess_ComponentType<ElementType>::type) {}
 	add_ref<ElementType>	at (uint32_t x, uint32_t y, uint32_t z = 0)
 	{
@@ -219,6 +220,7 @@ struct BufferTexelAccess : namespace_hidden::BufferTexelAccess_
 		return *static_cast<add_cptr<ElementType>>(BufferTexelAccess_::at(x, y, z));
 	}
 	auto stdBeginEnd () { return makeStdBeginEnd<ElementType>(m_data, (m_size.x() * m_size.y() * m_size.z())); }
+	uint32_t getElementCount() const { return m_size.prod(); }
 };
 
 } // namespace vtf

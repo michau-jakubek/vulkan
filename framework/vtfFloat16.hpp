@@ -38,6 +38,15 @@ public:
 	}
 };
 
+struct BrainFloat16
+{
+	BrainFloat16() {}
+	BrainFloat16(float, int = 0) {}
+	float asFloat() const {
+		return 0.0f;
+	}
+};
+
 #ifdef _MSC_VER
 // warning C4324: '': structure was padded due to alignment specifier
 #pragma warning(default: 4324)

@@ -1101,15 +1101,14 @@ add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (add_cref<ZPhys
 	return device.getParamRef<VkPhysicalDeviceProperties>();
 }
 
-VkPhysicalDeviceProperties2 deviceGetPhysicalProperties2 (add_cref<ZDevice> device, add_ptr<void> pNext)
+VkPhysicalDeviceProperties2 deviceGetPhysicalProperties2 (add_cref<ZPhysicalDevice> device, add_ptr<void> pNext)
 {
 	ASSERTMSG(device.has_handle(), "Device must have handle");
 	VkPhysicalDeviceProperties2 props = makeVkStruct(pNext);
-	auto physicalDevice = deviceGetPhysicalDevice(device);
 	auto fn = deviceGetInstance(device).getInterface().vkGetPhysicalDeviceProperties2KHR;
 	if (fn)
-		fn(*physicalDevice, &props);
-	else vkGetPhysicalDeviceProperties2(*physicalDevice, &props);
+		fn(*device, &props);
+	else vkGetPhysicalDeviceProperties2(*device, &props);
 	return props;
 }
 

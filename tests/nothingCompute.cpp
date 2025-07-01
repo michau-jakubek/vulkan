@@ -52,6 +52,7 @@ struct AlignedF16Vec4 : public VecX<Float16, 4>
 
 static_assert(sizeof(Float16) == sizeof(uint16_t), "???");
 
+/*
 auto makeStructImpl(const std::tuple<>&)
 {
 	struct S {};
@@ -83,7 +84,7 @@ template<class... X> auto makeStruct(const std::tuple<X...>& t)
 {
 	return makeStructImpl(t);
 }
-
+*/
 template<class FVec> void fillFloat16 (FVec& vec, add_ref<float> val)
 {
 	for (uint32_t i = 0u; i < vec.count(); ++i)
@@ -143,11 +144,13 @@ TriLogicInt runTest (const TestRecord& record, const strings& cmdLineParams)
 		AlignedFloat16_t
 	> InTuple;
 
+	/*
 	//typedef std::tuple<int, char, double> InTuple;
 	auto inTuple = makeStruct(InTuple());
 	std::cout << "SIZEOF 1: " << sizeof(inTuple) << std::endl;
 	std::cout << "SIZEOF 1: " << sizeof(InTuple) << std::endl;
 	std::cout << demangledName(inTuple) << std::endl;
+	*/
 
 	LayoutManager				lm(ctx.device);
 	using type = Float16;
