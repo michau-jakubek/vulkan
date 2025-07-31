@@ -1,6 +1,7 @@
 #include "descriptorBufferTests.hpp"
 #include "vtfOptionParser.hpp"
 #include "vtfBacktrace.hpp"
+#include "vtfProgressRecorder.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfLayoutManager.hpp"
@@ -29,12 +30,14 @@ struct Params
 	add_cref<strings>		m_cmdLineParams;
 	bool					m_set;
 	bool					m_fps;
+	bool					m_cache;
 	bool					m_samplerAnisotropy;
 	Params(add_cref<std::string> assets, add_cref<strings> cmdLineParams)
 		: m_assets				(assets)
 		, m_cmdLineParams		(cmdLineParams)
 		, m_set					(false)
 		, m_fps					(false)
+		, m_cache				(false)
 		, m_samplerAnisotropy	(false)
 	{
 	}
@@ -62,26 +65,23 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 		{
 			caps.addUpdateFeatureIf(
 				&VkPhysicalDeviceBufferDeviceAddressFeatures::bufferDeviceAddress)
-				.checkNotSupported(&VkPhysicalDeviceBufferDeviceAddressFeatures::bufferDeviceAddress, true,
-					"bufferDeviceAddress is not supported by device");
+				.checkSupported("bufferDeviceAddress");
 
 			caps.addUpdateFeatureIf(
 				&VkPhysicalDeviceDescriptorBufferFeaturesEXT::descriptorBuffer)
-				.checkNotSupported(&VkPhysicalDeviceDescriptorBufferFeaturesEXT::descriptorBuffer, true,
-					"descriptorBuffer is not supported by device");
+				.checkSupported("descriptorBuffer");
 
 			//caps.addUpdateFeatureIf(
 			//	&VkPhysicalDeviceDescriptorBufferFeaturesEXT::descriptorBufferCaptureReplay)
-			//	.checkNotSupported(&VkPhysicalDeviceDescriptorBufferFeaturesEXT::descriptorBufferCaptureReplay, true,
-			//		"descriptorBufferCaptureReplay not supported by device");
+			//	.checkSupported("descriptorBufferCaptureReplay");
 
 			p.m_samplerAnisotropy = caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::samplerAnisotropy);
 
-			caps.requiredExtension.push_back(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
-			caps.requiredExtension.push_back(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME);
-			caps.requiredExtension.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
-			caps.requiredExtension.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
-			caps.requiredExtension.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
+			caps.addExtension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+			caps.addExtension(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME);
+			caps.addExtension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+			caps.addExtension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+			caps.addExtension(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
 		}
 	};
 
@@ -95,6 +95,7 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 
 constexpr Option optionSet("-set", 0);
 constexpr Option optionFps("-fps", 0);
+constexpr Option optionCache("-cache", 0);
 OptionParser<Params> Params::getParser ()
 {
 	OptionFlags				flags	(OptionFlag::None);
@@ -103,6 +104,7 @@ OptionParser<Params> Params::getParser ()
 
 	parser.addOption(&Params::m_set, optionSet,	"Use descriptor set", { params.m_set }, flags);
 	parser.addOption(&Params::m_fps, optionFps, "Enable FPS", { params.m_fps }, flags);
+	parser.addOption(&Params::m_cache, optionCache, "Use pipeline cache", { params.m_cache }, flags);
 
 	return parser;
 }
@@ -311,6 +313,10 @@ void makeVertices (add_ref<VertexInput> input)
 
 TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 {
+	add_ref<ProgressRecorder> recorder = canvas.device.getParam<ZPhysicalDevice>()
+											.getParam<ZInstance>()
+											.getParamRef<ProgressRecorder>();
+
 	const VkFormat stoFormat = VK_FORMAT_R32_UINT;
 	const std::string face1FileName = (fs::path(params.m_assets) / "dice_texture.png").string();
 	{
@@ -401,10 +407,14 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 	ZBuffer					desc1Buffer = useDescriptorSet ? ZBuffer() : set1.createDescriptorBuffer(ds1Layout);
 	ZRenderPass				renderPass	= createColorRenderPass(canvas.device, { canvas.surfaceFormat },
 																{ makeClearColor(Vec4(0,0,0,1)) });
+	ZPipelineCache			graphCache = params.m_cache
+											? createPipelineCache(canvas.device, "descriptor_buffer.cache")
+											: ZPipelineCache();
+	recorder.stamp("Before vkCreateGraphicsPipelines()");
 	ZPipeline				graphPline	= createGraphicsPipeline(pLayout, renderPass, vertShader, fragShader, vertexInput,
 																VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR,
-																gpp::DepthTestEnable(true));
-
+																gpp::DepthTestEnable(true), graphCache);
+	recorder.stamp("After vkCreateGraphicsPipelines()");
 	ZBuffer					matBuffer	= std::get<DescriptorBufferInfo>(set1.getDescriptorInfo(matBinding)).buffer;
 	ZBuffer					inStoBuffer	= createBuffer(stoImage, ZBufferUsageStorageFlags, ZMemoryPropertyHostFlags);
 	ZBuffer					outStoBuffer = createBuffer(stoImage, ZBufferUsageStorageFlags, ZMemoryPropertyHostFlags);
@@ -440,6 +450,10 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 	{
 		std::cout << "SampledImage: " << face1Image << std::endl
 				  << "StorageImage: " << stoImage << std::endl;
+	}
+	if (params.m_cache)
+	{
+		recorder.print(std::cout);
 	}
 
 	UserData userData{ matBuffer, 1u };

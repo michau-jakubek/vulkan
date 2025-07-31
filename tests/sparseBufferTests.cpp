@@ -82,7 +82,7 @@ TriLogicInt selfTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 	ZPipelineLayout						pipelineLayout		= lm.createPipelineLayout({descriptorSetLayout});
 	lm.updateDescriptorSet(descriptorSet, binding, buffer);
 
-	ZPipeline							pipeline			= createComputePipeline(pipelineLayout, shaderModule, UVec3(10,10,1));
+	ZPipeline							pipeline			= createComputePipeline(pipelineLayout, shaderModule, {}, UVec3(10,10,1));
 
 	Alloc								alloc				(buffer);
 	std::fill_n(alloc.begin<Item>(), count, Item{ 3u, {} });

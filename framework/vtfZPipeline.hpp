@@ -78,6 +78,7 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::BlendA
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::BlendConstants>		blendConstants);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::SpecConstants>		specConstants);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::PrimitiveRestart>		primitiveRestartEnable);
+void updateKnownSettings(add_ref<GraphicPipelineSettings>,	ZPipelineCache						pipelineCache);
 
 // end of template recursion
 void updateSettings (add_ref<GraphicPipelineSettings>);
@@ -102,11 +103,23 @@ ZPipeline createGraphicsPipeline (ZPipelineLayout layout, X&&... params)
 }
 
 bool computePipelineVerifyLimits (ZDevice device, add_cref<UVec3> wgSizes, bool raise = true);
-ZPipeline createComputePipeline (
+
+ZPipeline createComputePipeline(
+	ZPipelineCache					pipelineCache,
 	ZPipelineLayout					layout,
 	ZShaderModule					computeShaderModule,
 	add_ref<ZSpecializationInfo>	specInfo,
-	bool							enableFullGroups		= false);
+	bool							enableFullGroups = false);
+
+inline ZPipeline createComputePipeline(
+	ZPipelineLayout					layout,
+	ZShaderModule					computeShaderModule,
+	add_ref<ZSpecializationInfo>	specInfo,
+	bool							enableFullGroups = false)
+{
+	return createComputePipeline(ZPipelineCache(), layout, computeShaderModule, specInfo, enableFullGroups);
+}
+
 // Please note that if any of localSize[?] is valid value and a layout of compute shader looks like
 // layout(local_size_x_ID = X, local_size_y_ID = Y, local_size_z_ID = Z), then X,Y,Z will refer to
 // the SpecID during compute pipeline creation. Be carefull to set them properly according to their
@@ -115,6 +128,7 @@ template<class... EntryTypes>
 ZPipeline createComputePipeline (
 	ZPipelineLayout				layout,
 	ZShaderModule				computeShaderModule,
+	ZPipelineCache				pipelineCache = {},
 	add_cref<UVec3>				localSizes = UVec3(INVALID_UINT32),
 	ZSpecEntry<EntryTypes>&&... entries)
 {
@@ -135,11 +149,19 @@ ZPipeline createComputePipeline (
 	info.addEntries(entries...);
 
 	extern ZPipeline createComputePipelineImpl(ZPipelineLayout layout, ZShaderModule computeShaderModule,
-		add_cref<UVec3>, bool autoLocalSizesIDs, bool enableFullGroups, add_ref<ZSpecializationInfo>);
-	return createComputePipelineImpl(layout, computeShaderModule, localSizes, autoLocalSizesIDs, false, info);
+		ZPipelineCache pipelineCache, add_cref<UVec3>, bool autoLocalSizesIDs, bool enableFullGroups,
+		add_ref<ZSpecializationInfo>);
+	return createComputePipelineImpl(layout, computeShaderModule, pipelineCache,
+										localSizes, autoLocalSizesIDs, false, info);
 }
 
 ZPipelineLayout	pipelineGetLayout (ZPipeline pipeline);
+
+ZPipelineCache createPipelineCache(
+	ZDevice						device,
+	add_cref<std::string>		cacheFileName,
+	VkPipelineCacheCreateFlags	flags = VkPipelineCacheCreateFlags(0),
+	bool						forceReset = false);
 
 } // namespace vtf
 

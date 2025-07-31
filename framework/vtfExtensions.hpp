@@ -102,9 +102,6 @@ class DeviceCaps
     void_cptr addUpdateFeature (VkStructureType sType, add_ptr<void> pExpected, add_cptr<void> pSource,
                            uint32_t featureSize, add_ref<Caller> caller);
 
-    VkBool32 checkNotSupportedFeature (add_cref<std::string> structName,
-                                       add_cptr<char> fieldNameAndDescription,
-                                       VkBool32 test, bool raiseIfFalse) const;
     void initializeFeature (add_ptr<void> feature, bool autoInitialize, bool isVkPhysicalDeviceFeatures10);
     FeatureInfo_ getFeatureInfo (VkStructureType sType, add_cref<std::vector<FeaturesVar>> others) const;
     bool getFeature (VkStructureType sType, add_ptr<void> feature);
@@ -129,7 +126,6 @@ public:
     bool removeFeature (VkStructureType sType);
     template<typename FeatureStructure>
     bool removeFeature ()
-
     {
         return removeFeature(mkstype<FeatureStructure>);
     }
@@ -149,23 +145,30 @@ public:
         return replaceFeature(sType, &str);
     }
 
-    template<class FeatureStructure> struct TemporaryStructure
+    struct FeatureStructureChecker
     {
-        const bool valid;
         add_cref<DeviceCaps> owner;
-        add_cptr<FeatureStructure> ptr;
-        TemporaryStructure (add_cref<DeviceCaps> caps, add_cptr<FeatureStructure> str)
-            : valid (str)
-            , owner (caps)
-            , ptr   (str) {}
-        VkBool32 checkNotSupported (VkBool32 FeatureStructure::* pField,
-                                    bool raiseIfFalse = true, add_cptr<char> fieldNameAndDescription = {}) const
-        {
-            return owner.checkNotSupportedFeature(demangledName<FeatureStructure>(), fieldNameAndDescription,
-                                                  (valid ? ptr->*pField : VK_FALSE), raiseIfFalse);
-        }
-        operator bool() const { return valid; }
+        const bool          valid;
+        const std::string   structName;
+        FeatureStructureChecker (add_cref<DeviceCaps> owner_, bool valid_, add_cref<std::string> structName_)
+            : owner     (owner_)
+            , valid     (valid_)
+            , structName(structName_) {}
+        bool checkSupported (add_cref<std::string> fieldName) const;
+        operator bool () const { return valid; }
     };
+
+    struct ExtensionChecker
+    {
+        const bool          exists;
+        const std::string   ext;
+        ExtensionChecker (bool exists_, add_cref<std::string> ext_)
+            : exists(exists_), ext(ext_) {}
+        bool checkSupported () const;
+        operator bool () const { return exists; }
+    };
+
+    ExtensionChecker addExtension (add_cref<std::string> extension);
 
     template <class FeatureStructure, class FieldType>
     bool addUpdateFeatureSet (FieldType FeatureStructure::* pField, const std::decay_t<FieldType>& setToValue,
@@ -175,10 +178,10 @@ public:
     }
 
     template <class FeatureStructure>
-    auto addUpdateFeatureIf (VkBool32 FeatureStructure::* pField) -> TemporaryStructure<FeatureStructure>
+    auto addUpdateFeatureIf (VkBool32 FeatureStructure::* pField) -> FeatureStructureChecker
     {
         void_cptr pf = _addUpdateFeatureSet<FeatureStructure>(nullptr, pField, VK_TRUE, VK_TRUE, true);
-        return TemporaryStructure<FeatureStructure>(*this, reinterpret_cast<add_cptr<FeatureStructure>>(pf));
+        return FeatureStructureChecker(*this, (pf != nullptr), demangledName<FeatureStructure>());
     }
 
     template <class FeatureStructure>
@@ -188,10 +191,10 @@ public:
     }
 
     template <class FeatureStructure>
-    auto addUpdateFeature() -> TemporaryStructure<FeatureStructure>
+    auto addUpdateFeature() -> FeatureStructureChecker
     {
         void_cptr pf = _addUpdateFeatureSet<FeatureStructure, std::nullptr_t>(nullptr, nullptr, nullptr);
-        return TemporaryStructure<FeatureStructure>(*this, reinterpret_cast<add_cptr<FeatureStructure>>(pf));
+        return FeatureStructureChecker(*this, (pf != nullptr), demangledName<FeatureStructure>());
     }
 };
 

@@ -142,11 +142,10 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
 		auto so = caps.addUpdateFeatureIf(&VkPhysicalDeviceShaderObjectFeaturesEXT::shaderObject);
-		params.shaderObject = so.checkNotSupported(&VkPhysicalDeviceShaderObjectFeaturesEXT::shaderObject,
-										params.dontIgnoreSoExtension, "shaderObject not supported");
+		params.shaderObject = so.checkSupported("shaderObject");
 		if (params.dontIgnoreSoExtension)
 		{
-			caps.requiredExtension.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
+			caps.addExtension(VK_EXT_SHADER_OBJECT_EXTENSION_NAME).checkSupported();
 		}
 		else
 		{

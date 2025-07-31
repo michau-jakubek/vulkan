@@ -460,41 +460,39 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 	{
 		if (params.flags.terminateInvocation)
 		{
-			caps.addUpdateFeature<VkPhysicalDeviceShaderTerminateInvocationFeatures>()
-				.checkNotSupported(&VkPhysicalDeviceShaderTerminateInvocationFeatures::shaderTerminateInvocation,
-								   true, "shaderTerminateInvocation");
+			const auto f = &VkPhysicalDeviceShaderTerminateInvocationFeatures::shaderTerminateInvocation;
+			caps.addUpdateFeatureIf(f).checkSupported("shaderTerminateInvocation");
 		}
 		if (params.flags.demoteInvocation)
 		{
-			caps.addUpdateFeature<VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures>()
-				.checkNotSupported(&VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures::shaderDemoteToHelperInvocation,
-								   true, "shaderDemoteToHelperInvocation");
+			const auto f = &VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures::shaderDemoteToHelperInvocation;
+			caps.addUpdateFeatureIf(f).checkSupported("shaderDemoteToHelperInvocation");
 		}
 
 		if (params.flags.tessellation)
 		{
 			caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::tessellationShader)
-				.checkNotSupported(&VkPhysicalDeviceFeatures::tessellationShader, true, "tessellationShader");
+				.checkSupported("tessellationShader");
 		}
 		if (params.flags.geometry)
 		{
 			caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::geometryShader)
-				.checkNotSupported(&VkPhysicalDeviceFeatures::geometryShader, true, "geometryShader");
+				.checkSupported("geometryShader");
 		}
 		if (params.flags.shaderFloat64)
 		{
 			caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::shaderFloat64)
-				.checkNotSupported(&VkPhysicalDeviceFeatures::shaderFloat64, true, "shaderFloat64");
+				.checkSupported("shaderFloat64");
 		}
 		if (params.flags.shaderInt64)
 		{
 			caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::shaderInt64)
-				.checkNotSupported(&VkPhysicalDeviceFeatures::shaderInt64, true, "shaderInt64");
+				.checkSupported("shaderInt64");
 		}
 		if (params.flags.shaderInt16)
 		{
 			caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::shaderInt16)
-				.checkNotSupported(&VkPhysicalDeviceFeatures::shaderInt16, true, "shaderInt16");
+				.checkSupported("shaderInt16");
 		}
 	};
 	add_cref<GlobalAppFlags>	gf			= getGlobalAppFlags();

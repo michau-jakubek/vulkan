@@ -267,7 +267,9 @@ static const VkShaderStageFlagBits availableShaderStages[]
 	VK_SHADER_STAGE_COMPUTE_BIT,
 	VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
 	VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-	VK_SHADER_STAGE_GEOMETRY_BIT
+	VK_SHADER_STAGE_GEOMETRY_BIT,
+	VK_SHADER_STAGE_TASK_BIT_EXT,
+	VK_SHADER_STAGE_MESH_BIT_EXT,
 };
 
 static const char* shaderStageToCommand (VkShaderStageFlagBits stage)
@@ -280,6 +282,8 @@ static const char* shaderStageToCommand (VkShaderStageFlagBits stage)
 	case VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT:		return "tesc";
 	case VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT:	return "tese";
 	case VK_SHADER_STAGE_GEOMETRY_BIT:					return "geom";
+	case VK_SHADER_STAGE_TASK_BIT_EXT:					return "task";
+	case VK_SHADER_STAGE_MESH_BIT_EXT:					return "mesh";
 	default: break;
 	}
 	ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/);

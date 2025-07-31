@@ -490,7 +490,7 @@ protected:
 					  << std::endl;
 		}
 
-		computePipeline = createComputePipeline(pipelineLayout, faceModule, UVec3(local_size_xy, local_size_xy, 1u));
+		computePipeline = createComputePipeline(pipelineLayout, faceModule, {}, UVec3(local_size_xy, local_size_xy, 1u));
 		updateSplashImage(80);
 	}
 	void phaseMakeOutputImage (add_ref<bool>)

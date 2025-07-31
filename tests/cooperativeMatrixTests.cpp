@@ -234,41 +234,41 @@ TriLogicInt createDeviceAndPerformTest(ZInstance instance, ZPhysicalDevice physi
 	{
 		const auto cooperativeMatrix = &VkPhysicalDeviceCooperativeMatrixFeaturesKHR::cooperativeMatrix;
 		auto cm = caps.addUpdateFeatureIf(cooperativeMatrix);
-		cm.checkNotSupported(cooperativeMatrix, true, "cooperativeMatrix not supported");
+		cm.checkSupported("cooperativeMatrix");
 
 		const auto vulkanMemoryModel = &VkPhysicalDeviceVulkan12Features::vulkanMemoryModel;
 		auto vmm = caps.addUpdateFeatureIf(vulkanMemoryModel);
-		vmm.checkNotSupported(vulkanMemoryModel, true, "vulkanMemoryModel not supported");
+		vmm.checkSupported("vulkanMemoryModel");
 
 		const auto maintenance4 = &VkPhysicalDeviceVulkan13Features::maintenance4;
 		auto m4 = caps.addUpdateFeatureIf(maintenance4);
-		m4.checkNotSupported(maintenance4, true, "maintenance4 not supported");
+		m4.checkSupported("maintenance4");
 
 		const auto storageBuffer16BitAccess = &VkPhysicalDevice16BitStorageFeatures::storageBuffer16BitAccess;
 		auto sb16 = caps.addUpdateFeatureIf(storageBuffer16BitAccess);
-		sb16.checkNotSupported(storageBuffer16BitAccess, true, "storageBuffer16BitAccess not supported");
+		sb16.checkSupported("storageBuffer16BitAccess");
 
 		/*
 		const auto storageBuffer8BitAccess = &VkPhysicalDevice8BitStorageFeatures::storageBuffer8BitAccess;
 		auto sb8 = caps.addUpdateFeatureIf(storageBuffer8BitAccess);
-		sb8.checkNotSupported(storageBuffer8BitAccess, true, "storageBuffer8BitAccess not supported");
+		sb8.checkSupported("storageBuffer8BitAccess");
 		*/
 
 		const auto shaderFloat16 = &VkPhysicalDeviceVulkan12Features::shaderFloat16;
 		auto sh16 = caps.addUpdateFeatureIf(shaderFloat16);
-		sh16.checkNotSupported(shaderFloat16, true, "shaderFloat16 not supported");
+		sh16.checkSupported("shaderFloat16");
 
 		const auto shaderInt8 = &VkPhysicalDeviceVulkan12Features::shaderInt8;
 		auto sh8 = caps.addUpdateFeatureIf(shaderInt8);
-		sh8.checkNotSupported(shaderInt8, true, "shaderFloat8 not supported");
+		sh8.checkSupported("shaderFloat8");
 
 		const auto storageBuffer8BitAccess = &VkPhysicalDeviceVulkan12Features::storageBuffer8BitAccess;
 		auto sb8 = caps.addUpdateFeatureIf(storageBuffer8BitAccess);
-		sb8.checkNotSupported(storageBuffer8BitAccess, true, "storageBuffer8BitAccess not supported");
+		sb8.checkSupported("storageBuffer8BitAccess");
 
-		caps.requiredExtension.push_back(VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME);
-		caps.requiredExtension.push_back(VK_KHR_SHADER_SUBGROUP_EXTENDED_TYPES_EXTENSION_NAME);
-		caps.requiredExtension.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+		caps.addExtension(VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME);
+		caps.addExtension(VK_KHR_SHADER_SUBGROUP_EXTENDED_TYPES_EXTENSION_NAME);
+		caps.addExtension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
 	};
 
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();

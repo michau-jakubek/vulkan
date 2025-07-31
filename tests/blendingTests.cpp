@@ -891,25 +891,21 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 		if (needShaderObject)
 		{
 			caps.addUpdateFeatureIf(&VkPhysicalDeviceShaderObjectFeaturesEXT::shaderObject)
-				.checkNotSupported(&VkPhysicalDeviceShaderObjectFeaturesEXT::shaderObject,
-					true, "shaderObject not supported by device");
-			caps.requiredExtension.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
+				.checkSupported("shaderObject");
+			caps.addExtension(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
 
 			caps.addUpdateFeatureIf(&VkPhysicalDeviceDynamicRenderingFeatures::dynamicRendering)
-				.checkNotSupported(&VkPhysicalDeviceDynamicRenderingFeatures::dynamicRendering,
-					true, "dynamicRendering not supported");
-			caps.requiredExtension.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+				.checkSupported("dynamicRendering");
+			caps.addExtension(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
 
 			caps.addUpdateFeatureIf(&VkPhysicalDeviceExtendedDynamicStateFeaturesEXT::extendedDynamicState)
-				.checkNotSupported(&VkPhysicalDeviceExtendedDynamicStateFeaturesEXT::extendedDynamicState,
-					true, "extendedDynamicState not supported");
-			caps.requiredExtension.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
+				.checkSupported("extendedDynamicState");
+			caps.addExtension(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
 
 			/*
 			caps.addUpdateFeatureIf(&VkPhysicalDeviceColorWriteEnableFeaturesEXT::colorWriteEnable)
-				.checkNotSupported(&VkPhysicalDeviceColorWriteEnableFeaturesEXT::colorWriteEnable,
-					true, "colorWriteEnable not supported");
-			caps.requiredExtension.push_back(VK_EXT_COLOR_WRITE_ENABLE_EXTENSION_NAME);
+				.checkSupported("colorWriteEnable");
+			caps.addExtension(VK_EXT_COLOR_WRITE_ENABLE_EXTENSION_NAME);
 			*/
 		}
 	};

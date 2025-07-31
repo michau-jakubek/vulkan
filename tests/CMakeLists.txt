@@ -54,6 +54,8 @@ set(tests_files
 	cogWheelsTests.hpp
 	cooperativeMatrixTests.cpp
 	cooperativeMatrixTests.hpp
+	taskMeshTriangleTests.cpp
+	taskMeshTriangleTests.hpp
     )
 
 if(ENABLE_DAEMON_TEST)

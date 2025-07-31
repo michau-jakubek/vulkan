@@ -1,7 +1,8 @@
 #include "vtfZPipeline.hpp"
 #include "vtfStructUtils.hpp"
-#include <array>
+#include "vtfBacktrace.hpp"
 
+#include <array>
 #include <iostream>
 
 namespace vtf
@@ -103,6 +104,7 @@ struct GraphicPipelineSettings
 	ZPipelineLayout		m_layout;
 	ZRenderPass			m_renderPass;
 	uint32_t			m_attachmentCount;
+	ZPipelineCache		m_pipelineCache;
 
 	SpecializationInfoPerStageMap						m_shaderPerStageSpecs;
 	std::vector<VkPipelineShaderStageCreateInfo>		m_shaderStages;
@@ -138,6 +140,7 @@ GraphicPipelineSettings::GraphicPipelineSettings (ZPipelineLayout layout)
 	: m_layout				(layout)
 	, m_renderPass			()
 	, m_attachmentCount		(0)
+	, m_pipelineCache		()
 	, m_shaderPerStageSpecs	()
 	, m_shaderStages		()
 	, m_shaderSpecs			()
@@ -264,10 +267,13 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 	info.basePipelineIndex	= -1;
 
 	VkPipeline					pipelineHandle	= VK_NULL_HANDLE;
+	VkPipelineCache				pipelineCache	= settings.m_pipelineCache.has_handle()
+													? *settings.m_pipelineCache
+													: VkPipelineCache(VK_NULL_HANDLE);
 	ZDevice						device			= settings.m_layout.getParam<ZDevice>();
 	auto						callbacks		= settings.m_layout.getParam<VkAllocationCallbacksPtr>();
 	const VkResult				createStatus	= vkCreateGraphicsPipelines	(*device,
-																			 VkPipelineCache(0),
+																			 pipelineCache,
 																			 1u, &info,
 																			 callbacks,
 																			 &pipelineHandle);
@@ -333,6 +339,11 @@ void updateKnownSettings(add_ref<GraphicPipelineSettings> settings, add_cref<gpp
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZRenderPass renderPass)
 {
 	settings.m_renderPass = renderPass;
+}
+
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZPipelineCache pipelineCache)
+{
+	settings.m_pipelineCache = pipelineCache;
 }
 
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::AttachmentCount> attachmentCount)
@@ -488,6 +499,7 @@ bool computePipelineVerifyLimits (ZDevice device, add_cref<UVec3> wgSizes, bool 
 ZPipeline createComputePipelineImpl (
 	ZPipelineLayout					layout,
 	ZShaderModule					computeShaderModule,
+	ZPipelineCache					pipelineCache,
 	add_cref<UVec3>					localSizes,
 	bool							autoLocalSizesIDs,
 	bool							enableFullGroups,
@@ -528,22 +540,60 @@ ZPipeline createComputePipelineImpl (
 	ci.basePipelineHandle	= VK_NULL_HANDLE;
 	ci.basePipelineIndex	= 0;
 
+	VkPipelineCache cache = pipelineCache.has_handle() ? *pipelineCache : VK_NULL_HANDLE;
 	ZPipeline	computePipeline (VK_NULL_HANDLE, aDevice, callbacks, layout, ZRenderPass(),
 								 VK_PIPELINE_BIND_POINT_COMPUTE, ci.flags);
-	VKASSERT(vkCreateComputePipelines(*aDevice, VkPipelineCache(VK_NULL_HANDLE), 1u, &ci, callbacks, computePipeline.setter()));
+	VKASSERT(vkCreateComputePipelines(*aDevice, cache, 1u, &ci, callbacks, computePipeline.setter()));
 
 	return computePipeline;
 }
 
-ZPipeline createComputePipeline (ZPipelineLayout layout, ZShaderModule computeShaderModule,
+ZPipeline createComputePipeline (ZPipelineCache pipelineCache, ZPipelineLayout layout, ZShaderModule computeShaderModule,
 								add_ref<ZSpecializationInfo> specInfo, bool enableFullGroups)
 {
-	return createComputePipelineImpl(layout, computeShaderModule, UVec3(INVALID_UINT32), false, enableFullGroups, specInfo);
+	return createComputePipelineImpl(layout, computeShaderModule, pipelineCache, UVec3(INVALID_UINT32), false, enableFullGroups, specInfo);
 }
 
 ZPipelineLayout	pipelineGetLayout (ZPipeline pipeline)
 {
 	return pipeline.getParam<ZPipelineLayout>();
+}
+
+ZPipelineCache createPipelineCache (ZDevice device, add_cref<std::string> cacheFileName,
+									VkPipelineCacheCreateFlags flags, bool forceReset)
+{
+	VkPipelineCacheCreateInfo pcci{};
+	pcci.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+	pcci.flags = flags;
+
+	if (forceReset)
+	{
+		pcci.initialDataSize = 0u;
+		pcci.pInitialData = nullptr;
+	}
+	else
+	{
+		std::vector<char> data;
+		add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
+		const fs::path tmpPath = std::strlen(gf.tmpDir) ? fs::path(gf.tmpDir) : fs::temp_directory_path();
+		const fs::path cachePath = tmpPath / cacheFileName;
+		if (const uint32_t size = readFile(cachePath, data); size != INVALID_UINT32)
+		{
+			pcci.initialDataSize = size_t(size);
+			pcci.pInitialData = data.data();
+		}
+		else
+		{
+			pcci.initialDataSize = 0u;
+			pcci.pInitialData = nullptr;
+		}
+	}
+
+	auto callbacks = device.getParam<VkAllocationCallbacksPtr>();
+	ZPipelineCache	cache(VK_NULL_HANDLE, device, callbacks, cacheFileName);
+	VKASSERT(vkCreatePipelineCache(*device, &pcci, callbacks, cache.setter()));
+
+	return cache;
 }
 
 } // namespace vtf

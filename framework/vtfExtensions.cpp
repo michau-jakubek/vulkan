@@ -145,17 +145,31 @@ DeviceCaps::DeviceCaps(add_cref<DeviceCaps> other)
 {
 }
 
-VkBool32 DeviceCaps::checkNotSupportedFeature (
-    add_cref<std::string> structName,
-    add_cptr<char> fieldNameAndDescription,
-    VkBool32 test, bool raiseIfFalse) const
+bool DeviceCaps::FeatureStructureChecker::checkSupported (add_cref<std::string> fieldName) const
 {
-    if (VK_FALSE == test && raiseIfFalse)
+    if (false == valid)
     {
-        ASSERTFALSE(structName, "::",
-            (fieldNameAndDescription ? fieldNameAndDescription : ""));
+        if (fieldName.empty())
+            ASSERTFALSE(structName, " not supported");
+        else ASSERTFALSE(structName, "::", fieldName, " not supported");
     }
-    return test;
+    return valid;
+}
+
+bool DeviceCaps::ExtensionChecker::checkSupported () const
+{
+    if (false == exists)
+    {
+        ASSERTFALSE("Extension ", ext, " not supported");
+    }
+    return exists;
+}
+
+DeviceCaps::ExtensionChecker DeviceCaps::addExtension (add_cref<std::string> extension)
+{
+    const bool exists = containsString(availableExtensions, extension);
+    if (exists) requiredExtension.push_back(extension);
+    return ExtensionChecker(exists, extension);
 }
 
 void DeviceCaps::initializeFeature (add_ptr<void> feature, bool autoInitialize, bool isVkPhysicalDeviceFeatures10)

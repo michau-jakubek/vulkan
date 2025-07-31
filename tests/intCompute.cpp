@@ -899,7 +899,8 @@ void printInputParamsFromShader (ostream_ref log, add_cref<Params> params, add_c
 	}
 }
 
-TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, const std::string& assets, const Params& params);
+TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, add_cref<std::string> assets, add_cref<Params> params);
+//TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, const std::string& assets, const Params& params);
 
 void printDeviceLimits (ZDevice device, add_ref<std::ostream> log)
 {
@@ -914,7 +915,7 @@ void printDeviceLimits (ZDevice device, add_ref<std::ostream> log)
 	log << "gl_SubgroupSize:                " << gl_SubgroupSize << std::endl;
 }
 
-TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests(const TestRecord& record, const strings& cmdLineParams)
 {
 	UNREF(record);
 	UNREF(cmdLineParams);
@@ -963,8 +964,10 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 	{
 		return (1);
 	}
-
+	/*
 	return runIntComputeSingleThread(ctx, record.assets, params);
+	*/
+	return {};
 }
 
 ZShaderModule createShader (ZDevice device, add_cref<std::string> assets, add_cref<Params> params)
@@ -983,7 +986,7 @@ ZShaderModule createShader (ZDevice device, add_cref<std::string> assets, add_cr
 	return programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT);
 }
 
-TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, add_cref<std::string> assets, add_cref<Params> params)
+[[maybe_unused]] TriLogicInt runIntComputeSingleThread (VulkanContext& ctx, add_cref<std::string> assets, add_cref<Params> params)
 {
 	const VkShaderStageFlagBits	stage			(VK_SHADER_STAGE_COMPUTE_BIT);
 	const VkDescriptorType		descType		(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);

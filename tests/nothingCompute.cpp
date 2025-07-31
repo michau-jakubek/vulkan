@@ -130,6 +130,7 @@ TriLogicInt runTest (const TestRecord& record, const strings& cmdLineParams)
 	programs.buildAndVerify(true);
 	ZShaderModule			shader		= programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT);
 
+	/*
 	typedef std::tuple<
 		AlignedFloat16_t,
 		AlignedF16Vec2,
@@ -144,7 +145,7 @@ TriLogicInt runTest (const TestRecord& record, const strings& cmdLineParams)
 		AlignedFloat16_t
 	> InTuple;
 
-	/*
+
 	//typedef std::tuple<int, char, double> InTuple;
 	auto inTuple = makeStruct(InTuple());
 	std::cout << "SIZEOF 1: " << sizeof(inTuple) << std::endl;

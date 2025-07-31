@@ -44,6 +44,8 @@ set(framework_files
 	vtfThreadPool.cpp
 	vtfThreadPool.hpp
 	vtfThreadPoolHelpers.hpp
+	vtfProgressRecorder.cpp
+	vtfProgressRecorder.hpp
 	vtfZBarriers.cpp
 	vtfZBarriers.hpp
 	vtfZBarriers2.cpp

@@ -18,6 +18,7 @@
 
 #include "vulkan/vulkan.h"
 #include "vtfZInstanceDeviceInterface.hpp"
+#include "vtfProgressRecorder.hpp"
 #include "vtfThreadSafeLogger.hpp"
 #include "vtfStrictTemplates.hpp"
 #include "demangle.hpp"
@@ -252,7 +253,7 @@ template<class Z, class F, F Ptr, class Tr, class Inh, class... X> struct ZDelet
 		add_cptr<AnObject> obj = super::get();
 		ASSERTMSG(obj != nullptr, "Object must not be null");
 		add_cptr<Z> p = &obj->handle;
-		ASSERTMSG(VK_NULL_HANDLE != *p, "Vulkan handle must not be VK_NULL_HANDLE");
+		ASSERTMSG(VK_NULL_HANDLE != *p, "Vulkan handle must not be VK_NULL_HANDLE (", demangledName<Z>(), ")");
 		return p;
 	}
 	Z operator*() const
@@ -371,7 +372,8 @@ typedef ZDeletable<VkInstance,
 	ZDistType<RequiredLayers, std::vector<std::string>>,
 	ZDistType<AvailableLayerExtensions, std::vector<std::string>>,
 	ZDistType<RequiredLayerExtensions, std::vector<std::string>>,
-	vtf::Logger, VkDebugUtilsMessengerEXT, VkDebugReportCallbackEXT>
+	vtf::Logger, vtf::ProgressRecorder,
+	VkDebugUtilsMessengerEXT, VkDebugReportCallbackEXT>
 ZInstance;
 
 typedef ZDeletable<VkPhysicalDevice,
@@ -577,6 +579,15 @@ typedef ZDeletable<VkPipeline,
 	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
 	ZPipelineLayout, ZRenderPass, VkPipelineBindPoint, VkPipelineCreateFlags>
 ZPipeline;
+
+// Implemented in vtfZPipeline.cpp
+void freePipelineCache(VkDevice, VkPipelineCache, VkAllocationCallbacksPtr, add_cref<std::string>);
+typedef ZDeletable<VkPipelineCache,
+	decltype(&freePipelineCache), &freePipelineCache,
+	std::integer_sequence<int, 0, -1, 1, 2>,
+	ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
+	std::string/*cacheFileName*/>
+ZPipelineCache;
 
 typedef ZDeletable<VkQueryPool,
 	decltype(&vkDestroyQueryPool), &vkDestroyQueryPool,

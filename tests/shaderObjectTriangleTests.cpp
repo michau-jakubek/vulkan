@@ -164,17 +164,15 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 		{
 			const auto f = caps.addUpdateFeatureIf(&VkPhysicalDeviceDynamicRenderingFeatures::dynamicRendering);
 			params.dynamicRendering = f;
-			f.checkNotSupported(&VkPhysicalDeviceDynamicRenderingFeatures::dynamicRendering,
-					true, "dynamicRendering not supported");
-			caps.requiredExtension.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+			f.checkSupported("dynamicRendering not supported");
+			caps.addExtension(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME).checkSupported();
 		}
 
 		{
 			const auto f = caps.addUpdateFeatureIf(&VkPhysicalDeviceExtendedDynamicStateFeaturesEXT::extendedDynamicState);
 			params.extendedDynamicState = f;
-			f.checkNotSupported(&VkPhysicalDeviceExtendedDynamicStateFeaturesEXT::extendedDynamicState,
-					true, "extendedDynamicState not supported");
-			caps.requiredExtension.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
+			f.checkSupported("extendedDynamicState not supported");
+			caps.addExtension(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME).checkSupported();
 		}
 	};
 

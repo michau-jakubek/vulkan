@@ -4,6 +4,7 @@
 #include "vtfVulkanDriver.hpp"
 #include "vtfVkUtils.hpp"
 
+#include <iterator>
 #include <sstream>
 #include <string_view>
 
@@ -69,5 +70,31 @@ void vtfDestroyDevice (VkDevice dev, VkAllocationCallbacksPtr cb, add_cref<ZPhys
 	{
 		(*proc)(dev, cb);
 	}
+}
+
+void freePipelineCache(VkDevice device, VkPipelineCache cache, VkAllocationCallbacksPtr callbacks,
+	add_cref<std::string> cacheFileName)
+{
+	size_t dataSize = 0u;
+	std::vector<char> data;
+	VKASSERT(vkGetPipelineCacheData(device, cache, &dataSize, nullptr));
+	if (dataSize)
+	{
+		data.resize(dataSize);
+		VKASSERT(vkGetPipelineCacheData(device, cache, &dataSize, data.data()));
+
+		add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
+		const fs::path tmpPath = std::strlen(gf.tmpDir) ? fs::path(gf.tmpDir) : fs::temp_directory_path();
+		const fs::path cachePath = tmpPath / cacheFileName;
+		std::basic_ofstream<char> file(cachePath.c_str(), std::ios::binary);
+		if (file.is_open())
+		{
+
+			std::copy(data.begin(), data.end(), std::ostream_iterator<char>(file));
+			file.close();
+		}
+	}
+
+	vkDestroyPipelineCache(device, cache, callbacks);
 }
 

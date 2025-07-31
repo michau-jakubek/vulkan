@@ -12,6 +12,7 @@
 #include "vtfDebugMessenger.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfThreadSafeLogger.hpp"
+#include "vtfProgressRecorder.hpp"
 #include "vtfVulkanDriver.hpp"
 
 void releaseQueue (const QueueParams& params)
@@ -505,12 +506,14 @@ ZInstance createInstance (
 		, {/*AvailableLayerExtensions*/ }
 		, {/*RequiredLayerExtensions*/ }
 		, logger
+		, ProgressRecorder()
 		, VkDebugUtilsMessengerEXT(VK_NULL_HANDLE)
 		, VkDebugReportCallbackEXT(VK_NULL_HANDLE));
 	add_ref<strings>			requiredLayers = instance.getParamRef<ZDistType<RequiredLayers, strings>>();
 	add_ref<strings>			availableLayers = instance.getParamRef<ZDistType<AvailableLayers, strings>>();
 	add_ref<strings>			availableExtensions = instance.getParamRef<ZDistType<AvailableLayerExtensions, strings>>();
 	add_ref<strings>			requiredExtensions = instance.getParamRef<ZDistType<RequiredLayerExtensions, strings>>();
+	add_ref<ProgressRecorder>	progressRecorder = instance.getParamRef<ProgressRecorder>();
 	add_cref<GlobalAppFlags>	gf = getGlobalAppFlags();
 
 	// setup layers
@@ -689,7 +692,9 @@ ZInstance createInstance (
 	}
 	auto pfnCreateInstance = getDriverCreateInstanceProc();
 	ASSERTMSG(pfnCreateInstance, "vkCreateInstance() must not be null");
+	progressRecorder.stamp("Before vkCreateInstance()");
 	VKASSERTMSG((*pfnCreateInstance)(&createInfo, callbacks, instance.setter()), "Failed to create instance!");
+	progressRecorder.stamp("After vkCreateInstance()");
 
 	if (getGlobalAppFlags().verbose)
 	{
@@ -926,6 +931,7 @@ ZDevice createLogicalDevice	(
 
 	ZInstance					instance	= physDevice.getParam<ZInstance>();
 	VkAllocationCallbacksPtr	callbacks	= instance.getParam<VkAllocationCallbacksPtr>();
+	add_ref<ProgressRecorder>	recorder	= instance.getParamRef<ProgressRecorder>();
 	std::vector<const char*>	layers		(to_cstrings(instance.getParamRef<ZDistType<RequiredLayers,strings>>().get()));
 
 	add_cref<strings>	availableExtensions(physDevice.getParamRef<ZDistType<AvailableDeviceExtensions, strings>>().get());
@@ -1019,7 +1025,9 @@ ZDevice createLogicalDevice	(
 	VkDevice deviceHandle(VK_NULL_HANDLE);
 	auto pfnCreateDevice = getDriverCreateDeviceProc();
     ASSERTMSG(pfnCreateDevice, "vkCreateDevice must not be null");
+	recorder.stamp("Before vkCreateDevice()");
 	const VkResult createResult = (*pfnCreateDevice)(*physDevice, &createInfo, callbacks, &deviceHandle);
+	recorder.stamp("After vkCreateDevice()");
 	VKASSERTMSG(createResult, "Failed to create logical device");
 	ZDevice logicalDevice(deviceHandle, callbacks, physDevice, std::move(queueCreateExInfos));
 	logicalDevice.verbose(getGlobalAppFlags().verbose != 0);

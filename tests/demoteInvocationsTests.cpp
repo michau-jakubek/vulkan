@@ -68,17 +68,16 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 	typedef VkPhysicalDeviceShaderDemoteToHelperInvocationFeatures DemoteFeatures;
 	auto onEnablingFatures = [&](add_ref<DeviceCaps> caps)
 	{
-		caps.requiredExtension.push_back(VK_EXT_SHADER_SUBGROUP_VOTE_EXTENSION_NAME);
-		caps.requiredExtension.push_back(VK_EXT_SHADER_SUBGROUP_BALLOT_EXTENSION_NAME);
-		caps.requiredExtension.push_back(VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME);
+		caps.addExtension(VK_EXT_SHADER_SUBGROUP_VOTE_EXTENSION_NAME).checkSupported();
+		caps.addExtension(VK_EXT_SHADER_SUBGROUP_BALLOT_EXTENSION_NAME).checkSupported();
+		caps.addExtension(VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME).checkSupported();
 
 		deviceCheckProperties(caps.physicalDevice,
 			&VkPhysicalDeviceSubgroupProperties::supportedStages, false,
 			VK_SHADER_STAGE_FRAGMENT_BIT, true, "supportedStages doesn't contain VK_SHADER_STAGE_FRAGMENT_BIT");
 
-		caps.addUpdateFeature<DemoteFeatures>()
-				.checkNotSupported(&DemoteFeatures::shaderDemoteToHelperInvocation,
-					true, "shaderDemoteToHelperInvocation");
+		caps.addUpdateFeatureIf(&DemoteFeatures::shaderDemoteToHelperInvocation)
+			.checkSupported("shaderDemoteToHelperInvocation");
 	};
 	auto [status, params, err] = Params::parseCommandLine(cmdLineParams);
 	switch (status)

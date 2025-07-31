@@ -261,11 +261,11 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 
 	ZRenderPass			renderPass		= createColorRenderPass(ctx.device, { format });
 	ZFramebuffer		framebuffer		= createFramebuffer(renderPass, extent, { colorView });	
-	ZPipelineLayout		pipelineLayout = lm.createPipelineLayout({ lm.createDescriptorSetLayout() });
+	ZPipelineLayout		pipelineLayout	= lm.createPipelineLayout({ lm.createDescriptorSetLayout() });
 	ZPipeline			graphPipeline	= createGraphicsPipeline(pipelineLayout, renderPass,
 											extent, vertexInput, vertShader, fragShader);
-	ZPipeline			forwardPipeline	= createComputePipeline(pipelineLayout, forwardShader, UVec3(1));
-	ZPipeline			backwardPipeline= createComputePipeline(pipelineLayout, backwardShader, UVec3(1));
+	ZPipeline			forwardPipeline = createComputePipeline(pipelineLayout, forwardShader, {}, UVec3(1));
+	ZPipeline			backwardPipeline = createComputePipeline(pipelineLayout, backwardShader, {}, UVec3(1));
 
 	ZBuffer				buffer0			= std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(buffer0binding)).buffer;
 	ZBuffer				buffer1			= std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(buffer1binding)).buffer;

@@ -174,7 +174,7 @@ int runTest (add_ref<VulkanContext> ctx, add_cref<Params> params,
 
 	ZPipelineLayout		pipelineLayout	= lm.createPipelineLayout({lm.createDescriptorSetLayout()},
 																	ZPushRange<UVec2>(VK_SHADER_STAGE_COMPUTE_BIT));
-	ZPipeline			computePipeline	= createComputePipeline(pipelineLayout, shaderModule, UVec3(1));
+	ZPipeline			computePipeline = createComputePipeline(pipelineLayout, shaderModule, {}, UVec3(1));
 	ZCommandPool		compCommandPool = ctx.createComputeCommandPool();
 	ZFence				timeoutFence	= createFence(ctx.device);
 	ZFence				devLostFence	= createFence(ctx.device);
