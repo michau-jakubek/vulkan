@@ -40,11 +40,13 @@ using SubpassIndex			= ZDistType<SubpassIndex, uint32_t>;
 using ViewportCount			= ZDistType<ViewportCount, uint32_t>;
 using ScissorCount			= ZDistType<ScissorCount, uint32_t>;
 using LineWidth				= ZDistType<LineWidth, float>;
-using AttachmentCount		= ZDistType<AttachmentCount, uint32_t>;
 using BlendAttachmentState	= ZDistType<BlendAttachmentState, std::pair<uint32_t, VkPipelineColorBlendAttachmentState>>;
 using BlendConstants		= ZDistType<BlendConstants, Vec4>;
 using SpecConstants			= ZDistType<SpecConstants, std::pair<VkShaderStageFlagBits, add_ref<ZSpecializationInfo>>>;
 using PrimitiveRestart		= ZDistType<PrimitiveRestart, bool>;
+using ViewMask				= ZDistType<ViewMask, uint32_t>;
+//     std::tuple<ZImageView, (input_)attachment_index, is_color-depth-stencil_attachment>
+using AttachmentLocation	= std::tuple<ZImageView, uint32_t, bool>;
 
 	// VkExtent2D	sets both viewport and scissor
 	// VkViewport	sets viewport only
@@ -73,12 +75,13 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::DepthW
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::StencilTestEnable>	enableStencilTest);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::SubpassIndex>			subpassIndex);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, ZRenderPass							renderPass);
-void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::AttachmentCount>		attachmentCount);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::BlendAttachmentState>	blendAttachmentState);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::BlendConstants>		blendConstants);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::SpecConstants>		specConstants);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::PrimitiveRestart>		primitiveRestartEnable);
-void updateKnownSettings(add_ref<GraphicPipelineSettings>,	ZPipelineCache						pipelineCache);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>,	ZPipelineCache						pipelineCache);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::AttachmentLocation>	drAttachment);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::ViewMask>				drViewMask);
 
 // end of template recursion
 void updateSettings (add_ref<GraphicPipelineSettings>);

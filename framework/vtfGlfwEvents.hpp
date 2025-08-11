@@ -10,17 +10,20 @@
 namespace vtf
 {
 
+struct GLFWEvents;
+
 template<class GLFWSetCallback, class... X>
 struct CanvasEvent
 {
 	typedef void* UserData;
 	typedef std::function<void(Canvas&, void*, X... params)> Callback;
 
-	CanvasEvent (Canvas& canvas, GLFWSetCallback* setCallback, routine_arg_t<GLFWSetCallback, 1> callCallback)
+	CanvasEvent (Canvas& canvas, GLFWEvents& events, GLFWSetCallback* setCallback, routine_arg_t<GLFWSetCallback, 1> callCallback)
 		: callback			(m_callback)
 		, userData			(m_userData)
 		, enabled			(m_enabled)
 		, m_canvas			(canvas)
+		, m_events			(events)
 		, m_callback		()
 		, m_userData		(nullptr)
 		, m_enabled			(false)
@@ -49,6 +52,7 @@ struct CanvasEvent
 
 private:
 	Canvas&								m_canvas;
+	GLFWEvents&							m_events;
 	Callback							m_callback;
 	UserData							m_userData;
 	bool								m_enabled;
@@ -64,6 +68,8 @@ struct GLFWEvents
 	CanvasEvent<decltype(glfwSetKeyCallback), int, int, int, int>		cbKey;
 	CanvasEvent<decltype(glfwSetMouseButtonCallback), int, int, int>	cbMouseButton;
 	CanvasEvent<decltype(glfwSetWindowSizeCallback), int, int>			cbWindowSize;
+
+	void		setDefault	(add_ref<int> drawTrigger);
 
 private:
 	static void onCursorPos (GLFWwindow* window, double xpos, double ypos);

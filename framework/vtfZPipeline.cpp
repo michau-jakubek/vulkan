@@ -1,9 +1,11 @@
 #include "vtfZPipeline.hpp"
 #include "vtfStructUtils.hpp"
 #include "vtfBacktrace.hpp"
+#include "vtfZImage.hpp"
 
 #include <array>
 #include <iostream>
+#include <numeric>
 
 namespace vtf
 {
@@ -103,7 +105,6 @@ struct GraphicPipelineSettings
 {
 	ZPipelineLayout		m_layout;
 	ZRenderPass			m_renderPass;
-	uint32_t			m_attachmentCount;
 	ZPipelineCache		m_pipelineCache;
 
 	SpecializationInfoPerStageMap						m_shaderPerStageSpecs;
@@ -130,6 +131,9 @@ struct GraphicPipelineSettings
 
 	VkGraphicsPipelineCreateInfo						m_createInfo;
 
+	std::vector<gpp::AttachmentLocation>				m_drAttachments;
+	uint32_t											m_drViewMask;
+
 	GraphicPipelineSettings (ZPipelineLayout layout);
 	auto findShader (VkShaderStageFlagBits stage) -> std::vector<VkPipelineShaderStageCreateInfo>::iterator;
 	uint32_t containsDynamicState (VkDynamicState dynamicState) const;
@@ -139,7 +143,6 @@ struct GraphicPipelineSettings
 GraphicPipelineSettings::GraphicPipelineSettings (ZPipelineLayout layout)
 	: m_layout				(layout)
 	, m_renderPass			()
-	, m_attachmentCount		(0)
 	, m_pipelineCache		()
 	, m_shaderPerStageSpecs	()
 	, m_shaderStages		()
@@ -159,6 +162,8 @@ GraphicPipelineSettings::GraphicPipelineSettings (ZPipelineLayout layout)
 	, m_dynamicStates		()
 	, m_dynamicState		(makeDynamicStateCreateInfo())
 	, m_createInfo			(makePipelineCreateInfo())
+	, m_drAttachments		()
+	, m_drViewMask			(0)
 {
 }
 
@@ -238,13 +243,23 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 	info.pMultisampleState		= &settings.m_multisampleState;
 	info.pDepthStencilState		= &settings.m_depthStencilState;
 
-	const uint32_t attachmentCount = settings.m_renderPass.has_handle()
-									? settings.m_renderPass.getParam<ZDistType<AttachmentCount, uint32_t>>().get()
-									: settings.m_attachmentCount;
-	ASSERTMSG(attachmentCount != 0u, "There must be at least one attachment");
+	auto calcColorAttachmentCount = [](add_cref<std::vector<gpp::AttachmentLocation>> drAttachments) -> uint32_t
+	{
+		uint32_t count = 0u;
+		for (add_cref<gpp::AttachmentLocation> l : drAttachments)
+		{
+			if (std::get<bool>(l)) ++count;
+		}
+		return count;
+	};
+	const uint32_t colorAttachmentCount =
+		settings.m_renderPass.has_handle()
+			? settings.m_renderPass.getParam<ZDistType<AttachmentCount, uint32_t>>().get()
+			: calcColorAttachmentCount(settings.m_drAttachments);
+	ASSERTMSG(colorAttachmentCount != 0u, "There must be at least one attachment");
 	if (settings.m_blendAttachments.empty())
 	{
-		settings.m_blendAttachments.resize(attachmentCount, gpp::defaultBlendAttachmentState);
+		settings.m_blendAttachments.resize(colorAttachmentCount, gpp::defaultBlendAttachmentState);
 	}
 	settings.m_blendState.attachmentCount	= data_count(settings.m_blendAttachments);
 	settings.m_blendState.pAttachments		= settings.m_blendAttachments.data();
@@ -261,6 +276,56 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 		info.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 	}
 
+	void_ptr infoPNext = nullptr;
+	std::vector<VkFormat> drFormats;
+	std::vector<uint32_t> drIndices;
+	std::vector<uint32_t> drLocations;
+	VkRenderingAttachmentLocationInfo rali = makeVkStruct();
+	VkRenderingInputAttachmentIndexInfo riai = makeVkStruct();
+	VkPipelineRenderingCreateInfo drInfo = makeVkStruct(&rali);
+	
+	if (false == settings.m_renderPass.has_handle())
+	{
+		drLocations.resize(colorAttachmentCount);
+		rali.colorAttachmentCount = colorAttachmentCount;
+		rali.pColorAttachmentLocations = drLocations.data();
+
+		drFormats.resize(colorAttachmentCount, VK_FORMAT_UNDEFINED);
+		for (uint32_t i = 0u, k = 0u; i < data_count(settings.m_drAttachments); ++i)
+		{
+			add_cref<gpp::AttachmentLocation> l(settings.m_drAttachments[i]);
+			const uint32_t index = std::get<uint32_t>(l);
+			if (std::get<bool>(l))
+			{
+				drLocations[k] = index;
+				ZImageView a = std::get<ZImageView>(l);
+				if (a.has_handle())
+				{
+					drFormats[k] = imageGetFormat(imageViewGetImage(a));
+				}
+				k = k + 1u;
+			}
+			else
+			{
+				drIndices.push_back(index);
+			}
+		}
+		if (drIndices.empty() == false)
+		{
+			riai.colorAttachmentCount = data_count(drIndices);
+			riai.pColorAttachmentInputIndices = drIndices.data();
+			rali.pNext = &riai;
+		}
+
+		infoPNext = &drInfo;
+		drInfo.viewMask					= settings.m_drViewMask;
+		drInfo.colorAttachmentCount		= colorAttachmentCount;
+		drInfo.pColorAttachmentFormats	= drFormats.data();
+		drInfo.depthAttachmentFormat	= VK_FORMAT_UNDEFINED;
+		drInfo.stencilAttachmentFormat	= VK_FORMAT_UNDEFINED;
+	}
+
+	info.pNext				= infoPNext;
 	info.layout				= *settings.m_layout;
 	info.renderPass			= settings.m_renderPass.has_handle() ? *settings.m_renderPass : VK_NULL_HANDLE;
 	info.basePipelineHandle	= VK_NULL_HANDLE;
@@ -346,9 +411,14 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZPipelineCa
 	settings.m_pipelineCache = pipelineCache;
 }
 
-void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::AttachmentCount> attachmentCount)
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::AttachmentLocation> drAttachment)
 {
-	settings.m_attachmentCount = attachmentCount;
+	settings.m_drAttachments.push_back(drAttachment);
+}
+
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::ViewMask> drViewMask)
+{
+	settings.m_drViewMask = drViewMask;
 }
 
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<VertexBinding> vertexBinding)

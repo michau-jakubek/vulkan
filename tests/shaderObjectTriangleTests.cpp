@@ -148,7 +148,7 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 
 	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
-		caps.requiredExtension.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
+		caps.addExtension(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
 		params.shaderObject = caps.addUpdateFeatureIf(&VkPhysicalDeviceShaderObjectFeaturesEXT::shaderObject);
 		if (false == params.dontIgnoreSoExtension)
 		{
@@ -162,17 +162,17 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 		}
 
 		{
-			const auto f = caps.addUpdateFeatureIf(&VkPhysicalDeviceDynamicRenderingFeatures::dynamicRendering);
-			params.dynamicRendering = f;
-			f.checkSupported("dynamicRendering not supported");
-			caps.addExtension(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME).checkSupported();
+			const auto f = &VkPhysicalDeviceDynamicRenderingFeatures::dynamicRendering;
+			const auto u = caps.addUpdateFeatureIf(f);
+			params.dynamicRendering = u;
+			caps.addExtension(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
 		}
 
 		{
-			const auto f = caps.addUpdateFeatureIf(&VkPhysicalDeviceExtendedDynamicStateFeaturesEXT::extendedDynamicState);
-			params.extendedDynamicState = f;
-			f.checkSupported("extendedDynamicState not supported");
-			caps.addExtension(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME).checkSupported();
+			const auto f = &VkPhysicalDeviceExtendedDynamicStateFeaturesEXT::extendedDynamicState;
+			const auto u = caps.addUpdateFeatureIf(f);
+			params.extendedDynamicState = u;
+			caps.addExtension(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
 		}
 	};
 
@@ -322,8 +322,9 @@ TriLogicInt runTriangeSingleThread (add_ref<Canvas> cs, add_cref<std::string> as
 
 	auto onCommandRecording = [&](add_ref<Canvas>, add_cref<Canvas::Swapchain> swapchain, ZCommandBuffer cmdBuffer, ZFramebuffer framebuffer)
 	{
-		ZImageMemoryBarrier makeImageGeneral(framebufferGetImage(framebuffer),
-											VK_ACCESS_NONE, VK_ACCESS_NONE, VK_IMAGE_LAYOUT_GENERAL);
+		ZImage image = framebufferGetImage(framebuffer);
+		add_cref<VkExtent3D> size = imageGetExtent(image);
+		ZImageMemoryBarrier makeImageGeneral(image,	VK_ACCESS_NONE, VK_ACCESS_NONE, VK_IMAGE_LAYOUT_GENERAL);
 
 		commandBufferBegin(cmdBuffer);
 			commandBufferBindDescriptorSets(cmdBuffer, pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS);
@@ -334,11 +335,12 @@ TriLogicInt runTriangeSingleThread (add_ref<Canvas> cs, add_cref<std::string> as
 			commandBufferPipelineBarriers(cmdBuffer,
 				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, makeImageGeneral);
 
-			commandBufferBeginRendering(cmdBuffer, { framebufferGetView(framebuffer) }, { { clearColor } });
+			commandBufferBeginRendering(cmdBuffer, size.width, size.height,
+										{ framebufferGetView(framebuffer) }, { { clearColor } });
 				di.vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1, 0, 0);
 			commandBufferEndRendering(cmdBuffer);
 
-			commandBufferMakeImagePresentationReady(cmdBuffer, framebufferGetImage(framebuffer));
+			commandBufferMakeImagePresentationReady(cmdBuffer, image);
 		commandBufferEnd(cmdBuffer);
 	};
 

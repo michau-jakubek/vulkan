@@ -337,7 +337,7 @@ enum ZDistName
 	RequiredLayers,				AvailableLayers,
 	RequiredLayerExtensions,	AvailableLayerExtensions,
 	DesiredRequiredDeviceExtensions,	AvailableDeviceExtensions,
-	Width, Height, Depth,		PatchControlPoints, SubpassIndex,
+	Width, Height, Depth, ViewMask, PatchControlPoints, SubpassIndex,
 	LayoutIdentifier, PrimitiveRestart,
 	SizeFirst, SizeSecond, SizeThird,
 	VtfVer, ApiVer, VulkanVer, SpirvVer,

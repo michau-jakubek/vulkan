@@ -82,9 +82,10 @@ ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZRenderPa
 												   uint32_t subpass, VkSubpassContents = VK_SUBPASS_CONTENTS_INLINE);
 bool				 commandBufferNextSubpass (add_ref<ZRenderPassBeginInfo> beginInfo);
 void				 commandBufferEndRenderPass (add_cref<ZRenderPassBeginInfo> beginInfo);
-void				 commandBufferBeginRendering (ZCommandBuffer cmd, std::initializer_list<ZImageView> attachments,
-												  std::optional<std::vector<VkClearValue>> clearColors = {},
-												  ZRenderingFlags renderingFlags = ZRenderingFlags());
+void				commandBufferBeginRendering (ZCommandBuffer cmd, uint32_t width, uint32_t height,
+												 std::initializer_list<ZImageView> attachments,
+												 std::optional<std::vector<VkClearValue>> clearColors = {},
+												 uint32_t viewMask = 0u, ZRenderingFlags renderingFlags = ZRenderingFlags());
 void				 commandBufferEndRendering (ZCommandBuffer cmd);
 void				 commandBufferSetViewport (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain);
 void				 commandBufferSetScissor (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain);
@@ -180,6 +181,11 @@ void commandBufferBlitImage			(ZCommandBuffer cmd, ZImage srcImage, ZImage dstIm
 									 VkImageSubresourceLayers srcSubresource,
 									 VkImageSubresourceLayers dstSubresource,
 									 VkFilter = VK_FILTER_LINEAR);
+void commandBufferBlitImageWithBarriers (ZCommandBuffer cmd, ZImage srcImage, ZImage dstImage,
+										 VkAccessFlags srcImgSrcAccess, VkAccessFlags dstImgDstAccess,
+										 VkPipelineStageFlags srcStage,	VkPipelineStageFlags dstStage,
+										 VkImageLayout dstLayout, VkFilter filter = VK_FILTER_LINEAR);
+
 void commandBufferMakeImagePresentationReady (ZCommandBuffer cmdBuffer, ZImage image,
 											  VkAccessFlags srcAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 											  VkAccessFlags dstAccess = VK_ACCESS_MEMORY_READ_BIT,

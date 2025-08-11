@@ -87,32 +87,6 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 			: runTriangeSingleThread(cs, record.assets, userInfinityRepeat(cmdLineParams));
 }
 
-void onResize (Canvas& cs, void* userData, int width, int height)
-{
-	UNREF(cs);
-	UNREF(width);
-	UNREF(height);
-	if (userData)
-	{
-		*((int*)userData) += 1;
-	}
-}
-
-void onKey (Canvas& cs, void* userData, const int key, int scancode, int action, int mods)
-{
-	UNREF(userData);
-	UNREF(scancode);
-	UNREF(mods);
-	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-	{
-		glfwSetWindowShouldClose(*cs.window, GLFW_TRUE);
-	}
-	if (key == GLFW_KEY_R && action == GLFW_PRESS)
-	{
-		*((int*)userData) += 1;
-	}
-}
-
 TriLogicInt runTriangeSingleThread (Canvas& cs, const std::string& assets, bool infinityRepeat)
 {
 	LayoutManager				pl			(cs.device);
@@ -141,8 +115,7 @@ TriLogicInt runTriangeSingleThread (Canvas& cs, const std::string& assets, bool 
 															VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
 
 	int drawTrigger = 1;
-	cs.events().cbKey.set(onKey, &drawTrigger);
-	cs.events().cbWindowSize.set(onResize, &drawTrigger);
+	cs.events().setDefault(drawTrigger);
 
 	auto onCommandRecording = [&](add_ref<Canvas>, add_cref<Canvas::Swapchain> swapchain,
 									ZCommandBuffer cmdBuffer, ZFramebuffer framebuffer)
@@ -196,8 +169,8 @@ TriLogicInt runTriangleMultipleThreads (Canvas& cs, const std::string& assets, c
 	const VkClearValue			clearColor			{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
 	ZPipelineLayout				pipelineLayout		= LayoutManager(cs.device).createPipelineLayout();
 
-	cs.events().cbKey.set(onKey, nullptr);
-	cs.events().cbWindowSize.set(onResize, nullptr);
+	int drawTrigger = 1;
+	cs.events().setDefault(drawTrigger);
 
 	const uint32_t	blitImageWidth	= 1024;
 	const uint32_t	blitImageHeight	= 1024;

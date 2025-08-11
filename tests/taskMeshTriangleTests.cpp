@@ -25,28 +25,6 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params);
 TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams);
 std::tuple<ZShaderModule, ZShaderModule, ZShaderModule> buildProgram (ZDevice device, add_cref<Params> params);
 
-void onResize (add_ref<Canvas> cs, void* userData, int width, int height)
-{
-	MULTI_UNREF(cs, width, height);
-	if (userData)
-	{
-		*((int*)userData) += 1;
-	}
-}
-
-void onKey (add_ref<Canvas> cs, void* userData, const int key, int scancode, int action, int mods)
-{
-	MULTI_UNREF(scancode, mods);
-	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-	{
-		glfwSetWindowShouldClose(*cs.window, GLFW_TRUE);
-	}
-	if (key == GLFW_KEY_R && action == GLFW_PRESS)
-	{
-		*((int*)userData) += 1;
-	}
-}
-
 TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
 {
 	UNREF(cmdLineParams);
@@ -98,8 +76,7 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 														VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
 
 	int drawTrigger = 1;
-	canvas.events().cbKey.set(onKey, &drawTrigger);
-	canvas.events().cbWindowSize.set(onResize, &drawTrigger);
+	canvas.events().setDefault(drawTrigger);
 
 	auto onCommandRecording = [&](add_ref<Canvas>, add_cref<Canvas::Swapchain> swapchain,
 									ZCommandBuffer cmdBuffer, ZFramebuffer framebuffer)

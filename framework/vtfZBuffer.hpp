@@ -61,7 +61,10 @@ VkDeviceSize	computeBufferSize (VkFormat format, uint32_t imageWidth, uint32_t i
  * @param flags			is a bitmask of VkBufferCreateFlagBits specifying a creation of the buffer
  * @return
  */
-ZBuffer			createBuffer	(ZImage image, ZBufferUsageFlags usage, ZMemoryPropertyFlags properties, ZBufferCreateFlags flags = ZBufferCreateFlags());
+ZBuffer			createBuffer	(ZImage image,
+								ZBufferUsageFlags usage = ZBufferUsageStorageFlags,
+								ZMemoryPropertyFlags properties = ZMemoryPropertyHostFlags,
+								ZBufferCreateFlags flags = ZBufferCreateFlags());
 
 /**
  * @brief   Create index buffer

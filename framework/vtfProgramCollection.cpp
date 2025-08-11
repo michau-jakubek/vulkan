@@ -938,4 +938,9 @@ ZShaderModule ProgramCollection::getShader (VkShaderStageFlagBits stage, uint32_
 	return module;
 }
 
+VkShaderStageFlagBits shaderGetStage (ZShaderModule module)
+{
+	return module.getParam<VkShaderStageFlagBits>();
+}
+
 } // namespace vtf

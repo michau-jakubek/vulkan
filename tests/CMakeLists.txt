@@ -56,6 +56,8 @@ set(tests_files
 	cooperativeMatrixTests.hpp
 	taskMeshTriangleTests.cpp
 	taskMeshTriangleTests.hpp
+	banalDRLRTests.cpp
+	banalDRLRTests.hpp
     )
 
 if(ENABLE_DAEMON_TEST)

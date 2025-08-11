@@ -647,7 +647,7 @@ TriLogicInt runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> asse
 	auto onAfterRecording = [&](add_ref<Canvas>)
 	{
 		bufferRead(queryResults, userData.queryResult);
-
+		/*
 		std::vector<uint32_t> x(20);
 		bufferRead(indexBuffer, x);
 		std::cout << "( " << userData.pointCount << " ) ";
@@ -655,6 +655,7 @@ TriLogicInt runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> asse
 			//std::cout << (x[i] == INVALID_UINT32 ? make_signed(x[i]) : (-1)) << ' ';
 		std::cout << x[i] << ' ';
 		std::cout << std::endl;
+		*/
 	};
 
 	return cs.run(onCommandRecording, renderPass, std::ref(userData.drawTrigger), {}, onAfterRecording);

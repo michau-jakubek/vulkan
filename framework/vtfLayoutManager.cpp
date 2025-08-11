@@ -16,10 +16,12 @@ const DescriptorTypeToBufferUsage[]
 	{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT	},
 	{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT	},
 	{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT	},
+	{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT	},
 };
 static bool isImageDescriptorType (const VkDescriptorType type)
 {
-	return (	type == VK_DESCRIPTOR_TYPE_SAMPLER
+	return (	type == VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT
+			 || type == VK_DESCRIPTOR_TYPE_SAMPLER
 			 || type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
 			 || type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
 			 || type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
@@ -177,6 +179,7 @@ uint32_t LayoutManager::addBinding (ZImageView			view,
 			break;
 		case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
 		case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+		case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
 			ASSERTION(view.has_handle());
 			break;
 		default:
@@ -199,6 +202,7 @@ uint32_t LayoutManager::addBinding (ZImageView			view,
 		break;
 	case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
 	case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+	case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
 		m_views[m_extbindings[binding].offset] = view;
 		break;
 	default:
@@ -225,6 +229,7 @@ uint32_t LayoutManager::addBinding (VkDescriptorType	type,
 	{
 	case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
 	case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+	case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
 		b.index				= std::type_index(typeid(typename add_extent<ZImageView>::type));
 		b.offset			= m_views.size();
 		m_views.push_back(ZImageView());
@@ -516,6 +521,7 @@ void LayoutManager::updateDescriptorSet_	(ZDescriptorSet	descriptorSet,
 			{
 			case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
 			case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+			case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
 				{
 					ZImageView	view		= m_views[b.offset];
 					imageInfo.imageView		= *view;

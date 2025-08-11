@@ -77,6 +77,8 @@ struct ProgramCollection : _GlSpvProgramCollection
 	auto getShader (VkShaderStageFlagBits stage, uint32_t index = 0u, bool verbose = true) const -> ZShaderModule;
 };
 
+VkShaderStageFlagBits shaderGetStage (ZShaderModule module);
+
 } // namespace vtf
 
 #endif // __VTF_PROGRAM_COLLECTION_HPP_INCLUDED__

@@ -191,12 +191,15 @@ void commandBufferSetVertexInputEXT (ZCommandBuffer cmd, add_cref<VertexInput> i
 {
 	add_cref<ZDeviceInterface> di = cmd.getParamRef<ZDevice>().getInterface();
 
-	ZVertexInput2EXT ext(input);
-	di.vkCmdSetVertexInputEXT(*cmd,
-							data_count(ext.bindingDescriptions),
-							data_or_null(ext.bindingDescriptions),
-							data_count(ext.attributeDescriptions),
-							data_or_null(ext.attributeDescriptions));
+	if (di.vkCmdSetVertexInputEXT)
+	{
+		ZVertexInput2EXT ext(input);
+		di.vkCmdSetVertexInputEXT(*cmd,
+			data_count(ext.bindingDescriptions),
+			data_or_null(ext.bindingDescriptions),
+			data_count(ext.attributeDescriptions),
+			data_or_null(ext.attributeDescriptions));
+	}
 }
 
 void commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkDeviceSize offset)
@@ -452,39 +455,53 @@ void commandBufferEndRenderPass (add_cref<ZRenderPassBeginInfo> beginInfo)
 	}
 }
 
-void commandBufferBeginRendering (ZCommandBuffer cmd, std::initializer_list<ZImageView> attachments,
-								  std::optional<std::vector<VkClearValue>> clearColors, ZRenderingFlags renderingFlags)
+void commandBufferBeginRendering (
+	ZCommandBuffer cmd, uint32_t width, uint32_t height,
+	std::initializer_list<ZImageView> attachments,
+	std::optional<std::vector<VkClearValue>> clearColors,
+	uint32_t viewMask, ZRenderingFlags renderingFlags)
 {
 	ASSERTMSG(attachments.size(), "There must be at least one attachment to perform rendering");
 	const uint32_t			clearColorCount = clearColors.has_value() ? data_count(*clearColors) : 0u;
 	add_cptr<VkClearValue>	clearColorsPtr	= clearColorCount ? data_or_null(*clearColors) : nullptr;
 
+	uint32_t cc = 0u;
 	std::vector<VkRenderingAttachmentInfo> attInfos(attachments.size());
 	for (auto begin = attachments.begin(), i = begin; i != attachments.end(); ++i)
 	{
 		decltype(attInfos)::size_type k = make_unsigned(std::distance(begin, i));
 		add_ref<VkRenderingAttachmentInfo> a = attInfos.at(k);
 		a = makeVkStruct();
+		ZImageView v = *i;
 
-		a.imageView					= **i;
-		a.imageLayout				= imageGetLayout(imageViewGetImage(*i));
+		a.imageView					= v.handle();
 		a.resolveMode				= VK_RESOLVE_MODE_NONE;
 		a.resolveImageView			= VK_NULL_HANDLE;
 		a.resolveImageLayout		= VK_IMAGE_LAYOUT_UNDEFINED;
 		a.loadOp					= clearColorCount
-										? (k < clearColorCount)
+										? (cc < clearColorCount)
 										  ?	VK_ATTACHMENT_LOAD_OP_CLEAR
 										  : VK_ATTACHMENT_LOAD_OP_LOAD
 										: VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		a.storeOp					= VK_ATTACHMENT_STORE_OP_STORE;
-		if (k < clearColorCount)	a.clearValue = clearColorsPtr[k];
+		if (cc < clearColorCount)	a.clearValue = clearColorsPtr[cc];
+
+		if (v.has_handle())
+		{
+			a.imageLayout = imageGetLayout(imageViewGetImage(v));
+			cc = cc + 1u;
+		}
+		else
+		{
+			a.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		}
 	}
 
 	VkRenderingInfo rInfo = makeVkStruct();
 	rInfo.flags					= renderingFlags();
-	rInfo.renderArea			= makeRect2D(makeExtent2D(imageGetExtent(imageViewGetImage(*attachments.begin()))));
+	rInfo.renderArea			= makeRect2D(makeExtent2D(width, height));
 	rInfo.layerCount			= 1u;
-	rInfo.viewMask				= 0b0;
+	rInfo.viewMask				= viewMask;
 	rInfo.colorAttachmentCount	= data_count(attInfos);
 	rInfo.pColorAttachments		= data_or_null(attInfos);
 	rInfo.pDepthAttachment		= nullptr;
@@ -495,7 +512,6 @@ void commandBufferBeginRendering (ZCommandBuffer cmd, std::initializer_list<ZIma
 }
 
 void commandBufferEndRendering (ZCommandBuffer cmd)
-
 {
 	cmd.getParamRef<ZDevice>().getInterface().vkCmdEndRendering(*cmd);
 }
@@ -523,44 +539,69 @@ void commandBufferSetDefaultDynamicStates (
 	commandBufferSetVertexInputEXT(cmdBuffer, vertexInput);
 
 	// VkPipelineInputAssemblyStateCreateInfo
-	di.vkCmdSetPrimitiveTopologyEXT(*cmdBuffer, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-	di.vkCmdSetPrimitiveRestartEnableEXT(*cmdBuffer, VK_FALSE);
+	if (di.vkCmdSetPrimitiveTopologyEXT)
+		di.vkCmdSetPrimitiveTopologyEXT(*cmdBuffer, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	if (di.vkCmdSetPrimitiveRestartEnableEXT)
+		di.vkCmdSetPrimitiveRestartEnableEXT(*cmdBuffer, VK_FALSE);
 
 	// VkPipelineViewportStateCreateInfo
-	di.vkCmdSetViewportWithCountEXT(*cmdBuffer, 1u, &viewport);
-	const VkRect2D scissor = pScissor
-		? *pScissor
-		: makeRect2D(uint32_t(viewport.width), uint32_t(viewport.height), int32_t(viewport.x), int32_t(viewport.y));
-	di.vkCmdSetScissorWithCountEXT(*cmdBuffer, 1u, &scissor);
+	if (di.vkCmdSetViewportWithCountEXT)
+		di.vkCmdSetViewportWithCountEXT(*cmdBuffer, 1u, &viewport);
+	if (di.vkCmdSetScissorWithCountEXT)
+	{
+		const VkRect2D scissor = pScissor
+			? *pScissor
+			: makeRect2D(uint32_t(viewport.width), uint32_t(viewport.height), int32_t(viewport.x), int32_t(viewport.y));
+		di.vkCmdSetScissorWithCountEXT(*cmdBuffer, 1u, &scissor);
+	}
 
 	// VkPipelineRasterizationStateCreateInfo
-	di.vkCmdSetDepthClampEnableEXT(*cmdBuffer, VK_FALSE);
-	di.vkCmdSetRasterizerDiscardEnableEXT(*cmdBuffer, VK_FALSE);
-	di.vkCmdSetPolygonModeEXT(*cmdBuffer, VK_POLYGON_MODE_FILL);
-	di.vkCmdSetCullModeEXT(*cmdBuffer, VK_CULL_MODE_BACK_BIT);
-	di.vkCmdSetFrontFaceEXT(*cmdBuffer, VK_FRONT_FACE_CLOCKWISE);
-	di.vkCmdSetDepthBiasEnableEXT(*cmdBuffer, VK_FALSE);
+	if (di.vkCmdSetDepthClampEnableEXT)
+		di.vkCmdSetDepthClampEnableEXT(*cmdBuffer, VK_FALSE);
+	if (di.vkCmdSetRasterizerDiscardEnableEXT)
+		di.vkCmdSetRasterizerDiscardEnableEXT(*cmdBuffer, VK_FALSE);
+	if (di.vkCmdSetPolygonModeEXT)
+		di.vkCmdSetPolygonModeEXT(*cmdBuffer, VK_POLYGON_MODE_FILL);
+	if (di.vkCmdSetCullModeEXT)
+		di.vkCmdSetCullModeEXT(*cmdBuffer, VK_CULL_MODE_BACK_BIT);
+	if (di.vkCmdSetFrontFaceEXT)
+		di.vkCmdSetFrontFaceEXT(*cmdBuffer, VK_FRONT_FACE_CLOCKWISE);
+	if (di.vkCmdSetDepthBiasEnableEXT)
+		di.vkCmdSetDepthBiasEnableEXT(*cmdBuffer, VK_FALSE);
 
 	// VkPipelineDepthStencilStateCreateInfo
-	di.vkCmdSetDepthTestEnableEXT(*cmdBuffer, VK_FALSE);
-	di.vkCmdSetDepthWriteEnableEXT(*cmdBuffer, VK_FALSE);
-	di.vkCmdSetStencilTestEnableEXT(*cmdBuffer, VK_FALSE);
+	if (di.vkCmdSetDepthTestEnableEXT)
+		di.vkCmdSetDepthTestEnableEXT(*cmdBuffer, VK_FALSE);
+	if (di.vkCmdSetDepthWriteEnableEXT)
+		di.vkCmdSetDepthWriteEnableEXT(*cmdBuffer, VK_FALSE);
+	if (di.vkCmdSetStencilTestEnableEXT)
+		di.vkCmdSetStencilTestEnableEXT(*cmdBuffer, VK_FALSE);
 
 	// VkPipelineMultisampleStateCreateInfo
-	di.vkCmdSetRasterizationSamplesEXT(*cmdBuffer, VK_SAMPLE_COUNT_1_BIT);
-	di.vkCmdSetSampleMaskEXT(*cmdBuffer, VK_SAMPLE_COUNT_1_BIT, makeQuickPtr(~0u));
-	di.vkCmdSetAlphaToCoverageEnableEXT(*cmdBuffer, VK_FALSE);
+	if (di.vkCmdSetRasterizationSamplesEXT)
+		di.vkCmdSetRasterizationSamplesEXT(*cmdBuffer, VK_SAMPLE_COUNT_1_BIT);
+	if (di.vkCmdSetSampleMaskEXT)
+		di.vkCmdSetSampleMaskEXT(*cmdBuffer, VK_SAMPLE_COUNT_1_BIT, makeQuickPtr(~0u));
+	if (di.vkCmdSetAlphaToCoverageEnableEXT)
+		di.vkCmdSetAlphaToCoverageEnableEXT(*cmdBuffer, VK_FALSE);
 
 	// VkPipelineColorBlendAttachmentState
-	di.vkCmdSetColorBlendEnableEXT(*cmdBuffer, 0u, 1u, makeQuickPtr(gpp::defaultBlendAttachmentState.blendEnable));
-	di.vkCmdSetColorBlendEquationEXT(*cmdBuffer, 0u, 1u, makeQuickPtr(makeColorBlendEquationExt(gpp::defaultBlendAttachmentState)));
-	di.vkCmdSetColorWriteMaskEXT(*cmdBuffer, 0u, 1u, makeQuickPtr(gpp::defaultBlendAttachmentColorWriteMask));
+	if (di.vkCmdSetColorBlendEnableEXT)
+		di.vkCmdSetColorBlendEnableEXT(*cmdBuffer, 0u, 1u, makeQuickPtr(gpp::defaultBlendAttachmentState.blendEnable));
+	if (di.vkCmdSetColorBlendEquationEXT)
+		di.vkCmdSetColorBlendEquationEXT(*cmdBuffer, 0u, 1u, makeQuickPtr(makeColorBlendEquationExt(gpp::defaultBlendAttachmentState)));
+	if (di.vkCmdSetColorWriteMaskEXT)
+		di.vkCmdSetColorWriteMaskEXT(*cmdBuffer, 0u, 1u, makeQuickPtr(gpp::defaultBlendAttachmentColorWriteMask));
 
-	di.vkCmdSetConservativeRasterizationModeEXT(*cmdBuffer, VK_CONSERVATIVE_RASTERIZATION_MODE_DISABLED_EXT);
-	di.vkCmdSetSampleLocationsEnableEXT(*cmdBuffer, VK_FALSE);
-	di.vkCmdSetProvokingVertexModeEXT(*cmdBuffer, VK_PROVOKING_VERTEX_MODE_FIRST_VERTEX_EXT);
+	if (di.vkCmdSetConservativeRasterizationModeEXT)
+		di.vkCmdSetConservativeRasterizationModeEXT(*cmdBuffer, VK_CONSERVATIVE_RASTERIZATION_MODE_DISABLED_EXT);
+	if (di.vkCmdSetSampleLocationsEnableEXT)
+		di.vkCmdSetSampleLocationsEnableEXT(*cmdBuffer, VK_FALSE);
+	if (di.vkCmdSetProvokingVertexModeEXT)
+		di.vkCmdSetProvokingVertexModeEXT(*cmdBuffer, VK_PROVOKING_VERTEX_MODE_FIRST_VERTEX_EXT);
 
-	di.vkCmdSetTessellationDomainOriginEXT(*cmdBuffer, VK_TESSELLATION_DOMAIN_ORIGIN_UPPER_LEFT);
+	if (di.vkCmdSetTessellationDomainOriginEXT)
+		di.vkCmdSetTessellationDomainOriginEXT(*cmdBuffer, VK_TESSELLATION_DOMAIN_ORIGIN_UPPER_LEFT);
 }
 
 void commandBufferDrawIndirect (ZCommandBuffer cmd, ZBuffer buffer)
@@ -623,6 +664,25 @@ void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image,
 	commandBufferPipelineBarriers(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, prepare);
 	vkCmdClearColorImage(*cmd, *image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1u, &range);
 	commandBufferPipelineBarriers(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, verify);
+}
+
+void commandBufferBlitImageWithBarriers(ZCommandBuffer cmd, ZImage srcImage, ZImage dstImage,
+	VkAccessFlags srcImgSrcAccess, VkAccessFlags dstImgDstAccess, VkPipelineStageFlags srcStage,
+	VkPipelineStageFlags dstStage, VkImageLayout dstLayout, VkFilter filter)
+{
+	const VkImageLayout srcLayout = imageGetLayout(srcImage);
+
+	ZImageMemoryBarrier	srcPreBlit(srcImage, srcImgSrcAccess, VK_ACCESS_TRANSFER_READ_BIT,
+									VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	ZImageMemoryBarrier	dstPreBlit(dstImage, VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
+									VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+	ZImageMemoryBarrier	srcPostBlit(srcImage, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_NONE, srcLayout);
+	ZImageMemoryBarrier	dstPostBlit(dstImage, VK_ACCESS_TRANSFER_WRITE_BIT, dstImgDstAccess,  dstLayout);
+
+	commandBufferPipelineBarriers(cmd, srcStage, VK_PIPELINE_STAGE_TRANSFER_BIT, srcPreBlit, dstPreBlit);
+	commandBufferBlitImage(cmd, srcImage, dstImage, filter);
+	commandBufferPipelineBarriers(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, dstStage, srcPostBlit, dstPostBlit);
 }
 
 void commandBufferBlitImage (ZCommandBuffer cmd, ZImage srcImage, ZImage dstImage, VkFilter filter)

@@ -1688,7 +1688,9 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 				{
 					commandBufferSetDefaultDynamicStates(displayCmd, vertexInput, makeViewport(currParams.defaultExtent));
 					commandBufferBindShaders(displayCmd, { soCommonVert, backgroundShader });
-					commandBufferBeginRendering(displayCmd, { colorView });
+					commandBufferBeginRendering(displayCmd,
+												TestParams::defaultExtent.width,
+												TestParams::defaultExtent.height, { colorView });
 					vkCmdDrawIndexed(*displayCmd, 12, 1, 0, 0, 0);  // dst color sample
 					vkCmdDrawIndexed(*displayCmd, 12, 1, 18, 0, 1); // src color sample
 					vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 0);  // dst color blending area
@@ -1715,6 +1717,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 														  srcColorReady);
 				if (currParams.enableShaderObject)
 				{
+					add_cref<VkExtent3D> colorSize = imageGetExtent(colorImage);
 					const VkPipelineColorBlendAttachmentState state = currParams.getState();
 					commandBufferSetDefaultDynamicStates(displayCmd, vertexInput, makeViewport(currParams.defaultExtent));
 					di.vkCmdSetColorBlendEnableEXT(*displayCmd, 0u, 1u, makeQuickPtr(VK_TRUE));
@@ -1722,7 +1725,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 					di.vkCmdSetColorWriteMaskEXT(*displayCmd, 0u, 1u, &state.colorWriteMask);
 					di.vkCmdSetBlendConstants(*displayCmd, currParams.constColor.getData());
 					commandBufferBindShaders(displayCmd, { soCommonVert, blendShader });
-					commandBufferBeginRendering(displayCmd, { colorView });
+					commandBufferBeginRendering(displayCmd, colorSize.width, colorSize.height, { colorView });
 					vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 1);
 					commandBufferEndRendering(displayCmd);
 				}
