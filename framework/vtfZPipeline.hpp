@@ -45,13 +45,38 @@ using BlendConstants		= ZDistType<BlendConstants, Vec4>;
 using SpecConstants			= ZDistType<SpecConstants, std::pair<VkShaderStageFlagBits, add_ref<ZSpecializationInfo>>>;
 using PrimitiveRestart		= ZDistType<PrimitiveRestart, bool>;
 using ViewMask				= ZDistType<ViewMask, uint32_t>;
-//     std::tuple<ZImageView, (input_)attachment_index, is_color-depth-stencil_attachment>
-using AttachmentLocation	= std::tuple<ZImageView, uint32_t, bool>;
+enum AttachmentDesc { Color, Depth, Stencil, DeptStencil, Resolve, Input };
+struct AttachmentIndex
+{
+	uint32_t index;
+	AttachmentIndex () : index(INVALID_UINT32) {}
+	AttachmentIndex (uint32_t idx) : index(idx) {}
+};
+struct Attachment
+{
+	ZImageView		view;		// if has no handle then it will be treated as VK_ATTACHMENT_UNUSED
+	AttachmentDesc	desc;
+	uint32_t		index;		// if INVALID_UINT32 then it will be assigned in the order it appears in the list
+	VkAttachmentLoadOp	loadOp;
+	VkAttachmentStoreOp	storeOp;
+	Attachment (ZImageView view_, AttachmentDesc desc_, AttachmentIndex index_ = {},
+		VkAttachmentLoadOp loadOp_ = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		VkAttachmentStoreOp storeOp_ = VK_ATTACHMENT_STORE_OP_STORE)
+		: view(view_)
+		, desc(desc_)
+		, index(index_.index)
+		, loadOp(loadOp_)
+		, storeOp(storeOp_) {}
+	Attachment () : Attachment(ZImageView(), AttachmentDesc::Color) {}
+};
+using DRAttachmentLocations		= ZDistType<DRAttachmentLocations, add_cptr<std::vector<uint32_t>>>;
+using DRInpuAttachmentIndices	= ZDistType<DRInpuAttachmentIndices, add_cptr<std::vector<uint32_t>>>;
 
-	// VkExtent2D	sets both viewport and scissor
-	// VkViewport	sets viewport only
-	// VkRect2D		sets scissor only
-} // gpp
+// VkExtent2D	sets both viewport and scissor
+// VkViewport	sets viewport only
+// VkRect2D		sets scissor only
+
+} // namespace gpp
 
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, ZPipelineCreateFlags				createFlags);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, ZShaderModule						shaderModule);
@@ -80,8 +105,11 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::BlendC
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::SpecConstants>		specConstants);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::PrimitiveRestart>		primitiveRestartEnable);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>,	ZPipelineCache						pipelineCache);
-void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::AttachmentLocation>	drAttachment);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::Attachment>			drAttachment);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<std::vector<gpp::Attachment>>	drAttachments);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::ViewMask>				drViewMask);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::DRAttachmentLocations>	locations);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::DRInpuAttachmentIndices>	indices);
 
 // end of template recursion
 void updateSettings (add_ref<GraphicPipelineSettings>);

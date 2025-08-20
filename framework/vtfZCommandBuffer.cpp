@@ -455,9 +455,22 @@ void commandBufferEndRenderPass (add_cref<ZRenderPassBeginInfo> beginInfo)
 	}
 }
 
+void commandBufferBeginRendering(
+	ZCommandBuffer cmd, uint32_t width, uint32_t height,
+	std::initializer_list<add_cptr<std::vector<gpp::Attachment>>> attachments,
+	std::optional<std::vector<VkClearValue>> clearColors,
+	uint32_t viewMask, ZRenderingFlags renderingFlags)
+{
+	std::vector<gpp::Attachment> a;
+	for (add_cptr<std::vector<gpp::Attachment>> x : attachments)
+		a.insert(a.end(), x->begin(), x->end());
+	commandBufferBeginRendering(cmd, width, height,
+								a, clearColors, viewMask, renderingFlags);
+}
+
 void commandBufferBeginRendering (
 	ZCommandBuffer cmd, uint32_t width, uint32_t height,
-	std::initializer_list<ZImageView> attachments,
+	add_cref<std::vector<gpp::Attachment>> attachments,
 	std::optional<std::vector<VkClearValue>> clearColors,
 	uint32_t viewMask, ZRenderingFlags renderingFlags)
 {
@@ -465,35 +478,42 @@ void commandBufferBeginRendering (
 	const uint32_t			clearColorCount = clearColors.has_value() ? data_count(*clearColors) : 0u;
 	add_cptr<VkClearValue>	clearColorsPtr	= clearColorCount ? data_or_null(*clearColors) : nullptr;
 
-	uint32_t cc = 0u;
-	std::vector<VkRenderingAttachmentInfo> attInfos(attachments.size());
-	for (auto begin = attachments.begin(), i = begin; i != attachments.end(); ++i)
+	const uint32_t colorAttachmentCount =
+		uint32_t(std::count_if(attachments.begin(), attachments.end(),
+				[](add_cref<gpp::Attachment> a) { return a.desc == gpp::AttachmentDesc::Color; }));
+
+	std::vector<VkRenderingAttachmentInfo>
+		colorInfos(colorAttachmentCount, VkRenderingAttachmentInfo(makeVkStruct()));
+
+	for (uint32_t i = 0u, color = 0u; i < data_count(attachments); ++i)
 	{
-		decltype(attInfos)::size_type k = make_unsigned(std::distance(begin, i));
-		add_ref<VkRenderingAttachmentInfo> a = attInfos.at(k);
-		a = makeVkStruct();
-		ZImageView v = *i;
-
-		a.imageView					= v.handle();
-		a.resolveMode				= VK_RESOLVE_MODE_NONE;
-		a.resolveImageView			= VK_NULL_HANDLE;
-		a.resolveImageLayout		= VK_IMAGE_LAYOUT_UNDEFINED;
-		a.loadOp					= clearColorCount
-										? (cc < clearColorCount)
-										  ?	VK_ATTACHMENT_LOAD_OP_CLEAR
-										  : VK_ATTACHMENT_LOAD_OP_LOAD
-										: VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		a.storeOp					= VK_ATTACHMENT_STORE_OP_STORE;
-		if (cc < clearColorCount)	a.clearValue = clearColorsPtr[cc];
-
-		if (v.has_handle())
+		add_cref<gpp::Attachment> a = attachments[i];
+		const gpp::AttachmentDesc desc = a.desc;
+		if (desc == gpp::AttachmentDesc::Color)
 		{
-			a.imageLayout = imageGetLayout(imageViewGetImage(v));
-			cc = cc + 1u;
+			add_ref<VkRenderingAttachmentInfo> rai = colorInfos.at(color++);
+
+			rai.imageView = a.view.handle();
+			if (a.view.has_handle())
+			{
+				rai.imageLayout = imageGetLayout(imageViewGetImage(a.view));
+				rai.loadOp		= a.loadOp;
+				rai.storeOp		= a.storeOp;
+			}
+			else
+			{
+				rai.imageLayout	= VK_IMAGE_LAYOUT_UNDEFINED;
+				rai.loadOp		= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+				rai.storeOp		= VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			}
+			rai.resolveMode				= VK_RESOLVE_MODE_NONE;
+			rai.resolveImageView		= VK_NULL_HANDLE;
+			rai.resolveImageLayout		= VK_IMAGE_LAYOUT_UNDEFINED;
+			if (i < clearColorCount)	rai.clearValue = clearColorsPtr[i];
 		}
 		else
 		{
-			a.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			ASSERTFALSE(demangledName<gpp::AttachmentDesc>(), " of ", desc, " not supported yet");
 		}
 	}
 
@@ -502,8 +522,8 @@ void commandBufferBeginRendering (
 	rInfo.renderArea			= makeRect2D(makeExtent2D(width, height));
 	rInfo.layerCount			= 1u;
 	rInfo.viewMask				= viewMask;
-	rInfo.colorAttachmentCount	= data_count(attInfos);
-	rInfo.pColorAttachments		= data_or_null(attInfos);
+	rInfo.colorAttachmentCount	= colorAttachmentCount;
+	rInfo.pColorAttachments		= data_or_null(colorInfos);
 	rInfo.pDepthAttachment		= nullptr;
 	rInfo.pStencilAttachment	= nullptr;
 

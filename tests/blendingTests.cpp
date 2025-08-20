@@ -303,7 +303,7 @@ void TestParams::printCpp(ostream_ref log) const
 {
 	TestParams params(*this);
 	auto parser = params.getParser(false, false, false);
-	auto opt = parser.getOptionByName(optionPrintCppCode.name);
+	auto opt = parser.getOptionByName(optionPrintCppCode);
 	auto optt = std::dynamic_pointer_cast<OptionT<std::string>>(opt);
 
 	static const std::pair<VkColorComponentFlagBits, add_cptr<char>> bits[]{
@@ -851,7 +851,7 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 			params.srcColor1 = params.srcTwiceColor;
 		}
 
-		auto optFile = parser.getOptionByName(optionFile.name);
+		auto optFile = parser.getOptionByName(optionFile);
 		if (optFile && optFile->getTouched())
 		{
 			fromFile = true;
@@ -1612,6 +1612,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 	ZRenderPass					colorRenderPass;
 	ZImage						colorImage;
 	ZImageView					colorView;
+	gpp::Attachment				colorAttachment;
 	ZFramebuffer				colorFB;
 	ZBuffer						colorBuffer;
 	ZPipeline					backgroundPipeline;
@@ -1651,6 +1652,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 		const VkFormat colorFormat = VkFormat(currParams.colorFormat);
 		colorImage			= ctx.createColorImage2D(colorFormat, TestParams::defaultExtent);
 		colorView			= createImageView(colorImage);
+		colorAttachment		= gpp::Attachment(colorView, gpp::AttachmentDesc::Color);
 		colorRenderPass		= createColorRenderPass(ctx.device, { colorFormat }, {}, VK_IMAGE_LAYOUT_GENERAL);
 		colorFB				= createFramebuffer(colorRenderPass, TestParams::defaultExtent, { colorView });
 		colorBuffer			= createBuffer(colorImage, ZBufferUsageStorageFlags, ZMemoryPropertyHostFlags);
@@ -1690,7 +1692,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 					commandBufferBindShaders(displayCmd, { soCommonVert, backgroundShader });
 					commandBufferBeginRendering(displayCmd,
 												TestParams::defaultExtent.width,
-												TestParams::defaultExtent.height, { colorView });
+												TestParams::defaultExtent.height, { colorAttachment });
 					vkCmdDrawIndexed(*displayCmd, 12, 1, 0, 0, 0);  // dst color sample
 					vkCmdDrawIndexed(*displayCmd, 12, 1, 18, 0, 1); // src color sample
 					vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 0);  // dst color blending area
@@ -1725,7 +1727,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 					di.vkCmdSetColorWriteMaskEXT(*displayCmd, 0u, 1u, &state.colorWriteMask);
 					di.vkCmdSetBlendConstants(*displayCmd, currParams.constColor.getData());
 					commandBufferBindShaders(displayCmd, { soCommonVert, blendShader });
-					commandBufferBeginRendering(displayCmd, colorSize.width, colorSize.height, { colorView });
+					commandBufferBeginRendering(displayCmd, colorSize.width, colorSize.height, { colorAttachment });
 					vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 1);
 					commandBufferEndRendering(displayCmd);
 				}

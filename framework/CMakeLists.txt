@@ -34,6 +34,8 @@ set(framework_files
 	vtfTermColor.hpp
 	vtfOptionParser.hpp
 	vtfOptionParser.cpp
+	vtfPrettyPrinter.cpp
+	vtfPrettyPrinter.hpp
 	vtfVector.hpp
 	vtfMatrix.cpp
 	vtfMatrix.hpp

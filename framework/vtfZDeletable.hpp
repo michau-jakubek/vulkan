@@ -344,7 +344,8 @@ enum ZDistName
 	QueueFamilyIndex, QueueIndex, QueueFlags,
 	CullModeFlags, DepthTestEnable, DepthWriteEnable, StencilTestEnable,
 	LineWidth, AttachmentCount, SubpassCount, ViewportCount, ScissorCount,
-	SpecConstants, BlendAttachmentState, BlendConstants, PipelineCreateFlags
+	SpecConstants, BlendAttachmentState, BlendConstants, PipelineCreateFlags,
+	DRAttachmentLocations, DRInpuAttachmentIndices
 };
 template<ZDistName, class CType_>
 struct ZDistType

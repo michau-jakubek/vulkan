@@ -120,6 +120,7 @@ ZImage	VulkanContext::createColorImage2D (VkFormat format, add_cref<VkExtent2D> 
 ZImage	VulkanContext::createColorImage2D (VkFormat format, uint32_t width, uint32_t height, bool deviceAddress) const
 {
 	const ZImageUsageFlags usage = { VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+									 VK_IMAGE_USAGE_STORAGE_BIT,
 									 VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
 									 VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 									 VK_IMAGE_USAGE_TRANSFER_DST_BIT };

@@ -2,6 +2,7 @@
 #include "vtfStructUtils.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfZImage.hpp"
+#include "demangle.hpp"
 
 #include <array>
 #include <iostream>
@@ -131,7 +132,9 @@ struct GraphicPipelineSettings
 
 	VkGraphicsPipelineCreateInfo						m_createInfo;
 
-	std::vector<gpp::AttachmentLocation>				m_drAttachments;
+	std::vector<gpp::Attachment>						m_drAttachments;
+	add_cptr<std::vector<uint32_t>>						m_drAttachmentLocations;
+	add_cptr<std::vector<uint32_t>>						m_drInputAttachmentIndices;
 	uint32_t											m_drViewMask;
 
 	GraphicPipelineSettings (ZPipelineLayout layout);
@@ -162,8 +165,10 @@ GraphicPipelineSettings::GraphicPipelineSettings (ZPipelineLayout layout)
 	, m_dynamicStates		()
 	, m_dynamicState		(makeDynamicStateCreateInfo())
 	, m_createInfo			(makePipelineCreateInfo())
-	, m_drAttachments		()
-	, m_drViewMask			(0)
+	, m_drAttachments					()
+	, m_drAttachmentLocations		(nullptr)
+	, m_drInputAttachmentIndices	(nullptr)
+	, m_drViewMask						(0)
 {
 }
 
@@ -209,6 +214,109 @@ std::shared_ptr<GraphicPipelineSettings> makeGraphicsPipelineSettings (ZPipeline
 	return std::make_shared<GraphicPipelineSettings>(layout);
 }
 
+static void dumpVkRenderingInputAttachmentIndexInfo (
+	add_cptr<VkRenderingInputAttachmentIndexInfo> p,
+	add_ref<std::ostream> str, uint32_t indent)
+{
+	const std::string spaces(indent, ' ');
+	str << spaces << "VkRenderingInputAttachmentIndexInfo" << std::endl;
+	str << spaces << "   colorAttachmentCount: " << p->colorAttachmentCount << std::endl;
+	str << spaces << "   pColorAttachmentInputIndices: ";
+	if (p->pColorAttachmentInputIndices)
+	{
+		str << '[';
+		for (uint32_t i = 0; i < p->colorAttachmentCount; ++i)
+		{
+			if (i) str << ", ";
+			str << p->pColorAttachmentInputIndices[i];
+		}
+		str << ']' << std::endl;
+	}
+	else str << "null" << std::endl;
+	str << spaces << "   pNext: " << p->pNext << std::endl;
+}
+static void dumpVkRenderingAttachmentLocationInfo (
+	add_cptr<VkRenderingAttachmentLocationInfo> p,
+	add_ref<std::ostream> str, uint32_t indent)
+{
+	const std::string spaces(indent, ' ');
+	str << spaces << "VkRenderingAttachmentLocationInfo" << std::endl;
+	str << spaces << "   colorAttachmentCount: " << p->colorAttachmentCount << std::endl;
+	str << spaces << "   pColorAttachmentInputIndices: ";
+	if (p->pColorAttachmentLocations)
+	{
+		str << '[';
+		for (uint32_t i = 0; i < p->colorAttachmentCount; ++i)
+		{
+			if (i) str << ", ";
+			str << p->pColorAttachmentLocations[i];
+		}
+		str << ']' << std::endl;
+	}
+	else str << "null" << std::endl;
+	str << spaces << "   pNext: " << p->pNext << std::endl;
+}
+static void dumpVkPipelineRenderingCreateInfo(
+	add_cptr<VkPipelineRenderingCreateInfo> p,
+	add_ref<std::ostream> str, uint32_t indent)
+{
+	const std::string spaces(indent, ' ');
+	auto writeFormat = [&](VkFormat f) -> add_ref<std::ostream> {
+		if (VK_FORMAT_UNDEFINED == f)
+			str << "VK_FORMAT_UNDEFINED";
+		else str << formatGetInfo(f).name;
+		return str;
+	};
+	str << spaces << "VkPipelineRenderingCreateInfo" << std::endl;
+	str << spaces << "   colorAttachmentCount: " << p->colorAttachmentCount << std::endl;
+	str << spaces << "   pColorAttachmentFormats: ";
+	if (p->pColorAttachmentFormats)
+	{
+		str << '[';
+		for (uint32_t i = 0; i < p->colorAttachmentCount; ++i)
+		{
+			if (i) str << ", ";
+			writeFormat(p->pColorAttachmentFormats[i]);
+		}
+		str << ']';
+	}
+	else str << "null";
+	str << std::endl;
+
+	str << spaces << "   depthAttachmentFormat: "; writeFormat(p->depthAttachmentFormat); str << std::endl;
+	str << spaces << "   stencilAttachmentFormat: "; writeFormat(p->stencilAttachmentFormat); str << std::endl;
+	str << spaces << "   viewMask: " << p->viewMask << std::endl;
+	str << spaces << "   pNext: " << p->pNext << std::endl;
+}
+
+static void dumpPipelineCreateInfoPNext(void_cptr p, VkStructureType sType, add_ref<std::ostream> str, uint32_t indent)
+{
+	if (VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO == sType)
+		dumpVkPipelineRenderingCreateInfo(static_cast<add_cptr<VkPipelineRenderingCreateInfo>>(p), str, indent);
+	if (VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_LOCATION_INFO == sType)
+		dumpVkRenderingAttachmentLocationInfo(static_cast<add_cptr<VkRenderingAttachmentLocationInfo>>(p), str, indent);
+	if (VK_STRUCTURE_TYPE_RENDERING_INPUT_ATTACHMENT_INDEX_INFO == sType)
+		dumpVkRenderingInputAttachmentIndexInfo(static_cast<add_cptr<VkRenderingInputAttachmentIndexInfo>>(p), str, indent);
+}
+
+static void dumpPipeline (VkPipeline pipeline, add_cref<VkGraphicsPipelineCreateInfo> info, add_ref<std::ostream> str)
+{
+	if (0 == getGlobalAppFlags().verbose)
+		return;
+
+	std::cout << "[INFO] created pipeline " << pipeline << ", pNext: " << info.pNext << std::endl;
+	if (info.pNext)
+	{
+		void_cptr pNext = info.pNext;
+		while (pNext)
+		{
+			add_cptr<VkBaseInStructure> p = static_cast<add_cptr<VkBaseInStructure>>(pNext);
+			dumpPipelineCreateInfoPNext(pNext, p->sType, str, 4u);
+			pNext = p->pNext;
+		}
+	}
+}
+
 ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 {
 	VkGraphicsPipelineCreateInfo& info = settings.m_createInfo;
@@ -243,19 +351,11 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 	info.pMultisampleState		= &settings.m_multisampleState;
 	info.pDepthStencilState		= &settings.m_depthStencilState;
 
-	auto calcColorAttachmentCount = [](add_cref<std::vector<gpp::AttachmentLocation>> drAttachments) -> uint32_t
-	{
-		uint32_t count = 0u;
-		for (add_cref<gpp::AttachmentLocation> l : drAttachments)
-		{
-			if (std::get<bool>(l)) ++count;
-		}
-		return count;
-	};
 	const uint32_t colorAttachmentCount =
 		settings.m_renderPass.has_handle()
 			? settings.m_renderPass.getParam<ZDistType<AttachmentCount, uint32_t>>().get()
-			: calcColorAttachmentCount(settings.m_drAttachments);
+			: uint32_t(std::count_if(settings.m_drAttachments.begin(), settings.m_drAttachments.end(),
+				[](add_cref<gpp::Attachment> a) { return a.desc == gpp::AttachmentDesc::Color; }));
 	ASSERTMSG(colorAttachmentCount != 0u, "There must be at least one attachment");
 	if (settings.m_blendAttachments.empty())
 	{
@@ -278,43 +378,56 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 
 	void_ptr infoPNext = nullptr;
 	std::vector<VkFormat> drFormats;
-	std::vector<uint32_t> drIndices;
-	std::vector<uint32_t> drLocations;
-	VkRenderingAttachmentLocationInfo rali = makeVkStruct();
+	VkRenderingAttachmentLocationInfo	rali = makeVkStruct();
 	VkRenderingInputAttachmentIndexInfo riai = makeVkStruct();
-	VkPipelineRenderingCreateInfo drInfo = makeVkStruct(&rali);
+	VkPipelineRenderingCreateInfo		drInfo = makeVkStruct();
 	
 	if (false == settings.m_renderPass.has_handle())
 	{
-		drLocations.resize(colorAttachmentCount);
-		rali.colorAttachmentCount = colorAttachmentCount;
-		rali.pColorAttachmentLocations = drLocations.data();
-
 		drFormats.resize(colorAttachmentCount, VK_FORMAT_UNDEFINED);
-		for (uint32_t i = 0u, k = 0u; i < data_count(settings.m_drAttachments); ++i)
+		for (uint32_t i = 0u, color = 0u; i < data_count(settings.m_drAttachments); ++i)
 		{
-			add_cref<gpp::AttachmentLocation> l(settings.m_drAttachments[i]);
-			const uint32_t index = std::get<uint32_t>(l);
-			if (std::get<bool>(l))
+			add_cref<gpp::Attachment> l(settings.m_drAttachments[i]);
+			//const uint32_t index = l.index == INVALID_UINT32 ? i : l.index;
+			if (l.desc == gpp::AttachmentDesc::Color)
 			{
-				drLocations[k] = index;
-				ZImageView a = std::get<ZImageView>(l);
-				if (a.has_handle())
+				if (l.view.has_handle())
 				{
-					drFormats[k] = imageGetFormat(imageViewGetImage(a));
+					drFormats[color] = imageGetFormat(imageViewGetImage(l.view));
 				}
-				k = k + 1u;
+				color = color + 1u;
 			}
 			else
 			{
-				drIndices.push_back(index);
+				ASSERTFALSE(demangledName<gpp::AttachmentDesc>(), " of ", l.desc, " not supported yet");
 			}
 		}
-		if (drIndices.empty() == false)
+
+		if (settings.m_drAttachmentLocations && settings.m_drInputAttachmentIndices)
 		{
-			riai.colorAttachmentCount = data_count(drIndices);
-			riai.pColorAttachmentInputIndices = drIndices.data();
+			riai.colorAttachmentCount = data_count(*settings.m_drInputAttachmentIndices);
+			riai.pColorAttachmentInputIndices = settings.m_drInputAttachmentIndices->data();
+			riai.pNext = nullptr;
+
+			rali.colorAttachmentCount = data_count(*settings.m_drAttachmentLocations);
+			rali.pColorAttachmentLocations = settings.m_drAttachmentLocations->data();
 			rali.pNext = &riai;
+
+			drInfo.pNext = &rali;
+		}
+		else if (settings.m_drAttachmentLocations)
+		{
+			rali.colorAttachmentCount = data_count(*settings.m_drAttachmentLocations);
+			rali.pColorAttachmentLocations = settings.m_drAttachmentLocations->data();
+
+			drInfo.pNext = &rali;
+		}
+		else if (settings.m_drInputAttachmentIndices)
+		{
+			riai.colorAttachmentCount = data_count(*settings.m_drInputAttachmentIndices);
+			riai.pColorAttachmentInputIndices = settings.m_drInputAttachmentIndices->data();
+
+			drInfo.pNext = &riai;
 		}
 
 		infoPNext = &drInfo;
@@ -342,6 +455,8 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 																			 1u, &info,
 																			 callbacks,
 																			 &pipelineHandle);
+	dumpPipeline(pipelineHandle, info, std::cout);
+
 	VKASSERT(createStatus);
 
 	return ZPipeline::create(pipelineHandle, device, callbacks, settings.m_layout,
@@ -411,9 +526,25 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZPipelineCa
 	settings.m_pipelineCache = pipelineCache;
 }
 
-void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::AttachmentLocation> drAttachment)
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::Attachment> drAttachment)
 {
 	settings.m_drAttachments.push_back(drAttachment);
+}
+
+void updateKnownSettings(add_ref<GraphicPipelineSettings> settings, add_cref<gpp::DRAttachmentLocations> locations)
+{
+	settings.m_drAttachmentLocations = locations;
+}
+
+void updateKnownSettings(add_ref<GraphicPipelineSettings> settings, add_cref<gpp::DRInpuAttachmentIndices> indices)
+{
+	settings.m_drInputAttachmentIndices = indices;
+}
+
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<std::vector<gpp::Attachment>>	drAttachments)
+{
+	settings.m_drAttachments.insert(
+		settings.m_drAttachments.end(), drAttachments.begin(), drAttachments.end());
 }
 
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::ViewMask> drViewMask)

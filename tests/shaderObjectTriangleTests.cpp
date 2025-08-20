@@ -336,7 +336,8 @@ TriLogicInt runTriangeSingleThread (add_ref<Canvas> cs, add_cref<std::string> as
 				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, makeImageGeneral);
 
 			commandBufferBeginRendering(cmdBuffer, size.width, size.height,
-										{ framebufferGetView(framebuffer) }, { { clearColor } });
+										{ gpp::Attachment(framebufferGetView(framebuffer), gpp::AttachmentDesc::Color) },
+										{ { clearColor } });
 				di.vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1, 0, 0);
 			commandBufferEndRendering(cmdBuffer);
 

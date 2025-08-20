@@ -133,9 +133,9 @@ void _OptionParserImpl::addHelpOpts ()
 {
 	const std::string comment("print this help");
 	m_options.insert(m_options.begin(), std::make_shared<OptionT<bool>>(m_state->hasHelp, _optionLongHelp,
-		comment, false, OptionFlags(), typename OptionT<bool>::parse_cb(), typename OptionT<bool>::format_cb()));
+		comment, false, OptionFlags(OptionFlag::DontPrintAsParams), typename OptionT<bool>::parse_cb(), typename OptionT<bool>::format_cb()));
 	m_options.insert(m_options.begin(), std::make_shared<OptionT<bool>>(m_state->hasHelp, _optionShortHelp,
-		comment, false, OptionFlags(), typename OptionT<bool>::parse_cb(), typename OptionT<bool>::format_cb()));
+		comment, false, OptionFlags(OptionFlag::DontPrintAsParams), typename OptionT<bool>::parse_cb(), typename OptionT<bool>::format_cb()));
 }
 
 strings _OptionParserImpl::parse (add_cref<strings> cmdLineParams, bool allMustBeConsumed, parse_cb onParsing)
@@ -186,8 +186,9 @@ _OptIPtrVec _OptionParserImpl::getOptions () const
 	return result;
 }
 
-_OptIPtr _OptionParserImpl::getOptionByName (add_cref<std::string> name) const
+_OptIPtr _OptionParserImpl::getOptionByName (add_cref<Option> option) const
 {
+	const std::string name = option.name;
 	auto match = [&](_OptIPtr ptr) { return ptr->getName() == name; };
 	auto ptr = std::find_if(m_options.begin(), m_options.end(), match);
 	return (ptr != m_options.end()) ? *ptr : _OptIPtr();
@@ -252,11 +253,15 @@ static void OptionParserImplPutDescrition (_OptIPtr opt, add_ref<std::ostream> s
 	auto makeDefaultString = [&]() -> std::string
 	{
 		std::ostringstream oss;
-		oss << ", default is " << opt->defaultWriter();
+		oss << ", default is ";
+		if (opt->getFlags().contain(OptionFlag::PrintValueAsDefault))
+			oss << opt->valueWriter();
+		else oss << opt->defaultWriter();
 		return oss.str();
 	};
 
-	const std::string	def		= (opt->getFlags().contain(OptionFlag::PrintDefault) ? makeDefaultString() : std::string());
+	const std::string	def		= (opt->getFlags().contain(OptionFlag::PrintDefault)
+								  || opt->getFlags().contain(OptionFlag::PrintValueAsDefault)) ? makeDefaultString() : std::string();
 	const strings		desc	= wordize(def);
 	const std::string	sep		(" ");
 	const std::string	sindent	(maxOptNameLength + 10 + indent, ' ');
@@ -280,6 +285,42 @@ static void OptionParserImplPutDescrition (_OptIPtr opt, add_ref<std::ostream> s
 		j = search(i, desc.cend(), sep);
 	}
 
+}
+
+void _OptionParserImpl::printParams (add_cref<std::string> header, add_ref<std::ostream> str, bool twoNewLines) const
+{
+	uint32_t maxOptionNameLength = 0u;
+	for (add_cref<_OptIPtr> opt : m_options)
+	{
+		if (false == opt->getFlags().contain(OptionFlag::DontPrintAsParams))
+			maxOptionNameLength = std::max(maxOptionNameLength, uint32_t(opt->getParamName().length()));
+	}
+	if (const auto hdrLength = header.length(); hdrLength)
+	{
+		str << header << std::endl << std::string(hdrLength, '-') << std::endl;
+	}
+	if (maxOptionNameLength)
+	{
+		for (add_cref<_OptIPtr> opt : m_options)
+		{
+			if (false == opt->getFlags().contain(OptionFlag::DontPrintAsParams))
+			{
+				str << opt->getParamName() << ':'
+					<< std::string((maxOptionNameLength - uint32_t(opt->getParamName().length()) + 2u), ' ')
+					<< opt->valueWriter() << std::endl;
+				if (twoNewLines) str << std::endl;
+			}
+		}
+	}
+	else
+	{
+		for (add_cref<_OptIPtr> opt : m_options)
+			if (false == opt->getFlags().contain(OptionFlag::DontPrintAsParams))
+			{
+				str << opt->valueWriter() << std::endl;
+				if (twoNewLines) str << std::endl;
+			}
+	}
 }
 
 void _OptionParserImpl::printOptions (add_ref<std::ostream> str, uint32_t descWidth, uint32_t indent) const

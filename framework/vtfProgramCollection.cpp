@@ -910,7 +910,22 @@ void ProgramCollection::buildAndVerify (add_cref<Version> vulkanVer, add_cref<Ve
 					m_stageToAssembly[key]	= std::move(assembly);
 					m_stageToBinary[key]	= std::move(binary);
 				}
-				else ASSERTFALSE(errors);
+				else
+				{
+					std::ostringstream codeWidthLines;
+					add_cref<std::string> code = m_stageToCode[key][ProgramCollection::StageToCode::shaderCode];
+					if (code.empty() == false)
+					{
+						uint32_t num = 0u;
+						std::string line;
+						std::istringstream is(code);
+						while (std::getline(is, line) && ++num)
+						{
+							codeWidthLines << num << ": " << std::move(line) << std::endl;
+						}
+					}
+					ASSERTFALSE(errors, codeWidthLines.str());
+				}
 			}
 		}
 	}

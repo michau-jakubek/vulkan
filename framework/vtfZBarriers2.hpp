@@ -144,6 +144,16 @@ struct ZBarrierConstants
 	static_assert(sizeof(VkPipelineStageFlags2) == sizeof(Stage), "???");
 };
 
+inline ZBarrierConstants::Access operator| (ZBarrierConstants::Access lhs, ZBarrierConstants::Access rhs) {
+	return static_cast<ZBarrierConstants::Access>(
+		static_cast<VkAccessFlagBits2>(lhs) | static_cast<VkAccessFlagBits2>(rhs));
+}
+
+inline ZBarrierConstants::Stage operator| (ZBarrierConstants::Stage lhs, ZBarrierConstants::Stage rhs) {
+	return static_cast<ZBarrierConstants::Stage>(
+		static_cast<VkPipelineStageFlags2>(lhs) | static_cast<VkPipelineStageFlags2>(rhs));
+}
+
 struct ZMemoryBarrier2 : protected VkMemoryBarrier2, public ZBarrierConstants
 {
 	ZMemoryBarrier2 (add_ptr<void> pNext = nullptr);

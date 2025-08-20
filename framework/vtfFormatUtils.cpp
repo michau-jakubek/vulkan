@@ -534,6 +534,7 @@ std::pair<bool, bool> formatIsDepthStencil (ZPhysicalDevice device, VkFormat for
 }
 
 ZFormatInfoIterator::ZFormatInfoIterator ()
+	: m_count(ARRAY_LENGTH_CAST(formatAndNames, uint32_t))
 {
 	reset();
 }

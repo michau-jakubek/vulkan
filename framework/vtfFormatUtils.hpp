@@ -74,10 +74,12 @@ struct ZFormatInfo
 
 class ZFormatInfoIterator : public ZFormatInfo
 {
-	int m_current;
+	const uint32_t	m_count;
+	int				m_current;
 public:
 
 	ZFormatInfoIterator ();
+	uint32_t getCount() const { return m_count; }
 	void reset ();
 	bool next ();
 };

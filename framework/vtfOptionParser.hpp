@@ -31,8 +31,10 @@ constexpr Option _optionLongHelp	("--help",	0);
 
 enum class OptionFlag : uint32_t
 {
-	None = 0b0,
-	PrintDefault = 0b1
+	None				= 0b0,
+	PrintDefault		= 0b1,
+	PrintValueAsDefault	= 0b10,
+	DontPrintAsParams	= 0b100,
 };
 typedef Flags<uint32_t, OptionFlag> OptionFlags;
 
@@ -43,6 +45,7 @@ struct OptionInterface : public Option
 		, m_desc		()
 		, m_typeName	()
 		, m_default		()
+		, m_paramName	()
 		, m_flags		()
 		, m_parseState	(false)
 		, m_touched		(false) {}
@@ -61,6 +64,8 @@ struct OptionInterface : public Option
 	auto			getDefault		() const -> add_cref<std::string>	{ return m_default; }
 	mptr			setDefault		(add_cref<std::string> def)			{ m_default = def; return this;}
 	auto			getTouched		() const -> bool					{ return m_touched; }
+	auto			getParamName	() const -> add_cref<std::string>	{ return m_paramName; }
+	mptr			setParamName	(add_cref<std::string> paramName)	{ m_paramName = paramName; return this; }
 
 	struct DefaultWriter			{ add_cref<OptionInterface> intf; };
 	struct ValueWriter				{ add_cref<OptionInterface> intf; };
@@ -73,6 +78,7 @@ private:
 	std::string	m_desc;
 	std::string m_typeName;
 	std::string m_default;
+	std::string m_paramName;
 	OptionFlags	m_flags;
 protected:
 	bool		m_parseState;
@@ -180,7 +186,8 @@ struct _OptionParserImpl
 	void	printOptions (add_ref<std::ostream> str, uint32_t descWidth = 40u, uint32_t indent = 2u) const;
 	auto	getMaxOptionNameLength (bool includeTypeName = false, bool onlyTouched = false) const -> uint32_t;
 	auto	getOptions () const -> _OptIPtrVec;
-	auto	getOptionByName (add_cref<std::string> name) const ->_OptIPtr;
+	auto	getOptionByName (add_cref<Option> option) const ->_OptIPtr;
+	void	printParams (add_cref<std::string> header, add_ref<std::ostream> str, bool twoNewLines = false) const;
 
 protected:
 	void	addHelpOpts ();

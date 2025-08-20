@@ -53,6 +53,7 @@ struct ZBufferMemoryBarrier : protected VkBufferMemoryBarrier
 	ZBufferMemoryBarrier ();
 	ZBufferMemoryBarrier (ZBuffer buffer, VkAccessFlags srcAccess, VkAccessFlags dstAccess);
 	VkBufferMemoryBarrier operator ()() const;
+	ZBuffer getBuffer () const;
 protected:
 	ZBuffer	m_buffer;
 };
@@ -64,6 +65,7 @@ struct ZImageMemoryBarrier : protected VkImageMemoryBarrier
 	ZImageMemoryBarrier (ZImage image, VkAccessFlags srcAccess, VkAccessFlags dstAccess, VkImageLayout targetLayout, add_cref<VkImageSubresourceRange>);
 	// exchanges m_image layout according to barrier target layout
 	VkImageMemoryBarrier operator()();
+	ZImage getImage () const;
 protected:
 	ZImage	m_image;
 };
@@ -91,6 +93,38 @@ void pushBarriers (add_ref<BarriersInfo> info, Barrier&& barrier, Barriers&&... 
 {
 	pushKnownBarrier(info, barrier);
 	pushBarriers(info, std::forward<Barriers>(barriers)...);
+}
+
+void pushKnownBarriers (
+	add_ref<std::vector<VkMemoryBarrier>>,
+	add_ref<std::vector<VkImageMemoryBarrier>>,
+	add_ref<std::vector<VkBufferMemoryBarrier>>,
+	add_cref<std::vector<ZMemoryBarrier>>);
+void pushKnownBarriers (
+	add_ref<std::vector<VkMemoryBarrier>>,
+	add_ref<std::vector<VkImageMemoryBarrier>>,
+	add_ref<std::vector<VkBufferMemoryBarrier>>,
+	add_cref<std::vector<ZImageMemoryBarrier>>);
+void pushKnownBarriers (
+	add_ref<std::vector<VkMemoryBarrier>>,
+	add_ref<std::vector<VkImageMemoryBarrier>>,
+	add_ref<std::vector<VkBufferMemoryBarrier>>,
+	add_cref<std::vector<ZBufferMemoryBarrier>>);
+
+void pushBarriers (
+	add_ref<std::vector<VkMemoryBarrier>>,
+	add_ref<std::vector<VkImageMemoryBarrier>>,
+	add_ref<std::vector<VkBufferMemoryBarrier>>);
+template<class Barrier, class... Barriers>
+void pushBarriers (
+	add_ref<std::vector<VkMemoryBarrier>>		memBarriers,
+	add_ref<std::vector<VkImageMemoryBarrier>>	imgBarriers,
+	add_ref<std::vector<VkBufferMemoryBarrier>>	bufBarriers,
+	const std::vector<Barrier>&					barriers,
+	const std::vector<Barriers>&...				otherBarriers)
+{
+	pushKnownBarriers(memBarriers, imgBarriers, bufBarriers, barriers);
+	pushBarriers(memBarriers, imgBarriers, bufBarriers, otherBarriers...);
 }
 
 } // namespace vtf

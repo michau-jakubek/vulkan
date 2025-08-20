@@ -205,7 +205,7 @@ TriLogicInt prepareTests(add_cref<TestRecord> record, add_cref<strings> cmdLineP
 	deviceGetPhysicalProperties2(physicalDevice, &subgroupProperties);
 	params.subgroupSize = subgroupProperties.subgroupSize;
 
-	params.allConfigurations = false == parser.getOptionByName(optionConfiguration.name)->getTouched();
+	params.allConfigurations = false == parser.getOptionByName(optionConfiguration)->getTouched();
 
 	TriLogicInt result;
 	if (params.allConfigurations || params.Configuration >= params.confs.size())

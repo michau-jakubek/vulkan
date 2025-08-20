@@ -84,8 +84,9 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	Option extList{ "-de", 1 };					options.push_back(extList);
 	Option excludeDevExt{ "-ede", 1 };			options.push_back(excludeDevExt);
 	Option curDev{ "-d", 1 };					options.push_back(curDev);
-	Option layer{ "-l", 1 };					options.push_back(layer);
+	Option addSingleLayer{ "-l", 1 };			options.push_back(addSingleLayer);
 	Option layList{ "-ll", 0 };					options.push_back(layList);
+	Option addAllAvailableLayers{ "-lall", 0 };	options.push_back(addAllAvailableLayers);
 	Option optLayNoVuid{ "-l-no-vuid-undefined", 0 };	options.push_back(optLayNoVuid);
 	Option optSuppressVUID{ "-l-suppress", 1 };	options.push_back(optSuppressVUID);
 	Option optAssets{ "-assets", 1 };			options.push_back(optAssets);
@@ -293,11 +294,16 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 			return 1;
 		}
 
-		consumeOptions(layer, options, appArgs, globalAppFlags.layers);
+		consumeOptions(addSingleLayer, options, appArgs, globalAppFlags.layers);
 		if (const std::string envLayers = getenv(VK_INSTANCE_LAYERS); envLayers.length())
 		{
 			const auto envLayerList = splitString(envLayers, listSeparator);
 			globalAppFlags.layers.insert(globalAppFlags.layers.end(), envLayerList.begin(), envLayerList.end());
+		}
+		if (consumeOptions(addAllAvailableLayers, options, appArgs, sink) > 0)
+		{
+			const auto availableLayers = enumerateInstanceLayers();
+			globalAppFlags.layers.insert(globalAppFlags.layers.end(), availableLayers.begin(), availableLayers.end());
 		}
 
 		ZInstance			instance = createInstance(THIS_EXECUTABLE_NAME
@@ -404,12 +410,18 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	consumeOptions(excludeDevExt, options, appArgs, globalAppFlags.excludedDevExtensions);
 	consumeOptions(optSuppressVUID, options, appArgs, globalAppFlags.suppressedVUIDs);
 
-	consumeOptions(layer, options, appArgs, globalAppFlags.layers);
+	consumeOptions(addSingleLayer, options, appArgs, globalAppFlags.layers);
 	if (const std::string envLayers = getenv(VK_INSTANCE_LAYERS); envLayers.length())
 	{
 		const auto envLayerList = splitString(envLayers, listSeparator);
 		globalAppFlags.layers.insert(globalAppFlags.layers.end(), envLayerList.begin(), envLayerList.end());
 	}
+	if (consumeOptions(addAllAvailableLayers, options, appArgs, sink) > 0)
+	{
+		const auto availableLayers = enumerateInstanceLayers();
+		globalAppFlags.layers.insert(globalAppFlags.layers.end(), availableLayers.begin(), availableLayers.end());
+	}
+
 
 	setGlobalAppFlags(globalAppFlags);
 
@@ -534,6 +546,7 @@ void printUsage (std::ostream& str)
 	str << "  -ll:                      prints available instance layer names" << std::endl;
 	str << "  -l <layer> [-l <layer>]:  enable layer(s)" << std::endl;
 	str << "                            also respects " VK_INSTANCE_LAYERS " environment variable" << std::endl;
+	str << "  -lall                     enable all available layers" << std::endl;
 	str << "  -l-no-vuid-undefined:     suppress layers(s) VUID_Undefined warning" << std::endl;
 	str << "  -l-suppress <VUID>:       suppress layers(s) specific VUID message: warning, error, etc.," << std::endl;
 	str << "                            that match at least first 5 characters. No wildcard is applied." << std::endl;

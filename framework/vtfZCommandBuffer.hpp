@@ -7,6 +7,7 @@
 #include "vtfZImage.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZShaderObject.hpp"
+#include "vtfZPipeline.hpp"
 
 namespace vtf
 {
@@ -32,6 +33,7 @@ public:
 	const ZCommandPool&		commandPool;
 
 	operator ZCommandBuffer () { return m_commandBuffer; }
+	ZCommandBuffer operator*() { return m_commandBuffer; }
 
 	OneShotCommandBuffer	(ZCommandPool pool);
 	OneShotCommandBuffer	(ZDevice device, ZQueue queue);
@@ -83,7 +85,11 @@ ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZRenderPa
 bool				 commandBufferNextSubpass (add_ref<ZRenderPassBeginInfo> beginInfo);
 void				 commandBufferEndRenderPass (add_cref<ZRenderPassBeginInfo> beginInfo);
 void				commandBufferBeginRendering (ZCommandBuffer cmd, uint32_t width, uint32_t height,
-												 std::initializer_list<ZImageView> attachments,
+												 add_cref<std::vector<gpp::Attachment>> attachments,
+												 std::optional<std::vector<VkClearValue>> clearColors = {},
+												 uint32_t viewMask = 0u, ZRenderingFlags renderingFlags = ZRenderingFlags());
+void				commandBufferBeginRendering (ZCommandBuffer cmd, uint32_t width, uint32_t height,
+												 std::initializer_list<add_cptr<std::vector<gpp::Attachment>>> attachments,
 												 std::optional<std::vector<VkClearValue>> clearColors = {},
 												 uint32_t viewMask = 0u, ZRenderingFlags renderingFlags = ZRenderingFlags());
 void				 commandBufferEndRendering (ZCommandBuffer cmd);
@@ -191,6 +197,24 @@ void commandBufferMakeImagePresentationReady (ZCommandBuffer cmdBuffer, ZImage i
 											  VkAccessFlags dstAccess = VK_ACCESS_MEMORY_READ_BIT,
 											  VkPipelineStageFlags srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 											  VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+
+template<class Barrier, class... Barriers>
+void commandBufferPipelineBarrierVecs (
+	ZCommandBuffer cmd,
+	VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask,
+	const std::vector<Barrier>& barriers, const std::vector<Barriers>&... otherBarriers)
+{
+	std::vector<VkMemoryBarrier>		memBarriers;
+	std::vector<VkImageMemoryBarrier>	imgBarriers;
+	std::vector<VkBufferMemoryBarrier>	bufBarriers;
+
+	pushBarriers(memBarriers, imgBarriers, bufBarriers, barriers, otherBarriers...);
+
+	vkCmdPipelineBarrier(*cmd, srcStageMask, dstStageMask, VK_DEPENDENCY_BY_REGION_BIT,
+							data_count(memBarriers), data_or_null(memBarriers),
+							data_count(bufBarriers), data_or_null(bufBarriers),
+							data_count(imgBarriers), data_or_null(imgBarriers));
+}
 
 template<class Barrier, class... Barriers>
 void commandBufferPipelineBarriers (ZCommandBuffer cmd,
