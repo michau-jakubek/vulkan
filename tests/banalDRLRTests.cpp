@@ -62,8 +62,8 @@ constexpr Option optionGapAttachmentIndex		{ "-gap-attachment-index", 1 };
 constexpr Option optionAttachmentLocations		{ "-attachment-locations", 1 };
 constexpr Option optionInputAttachmentIndices	{ "-input-attachment-indices", 1 };
 Params::Params(add_cref<std::string> testName_, add_cref<std::string> assets_)
-	: assets(testName_)
-	, testName(assets_) { }
+	: assets(assets_)
+	, testName(testName_) { }
 OptionParser<Params> Params::getParser ()
 {
 	auto printAttachmentMap = [this](add_cref<OptionT<decltype(attachmentLocations)>> opt) -> std::string
