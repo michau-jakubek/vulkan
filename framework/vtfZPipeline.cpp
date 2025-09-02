@@ -357,7 +357,7 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 			: uint32_t(std::count_if(settings.m_drAttachments.begin(), settings.m_drAttachments.end(),
 				[](add_cref<gpp::Attachment> a) { return a.desc == gpp::AttachmentDesc::Color; }));
 	ASSERTMSG(colorAttachmentCount != 0u, "There must be at least one attachment");
-	if (settings.m_blendAttachments.empty())
+	if (settings.m_blendAttachments.size() < colorAttachmentCount)
 	{
 		settings.m_blendAttachments.resize(colorAttachmentCount, gpp::defaultBlendAttachmentState);
 	}
@@ -491,11 +491,25 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZShaderModu
 	}
 }
 
-void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::BlendAttachmentState> blendAttachmentState)
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings,
+							add_cref<gpp::BlendAttachmentState> blendAttachmentState)
 {
 	const uint32_t attachment = blendAttachmentState.get().first;
 	settings.m_blendAttachments.resize((attachment + 1u), gpp::defaultBlendAttachmentState);
 	settings.m_blendAttachments.at(attachment) = blendAttachmentState.get().second;
+}
+
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings,
+							add_cref<std::vector<gpp::BlendAttachmentState>> blendAttachmentStates)
+{
+	const auto itMax = std::max_element(blendAttachmentStates.begin(), blendAttachmentStates.end(),
+		[](add_cref<gpp::BlendAttachmentState> lhs, add_cref<gpp::BlendAttachmentState> rhs) {
+			return lhs.get().first < rhs.get().first; });
+	const uint32_t maxAttachment = itMax->get().first;
+	settings.m_blendAttachments.resize(
+		std::max((maxAttachment + 1u), data_count(settings.m_blendAttachments)), gpp::defaultBlendAttachmentState);
+	for (add_cref<gpp::BlendAttachmentState> state : blendAttachmentStates)
+		settings.m_blendAttachments[state.get().first] = state.get().second;
 }
 
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::BlendConstants> blendConstants)

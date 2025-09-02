@@ -383,12 +383,15 @@ VkDeviceSize bufferGetSize (ZBuffer buffer)
 	return buffer.getParam<VkDeviceSize>();
 }
 
-VkDeviceAddress	bufferGetAddress (ZBuffer buffer)
+VkDeviceAddress	bufferGetAddress (ZBuffer buffer, uint32_t hintAssertBinding, VkDescriptorType hintAssertDescriptorType)
 {
 	ASSERTMSG(buffer.has_handle(), "Buffer must have valid handle");
 	const VkBufferUsageFlags usage = buffer.getParamRef<VkBufferCreateInfo>().usage;
+	auto binding = [&] { return INVALID_UINT32 != hintAssertBinding
+		? ("(binding: " + std::to_string(hintAssertBinding) + ", type: "
+			+ vk::to_string(static_cast<vk::DescriptorType>(hintAssertDescriptorType)) + ") ") : std::string(" "); };
 	ASSERTMSG((usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT),
-		"Buffer was not created with VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT flag");
+		"Buffer ", binding(), "was not created with VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT flag");
 	VkBufferDeviceAddressInfo info = makeVkStruct();
 	info.buffer = *buffer;
 	ZDevice device = buffer.getParam<ZDevice>();
@@ -564,7 +567,9 @@ BufferTexelAccess_::BufferTexelAccess_ (ZBuffer buffer, uint32_t elementSize,
 	, m_offset			(off)
 	, m_data			(nullptr)
 {
-	ASSERTION(width != 0 && height != 0 && depth != 0 && (VkDeviceSize(elementSize) * width * height * depth) <= m_bufferSize);
+	ASSERTMSG(width != 0 && height != 0 && depth != 0 && (VkDeviceSize(elementSize) * width * height * depth) <= m_bufferSize,
+		"width: ", width, ", height: ", height, ", depth: ", depth, ", elementSize: ", elementSize,
+		", ", (VkDeviceSize(elementSize) * width * height * depth), " <= ", m_bufferSize);
 	const VkBufferUsageFlags	usage = buffer.getParamRef<VkBufferCreateInfo>().usage;
 	ASSERTION(usage & (VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT));
 	const VkMemoryPropertyFlags	flags = bufferGetMemory(buffer, 0u).getParam<VkMemoryPropertyFlags>();

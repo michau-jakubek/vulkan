@@ -1,8 +1,8 @@
 #include "banalDRLRTests.hpp"
 #include "vtfCUtils.hpp"
 #include "vtfBacktrace.hpp"
-#include "vtfProgramCollection.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfShaderObjectCollection.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfZPipeline.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfGlfwEvents.hpp"
@@ -40,8 +40,12 @@ struct Params
 	bool		writePipeDisable	= false;
 	bool		buildAlways			= false;
 	bool		synchronization2	= false;
+	bool		useShaderObjects	= false;
+	bool		useDescriptorBuffer	= false;
 	bool		printParams			= false;
 	bool		printSystemLimits	= false;
+	bool		KHR					= true;
+	bool		discardInFragment	= false;
 	Params (add_cref<std::string> testName_, add_cref<std::string> assets_);
 	OptionParser<Params> getParser ();
 	void updateLoactionsAndIndices (add_cref<OptionParser<Params>> parser);
@@ -57,6 +61,8 @@ constexpr Option optionBuildAlways				{ "--build-always", 0 };
 constexpr Option optionPrintParams				{ "--print-params", 0 };
 constexpr Option optionPrintSystemLimits		{ "--print-limits", 0 };
 constexpr Option optionSynchronization2			{ "--enable-synchronization2", 0 };
+constexpr Option optionUseShaderObjects			{ "--use-shader-objects", 0 };
+constexpr Option optionUseDescriptorBuffer		{ "--use-descriptor-buffer", 0 };
 constexpr Option optionAttachmentCount			{ "-attachment-count", 1 };
 constexpr Option optionGapAttachmentIndex		{ "-gap-attachment-index", 1 };
 constexpr Option optionAttachmentLocations		{ "-attachment-locations", 1 };
@@ -64,21 +70,21 @@ constexpr Option optionInputAttachmentIndices	{ "-input-attachment-indices", 1 }
 Params::Params(add_cref<std::string> testName_, add_cref<std::string> assets_)
 	: assets(assets_)
 	, testName(testName_) { }
-OptionParser<Params> Params::getParser ()
+OptionParser<Params> Params::getParser()
 {
 	auto printAttachmentMap = [this](add_cref<OptionT<decltype(attachmentLocations)>> opt) -> std::string
-	{
-		std::ostringstream os;
-		os << '[';
-		for (uint32_t i = 0u; i < attachmentCount; ++i)
 		{
-			if (i) os << ", ";
-			os << (*opt.m_default)[i];
-		}
-		os << ']';
-		os.flush();
-		return os.str();
-	};
+			std::ostringstream os;
+			os << '[';
+			for (uint32_t i = 0u; i < attachmentCount; ++i)
+			{
+				if (i) os << ", ";
+				os << (*opt.m_default)[i];
+			}
+			os << ']';
+			os.flush();
+			return os.str();
+		};
 
 	OptionFlags				flags(OptionFlag::None);
 	OptionFlags				flagsDef(OptionFlag::PrintValueAsDefault);
@@ -123,6 +129,14 @@ OptionParser<Params> Params::getParser ()
 	parser.addOption(&Params::synchronization2, optionSynchronization2,
 		"Use synchronization2 feature", { false }, flagsDef)
 		->setParamName("synchronization2");
+
+	parser.addOption(&Params::useShaderObjects, optionUseShaderObjects,
+		"Use shader objects instead of classic pipelines", { false }, flagsDef)
+		->setParamName("useShaderObjects");
+
+	parser.addOption(&Params::useDescriptorBuffer, optionUseDescriptorBuffer,
+		"Use descriptor buffer instead of classic descriptor set", { false }, flagsDef)
+		->setParamName("useDescriptorBuffer");
 
 	parser.addOption(&Params::buildAlways, optionBuildAlways,
 		"Rebuild the shaders each time you run application", { false }, flagsDef)
@@ -247,7 +261,9 @@ bool Params::verify (add_ref<std::string> msg) const
 
 TriLogicInt runTests (add_ref<VulkanContext> canvas, add_cref<Params> params);
 TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams);
-std::array<ZShaderModule, 3> buildProgram (ZDevice device, add_cref<Params> params);
+std::array<ZShaderModule, 3> buildShaderModules (ZDevice device, add_cref<Params> params);
+std::tuple<ZShaderObject, ZShaderObject, ZShaderObject, ZShaderObject>
+	buildShaderObjects (ZDevice, ZDescriptorSetLayout, add_cref<ZPushRange<uint32_t>>, add_cref<Params>);
 void genVertices (VertexInput& vi);
 
 TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
@@ -276,7 +292,39 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 
 	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
-		if (false)
+		add_cref<VkPhysicalDeviceProperties> props = deviceGetPhysicalProperties(caps.physicalDevice);
+		const uint32_t major = VK_VERSION_MAJOR(props.apiVersion);
+		const uint32_t minor = VK_VERSION_MINOR(props.apiVersion);
+		params.KHR = major == 1u && minor < 4u;
+
+		if (params.useShaderObjects)
+		{
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceShaderObjectFeaturesEXT::shaderObject)
+				.checkSupported("shaderObject");
+			caps.addExtension(VK_EXT_SHADER_OBJECT_EXTENSION_NAME).checkSupported();
+		}
+
+		if (params.KHR)
+		{
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceDynamicRenderingLocalReadFeatures::dynamicRenderingLocalRead)
+				.checkSupported("dynamicRenderingLocalRead");
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceDynamicRenderingFeatures::dynamicRendering)
+				.checkSupported("dynamicRendering");
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceExtendedDynamicStateFeaturesEXT::extendedDynamicState)
+				.checkSupported("extendedDynamicState");
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceExtendedDynamicState2FeaturesEXT::extendedDynamicState2)
+				.checkSupported("extendedDynamicState2");
+			//caps.addUpdateFeatureIf(&VkPhysicalDeviceExtendedDynamicState3FeaturesEXT::)
+			//	.checkSupported("extendedDynamicState");
+
+			if (params.synchronization2)
+			{
+				caps.addUpdateFeatureIf(&VkPhysicalDeviceSynchronization2Features::synchronization2)
+					.checkSupported("synchronization2");
+				caps.addExtension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME).checkSupported();
+			}
+		}
+		else
 		{
 			caps.addUpdateFeatureIf(&VkPhysicalDeviceVulkan14Features::dynamicRenderingLocalRead)
 				.checkSupported("dynamicRenderingLocalRead");
@@ -292,22 +340,18 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 				caps.addExtension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME).checkSupported();
 			}
 		}
-		else
-		{
-			caps.addUpdateFeatureIf(&VkPhysicalDeviceDynamicRenderingLocalReadFeatures::dynamicRenderingLocalRead)
-				.checkSupported("dynamicRenderingLocalRead");
-			caps.addUpdateFeatureIf(&VkPhysicalDeviceDynamicRenderingFeatures::dynamicRendering)
-				.checkSupported("dynamicRendering");
-
-			if (params.synchronization2)
-			{
-				caps.addUpdateFeatureIf(&VkPhysicalDeviceSynchronization2Features::synchronization2)
-					.checkSupported("synchronization2");
-				caps.addExtension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME).checkSupported();
-			}
-		}
 		caps.addExtension(VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME).checkSupported();
 		caps.addExtension(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME).checkSupported();
+
+		// Validation Error : [VUID - vkCreateDevice - ppEnabledExtensionNames - 01387]
+		// vkCreateDevice() : pCreateInfo->ppEnabledExtensionNames[1]
+		// Missing extension required by the device extension VK_KHR_dynamic_rendering : VK_KHR_depth_stencil_resolve.
+		caps.addExtension(VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME).checkSupported();
+
+		// Validation Error : [VUID - vkCreateDevice - ppEnabledExtensionNames - 01387]
+		// vkCreateDevice() : pCreateInfo->ppEnabledExtensionNames[2]
+		// Missing extension required by the device extension VK_KHR_depth_stencil_resolve : VK_KHR_create_renderpass2.
+		caps.addExtension(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
 
 		add_cref<VkPhysicalDeviceLimits> limits = deviceGetPhysicalLimits(caps.physicalDevice);
 		maxColorAttachments = limits.maxColorAttachments;
@@ -316,7 +360,7 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 		params.attachmentCount = std::clamp(params.attachmentCount, 2u, attachmentsLimit);
 	};
 
-	VulkanContext ctx(record.name, gf.layers, {}, {}, onEnablingFeatures, gf.apiVer, gf.debugPrintfEnabled);
+	VulkanContext ctx(record.name, gf.layers, {}, {}, onEnablingFeatures, Version(1,3), gf.debugPrintfEnabled);
 
 	if (params.printSystemLimits)
 	{
@@ -344,12 +388,12 @@ void genVertices (VertexInput& vi)
 	vi.binding(0).addAttributes(pos, pos);
 }
 
-std::array<ZShaderModule, 3> buildProgram (ZDevice device, add_cref<Params> params)
+std::pair<std::string, std::string> genShaderSources (add_cref<Params> params)
 {
-	std::ostringstream wFrag, rwFrag;
+	std::ostringstream wFrag, wrFrag;
 
 	wFrag << "#version 450\n";
-	rwFrag << "#version 450\n";
+	wrFrag << "#version 450\n";
 	for (uint32_t i = 0u, binding = 0u; i < params.attachmentCount; ++i)
 	{
 		if (params.gapAttachmentIndex == i)
@@ -357,22 +401,26 @@ std::array<ZShaderModule, 3> buildProgram (ZDevice device, add_cref<Params> para
 
 		wFrag << "layout(location = " << i << ") out uint color" << i << ";\n";
 
-		rwFrag << "layout(binding = " << binding++ << ", input_attachment_index = " << i << ") "
+		wrFrag << "layout(binding = " << binding++ << ", input_attachment_index = " << i << ") "
 			"uniform usubpassInput inColor" << i << ";\n";
 		/*
 		rwFrag << "layout(r32ui, binding = " << binding++ << ") "
 			"uniform uimage2D outColor" << i << ";\n";
 		*/
-		rwFrag << "layout(binding = " << binding++ << ") "
+		wrFrag << "layout(binding = " << binding++ << ") "
 			"buffer OutColor" << i << " { uint outColor" << i << "[]; };\n";
+		if (params.discardInFragment)
+		{
+			wrFrag << "layout(location = " << i << ") out uint output" << i << ";\n";
+		}
 	}
 	wFrag << "layout(push_constant) uniform PC { uint width; };\n";
-	rwFrag << "layout(push_constant) uniform PC { uint width; };\n";
+	wrFrag << "layout(push_constant) uniform PC { uint width; };\n";
 	wFrag << "void main() {\n";
 	wFrag << "  uvec2 k = uvec2(gl_FragCoord);\n";
-	rwFrag << "void main() {\n";
+	wrFrag << "void main() {\n";
 	const double x = double((params.attachmentCount * 4 + 1) + // clearColors
-							(params.frameSize * params.frameSize * params.attachmentCount));
+		(params.frameSize * params.frameSize * params.attachmentCount));
 	const uint32_t locStep = uint32_t(std::pow(10.0, std::ceil(std::log10(x))));
 	for (uint32_t i = 0u; i < params.attachmentCount; ++i)
 	{
@@ -381,21 +429,72 @@ std::array<ZShaderModule, 3> buildProgram (ZDevice device, add_cref<Params> para
 
 		wFrag << "  color" << i << " = "
 			"k.y * width + k.x + " << ((i + 1) * locStep) << ";\n";
-		rwFrag << "uint color" << i << " = "
+		wrFrag << "uint color" << i << " = "
 			"subpassLoad(inColor" << i << ").x + " << ((i + 1) * locStep * 10) << ";\n";
 		//rwFrag << "imageStore(outColor" << i << ", ivec2(gl_FragCoord.xy), uvec4(color" << i << ", 0, 0, 0));\n";
-		rwFrag << "outColor" << i << "[uint(gl_FragCoord.y) * width + uint(gl_FragCoord.x)] = color" << i << ";\n";
+		wrFrag << "outColor" << i << "[uint(gl_FragCoord.y) * width + uint(gl_FragCoord.x)] = color" << i << ";\n";
+		if (params.discardInFragment)
+		{
+			wrFrag << "discard;\n";
+		}
 	}
 	wFrag << "}\n";
-	rwFrag << "}\n";
+	wrFrag << "}\n";
 	wFrag.flush();
-	rwFrag.flush();
+	wrFrag.flush();
+
+	return { wFrag.str(), wrFrag.str() };
+}
+
+std::tuple<ZShaderObject, ZShaderObject, ZShaderObject, ZShaderObject>
+buildShaderObjects (
+	ZDevice	device,
+	ZDescriptorSetLayout dsLayout,
+	add_cref<ZPushRange<uint32_t>> push_const,
+	add_cref<Params> params)
+{
+	using Link = ShaderObjectCollection::ShaderLink;
+
+	ZShaderObject so1;
+	std::cout << so1.use_count() << std::endl;
+	ZShaderObject so2 = so1;
+	std::cout << so2.use_count() << std::endl;
+
+	std::string wFrag, wrFrag;
+	std::tie(wFrag, wrFrag) = genShaderSources(params);
+
+	ShaderObjectCollection coll(device, params.assets);
+	Link linkWVert = coll.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
+	Link linkWRVert = coll.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
+	Link linkWFrag = coll.addFromText(VK_SHADER_STAGE_FRAGMENT_BIT, wFrag, linkWVert);
+	Link linkWRFrag = coll.addFromText(VK_SHADER_STAGE_FRAGMENT_BIT, wrFrag, linkWRVert);
+	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
+	coll.updateShaders({ linkWVert, linkWRVert, linkWFrag, linkWRFrag },
+		params.buildAlways, gf.spirvValidate, gf.genSpirvDisassembly,
+		gf.vulkanVer, gf.spirvVer);
+	coll.updateShaders({ linkWVert, linkWRVert, linkWFrag, linkWRFrag }, push_const);
+	coll.updateShaders({ linkWRVert, linkWRFrag }, { dsLayout });
+	coll.buildAndVerify();
+	return
+	{
+		coll.getShader(linkWVert),
+		coll.getShader(linkWFrag),
+		coll.getShader(linkWRVert),
+		coll.getShader(linkWRFrag),
+	};
+}
+
+std::array<ZShaderModule, 3> buildShaderModules (ZDevice device, add_cref<Params> params)
+{
+	std::string wFrag, wrFrag;
+	std::tie(wFrag, wrFrag) = genShaderSources(params);
 
 	ProgramCollection progs(device, params.assets);
 	progs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
-	progs.addFromText(VK_SHADER_STAGE_FRAGMENT_BIT, wFrag.str());
-	progs.addFromText(VK_SHADER_STAGE_FRAGMENT_BIT, rwFrag.str());
+	progs.addFromText(VK_SHADER_STAGE_FRAGMENT_BIT, wFrag);
+	progs.addFromText(VK_SHADER_STAGE_FRAGMENT_BIT, wrFrag);
 	progs.buildAndVerify(params.buildAlways);
+
 	return
 	{
 		progs.getShader(VK_SHADER_STAGE_VERTEX_BIT),
@@ -522,15 +621,16 @@ offlineGenerator(
 
 TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 {
-	add_cref<ZDeviceInterface> di = ctx.device.getInterface();
+	add_cref<ZDeviceInterface> di = ctx.device.getInterface(); UNREF(di);
 
 	VertexInput	vertexInput(ctx.device);
 	genVertices(vertexInput);
 
-	auto [vert, wFrag, rwFrag] = buildProgram(ctx.device, params);
+	auto [vert, wFrag, wrFrag] = buildShaderModules(ctx.device, params);
 
-	LayoutManager				lm0(ctx.device);
-	LayoutManager				lm1(ctx.device);
+	ZCommandPool				cmdPool	= createCommandPool(ctx.device, ctx.graphicsQueue);
+	LayoutManager				lm0		(ctx.device, cmdPool);
+	LayoutManager				lm1		(ctx.device, cmdPool);
 
 	std::vector<ZImage>			inputImages(params.attachmentCount);
 	std::vector<ZImageView>		inputAttachments(params.attachmentCount);
@@ -539,6 +639,7 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 
 	std::vector<gpp::Attachment>	inputRenderingAttachments(params.attachmentCount);
 	std::vector<VkClearValue>		clearColors(params.attachmentCount);
+	std::vector<gpp::BlendAttachmentState> readPipelineBlendStates(params.attachmentCount);
 
 	std::vector<ZImageMemoryBarrier>	transitGeneralInputBarriers(params.attachmentCount);
 	std::vector<ZImageMemoryBarrier>	transitLocalReadBarriers(params.attachmentCount);
@@ -576,6 +677,8 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 
 	std::vector<uint32_t>	renderingInputAttachmentIndices = params.getInputAttachmentIndices();
 
+	const bool useOutputBuffers = false;
+	const bool verbose = getGlobalAppFlags().verbose != 0u;
 	const bool renderingAttachmentLocationsEnabled = params.locationsEnable;
 	const bool renderingInputAttachmentIndicesEnabled = params.indicesEnable;
 
@@ -593,17 +696,24 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 	{		
 		clearColors[i] = makeClearColor(UVec4(i + 1u, i + 2u, i + 3u, i + 4u));
 
+		auto blendAttachmentState = gpp::defaultBlendAttachmentState;
+		blendAttachmentState.colorWriteMask = 0u;
+
 		if (params.gapAttachmentIndex == i)
 		{
 			inputRenderingAttachments[i] = gpp::Attachment(ZImageView(), gpp::AttachmentDesc::Color);
+			readPipelineBlendStates[i] = gpp::BlendAttachmentState(std::make_pair(i, blendAttachmentState));
 			continue;
 		}
 
 		inputImages[i] = ctx.createColorImage2D(VK_FORMAT_R32_UINT, params.frameSize, params.frameSize);
 		inputBuffers[i] = createBuffer(inputImages[i]);
+		inputBuffers[i].name("inputBuffer " + std::to_string(i));
+		inputBuffers[i].verbose(verbose);
 		inputAttachments[i] = createImageView(inputImages[i]);
 
 		inputRenderingAttachments[i] = gpp::Attachment(inputAttachments[i], gpp::AttachmentDesc::Color);
+		readPipelineBlendStates[i] = gpp::BlendAttachmentState(std::make_pair(i, blendAttachmentState));
 
 		transitGeneralInputBarriers[i] = ZImageMemoryBarrier(inputImages[i],
 											VK_ACCESS_NONE, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
@@ -617,13 +727,24 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 											A::INPUT_ATTACHMENT_READ_BIT, S::FRAGMENT_SHADER_BIT,
 											VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ);
 
-		lm1.addBinding(inputAttachments[i], {/*sampler*/}, 
-			inputAttachmentsLayout, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, shaderGetStage(rwFrag));
-		lm1.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-			(params.attachmentCount * params.attachmentCount), shaderGetStage(rwFrag));
+		lm1.addBinding(inputAttachments[i], VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+						inputAttachmentsLayout, shaderGetStage(wrFrag));
+
+		if (useOutputBuffers)
+		{
+			outputBuffers[i] = createBuffer<uint32_t>(ctx.device, (params.frameSize * params.frameSize));
+		}
+		else
+		{
+			outputBuffers[i] = createBuffer(inputImages[i]);
+		}
+		const uint32_t bufferBinding = lm1.addBinding(outputBuffers[i], VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, shaderGetStage(wrFrag));
+		lm1.fillBinding(bufferBinding, clearColors[i].color.uint32[0]);
+		outputBuffers[i].name("outputBuffer " + std::to_string(i));
+		outputBuffers[i].verbose(verbose);
 	}
 
-	ZPushRange<uint32_t>		push_const	(VK_SHADER_STAGE_FRAGMENT_BIT);
+	ZPushRange<uint32_t>		push_const	(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
 	// Validation Error : [VUID - vkCmdDraw - colorAttachmentCount - 06179] | MessageID = 0x94a972a0
 	// vkCmdDraw() : Currently bound pipeline VkPipeline VkPipelineRenderingCreateInfo::colorAttachmentCount(2)
@@ -657,61 +778,55 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 										: nullptr;
 	ZDescriptorSetLayout		dsLayout	= lm1.createDescriptorSetLayout();
 	ZPipelineLayout				rLayout		= lm1.createPipelineLayout({ dsLayout }, push_const);
-	ZPipeline					rPipeline	= createGraphicsPipeline(rLayout, vert, rwFrag, vertexInput,
+	ZPipeline					rPipeline	= createGraphicsPipeline(rLayout, vert, wrFrag, vertexInput,
 													inputRenderingAttachments,
 													gpp::DRAttachmentLocations(readPipelineAttachmentLocations),
 													gpp::DRInpuAttachmentIndices(readPipelineInputAttachmentIndices),
-													gpp::SubpassIndex(INVALID_UINT32),
+													gpp::SubpassIndex(INVALID_UINT32), readPipelineBlendStates,
 													makeExtent2D(params.frameSize, params.frameSize),
 													VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP);
 
-	for (uint32_t i = 0u, bufferBinding = 1u; i < params.attachmentCount; ++i)
+	ZShaderObject shoWVert, shoWFrag, shoWRVert, shoWRFrag;
+	if (params.useShaderObjects)
 	{
-		if (params.gapAttachmentIndex == i)
-			continue;
-
-		outputBuffers[i] = std::get<DescriptorBufferInfo>(lm1.getDescriptorInfo(bufferBinding)).buffer;
-		lm1.fillBinding(bufferBinding, clearColors[i].color.uint32[0]);
-		bufferBinding = bufferBinding + 2u;
+		std::tie(shoWVert, shoWFrag, shoWRVert, shoWRFrag) = buildShaderObjects(ctx.device, dsLayout, push_const, params);
+		ASSERTMSG(shoWVert.has_handle(), "Vertex shader must have valid handle");
+		ASSERTMSG(shoWRVert.has_handle(), "Fragment shader must have valid handle");
 	}
 
-	VkRenderingAttachmentLocationInfo rali = makeVkStruct();
-	rali.colorAttachmentCount		= data_count(renderingAttachmentLocations);
-	rali.pColorAttachmentLocations	= renderingAttachmentLocations.data();
-
-	VkRenderingAttachmentLocationInfo raliNull = makeVkStruct();
-	raliNull.colorAttachmentCount		= data_count(renderingNullAttachmentLocations);
-	raliNull.pColorAttachmentLocations	= renderingNullAttachmentLocations.data();
-
-	VkRenderingInputAttachmentIndexInfo riai = makeVkStruct();
-	riai.colorAttachmentCount			= data_count(renderingInputAttachmentIndices);
-	riai.pColorAttachmentInputIndices	= renderingInputAttachmentIndices.data();
-
-	const bool verbose = getGlobalAppFlags().verbose != 0;
-
 	{
-		OneShotCommandBuffer	cmd(ctx.device, ctx.graphicsQueue);
+		OneShotCommandBuffer	cmd(cmdPool);
 
 		commandBufferBindVertexBuffers(cmd, vertexInput);
 
 		commandBufferPipelineBarrierVecs(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
 			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, transitGeneralInputBarriers);
+		commandBufferBindDescriptorSets(cmd, rLayout, VK_PIPELINE_BIND_POINT_GRAPHICS);
 
-		commandBufferBeginRendering(cmd, params.frameSize, params.frameSize, 
-					{ &inputRenderingAttachments }, clearColors);
+		if (params.useShaderObjects)
+		{
+			commandBufferSetDefaultDynamicStates(cmd, vertexInput, makeViewport(params.frameSize, params.frameSize),
+												params.attachmentCount);
+			di.vkCmdSetPrimitiveTopologyEXT(**cmd, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP);
+		}
+
+		commandBufferBeginRendering(cmd, params.frameSize, params.frameSize, { &inputRenderingAttachments }, clearColors);
 
 		if (false == params.writePipeDisable)
 		{
-			commandBufferBindPipeline(cmd, wPipeline);
+			if (params.useShaderObjects)
+				commandBufferBindShaders(cmd, { shoWVert, shoWFrag });
+			else commandBufferBindPipeline(cmd, wPipeline, false);
 			commandBufferPushConstants(ZCommandBuffer(cmd), wLayout, params.frameSize);
+
 			if (renderingAttachmentLocationsEnabled)
 			{
 				if (verbose) {
-					std::vector<uint32_t> k(rali.pColorAttachmentLocations,
-						rali.pColorAttachmentLocations + rali.colorAttachmentCount);
-					printMap(std::cout, '[' + params.testName + "] vkCmdSetRenderingAttachmentLocations()", k);
+					printMap(std::cout, '[' + params.testName + "] vkCmdSetRenderingAttachmentLocations()",
+										renderingAttachmentLocations);
 				}
-				di.vkCmdSetRenderingAttachmentLocations(**cmd, &rali);
+				//(*di.vkCmdSetRenderingAttachmentLocations)(**cmd, &rali);
+				commandBufferSetRenderingAttachmentLocations(*cmd, renderingAttachmentLocations, params.KHR);
 			}
 			vkCmdDraw(**cmd, vertexInput.getVertexCount(0), 1u, 0u, 0u);
 
@@ -719,32 +834,46 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, transitLocalReadBarriers);
 		}
 
-		commandBufferBindPipeline(cmd, rPipeline);
-		commandBufferPushConstants(ZCommandBuffer(cmd), rLayout, params.frameSize);
+		if (params.useShaderObjects)
+		{
+			commandBufferBindDescriptorSets(cmd, rLayout, VK_PIPELINE_BIND_POINT_GRAPHICS);
+			commandBufferBindShaders(cmd, { shoWRVert, shoWRFrag });
+		}
+		else commandBufferBindPipeline(cmd, rPipeline, false);
+		commandBufferPushConstants(cmd, rLayout, params.frameSize);
+
+		if (params.useShaderObjects)
+		{
+			VkColorComponentFlags blendWriteMasks[params.rangeAttachments];
+			std::fill_n(std::begin(blendWriteMasks), params.attachmentCount, 0u);
+			di.vkCmdSetColorWriteMaskEXT(**cmd, 0u, params.attachmentCount, blendWriteMasks);
+		}
+
 		if ((false == params.writePipeDisable) && renderingAttachmentLocationsEnabled)
 		{
 			if (verbose) {
-				std::vector<uint32_t> k(raliNull.pColorAttachmentLocations,
-										raliNull.pColorAttachmentLocations + raliNull.colorAttachmentCount);
-				printMap(std::cout, '[' + params.testName + "] vkCmdSetRenderingAttachmentLocations()", k);
+				printMap(std::cout, '[' + params.testName + "] vkCmdSetRenderingAttachmentLocations()",
+									renderingNullAttachmentLocations);
 			}
-			di.vkCmdSetRenderingAttachmentLocations(**cmd, &raliNull);
+			//(*di.vkCmdSetRenderingAttachmentLocations)(**cmd, &raliNull);
+			commandBufferSetRenderingAttachmentLocations(cmd, renderingNullAttachmentLocations, params.KHR);
 		}
 		if (renderingInputAttachmentIndicesEnabled)
 		{
 			if (verbose) {
-				std::vector<uint32_t> k(riai.pColorAttachmentInputIndices,
-					riai.pColorAttachmentInputIndices + riai.colorAttachmentCount);
-				printMap(std::cout, '[' + params.testName + "] vkCmdSetRenderingInputAttachmentIndices()", k);
+				printMap(std::cout, '[' + params.testName + "] vkCmdSetRenderingInputAttachmentIndices()",
+									renderingInputAttachmentIndices);
 			}
-			di.vkCmdSetRenderingInputAttachmentIndices(**cmd, &riai);
+			//(*di.vkCmdSetRenderingInputAttachmentIndices)(**cmd, &riai);
+			commandBuffervSetRenderingInputAttachmentIndices(cmd, renderingInputAttachmentIndices, {}, {}, params.KHR);
 		}
 		vkCmdDraw(**cmd, vertexInput.getVertexCount(0), 1u, 0u, 0u);
 		commandBufferEndRendering(cmd);
 	}
 
+	if (useOutputBuffers)
 	{
-		OneShotCommandBuffer	cmd(ctx.device, ctx.graphicsQueue);
+		OneShotCommandBuffer	cmd(cmdPool);
 		for (uint32_t i = 0u; i < params.attachmentCount; ++i)
 		{
 			if (params.gapAttachmentIndex == i)
@@ -760,14 +889,32 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 	PrettyPrinter printer;
 	printMap(std::cout, "-------\nrenderingAttachmentLocations", renderingAttachmentLocations);
 	printMap(std::cout, "renderingInputAttachmentIndices", renderingInputAttachmentIndices);
-	for (uint32_t i = 0u; i < params.attachmentCount; ++i)
+	for (uint32_t i = 0u, imageBinding = 0u, bufferBinding = 1u; i < params.attachmentCount; ++i)
 	{
 		if (params.gapAttachmentIndex == i)
 			continue;
 
-		printAttachment(printer.getCursor(0), "Input attachment", i, inputBuffers[i], params);
-		printAttachment(printer.getCursor(1), "Color attachment", i, outputBuffers[i], params);
+		if (useOutputBuffers)
+		{
+			printAttachment(printer.getCursor(0), "Input attachment", i, inputBuffers[i], params);
+			printAttachment(printer.getCursor(1), "Color attachment", i, outputBuffers[i], params);
+		}
+		else
+		{
+			std::vector<uint32_t> imageData, bufferData;
+			lm1.readBinding(imageBinding, imageData);
+			lm1.readBinding(bufferBinding, bufferData);
+			printAttachment(printer.getCursor(0), "Input attachment", i, imageData, params);
+			printAttachment(printer.getCursor(1), "Color attachment", i, bufferData, params);
+			bufferBinding = bufferBinding + 2u;
+			imageBinding = imageBinding + 2u;
+		}
 	}
+
+	/*
+	aw.sleepCallingThread();
+	watcher.join();
+	*/
 
 	std::vector<uint32_t> writeClearColors(params.attachmentCount);
 	std::vector<uint32_t> readClearColors(params.attachmentCount);
@@ -795,11 +942,13 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 		if (params.gapAttachmentIndex == i)
 			continue;
 
-		printAttachment(printer.getCursor(2), "Ref Input atts", i, ref[0][i], params);
-		printAttachment(printer.getCursor(3), "Ref Color atts", i, ref[1][i], params);
+		printAttachment(printer.getCursor(2), "Ref Input", i, ref[0][i], params);
+		printAttachment(printer.getCursor(3), "Ref Color", i, ref[1][i], params);
 	}
 
 	printer.merge({ 0, 1, 2, 3 }, std::cout);
+
+	std::cout << "Done..." << std::endl;
 
 	return { /*to be continued*/ };
 }

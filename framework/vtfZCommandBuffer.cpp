@@ -6,6 +6,7 @@
 #include "vtfStructUtils.hpp"
 #include "vtfTemplateUtils.hpp"
 #include "vtfZPipeline.hpp"
+#include "vtfPlatformDriver.hpp"
 #include <memory>
 
 namespace vtf
@@ -162,7 +163,7 @@ void commandBufferBindPipeline (ZCommandBuffer cmd, ZPipeline pipeline, bool bin
 	auto bindingPoint		= pipeline.getParam<VkPipelineBindPoint>();
 	auto pipelineLayout		= pipeline.getParam<ZPipelineLayout>();
 
-	vkCmdBindPipeline(*cmd, bindingPoint, *pipeline);
+	cmd.getParamRef<ZDevice>().getInterface().vkCmdBindPipeline(*cmd, bindingPoint, *pipeline);
 
 	if (bindDescriptorSets)
 	{
@@ -536,6 +537,73 @@ void commandBufferEndRendering (ZCommandBuffer cmd)
 	cmd.getParamRef<ZDevice>().getInterface().vkCmdEndRendering(*cmd);
 }
 
+void commandBuffervSetRenderingInputAttachmentIndices (
+	ZCommandBuffer cmd,
+	add_cref<std::vector<uint32_t>> indices,
+	add_cptr<std::vector<uint32_t>> pDepthInputAttachmentIndex,
+	add_cptr<std::vector<uint32_t>> pStencilInputAttachmentIndex,
+	std::optional<bool> useKHRversion)
+{
+	VkRenderingInputAttachmentIndexInfo riai = makeVkStruct();
+	riai.colorAttachmentCount			= data_count(indices);
+	riai.pColorAttachmentInputIndices	= indices.data();
+	riai.pDepthInputAttachmentIndex		= pDepthInputAttachmentIndex ? pDepthInputAttachmentIndex->data() : nullptr;
+	riai.pStencilInputAttachmentIndex	= pStencilInputAttachmentIndex ? pStencilInputAttachmentIndex->data() : nullptr;
+
+	ZDevice device = cmd.getParam<ZDevice>();
+	ZPhysicalDevice physDevice = device.getParam<ZPhysicalDevice>();
+	ZInstance instance = physDevice.getParam<ZInstance>();
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	add_cref<ZInstanceInterface> ii = instance.getInterface(); UNREF(ii);
+
+	if (useKHRversion.has_value())
+	{
+		add_cptr<char> fun = *useKHRversion ? "vkCmdSetRenderingInputAttachmentIndicesKHR" : "vkCmdSetRenderingInputAttachmentIndices";
+		const auto pfn = *useKHRversion ? di.vkCmdSetRenderingInputAttachmentIndicesKHR : di.vkCmdSetRenderingInputAttachmentIndices;
+		ASSERTMSG(pfn != nullptr, fun, " must not be nullptr");
+		(*pfn)(*cmd, &riai);
+	}
+	else
+	{
+		add_cref<VkPhysicalDeviceProperties> props = deviceGetPhysicalProperties(physDevice);
+		const uint32_t major = VK_VERSION_MAJOR(props.apiVersion);
+		const uint32_t minor = VK_VERSION_MINOR(props.apiVersion);
+		const bool KHR = major == 1u && minor < 4u;
+		commandBuffervSetRenderingInputAttachmentIndices(cmd, indices, pDepthInputAttachmentIndex, pStencilInputAttachmentIndex, KHR);
+	}
+}
+
+void commandBufferSetRenderingAttachmentLocations (
+	ZCommandBuffer cmd,	add_cref<std::vector<uint32_t>> locations,
+	std::optional<bool> useKHRversion)
+{
+	VkRenderingAttachmentLocationInfo rali = makeVkStruct();
+	rali.colorAttachmentCount = data_count(locations);
+	rali.pColorAttachmentLocations = locations.data();
+
+	ZDevice device = cmd.getParam<ZDevice>();
+	ZPhysicalDevice physDevice = device.getParam<ZPhysicalDevice>();
+	ZInstance instance = physDevice.getParam<ZInstance>();
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	add_cref<ZInstanceInterface> ii = instance.getInterface(); UNREF(ii);
+
+	if (useKHRversion.has_value())
+	{
+		add_cptr<char> fun = *useKHRversion ? "vkCmdSetRenderingAttachmentLocationsKHR" : "vkCmdSetRenderingAttachmentLocations";
+		auto pfn = *useKHRversion ? di.vkCmdSetRenderingAttachmentLocationsKHR : di.vkCmdSetRenderingAttachmentLocations;
+		ASSERTMSG(pfn != nullptr, fun, " must not be nullptr");
+		(*pfn)(*cmd, &rali);
+	}
+	else
+	{
+		add_cref<VkPhysicalDeviceProperties> props = deviceGetPhysicalProperties(physDevice);
+		const uint32_t major = VK_VERSION_MAJOR(props.apiVersion);
+		const uint32_t minor = VK_VERSION_MINOR(props.apiVersion);
+		const bool KHR = major == 1u && minor < 4u;
+		commandBufferSetRenderingAttachmentLocations(cmd, locations, KHR);
+	}
+}
+
 void commandBufferSetViewport (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain)
 {
 	vkCmdSetViewport(*cmd, 0u, 1u, &swapchain.viewport);
@@ -550,9 +618,36 @@ void commandBufferSetDefaultDynamicStates (
 	ZCommandBuffer			cmdBuffer,
 	add_cref<VertexInput>	vertexInput,
 	add_cref<VkViewport>	viewport,
+	uint32_t				attachmentCount,
 	add_cptr<VkRect2D>		pScissor)
 {
-	add_cref<ZDeviceInterface> di = cmdBuffer.getParamRef<ZDevice>().getInterface();
+	/*
+	* VK_DYNAMIC_STATE_PRIMITIVE_RESTART_ENABLE		vkCmdSetPrimitiveRestartEnable	1.4
+	* VK_DYNAMIC_STATE_RASTERIZER_DISCARD_ENABLE	vkCmdSetRasterizerDiscardEnable	1.3
+	* VK_DYNAMIC_STATE_CULL_MODE					vkCmdSetCullMode				1.3
+	* VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE			vkCmdSetDepthTestEnable			1.3
+	* VK_DYNAMIC_STATE_STENCIL_TEST_ENABLE			vkCmdSetStencilTestEnable		1.3
+	* VK_DYNAMIC_STATE_DEPTH_BIAS_ENABLE			vkCmdSetDepthBiasEnable			1.3
+	* VK_DYNAMIC_STATE_VIEWPORT_WITH_COUNT			vkCmdSetViewportWithCount		1.3
+	* VK_DYNAMIC_STATE_SCISSOR_WITH_COUNT			vkCmdSetScissorWithCount		1.3
+	* VK_DYNAMIC_STATE_POLYGON_MODE_EXT				vkCmdSetPolygonModeEXT			--
+	* VK_DYNAMIC_STATE_RASTERIZATION_SAMPLES_EXT	vkCmdSetRasterizationSamplesEXT
+	* VK_DYNAMIC_STATE_SAMPLE_MASK_EXT				vkCmdSetSampleMaskEXT
+	* VK_DYNAMIC_STATE_ALPHA_TO_COVERAGE_ENABLE_EXT	vkCmdSetAlphaToCoverageEnableEXT
+	* VK_DYNAMIC_STATE_COLOR_BLEND_ENABLE_EXT		vkCmdSetColorBlendEnableEXT
+	* VK_DYNAMIC_STATE_COLOR_WRITE_MASK_EXT			vkCmdSetColorWriteMaskEXT
+	* VK_DYNAMIC_STATE_VERTEX_INPUT_EXT				vkCmdSetVertexInputEXT
+	*/
+	ZDevice device = cmdBuffer.getParamRef<ZDevice>();
+
+	const bool ext = [&] {
+		add_cref<VkPhysicalDeviceProperties> props = deviceGetPhysicalProperties(device);
+		const uint32_t major = VK_VERSION_MAJOR(props.apiVersion);
+		const uint32_t minor = VK_VERSION_MINOR(props.apiVersion);
+		return major == 1u && minor < 3u;
+	}(); UNREF(ext);
+
+	add_cref<ZDeviceInterface> di = device.getInterface();
 
 	// VkPipelineVertexInputStateCreateInfo
 	commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
@@ -561,6 +656,7 @@ void commandBufferSetDefaultDynamicStates (
 	// VkPipelineInputAssemblyStateCreateInfo
 	if (di.vkCmdSetPrimitiveTopologyEXT)
 		di.vkCmdSetPrimitiveTopologyEXT(*cmdBuffer, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+
 	if (di.vkCmdSetPrimitiveRestartEnableEXT)
 		di.vkCmdSetPrimitiveRestartEnableEXT(*cmdBuffer, VK_FALSE);
 
@@ -606,12 +702,17 @@ void commandBufferSetDefaultDynamicStates (
 		di.vkCmdSetAlphaToCoverageEnableEXT(*cmdBuffer, VK_FALSE);
 
 	// VkPipelineColorBlendAttachmentState
-	if (di.vkCmdSetColorBlendEnableEXT)
-		di.vkCmdSetColorBlendEnableEXT(*cmdBuffer, 0u, 1u, makeQuickPtr(gpp::defaultBlendAttachmentState.blendEnable));
-	if (di.vkCmdSetColorBlendEquationEXT)
-		di.vkCmdSetColorBlendEquationEXT(*cmdBuffer, 0u, 1u, makeQuickPtr(makeColorBlendEquationExt(gpp::defaultBlendAttachmentState)));
-	if (di.vkCmdSetColorWriteMaskEXT)
-		di.vkCmdSetColorWriteMaskEXT(*cmdBuffer, 0u, 1u, makeQuickPtr(gpp::defaultBlendAttachmentColorWriteMask));
+	{
+		std::vector<VkBool32> blendEnables(attachmentCount, gpp::defaultBlendAttachmentState.blendEnable);
+		std::vector<VkColorBlendEquationEXT> blendEqs(attachmentCount, makeColorBlendEquationExt(gpp::defaultBlendAttachmentState));
+		std::vector<VkColorComponentFlags> blendWriteMasks(attachmentCount, gpp::defaultBlendAttachmentColorWriteMask);
+		if (di.vkCmdSetColorBlendEnableEXT)
+			di.vkCmdSetColorBlendEnableEXT(*cmdBuffer, 0u, attachmentCount, blendEnables.data());
+		if (di.vkCmdSetColorBlendEquationEXT)
+			di.vkCmdSetColorBlendEquationEXT(*cmdBuffer, 0u, attachmentCount, blendEqs.data());
+		if (di.vkCmdSetColorWriteMaskEXT)
+			di.vkCmdSetColorWriteMaskEXT(*cmdBuffer, 0u, attachmentCount, blendWriteMasks.data());
+	}
 
 	if (di.vkCmdSetConservativeRasterizationModeEXT)
 		di.vkCmdSetConservativeRasterizationModeEXT(*cmdBuffer, VK_CONSERVATIVE_RASTERIZATION_MODE_DISABLED_EXT);

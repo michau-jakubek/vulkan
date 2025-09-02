@@ -3,6 +3,7 @@
 #include "vtfThreadSafeLogger.hpp"
 #include <iterator>
 #include <functional>
+#include <numeric>
 
 namespace vtf
 {
@@ -36,6 +37,55 @@ Logger& Logger::operator<< (std::ostream& (&maybeNewLine)(std::ostream&))
 }
 Logger::Logger () : mOutput(std::cout), mInput(Logger_mInput), mMutex(Logger_mMutex) {}
 Logger::Logger (const Logger& other) : mOutput(other.mOutput), mInput(other.mInput), mMutex(other.mMutex) {}
+
+
+void AddressWatcher::add (void_cptr address, size_t size)
+{
+	m_map.push_back(std::make_pair(address, size));
+}
+
+void AddressWatcher::add (std::pair<void const*, size_t> const& info)
+{
+	m_map.push_back(info);
+}
+
+AddressWatcher::AddressWatcher()
+	: m_continueThread(State::NotStartedCallWatch)
+	, m_lastResult()
+	, m_mutex()
+	, m_cv()
+	, m_map()
+{
+}
+
+void AddressWatcher::thread::join ()
+{
+	const State before = *m_continueThread;
+	if (before == State::Continue)
+	{
+		*m_continueThread = State::FinishedByCaller;
+	}
+	static_cast<std::thread*>(this)->join();
+	const State after = *m_continueThread;
+	MULTI_UNREF(before, after);
+}
+
+bool AddressWatcher::selfTest (uint32_t sleepBeforeJoinInMicroseconds)
+{
+	uint32_t arr[10]{};
+	AddressWatcher aw;
+	for (uint32_t i = 0u; i < ARRAY_LENGTH_CAST(arr, uint32_t); ++i)
+	{
+		arr[i] = i + 123u;
+		aw.add(&arr[i], sizeof(uint32_t));
+	}
+	auto trigger = [&](Trigger) -> void {	};
+	AddressWatcher::thread worker = aw.watch(trigger);
+	((uint8_t*)&arr[3u])[1u] = 255u;
+	aw.sleepCallingThread(sleepBeforeJoinInMicroseconds);
+	worker.join();
+	return aw.getLastResult().first == 3u && aw.getLastResult().second == 1u;
+}
 
 
 } // namespace vtf

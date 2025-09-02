@@ -5,7 +5,7 @@
 #include "vtfContext.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfProgramCollection.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfZPipeline.hpp"
 
 namespace
@@ -25,25 +25,15 @@ TriLogicInt prepareTests(add_cref<TestRecord> record, add_cref<strings> cmdLineP
 {
 	UNREF(cmdLineParams);
 
-	add_ref<std::ostream> log(std::cout);
-
-	VkStruct<VkPhysicalDeviceFeatures2>	requiredfeatures;
 	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
-		const VkPhysicalDeviceFeatures2 availableFeatures = deviceGetPhysicalFeatures2(caps.physicalDevice);
-		requiredfeatures.features.sparseBinding = availableFeatures.features.sparseBinding;
-		return availableFeatures;
+		caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::sparseBinding)
+			.checkSupported("sparseBinding");
 	};
 
 	Params						params	{ record.assets };
 	add_cref<GlobalAppFlags>	gf		= getGlobalAppFlags();
 	VulkanContext				ctx		(record.name, gf.layers, strings(), strings(), onEnablingFeatures, gf.apiVer);
-
-	if (VK_FALSE == requiredfeatures.features.sparseBinding)
-	{
-		log << "[ERROR] sparseBinding is not supported by device" << std::endl;
-		return {};
-	}
 
 	return performTests(ctx, params);
 }
@@ -76,11 +66,10 @@ TriLogicInt selfTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 	bufferBindMemory(buffer, queue);
 
 	LayoutManager						lm					(ctx.device);
-	const uint32_t						binding				= lm.addBindingAsVector<Item>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, count);
+	const uint32_t						binding				= lm.addBinding(buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER); UNREF(binding);
 	ZDescriptorSetLayout				descriptorSetLayout	= lm.createDescriptorSetLayout(false);
 	ZDescriptorSet						descriptorSet		= lm.getDescriptorSet(descriptorSetLayout);
 	ZPipelineLayout						pipelineLayout		= lm.createPipelineLayout({descriptorSetLayout});
-	lm.updateDescriptorSet(descriptorSet, binding, buffer);
 
 	ZPipeline							pipeline			= createComputePipeline(pipelineLayout, shaderModule, {}, UVec3(10,10,1));
 

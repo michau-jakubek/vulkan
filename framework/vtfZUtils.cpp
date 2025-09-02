@@ -55,44 +55,34 @@ std::ostream& operator<<(std::ostream& str, const VtfVersion& v)
 				<< v.get().nvariant;
 }
 
-ZShaderModule createShaderModule (
-    ZDevice						device,
-    VkShaderStageFlagBits		stage,
-    add_cref<std::vector<char>>	code,
-    add_cref<std::string>		entryName)
+ZShaderModule	createShaderModule (ZDevice device, VkShaderStageFlagBits stage,
+                                    add_cref<std::vector<char>> base64Code, add_cref<std::string> entryName)
 {
-    auto readMagicNumber = [](add_cref<std::vector<char>> s) -> uint32_t
-	{
-		return *(const uint32_t*)(s.data());
-	};
-    auto changeMagicNumber = [](uint32_t magic, add_ref<std::vector<char>>  s) -> void
-	{
-		*(uint32_t*)(s.data()) = magic;
-	};
+	const std::vector<uint8_t> code = base64_decode(base64Code);
+	const auto size = code.size();
+	ASSERTMSG(size != 0u && size % 4u == 0u, "Base64 code size (", size, ") must be four bytes multiplication");
+	return createShaderModule(device, stage,
+			reinterpret_cast<add_cptr<uint32_t>>(code.data()), size_t(size), entryName);
+}
+
+ZShaderModule createShaderModule (
+    ZDevice					device,
+    VkShaderStageFlagBits	stage,
+    add_cptr<uint32_t>		pCode,
+	size_t					codeSize,
+    add_cref<std::string>	entryName)
+{
+	ASSERTMSG(reinterpret_cast<uintptr_t>(pCode) % alignof(uint32_t) == 0, "Shader byte buffer is not 4-byte aligned");
 
 	VkShaderModuleCreateInfo createInfo = makeVkStruct();
-	createInfo.codeSize	= code.size();
-	createInfo.pCode	= reinterpret_cast<const uint32_t*>(code.data());
+	createInfo.codeSize = codeSize;
+	createInfo.pCode	= pCode;
+	// Magic number: 0x07230203
 
 	VkShaderModule				shaderModule	= VK_NULL_HANDLE;
 	VkAllocationCallbacksPtr	callbacks		= device.getParam<VkAllocationCallbacksPtr>();
 
-    std::vector<char> code2;
-	if (readMagicNumber(code) == 0)
-	{
-		add_ref<Logger> logger = device.getParam<ZPhysicalDevice>().getParam<ZInstance>().getParamRef<Logger>();
-		if (getGlobalAppFlags().verbose)
-		{
-			logger << "Magic number was: 0x" << std::hex << readMagicNumber(code) << std::dec << std::endl;
-		}
-		code2 = code;
-		changeMagicNumber(0x07230203, code2);
-		createInfo.pCode	= reinterpret_cast<const uint32_t*>(code2.data());
-		if (getGlobalAppFlags().verbose)
-		{
-			logger << "Magic number is: 0x" << std::hex << readMagicNumber(code2) << std::dec << std::endl;
-		}
-	}
+    std::vector<uint32_t> code2;
 
 	VKASSERT(vkCreateShaderModule(*device, &createInfo, callbacks, &shaderModule));
 
@@ -1023,10 +1013,12 @@ ZDevice createLogicalDevice	(
 	}
 
 	VkDevice deviceHandle(VK_NULL_HANDLE);
-	auto pfnCreateDevice = getDriverCreateDeviceProc();
-    ASSERTMSG(pfnCreateDevice, "vkCreateDevice must not be null");
+	auto pfnDriverCreateDevice = getDriverCreateDeviceProc();
+    ASSERTMSG(pfnDriverCreateDevice, "vkCreateDevice must not be null");
+	auto pfnInstanceCreateDevice = getInstanceCreateDeviceProc(*instance);
+	ASSERTMSG(pfnInstanceCreateDevice, "vkCreateDevice must not be null");
 	recorder.stamp("Before vkCreateDevice()");
-	const VkResult createResult = (*pfnCreateDevice)(*physDevice, &createInfo, callbacks, &deviceHandle);
+	const VkResult createResult = pfnInstanceCreateDevice(*physDevice, &createInfo, callbacks, &deviceHandle);
 	recorder.stamp("After vkCreateDevice()");
 	VKASSERTMSG(createResult, "Failed to create logical device");
 	ZDevice logicalDevice(deviceHandle, callbacks, physDevice, std::move(queueCreateExInfos));
@@ -1044,7 +1036,7 @@ ZDevice createLogicalDevice	(
 			ADevice(dev).initInterface(this->operator*(), *dev);
 		}
 	};
-	AInstance(physDevice.getParam<ZInstance>()).initInterface(logicalDevice);
+	AInstance(instance).initInterface(logicalDevice);
 
 	return logicalDevice;
 }
@@ -1109,7 +1101,7 @@ add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (add_cref<ZPhys
 	return device.getParamRef<VkPhysicalDeviceProperties>();
 }
 
-VkPhysicalDeviceProperties2 deviceGetPhysicalProperties2 (add_cref<ZPhysicalDevice> device, add_ptr<void> pNext)
+VkPhysicalDeviceProperties deviceGetPhysicalProperties2 (add_cref<ZPhysicalDevice> device, add_ptr<void> pNext)
 {
 	ASSERTMSG(device.has_handle(), "Device must have handle");
 	VkPhysicalDeviceProperties2 props = makeVkStruct(pNext);
@@ -1117,7 +1109,7 @@ VkPhysicalDeviceProperties2 deviceGetPhysicalProperties2 (add_cref<ZPhysicalDevi
 	if (fn)
 		fn(*device, &props);
 	else vkGetPhysicalDeviceProperties2(*device, &props);
-	return props;
+	return props.properties;
 }
 
 add_cref<VkPhysicalDeviceLimits> deviceGetPhysicalLimits (add_cref<ZDevice> device)

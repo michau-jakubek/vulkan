@@ -16,9 +16,10 @@ namespace vtf
 {
 
 typedef ZDeletable<VkShaderEXT,
-	decltype(ZDeviceInterface::vkDestroyShaderEXT), &ZDeviceInterface::zDestroyShaderEXT,
+	decltype(&ZDeviceInterface::zDestroyShaderEXT), &ZDeviceInterface::zDestroyShaderEXT,
 	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
-	VkShaderStageFlagBits,
+	ZDistType<SomeZero, VkShaderStageFlagBits>, // this shader stage
+	ZDistType<SomeOne, VkShaderStageFlagBits>, // next stage
 	ZSpecializationInfo,
 	std::vector<ZDescriptorSetLayout>,
 	std::vector<VkPushConstantRange>,

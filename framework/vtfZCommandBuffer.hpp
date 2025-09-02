@@ -84,19 +84,27 @@ ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZRenderPa
 												   uint32_t subpass, VkSubpassContents = VK_SUBPASS_CONTENTS_INLINE);
 bool				 commandBufferNextSubpass (add_ref<ZRenderPassBeginInfo> beginInfo);
 void				 commandBufferEndRenderPass (add_cref<ZRenderPassBeginInfo> beginInfo);
-void				commandBufferBeginRendering (ZCommandBuffer cmd, uint32_t width, uint32_t height,
-												 add_cref<std::vector<gpp::Attachment>> attachments,
-												 std::optional<std::vector<VkClearValue>> clearColors = {},
-												 uint32_t viewMask = 0u, ZRenderingFlags renderingFlags = ZRenderingFlags());
-void				commandBufferBeginRendering (ZCommandBuffer cmd, uint32_t width, uint32_t height,
-												 std::initializer_list<add_cptr<std::vector<gpp::Attachment>>> attachments,
-												 std::optional<std::vector<VkClearValue>> clearColors = {},
-												 uint32_t viewMask = 0u, ZRenderingFlags renderingFlags = ZRenderingFlags());
-void				 commandBufferEndRendering (ZCommandBuffer cmd);
+void	commandBufferBeginRendering (ZCommandBuffer cmd, uint32_t width, uint32_t height,
+									 add_cref<std::vector<gpp::Attachment>> attachments,
+									 std::optional<std::vector<VkClearValue>> clearColors = {},
+									 uint32_t viewMask = 0u, ZRenderingFlags renderingFlags = ZRenderingFlags());
+void	commandBufferBeginRendering (ZCommandBuffer cmd, uint32_t width, uint32_t height,
+									 std::initializer_list<add_cptr<std::vector<gpp::Attachment>>> attachments,
+									 std::optional<std::vector<VkClearValue>> clearColors = {},
+									 uint32_t viewMask = 0u, ZRenderingFlags renderingFlags = ZRenderingFlags());
+void	commandBufferEndRendering (ZCommandBuffer cmd);
+void	commandBufferSetRenderingAttachmentLocations (ZCommandBuffer cmd, add_cref<std::vector<uint32_t>> locations,
+													  std::optional<bool> useKHRversion = {});
+void	commandBuffervSetRenderingInputAttachmentIndices (ZCommandBuffer cmd,
+														  add_cref<std::vector<uint32_t>> indices,
+														  add_cptr<std::vector<uint32_t>> pDepthInputAttachmentIndex = {},
+														  add_cptr<std::vector<uint32_t>> pStencilInputAttachmentIndex = {},
+														  std::optional<bool> useKHRversion = {});
 void				 commandBufferSetViewport (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain);
 void				 commandBufferSetScissor (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain);
 void				 commandBufferSetDefaultDynamicStates (ZCommandBuffer cmdBuffer, add_cref<VertexInput> vertexInput,
-															add_cref<VkViewport> viewport, add_cptr<VkRect2D> pScissor = nullptr);
+															add_cref<VkViewport> viewport, uint32_t attachmentCount = 1u,
+															add_cptr<VkRect2D> pScissor = nullptr);
 
 void				commandBufferDrawIndirect (ZCommandBuffer cmd, ZBuffer buffer);
 void				commandBufferDrawIndexedIndirect (ZCommandBuffer cmd, ZBuffer buffer);

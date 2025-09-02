@@ -1,0 +1,99 @@
+; SPIR-V
+; Version: 1.4
+; Generator: Khronos Glslang Reference Front End; 11
+; Bound: 31
+; Schema: 0
+               OpCapability Shader
+               OpCapability VariablePointers
+               OpCapability VariablePointersStorageBuffer
+               OpExtension "SPV_KHR_variable_pointers"
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main" %_ %__0 %__1
+               OpExecutionMode %main LocalSize 1 1 1
+
+               ; Annotations
+               OpDecorate %PC Block
+               OpMemberDecorate %PC 0 Offset 0
+               OpMemberDecorate %PC 1 Offset 4
+               OpMemberDecorate %PC 2 Offset 8
+               OpMemberDecorate %PC 3 Offset 12
+               OpDecorate %_runtimearr_uint ArrayStride 4
+               OpDecorate %_runtimearr_v3uint ArrayStride 12
+               OpDecorate %_runtimearr_v4uint ArrayStride 16
+               OpDecorate %FooBuffer Block
+               OpDecorate %BarBuffer Block
+               OpMemberDecorate %FooBuffer 0 Offset 0
+               OpMemberDecorate %BarBuffer 0 Offset 0
+               OpDecorate %__0 Binding 0
+               OpDecorate %__0 DescriptorSet 0
+               OpDecorate %__1 Binding 1
+               OpDecorate %__1 DescriptorSet 0
+               OpDecorate %gl_WorkGroupSize BuiltIn WorkgroupSize
+
+               ; Types, variables and constants
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+       %uint = OpTypeInt 32 0
+         %PC = OpTypeStruct %uint %uint %uint %uint     ; Block
+%_ptr_PushConstant_PC = OpTypePointer PushConstant %PC
+          %_ = OpVariable %_ptr_PushConstant_PC PushConstant
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+      %int_1 = OpConstant %int 1
+      %int_2 = OpConstant %int 2
+      %int_3 = OpConstant %int 3
+      %int_4 = OpConstant %int 4
+      %int_5 = OpConstant %int 5
+      %int_6 = OpConstant %int 6
+      %int_7 = OpConstant %int 7
+      %int_8 = OpConstant %int 8
+      %int_9 = OpConstant %int 9
+%_ptr_PushConstant_uint = OpTypePointer PushConstant %uint
+       %bool = OpTypeBool
+     %uint_0 = OpConstant %uint 0
+     %uint_1 = OpConstant %uint 1
+     %v3uint = OpTypeVector %uint 3
+     %v4uint = OpTypeVector %uint 4
+%_runtimearr_uint = OpTypeRuntimeArray %uint       ; ArrayStride 4
+%_runtimearr_v3uint = OpTypeRuntimeArray %v3uint   ; ArrayStride 12
+%_runtimearr_v4uint = OpTypeRuntimeArray %v4uint   ; ArrayStride 16
+  %FooBuffer = OpTypeStruct %_runtimearr_v4uint    ; Block
+  %BarBuffer = OpTypeStruct %_runtimearr_v3uint    ; Block
+%_ptr_StorageBuffer_FooBuffer = OpTypePointer StorageBuffer %FooBuffer
+%_ptr_StorageBuffer_BarBuffer = OpTypePointer StorageBuffer %BarBuffer
+        %__0 = OpVariable %_ptr_StorageBuffer_FooBuffer StorageBuffer   ; Binding 0, DescriptorSet 0
+        %__1 = OpVariable %_ptr_StorageBuffer_BarBuffer StorageBuffer   ; Binding 1, DescriptorSet 0
+%_ptr_StorageBuffer_uint = OpTypePointer StorageBuffer %uint
+%_ptr_StorageBuffer_v3uint = OpTypePointer StorageBuffer %v3uint
+%_ptr_StorageBuffer_v4uint = OpTypePointer StorageBuffer %v4uint
+%gl_WorkGroupSize = OpConstantComposite %v3uint %uint_1 %uint_1 %uint_1     ; BuiltIn WorkgroupSize
+
+               ; Function main
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+         %13 = OpAccessChain %_ptr_PushConstant_uint %_ %int_3
+         %14 = OpLoad %uint %13
+         %15 = OpAccessChain %_ptr_PushConstant_uint %_ %int_2
+         %16 = OpLoad %uint %15
+         %17 = OpAccessChain %_ptr_PushConstant_uint %_ %int_1
+         %18 = OpLoad %uint %17
+         %19 = OpAccessChain %_ptr_PushConstant_uint %_ %int_0
+         %20 = OpLoad %uint %19
+         %21 = OpIAdd %uint %20 %18
+         %22 = OpIAdd %uint %21 %16
+         %23 = OpIAdd %uint %22 %14
+         %24 = OpIEqual %bool %20 %uint_0
+		 %_ptr_v4uint = OpAccessChain %_ptr_StorageBuffer_v4uint %__0 %int_0 %uint_0
+		 %_ptr_v3uint = OpAccessChain %_ptr_StorageBuffer_v3uint %__1 %int_0 %uint_0
+               OpSelectionMerge %27 None
+               OpBranchConditional %24 %25 %27
+         %25 = OpLabel
+               ; fooData[0].x = x;
+         ;%26 = OpAccessChain %_ptr_StorageBuffer_uint %__0 %int_0 %int_0 %uint_0
+         ;      OpStore %26 %23
+               OpBranch %27
+         %27 = OpLabel
+         ;; %28 = OpAccessChain %_ptr_StorageBuffer_uint %__1 %int_0 %18 %uint_0
+               OpReturn
+               OpFunctionEnd

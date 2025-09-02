@@ -1,8 +1,9 @@
-#include <iostream>
-#include <cstring>
-#include <sstream>
-#include <string_view>
-#include <cstdlib>
+#if defined(_MSC_VER) && defined(_DEBUG) && defined(CHECK_MEMORY_LEAKS)
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#define DEBUG_NEW new(_NORMAL_BLOCK, __FILE__, __LINE__)
+#define new DEBUG_NEW
+#endif
 
 #include "main.hpp"
 #include "vtfBacktrace.hpp"
@@ -15,6 +16,12 @@
 #include "allTests.hpp"
 #include "vtfOptionParser.hpp"
 #include "vtfPlatformDriver.hpp"
+
+#include <iostream>
+#include <cstring>
+#include <sstream>
+#include <string_view>
+#include <cstdlib>
 
 using namespace vtf;
 
@@ -449,6 +456,12 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 
 int main (int argc, char* argv[])
 {
+#if defined(_MSC_VER) && defined(_DEBUG) && defined(CHECK_MEMORY_LEAKS)
+	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+	_CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
+	_CrtSetReportFile(_CRT_WARN, _CRTDBG_FILE_STDOUT);
+#endif
+
 	recordAllTests(AllTestRecords);
 	
 	TestRecord	testRecord;
@@ -471,8 +484,11 @@ int main (int argc, char* argv[])
 		result = {};
 		performTest = false;
 		std::cout << e.what();
-		std::cout << "The test " << std::quoted(testRecord.name) << ' '
-			<< "thrown an exception so no result to show." << std::endl;
+		if (testRecord.name)
+			std::cout << "The test " << std::quoted(testRecord.name) << ' ';
+		else
+			std::cout << "Application ";
+		std::cout << "thrown an exception so no result to show." << std::endl;
 	}
 	if (performTest)
 	{
@@ -481,6 +497,10 @@ int main (int argc, char* argv[])
 				? (result == 0 ? "Passed" : "FAILED")
 				: "finished but no results to show.") << std::endl;
 	}
+
+#if defined(_MSC_VER) && defined(_DEBUG) && defined(CHECK_MEMORY_LEAKS)
+	_CrtDumpMemoryLeaks();
+#endif
 
 	return result.hasValue() ? result.value() : (1);
 }

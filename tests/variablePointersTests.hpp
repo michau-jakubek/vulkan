@@ -1,0 +1,6 @@
+#ifndef __VARIABLE_POINTERS_TESTS_INCLUDED__
+#define __VARIABLE_POINTERS_TESTS_INCLUDED__
+
+#include "allTests.hpp"
+
+#endif // __VARIABLE_POINTERS_TESTS_INCLUDED__

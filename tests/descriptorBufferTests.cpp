@@ -4,7 +4,7 @@
 #include "vtfProgressRecorder.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfGlfwEvents.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfProgramCollection.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfZPipeline.hpp"
@@ -380,25 +380,30 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 #pragma warning(pop)
 #endif
 
+	ZBufferUsageFlags		uni_usage	(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+	ZBufferUsageFlags		buf_usage	(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 	LayoutManager			set0		(canvas.device);
 	const uint32_t			elemCount	= 64;
 	const uint32_t			startElem1	= 7;
 	const uint32_t			startElem2	= 19;
-	const uint32_t			inBinding1	= set0.addBindingAsVector<UniformUint>(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, elemCount);
-	const uint32_t			imgBinding	= set0.addBinding(face1View, ZSampler());
-	const uint32_t			outBinding1	= set0.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, elemCount);
+	ZBuffer					inBuffer1	= createBuffer<UniformUint>(canvas.device, elemCount, uni_usage);
+	ZBuffer					outBuffer1	= createBuffer<uint32_t>(canvas.device, elemCount, buf_usage);
+	ZBuffer					outBuffer2	= createBuffer<uint32_t>(canvas.device, elemCount, buf_usage);
+	ZBuffer					inBuffer2	= createBuffer<UniformUint>(canvas.device, elemCount, uni_usage);
+	const uint32_t			inBinding1	= set0.addBinding(inBuffer1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	const uint32_t			imgBinding	= set0.addBinding(face1View, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+	const uint32_t			outBinding1 = set0.addBinding(outBuffer1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 	const uint32_t			compBinding = set0.addBinding(face1View, sampler);
-	const uint32_t			outBinding2	= set0.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, elemCount);
-	const uint32_t			samBinding	= set0.addBinding(ZImageView(), sampler);
-	const uint32_t			inBinding2	= set0.addBindingAsVector<UniformUint>(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, elemCount);
-	const uint32_t			stoBinding	= set0.addBinding(stoView, ZSampler(), VK_IMAGE_LAYOUT_GENERAL,
-															VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	const uint32_t			outBinding2	= set0.addBinding(outBuffer2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	const uint32_t			samBinding	= set0.addBinding(sampler);
+	const uint32_t			inBinding2	= set0.addBinding(inBuffer2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	const uint32_t			stoBinding	= set0.addBinding(stoView, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	ZDescriptorSetLayout	ds0Layout	= set0.createDescriptorSetLayout(useDescriptorSet, layoutFlags);
 
 	LayoutManager			set1		(canvas.device);
-	const uint32_t			stoBinding2	= set1.addBinding(stoView, ZSampler(), VK_IMAGE_LAYOUT_GENERAL,
-															VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); UNREF(stoBinding2);
-	const uint32_t			matBinding	= set1.addBinding<MVP>(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	const uint32_t			stoBinding2	= set1.addBinding(stoView, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); UNREF(stoBinding2);
+	ZBuffer					matBuffer	= createBuffer<MVP>(canvas.device, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, uni_usage);
+	const uint32_t			matBinding	= set1.addBinding(matBuffer, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER); UNREF(matBinding);
 	ZDescriptorSetLayout	ds1Layout	= set1.createDescriptorSetLayout(useDescriptorSet, layoutFlags);
 
 	ZPipelineLayout			pLayout		= set0.createPipelineLayout({ds0Layout, ds1Layout});
@@ -415,13 +420,10 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 																VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR,
 																gpp::DepthTestEnable(true), graphCache);
 	recorder.stamp("After vkCreateGraphicsPipelines()");
-	ZBuffer					matBuffer	= std::get<DescriptorBufferInfo>(set1.getDescriptorInfo(matBinding)).buffer;
+
 	ZBuffer					inStoBuffer	= createBuffer(stoImage, ZBufferUsageStorageFlags, ZMemoryPropertyHostFlags);
 	ZBuffer					outStoBuffer = createBuffer(stoImage, ZBufferUsageStorageFlags, ZMemoryPropertyHostFlags);
-	ZBuffer					outBuffer1	= std::get<DescriptorBufferInfo>(set0.getDescriptorInfo(outBinding1)).buffer;
-	ZBuffer					outBuffer2	= std::get<DescriptorBufferInfo>(set0.getDescriptorInfo(outBinding2)).buffer;
-	ZBuffer					inBuffer1	= std::get<DescriptorBufferInfo>(set0.getDescriptorInfo(inBinding1)).buffer;
-	ZBuffer					inBuffer2	= std::get<DescriptorBufferInfo>(set0.getDescriptorInfo(inBinding2)).buffer;
+
 	{
 		std::vector<UniformUint> inData(bufferGetElementCount<UniformUint>(inBuffer1));
 		std::iota(inData.begin(), inData.end(), startElem1);

@@ -56,7 +56,7 @@ ZDevice			createLogicalDevice	(ZPhysicalDevice		physDevice,
 									 bool					enableDebugPrintf = false);
 add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (add_cref<ZDevice> device);
 add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (add_cref<ZPhysicalDevice> device);
-VkPhysicalDeviceProperties2			 deviceGetPhysicalProperties2 (add_cref<ZPhysicalDevice> device, add_ptr<void> pNext = nullptr);
+VkPhysicalDeviceProperties			 deviceGetPhysicalProperties2 (add_cref<ZPhysicalDevice> device, add_ptr<void> pNext = nullptr);
 template<typename  PropertiesType, typename FieldType, typename MaskType>
 FieldType deviceCheckProperties (
 	ZPhysicalDevice dev,
@@ -109,7 +109,9 @@ ZQueryPool		createQueryPool	(ZDevice device, VkQueryType type, VkQueryPipelineSt
 								 uint32_t count = 1u, VkQueryPoolCreateFlags flags = 0);
 
 ZShaderModule	createShaderModule (ZDevice device, VkShaderStageFlagBits stage,
-                                    add_cref<std::vector<char>> code, add_cref<std::string> entryName);
+                                    add_cptr<uint32_t> pCode, size_t codeSize, add_cref<std::string> entryName);
+ZShaderModule	createShaderModule (ZDevice device, VkShaderStageFlagBits stage,
+                                    add_cref<std::vector<char>> base64Code, add_cref<std::string> entryName = "main");
 
 ZFramebuffer	createFramebuffer (ZRenderPass renderPass, add_cref<VkExtent2D> size, const std::vector<ZImageView>& attachments);
 ZFramebuffer	createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t height, const std::vector<ZImageView>& attachments);

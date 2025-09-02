@@ -4,7 +4,7 @@
 #include "vtfVector.hpp"
 #include "vtfStructUtils.hpp"
 #include "vtfProgramCollection.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfZPipeline.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "subgroupMatrixTests.hpp"
@@ -990,6 +990,7 @@ ZShaderModule createShader (ZDevice device, add_cref<std::string> assets, add_cr
 {
 	const VkShaderStageFlagBits	stage			(VK_SHADER_STAGE_COMPUTE_BIT);
 	const VkDescriptorType		descType		(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	const ZBufferUsageFlags		busage			(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 	ZShaderModule				computeShader	= createShader(ctx.device, assets, params);
 	struct PushConstant
 	{
@@ -1000,12 +1001,19 @@ ZShaderModule createShader (ZDevice device, add_cref<std::string> assets, add_cr
 													params.controlIndex0, params.controlIndex1,
 													params.controlIndex2, params.controlIndex3, params.controlIndex4 };
 	LayoutManager				lm				(ctx.device);
-	const uint32_t				bindingParams	= lm.addBinding<std::vector<uint32_t>>(descType, params.paramsBufferLength, stage);
-	const uint32_t				bindingTypes	= lm.addBinding<std::vector<uint32_t>>(descType, data_count(params.inputTypes), stage);
-	const uint32_t				bindingIinput	= lm.addBinding<std::vector<uint32_t>>(descType, data_count(params.inputIvalues), stage);
-	const uint32_t				bindingJinput	= lm.addBinding<std::vector<uint32_t>>(descType, data_count(params.inputJvalues), stage);
-	const uint32_t				bindingResult	= lm.addBinding<std::vector<uint32_t>>(descType, data_count(params.inputTypes), stage);
-	ZPipelineLayout				pipelineLayout	= lm.createPipelineLayout<PushConstant>({ lm.createDescriptorSetLayout() }, stage);
+
+	ZBuffer	bufferParams	= createBuffer(ctx.device, params.paramsBufferLength, busage);
+	ZBuffer	bufferTypes		= createBuffer(ctx.device, data_count(params.inputTypes), busage);
+	ZBuffer	bufferIinput	= createBuffer(ctx.device, data_count(params.inputIvalues), busage);
+	ZBuffer	bufferJinput	= createBuffer(ctx.device, data_count(params.inputJvalues), busage);
+	ZBuffer	bufferResult	= createBuffer(ctx.device, data_count(params.inputTypes), busage);
+
+	const uint32_t	bindingParams	= lm.addBinding(bufferParams, descType, stage);
+	const uint32_t	bindingTypes	= lm.addBinding(bufferTypes, descType, stage);
+	const uint32_t	bindingIinput	= lm.addBinding(bufferIinput, descType, stage);
+	const uint32_t	bindingJinput	= lm.addBinding(bufferJinput, descType, stage);
+	const uint32_t	bindingResult	= lm.addBinding(bufferResult, descType, stage);
+	ZPipelineLayout	pipelineLayout	= lm.createPipelineLayout<PushConstant>({ lm.createDescriptorSetLayout() }, stage);
 
 	ZSpecializationInfo	specInfo;
 	specInfo.addEntries(ZSpecEntry<int32_t>(make_signed(params.localSize.x()), std::numeric_limits<int32_t>::max() - 3),	// 2147483644

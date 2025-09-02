@@ -111,7 +111,8 @@ TriLogicInt runIntMatrixSingleThread (VulkanContext& ctx, const std::string& ass
 	std::cout << "Offset outVex:     " << offsetof(Binding, outVec)	<< std::endl;
 	std::cout << "Offset mat3x3:     " << offsetof(Binding, mat3x4)	<< std::endl;
 
-	const uint32_t			inOutBinding	= pl.addBinding<Binding>();
+	ZBuffer					buffer			= createBuffer<Binding>(ctx.device, 1u, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+	const uint32_t			inOutBinding	= pl.addBinding(buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 	ZDescriptorSetLayout	dsLayout		= pl.createDescriptorSetLayout();
 	ZPipelineLayout			pipelineLayout	= pl.createPipelineLayout({ dsLayout });
 	ZPipeline				pipeline		= createComputePipeline(pipelineLayout, compShaderModule);

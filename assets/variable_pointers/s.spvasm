@@ -1,0 +1,99 @@
+               OpCapability Shader
+               OpCapability VariablePointers
+               OpCapability VariablePointersStorageBuffer
+               OpExtension "SPV_KHR_variable_pointers"
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               ; OpMemoryModel PhysicalStorageBuffer64 GLSL450
+               OpEntryPoint GLCompute %main "main" %_ %__0 %__1
+               OpExecutionMode %main LocalSize 1 1 1
+
+               ; Annotations
+               OpDecorate %PC Block
+               OpMemberDecorate %PC 0 Offset 0
+               OpMemberDecorate %PC 1 Offset 4
+               OpMemberDecorate %PC 2 Offset 8
+               OpMemberDecorate %PC 3 Offset 12
+               OpDecorate %_runtimearr_v3uint ArrayStride 12
+               OpDecorate %_runtimearr_v4uint ArrayStride 16
+               OpDecorate %FooBuffer Block
+               OpDecorate %BarBuffer Block
+               OpMemberDecorate %FooBuffer 0 Offset 0
+               OpMemberDecorate %BarBuffer 0 Offset 0
+               OpDecorate %__0 Binding 0
+               OpDecorate %__0 DescriptorSet 0
+               OpDecorate %__1 Binding 1
+               OpDecorate %__1 DescriptorSet 0
+               OpDecorate %gl_WorkGroupSize BuiltIn WorkgroupSize
+
+               ; Types, variables and constants
+       %bool = OpTypeBool
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+        %int = OpTypeInt 32 1
+       %uint = OpTypeInt 32 0
+     %v3uint = OpTypeVector %uint 3
+     %v4uint = OpTypeVector %uint 4
+         %PC = OpTypeStruct %uint %uint %uint %uint     ; Block
+%_ptr_PushConstant_PC = OpTypePointer PushConstant %PC
+          %_ = OpVariable %_ptr_PushConstant_PC PushConstant
+      %int_0 = OpConstant %int 0
+      %int_1 = OpConstant %int 1
+      %int_2 = OpConstant %int 2
+      %int_3 = OpConstant %int 3
+%_ptr_PushConstant_uint = OpTypePointer PushConstant %uint
+     %uint_0 = OpConstant %uint 0
+     %uint_1 = OpConstant %uint 1
+%_runtimearr_v3uint = OpTypeRuntimeArray %v3uint   ; ArrayStride 12
+%_runtimearr_v4uint = OpTypeRuntimeArray %v4uint   ; ArrayStride 16
+%_ptr_runtimearr_v3uint = OpTypePointer StorageBuffer %_runtimearr_v3uint
+%_ptr_runtimearr_v4uint = OpTypePointer StorageBuffer %_runtimearr_v4uint
+  %FooBuffer = OpTypeStruct %_runtimearr_v4uint    ; Block
+  %BarBuffer = OpTypeStruct %_runtimearr_v3uint    ; Block
+%_ptr_StorageBuffer_FooBuffer = OpTypePointer StorageBuffer %FooBuffer
+%_ptr_StorageBuffer_BarBuffer = OpTypePointer StorageBuffer %BarBuffer
+        %__0 = OpVariable %_ptr_StorageBuffer_FooBuffer StorageBuffer   ; Binding 0, DescriptorSet 0
+        %__1 = OpVariable %_ptr_StorageBuffer_BarBuffer StorageBuffer   ; Binding 1, DescriptorSet 0
+%_ptr_StorageBuffer_v3uint = OpTypePointer StorageBuffer %v3uint
+%_ptr_StorageBuffer_v4uint = OpTypePointer StorageBuffer %v4uint
+%gl_WorkGroupSize = OpConstantComposite %v3uint %uint_1 %uint_1 %uint_1     ; BuiltIn WorkgroupSize
+
+               ; Function main
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+         %13 = OpAccessChain %_ptr_PushConstant_uint %_ %int_3
+         %14 = OpLoad %uint %13
+         %15 = OpAccessChain %_ptr_PushConstant_uint %_ %int_2
+         %16 = OpLoad %uint %15
+         %17 = OpAccessChain %_ptr_PushConstant_uint %_ %int_1
+         %18 = OpLoad %uint %17
+         %19 = OpAccessChain %_ptr_PushConstant_uint %_ %int_0
+         %20 = OpLoad %uint %19
+         %21 = OpIAdd %uint %20 %18
+         %22 = OpIAdd %uint %21 %16
+         ; %23 holds value to store which is the sum of x,y,z,w from push constant struct
+         %23 = OpIAdd %uint %22 %14
+         ; make condition
+         %200 = OpIEqual %bool %20 %uint_0
+         %201 = OpAccessChain %_ptr_runtimearr_v3uint %__1 %int_0
+         %202 = OpAccessChain %_ptr_runtimearr_v4uint %__0 %int_0
+         %203 = OpBitcast %_ptr_runtimearr_v3uint %202
+         %204 = OpBitcast %_ptr_runtimearr_v4uint %201
+         ; assume that if %20 is 0 then is in BarBuffer
+         %205 = OpSelect %_ptr_runtimearr_v3uint %200 %201 %203
+         ; assume that if %20 is 0 then is in FooBuffer
+         %206 = OpSelect %_ptr_runtimearr_v4uint %200 %202 %204
+         ; make access to vec3
+         %209 = OpAccessChain %_ptr_StorageBuffer_v3uint %205 %18
+         ; make access to vec4
+         %210 = OpAccessChain %_ptr_StorageBuffer_v4uint %206 %18
+         ; make vec3 to store
+         %211 = OpCompositeConstruct %v3uint %23 %18 %16
+         ; make vec4 to store
+         %212 = OpCompositeConstruct %v4uint %23 %18 %16 %14
+         ; final storing
+         OpStore %209 %211
+         OpStore %210 %212
+               OpReturn
+               OpFunctionEnd
+

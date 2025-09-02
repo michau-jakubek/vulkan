@@ -2,7 +2,7 @@
 #include "triangleTests.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZImage.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfProgramCollection.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfZCommandBuffer.hpp"
@@ -231,17 +231,52 @@ void Params::usage (add_ref<std::ostream> log) const
 #define NON_HELPER_COUNT		2
 #define HELPER_COUNT			3
 
+struct DerivativeEntry;
+struct QuadPoints;
+struct QuadInfo;
 struct Bindings
 {
+	add_ref<LayoutManager> lm;
+
+	ZBuffer bOutputP;
+	ZBuffer bInputQuads;
+	ZBuffer bOutputQuads;
+	ZBuffer bOutputDerivatives;
+	ZBuffer bTestH;
+
 	uint32_t outputP;
 	uint32_t inputQuads;
 	uint32_t outputQuads;
 	uint32_t outputDerivatives;
 	uint32_t testH;
+
+	Bindings(add_ref<LayoutManager> layoutManager, uint32_t primitiveStride, add_cref<Params> params)
+		: lm(layoutManager)
+		, bOutputP(createBuffer<uint32_t>(lm.device,
+			(make_unsigned(params.width)* make_unsigned(params.height)* primitiveStride + 48u),
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT))
+		, bInputQuads(createBuffer<QuadPoints>(lm.device,
+			(make_unsigned(params.width)* make_unsigned(params.height) * 4u),
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT))
+		, bOutputQuads(createBuffer<QuadInfo>(lm.device, primitiveStride, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT))
+		, bOutputDerivatives(createBuffer<DerivativeEntry>(lm.device,
+			((make_unsigned(params.width) + 1u)* (make_unsigned(params.height) + 1u)* primitiveStride),
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT))
+		, bTestH(createBuffer<uint32_t>(lm.device, make_unsigned(params.width* params.height),
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT))
+		, outputP(lm.addBinding(bOutputP, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER))
+		, inputQuads(lm.addBinding(bInputQuads, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER))
+		, outputQuads(lm.addBinding(bOutputQuads, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER))
+		, outputDerivatives(lm.addBinding(bOutputDerivatives, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER))
+		, testH(lm.addBinding(bTestH, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER))
+	{
+		bOutputP.name("outputP");
+		bInputQuads.name("inputQuads");
+		bOutputQuads.name("outputQuads");
+		bOutputDerivatives.name("outputDerivatives");
+		bTestH.name("testH");
+	}
 };
-struct DerivativeEntry;
-struct QuadPoints;
-struct QuadInfo;
 struct Buffers
 {
 	std::vector<uint32_t>			outputP;
@@ -259,11 +294,6 @@ Buffers::Buffers (add_ref<LayoutManager> lm, add_cref<Bindings> b)
 	, outputDerivatives	(lm.getBindingElementCount(b.outputDerivatives))
 	, testH				(lm.getBindingElementCount(b.testH))
 {
-	lm.getBinding<ZBuffer>(b.outputP)->name("outputP");
-	lm.getBinding<ZBuffer>(b.inputQuads)->name("inputQuads");
-	lm.getBinding<ZBuffer>(b.outputQuads)->name("outputQuads");
-	lm.getBinding<ZBuffer>(b.outputDerivatives)->name("outputDerivatives");
-	lm.getBinding<ZBuffer>(b.testH)->name("testH");
 }
 void Buffers::invalidate (add_ref<LayoutManager> lm, add_cref<Bindings> b)
 {
@@ -802,7 +832,7 @@ void printInfo (add_ref<VulkanContext>, add_ref<UserData> ui)
 
 	ui.mParams.print(log);
 
-	log << "Buffer " << lm.getBinding<ZBuffer>(ui.mBindings.outputP)->name()
+	log << "Buffer " << ui.mBindings.bOutputP.name()
 		<< " of size: " << outputP.size() << " content:" << std::endl;
 
 	log << "  Drawing area:              " << UVec2(width, height) << std::endl;
@@ -1108,19 +1138,7 @@ TriLogicInt runDemoteInvocationsSingleThread (Canvas& cs, const std::string& ass
 	ZImageView					srcView				= createImageView(srcImage);
 	const VkExtent2D			srcImageSize		= makeExtent2D(srcImageWidth, srcImageHeight);
 	ZFramebuffer				srcFramebuffer		= createFramebuffer(renderPass, srcImageSize, {srcView});
-	const Bindings				bindings
-	{
-						/* outputP */				lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-														(make_unsigned(params.width) * make_unsigned(params.height) * primitiveStride + 48u)),
-						/* inputQuads */			lm.addBindingAsVector<QuadPoints>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-														(make_unsigned(params.width) * make_unsigned(params.height) * 4u)),
-						/* outputQuads */			lm.addBindingAsVector<QuadInfo>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-														primitiveStride),
-						/* outputDerivatives */		lm.addBindingAsVector<DerivativeEntry>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-														((make_unsigned(params.width) + 1u) * (make_unsigned(params.height) + 1u) * primitiveStride)),
-						/* testH */					lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-														make_unsigned(params.width * params.height)),
-	};
+	const Bindings				bindings			(lm, primitiveStride, params);
 	ZPipelineLayout				pipelineLayout		= lm.createPipelineLayout({ lm.createDescriptorSetLayout() },
 																			ZPushRange<UserData::PushConstant>());
 	ZPipeline					mainThreadPipeline	= createGraphicsPipeline(pipelineLayout, renderPass,

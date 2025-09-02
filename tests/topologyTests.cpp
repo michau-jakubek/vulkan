@@ -2,7 +2,7 @@
 #include "vtfOptionParser.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZImage.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfProgramCollection.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfZCommandBuffer.hpp"
@@ -571,7 +571,8 @@ TriLogicInt runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> asse
 															{ Vec4(1,0,0,1), { 7.0f } }
 													  }
 													};
-	const uint32_t				uniBinding			= lm.addBinding<Uniform>(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	ZBuffer						uniBuffer			= createBuffer<Uniform>(cs.device, 1u, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+	const uint32_t				uniBinding			= lm.addBinding(uniBuffer, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 	ZDescriptorSetLayout		dsLayout			= lm.createDescriptorSetLayout();
 	ZPipelineLayout				pipelineLayout		= lm.createPipelineLayout({dsLayout});
 	lm.writeBinding(uniBinding, uni);

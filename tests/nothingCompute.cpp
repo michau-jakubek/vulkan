@@ -2,7 +2,7 @@
 #include "vtfBacktrace.hpp"
 #include "vtfContext.hpp"
 #include "vtfProgramCollection.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfZPipeline.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfFloat16.hpp"
@@ -213,11 +213,10 @@ TriLogicInt runTest (const TestRecord& record, const strings& cmdLineParams)
 		{
 			printOffsets();
 
-			ZBuffer outBuffer = std::get<DescriptorBufferInfo>(man.getDescriptorInfo(bind)).buffer;
 			if (raw)
 			{
 				std::vector<Float16> v(ROUNDUP(sizeof(In) / sizeof(Float16), 4));
-				bufferRead(outBuffer, v);
+				man.readBinding(bind, v);
 				std::cout << "RAW <<<<<<<" << std::endl;
 				for (uint32_t i = 0; i < v.size(); ++i)
 				{
@@ -228,7 +227,7 @@ TriLogicInt runTest (const TestRecord& record, const strings& cmdLineParams)
 			else
 			{
 				In in;
-				if (sizeof(in) != bufferRead(outBuffer, in))
+				if (sizeof(in) != man.readBinding(bind, in))
 				{
 					std::cout << "DIFF" << std::endl;
 				}
@@ -269,14 +268,19 @@ TriLogicInt runTest (const TestRecord& record, const strings& cmdLineParams)
 	ZPipeline				pipeline = createComputePipeline(pipelineLayout, shader);
 
 	const uint32_t mode = 1;
+#ifdef _MSC_VER
+#pragma warning(disable: 4127)
+#endif
 	if (mode == 1)
+#ifdef _MSC_VER
+#pragma warning(default: 4127)
+#endif
 	{
 		// w tym trybie struktura po stronie hosta jest potraktowana jak zwykla tablica,
 		// a po stronie gpu zostaje skastowana do niej samej i przepisana do bufora out
-		ZBuffer inBuffer = std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(inBinding0)).buffer;
-		std::vector<type> v(bufferGetElementCount<type>(inBuffer));
+		std::vector<type> v(lm.getBindingElementCount(inBinding0));
 		std::iota(v.begin(), v.end(), 1.0f);
-		bufferWrite(inBuffer, v);
+		lm.writeBinding(inBinding0, v);
 	}
 	else
 	{

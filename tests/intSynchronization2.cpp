@@ -5,7 +5,7 @@
 #include "vtfStructUtils.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfProgramCollection.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfZPipeline.hpp"
 #include "vtfZBarriers.hpp"
 #include "vtfCopyUtils.hpp"
@@ -63,26 +63,15 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 		if (state.hasErrors) return {};
 	}
 
-	VkPhysicalDeviceSynchronization2Features	synchFeatures = makeVkStruct();
-
 	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
-		VkPhysicalDeviceFeatures2 availableFeatures =
-				deviceGetPhysicalFeatures2(caps.physicalDevice, &synchFeatures);
-		synchFeatures.synchronization2 |= (containsString(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
-														  caps.availableExtensions) ? VK_TRUE : VK_FALSE);
-		availableFeatures.features = {};
-		return availableFeatures;
+		caps.addUpdateFeatureIf(&VkPhysicalDeviceSynchronization2Features::synchronization2)
+			.checkSupported("synchronization2");
+		caps.addExtension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME).checkSupported();
 	};
 
 	add_cref<GlobalAppFlags>	gf = getGlobalAppFlags();
 	VulkanContext				ctx(record.name, gf.layers, strings(), strings(), onEnablingFeatures, gf.apiVer);
-
-	if (VK_FALSE == synchFeatures.synchronization2)
-	{
-		std::cout << "ERROR: " VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME " is not supported by device" << std::endl;
-		return (-1);
-	}
 
 	return runSynchronization2Tests(ctx, params);
 }
@@ -242,12 +231,17 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 
 	vertexInput.binding(0).addAttributes(std::vector<Vec4>{ { -1, +3.5 }, { -1, -1 }, { +3.5, -1 } });
 
-	const uint32_t		buffer0binding	= lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (width * height));
-	const uint32_t		buffer1binding	= lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (width * height));
-	const uint32_t		buffer2binding	= lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (width * height));
-	const uint32_t		buffer3binding	= lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (width * height));
-	const uint32_t		storageBinding	= lm.addBinding(storageView, ZSampler());
-	const uint32_t		colorBinding	= lm.addBinding(colorView, ZSampler());
+	ZBufferUsageFlags	busage	= ZBufferUsageStorageFlags;
+	ZBuffer				buffer0 = createBuffer<uint32_t>(ctx.device, (width * height), busage);
+	ZBuffer				buffer1 = createBuffer<uint32_t>(ctx.device, (width * height), busage);
+	ZBuffer				buffer2 = createBuffer<uint32_t>(ctx.device, (width * height), busage);
+	ZBuffer				buffer3 = createBuffer<uint32_t>(ctx.device, (width * height), busage);
+	const uint32_t		buffer0binding	= lm.addBinding(buffer0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	const uint32_t		buffer1binding	= lm.addBinding(buffer1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	const uint32_t		buffer2binding	= lm.addBinding(buffer2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	const uint32_t		buffer3binding	= lm.addBinding(buffer3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	const uint32_t		storageBinding	= lm.addBinding(storageView, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	const uint32_t		colorBinding	= lm.addBinding(colorView, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
@@ -267,10 +261,6 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 	ZPipeline			forwardPipeline = createComputePipeline(pipelineLayout, forwardShader, {}, UVec3(1));
 	ZPipeline			backwardPipeline = createComputePipeline(pipelineLayout, backwardShader, {}, UVec3(1));
 
-	ZBuffer				buffer0			= std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(buffer0binding)).buffer;
-	ZBuffer				buffer1			= std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(buffer1binding)).buffer;
-	ZBuffer				buffer2			= std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(buffer2binding)).buffer;
-	ZBuffer				buffer3			= std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(buffer3binding)).buffer;
 	ZBuffer				indirectBuffer	= createBuffer<VkDrawIndexedIndirectCommand>(
 												ctx.device, 1u, ZBufferUsageFlags(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT));
 	ZBuffer				indexBuffer		= createIndexBuffer(ctx.device, 3, VK_INDEX_TYPE_UINT32);

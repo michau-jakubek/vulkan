@@ -3,7 +3,7 @@
 
 #include "vtfVkUtils.hpp"
 
-constexpr vtf::Version CurrentVtfVersion(1, 3, 7, 6);
+constexpr vtf::Version CurrentVtfVersion(1, 3, 7, 8);
 
 // 2024-04-10, 1.1.0.0, "Add versioning"
 // 2024-04-15, 1.1.1.0, "Some fixes in int_compute test."
@@ -37,5 +37,7 @@ constexpr vtf::Version CurrentVtfVersion(1, 3, 7, 6);
 // 2025-08-04, 1.3.7.4, "Add task and mesh shaders"
 // 2025-08-14, 1,3.7.5, "Add banal dynamic rendering local read test"
 // 2025-08-29, 1.3.7.6, "Update banal_drlr test"
+// 2025-08-31, 1.3.7.7, "Errata to banal_drlr"
+// 2025-09-16, 1.3.7.8, "Add mutable_descriptor tests"
 
 #endif  // __MAIN_HPP_INCLUDED__

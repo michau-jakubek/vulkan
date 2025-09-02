@@ -70,8 +70,8 @@ set(framework_files
 	vtfShaderObjectCollection.hpp
 	vtfDebugMessenger.cpp
 	vtfDebugMessenger.hpp
-	vtfLayoutManager.cpp
-	vtfLayoutManager.hpp
+	vtfDSBMgr.cpp
+	vtfDSBMgr.hpp
 	vtfZPipeline.cpp
 	vtfZPipeline.hpp
 	vtfVertexInput.cpp

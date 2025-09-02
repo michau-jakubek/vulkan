@@ -44,6 +44,12 @@ PFN_vkCreateDevice getDriverCreateDeviceProc ()
     return (PFN_vkCreateDevice)DriverInitializer::getPlatformDriverProc("vkCreateDevice");
 }
 
+PFN_vkCreateDevice getInstanceCreateDeviceProc (VkInstance instance)
+{
+    return DriverInitializer::getPlatformInstanceProc(PFN_vkCreateDevice(),
+                                                      PFN_vkGetInstanceProcAddr(), instance, "vkCreateDevice");
+}
+
 PFN_vkDestroyDevice getDriverDestroyDeviceProc()
 {
     return (PFN_vkDestroyDevice)DriverInitializer::getPlatformDriverProc("vkDestroyDevice");

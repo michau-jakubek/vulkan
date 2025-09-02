@@ -140,6 +140,7 @@ typedef Flags<VkMemoryPropertyFlags, VkMemoryPropertyFlagBits>		ZMemoryPropertyF
 typedef Flags<VkPipelineCreateFlags, VkPipelineCreateFlagBits>		ZPipelineCreateFlags;
 typedef Flags<VkRenderingFlags, VkRenderingFlagBits>				ZRenderingFlags;
 static const ZBufferUsageFlags ZBufferUsageStorageFlags(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+static const ZBufferUsageFlags ZBufferUsageUniformFlags(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 static const ZMemoryPropertyFlags ZMemoryPropertyDeviceFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 static const ZMemoryPropertyFlags ZMemoryPropertyHostFlags(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 

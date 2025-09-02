@@ -58,6 +58,7 @@ std::string getRealPath (const char* path, bool& status);
 std::string	readFile (const std::string& filename, bool* status = nullptr);
 uint32_t	readFile (add_cref<fs::path> path, add_ref<std::vector<char>> buffer);
 std::string captureSystemCommandResult (const char* cmd, bool& status, const char LF = '\0');
+std::vector<uint8_t> base64_decode (add_cref<std::vector<char>> input);
 
 bool		containsString (const std::string& s, const vtf::strings& list);
 bool		containsString (const vtf::strings& list, const std::string& s);

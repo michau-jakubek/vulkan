@@ -97,4 +97,3 @@ void freePipelineCache(VkDevice device, VkPipelineCache cache, VkAllocationCallb
 
 	vkDestroyPipelineCache(device, cache, callbacks);
 }
-

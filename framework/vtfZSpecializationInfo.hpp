@@ -32,7 +32,7 @@ struct ZSpecializationInfo : protected VkSpecializationInfo
 		insertEntry(entry, &entry.m_data);
 	}
 
-	template<class X> void addEntry (add_cref<X> data, uint32_t id = INVALID_UINT32)
+	template<class X> void addEntry (X const& data, uint32_t id = INVALID_UINT32)
 	{
 		appendEntry(ZSpecEntry<X>(data, id), &data);
 	}

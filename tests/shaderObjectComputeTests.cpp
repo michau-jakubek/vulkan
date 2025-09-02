@@ -6,7 +6,7 @@
 #include "vtfZUtils.hpp"
 #include "vtfStructUtils.hpp"
 #include "vtfZCommandBuffer.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfZPipeline.hpp"
 
 #include <utility>
@@ -221,9 +221,12 @@ TriLogicInt performTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 
 	LayoutManager			lm				(ctx.device);
 	add_cref<GlobalAppFlags> gf				= getGlobalAppFlags();
-	const uint32_t			binding1buffer	= lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 32);
-	const uint32_t			binding2buffer	= lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 32);
-	const uint32_t			binding3buffer	= lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 32);
+	ZBuffer					buffer1			= createBuffer<uint32_t>(ctx.device, 32u, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+	ZBuffer					buffer2			= createBuffer<uint32_t>(ctx.device, 32u, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+	ZBuffer					buffer3			= createBuffer<uint32_t>(ctx.device, 32u, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+	const uint32_t			binding1buffer = lm.addBinding(buffer1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	const uint32_t			binding2buffer = lm.addBinding(buffer2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	const uint32_t			binding3buffer = lm.addBinding(buffer3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 	ZDescriptorSetLayout	dsLayout		= lm.createDescriptorSetLayout(true);
 
 	const int		c0_1	= 44;	const int		c0_2	= 77;	const int		c0_3	= 777;

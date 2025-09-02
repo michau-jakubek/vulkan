@@ -8,7 +8,8 @@
 namespace vtf
 {
 
-ZInstanceInterface ZInstanceSingleton::m_interface;
+static ZCommonInterface commonInterface;
+
 ZInstanceSingleton::~ZInstanceSingleton ()
 {
 	add_ptr<ZInstance> me = static_cast<add_ptr<ZInstance>>(this);
@@ -21,27 +22,30 @@ ZInstanceSingleton::~ZInstanceSingleton ()
 
 const ZInstanceInterface& ZInstanceSingleton::initInterface (VkInstance instance)
 {
-	m_interface.initialize(instance);
-	return m_interface;
+	add_ref<ZInstanceInterface> i = dynamic_cast<add_ref<ZInstanceInterface>>(commonInterface);
+	i.initialize(instance);
+	return i;
 }
 
 const ZInstanceInterface& ZInstanceSingleton::getInterface() const
 {
-	ASSERTMSG(m_interface.initialized, "Device interface is not initialized");
-	return m_interface;
+	add_ref<ZInstanceInterface> i = dynamic_cast<add_ref<ZInstanceInterface>>(commonInterface);
+	ASSERTMSG(i.initialized, "Device interface is not initialized");
+	return i;
 }
 
-ZDeviceInterface ZDeviceSingleton::m_interface;
 const ZDeviceInterface& ZDeviceSingleton::initInterface (VkInstance instance, VkDevice device)
 {
-	m_interface.initialize(instance, device);
-	return m_interface;
+	add_ref<ZDeviceInterface> i = dynamic_cast<add_ref<ZDeviceInterface>>(commonInterface);
+	i.initialize(instance, device);
+	return i;
 }
 
 const ZDeviceInterface& ZDeviceSingleton::getInterface () const
 {
-	ASSERTMSG(m_interface.initialized, "Device interface is not initialized");
-	return m_interface;
+	add_ref<ZDeviceInterface> i = dynamic_cast<add_ref<ZDeviceInterface>>(commonInterface);
+	ASSERTMSG(i.initialized, "Device interface is not initialized");
+	return i;
 }
 
 void ZInstanceInterface::initialize (VkInstance instance)

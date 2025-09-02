@@ -4,7 +4,7 @@
 #include "vtfStructUtils.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZImage.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfProgramCollection.hpp"
 #include "vtfShaderObjectCollection.hpp"
 #include "vtfGlfwEvents.hpp"
@@ -224,28 +224,6 @@ void TestParams::print (add_ref<std::ostream> str) const
 	str << "Used SPIR-V version: "	<< params.usedSpvVersion << std::endl;
 }
 
-void onResize (Canvas& cs, void* userData, int width, int height)
-{
-	UNREF(cs);
-	UNREF(width);
-	UNREF(height);
-	if (userData)
-	{
-		*((int*)userData) += 1;
-	}
-}
-
-void onKey (Canvas& cs, void* userData, const int key, int scancode, int action, int mods)
-{
-	UNREF(userData);
-	UNREF(scancode);
-	UNREF(mods);
-	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-	{
-		glfwSetWindowShouldClose(*cs.window, GLFW_TRUE);
-	}
-}
-
 TriLogicInt runTriangeSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets, add_cref<TestParams> params)
 {
 	params.print(std::cout);
@@ -257,14 +235,16 @@ TriLogicInt runTriangeSingleThread (add_ref<Canvas> cs, add_cref<std::string> as
 
 	ShaderObjectCollection		coll			(cs.device, assets);
 	using Link = ShaderObjectCollection::ShaderLink;
-	Link						singleVertex	= coll.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
+	Link						singleVertex	= coll.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert",
+																	VK_SHADER_STAGE_FRAGMENT_BIT);
 	Link						singleFragment	= coll.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
 	Link						linkVertex		= coll.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
-	Link						linkFragment	= coll.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag", linkVertex);
+	Link						linkFragment	= coll.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag",
+																	linkVertex);
 
-	lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 256u);
-	ZDescriptorSetLayout		dsLayout		= lm.createDescriptorSetLayout();
-	ZBuffer						testBuffer		= std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(0)).buffer;
+	ZBuffer						testBuffer		= createBuffer<uint32_t>(cs.device, 256u);
+	const uint32_t				testBinding		= lm.addBinding(testBuffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	ZDescriptorSetLayout		dsLayout		= lm.createDescriptorSetLayout(); UNREF(testBinding);
 
 	//ZPushConstants				pushConstants	{ZPushRange<Vec4>()};
 
@@ -307,17 +287,17 @@ TriLogicInt runTriangeSingleThread (add_ref<Canvas> cs, add_cref<std::string> as
 	ZPipelineLayout				pipelineLayout		= lm.createPipelineLayout({ dsLayout }); // push
 
 	int drawTrigger = 1;
-	cs.events().cbKey.set(onKey, nullptr);
-	cs.events().cbWindowSize.set(onResize, &drawTrigger);
+	cs.events().setDefault(drawTrigger);
 
 	auto onAfterRecording = [&](add_ref<Canvas>)
 	{
 		if (params.infinity) { drawTrigger = 1; }
-
+		/*
 		const uint32_t bufferSize = bufferGetElementCount<uint32_t>(testBuffer);
 		static std::vector<uint32_t> bufferData(bufferSize);
 		bufferRead(testBuffer, bufferData);
 		std::cout << bufferData[0] << bufferData[1] << std::endl;
+		*/
 	};
 
 	auto onCommandRecording = [&](add_ref<Canvas>, add_cref<Canvas::Swapchain> swapchain, ZCommandBuffer cmdBuffer, ZFramebuffer framebuffer)
@@ -330,7 +310,7 @@ TriLogicInt runTriangeSingleThread (add_ref<Canvas> cs, add_cref<std::string> as
 			commandBufferBindDescriptorSets(cmdBuffer, pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS);
 			commandBufferBindShaders(cmdBuffer, { vertexShaderObject, fragmentShaderObject });
 
-			commandBufferSetDefaultDynamicStates(cmdBuffer, vertexInput, swapchain.viewport, &swapchain.scissor);
+			commandBufferSetDefaultDynamicStates(cmdBuffer, vertexInput, swapchain.viewport, 1u, &swapchain.scissor);
 
 			commandBufferPipelineBarriers(cmdBuffer,
 				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, makeImageGeneral);

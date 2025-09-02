@@ -6,7 +6,7 @@
 #include "vtfGlfwEvents.hpp"
 #include "vtfProgramCollection.hpp"
 #include "vtfShaderObjectCollection.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfZPipeline.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfStructUtils.hpp"

@@ -4,7 +4,7 @@
 #include "vtfCanvas.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfFilesystem.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfZPipeline.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfZCommandBuffer.hpp"
@@ -378,6 +378,7 @@ protected:
 	ZImage					tmpImage;
 	ZPipeline				computePipeline;
 	uint32_t				panBinding;
+	ZImageView				cubeView;
 	uint32_t				cubeBinding;
 
 	Subroutines makeSubroutines (bool isPanorama)
@@ -470,14 +471,12 @@ protected:
 	{
 		ZDevice					device				= pool.getParam<ZDevice>();
 		ZImageView				panView				= createImageView(tmpImage.has_handle() ? tmpImage : panImage);
-								panBinding			= layout.addBinding(panView, ZSampler(),
-														VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+								panBinding			= layout.addBinding(panView, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		ZImage					cubeImage			= createImage(device, format, VK_IMAGE_TYPE_2D, faceSize, faceSize,
 																  usage, VK_SAMPLE_COUNT_1_BIT, 1u, 6u);
-		ZImageView				cubeView			= createImageView(cubeImage, VK_FORMAT_UNDEFINED, VK_IMAGE_VIEW_TYPE_MAX_ENUM,
+								cubeView			= createImageView(cubeImage, VK_FORMAT_UNDEFINED, VK_IMAGE_VIEW_TYPE_MAX_ENUM,
 																		VK_IMAGE_ASPECT_FLAG_BITS_MAX_ENUM, 0u, 1u, 0u, 6u);
-								cubeBinding			= layout.addBinding(cubeView, ZSampler(),
-														VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+								cubeBinding			= layout.addBinding(cubeView, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		ZDescriptorSetLayout	descriptorSetLayout	= layout.createDescriptorSetLayout();
 		ZPipelineLayout			pipelineLayout		= layout.createPipelineLayout({ descriptorSetLayout },
 																					ZPushRange<PushContant>());
@@ -495,7 +494,6 @@ protected:
 	}
 	void phaseMakeOutputImage (add_ref<bool>)
 	{
-		ZImageView				cubeView			= std::get<DescriptorImageInfo>(layout.getDescriptorInfo(cubeBinding)).view;
 		ZImage					cubeImage			= imageViewGetImage(cubeView);
 		VkPipelineStageFlags	stageCompute		= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 		VkPipelineStageFlags	stageTransfer		= VK_PIPELINE_STAGE_TRANSFER_BIT;
@@ -613,7 +611,8 @@ TriLogicInt runViewerSingleThread (add_ref<Canvas> cs, add_cref<std::string> ass
 						   add_cref<std::vector<ImageFileInfo> > files, const int32_t regularCount, const int32_t panoramaCount)
 {
 	UserData		userData	(static_cast<uint32_t>(files.size()));
-	ZRenderPass		renderPass	= createColorRenderPass(cs.device, {cs.surfaceFormat}, {});
+	std::vector<VkFormat> formats{ cs.surfaceFormat };
+	ZRenderPass		renderPass = createColorRenderPass(cs.device, formats, { makeClearColor(Vec4()) });
 
 	ZShaderModule	faceShader	{};
 	ZShaderModule	vertShader	{};

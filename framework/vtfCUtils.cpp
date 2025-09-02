@@ -158,6 +158,35 @@ uint32_t readFile (add_cref<fs::path> path, add_ref<std::vector<char>> buffer)
 	return length;
 }
 
+std::vector<uint8_t> base64_decode (add_cref<std::vector<char>> input)
+{
+	static const std::string base64_chars =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		"abcdefghijklmnopqrstuvwxyz"
+		"0123456789+/";
+
+	std::vector<uint8_t> output;
+	output.reserve((input.size() / 4u) * 3u);
+	int val = 0;
+	int bits = -8;
+
+	for (char c : input) {
+		if (std::isspace(c)) continue; // ignore white spaces and new lines
+		if (c == '=') break;           // padding as the end of data
+		ASSERTMSG(std::isalnum(c) || c == '+' || c == '/', "Invalid Base64 character");
+
+		val = (val << 6) + int(base64_chars.find(c));
+		bits += 6;
+
+		if (bits >= 0) {
+			output.push_back(uint8_t((val >> bits) & 0xFF));
+			bits -= 8;
+		}
+	}
+
+	return output;
+}
+
 std::string subst_variables (const std::string& templateStr, const vtf::string_to_string_map& variables, bool validateVariableExistence)
 {
 	std::string result(templateStr);

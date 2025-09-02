@@ -3,7 +3,7 @@
 #include "vtfStructUtils.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfProgramCollection.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfZPipeline.hpp"
 #include "vtfFloat16.hpp"
@@ -1015,33 +1015,40 @@ TriLogicInt performTests(add_ref<VulkanContext> ctx, add_cref<CoopParams> params
 	ZShaderModule			shader = params.useSpirvShader 
 								? buildSpirvProgram(ctx.device, params)
 								: buildGlslProgram(ctx.device, params);
-	uint32_t	a_null = 0, a_binding = lm.addBindingAsVector<uint8_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-											Value(a_comp).size() * ASize, VK_SHADER_STAGE_COMPUTE_BIT);
-	uint32_t	b_null = 0, b_binding = lm.addBindingAsVector<uint8_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-											Value(b_comp).size() * BSize, VK_SHADER_STAGE_COMPUTE_BIT);
-	uint32_t	c_null = 0, c_binding = lm.addBindingAsVector<uint8_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-											Value(c_comp).size() * CRSize, VK_SHADER_STAGE_COMPUTE_BIT);
-	uint32_t	r_null = 0, r_binding = lm.addBindingAsVector<uint8_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-											Value(r_comp).size() * CRSize, VK_SHADER_STAGE_COMPUTE_BIT);
+
+	ZBuffer a_null_buffer, a_buffer = createBuffer<uint8_t>(ctx.device, Value(a_comp).size() * ASize);
+	ZBuffer	b_null_buffer, b_buffer = createBuffer<uint8_t>(ctx.device, Value(b_comp).size() * BSize);
+	ZBuffer	c_null_buffer, c_buffer = createBuffer<uint8_t>(ctx.device, Value(c_comp).size() * CRSize);
+	ZBuffer	r_null_buffer, r_buffer = createBuffer<uint8_t>(ctx.device, Value(r_comp).size() * CRSize);
+
+	uint32_t	a_null = 0, a_binding = lm.addBinding(a_buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+														VK_SHADER_STAGE_COMPUTE_BIT); UNREF(a_binding);
+	uint32_t	b_null = 0, b_binding = lm.addBinding(b_buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+														VK_SHADER_STAGE_COMPUTE_BIT); UNREF(b_binding);
+	uint32_t	c_null = 0, c_binding = lm.addBinding(c_buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+														VK_SHADER_STAGE_COMPUTE_BIT); UNREF(c_binding);
+	uint32_t	r_null = 0, r_binding = lm.addBinding(r_buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+														VK_SHADER_STAGE_COMPUTE_BIT); UNREF(r_binding);
 	if (false == params.useSpirvShader)
 	{
-		a_null = lm.addBindingAsVector<uint8_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-					Value(a_comp).size() * ASize, VK_SHADER_STAGE_COMPUTE_BIT);
-		b_null = lm.addBindingAsVector<uint8_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-					Value(b_comp).size() * BSize, VK_SHADER_STAGE_COMPUTE_BIT);
-		c_null = lm.addBindingAsVector<uint8_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-					Value(c_comp).size() * CRSize, VK_SHADER_STAGE_COMPUTE_BIT);
-		r_null = lm.addBindingAsVector<uint8_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-					Value(r_comp).size() * CRSize, VK_SHADER_STAGE_COMPUTE_BIT);
+		a_null_buffer = createBuffer<uint8_t>(ctx.device, Value(a_comp).size() * ASize);
+		b_null_buffer = createBuffer<uint8_t>(ctx.device, Value(b_comp).size() * BSize);
+		c_null_buffer = createBuffer<uint8_t>(ctx.device, Value(c_comp).size() * CRSize);
+		r_null_buffer = createBuffer<uint8_t>(ctx.device, Value(r_comp).size() * CRSize);
+
+		a_null = lm.addBinding(a_null_buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+								VK_SHADER_STAGE_COMPUTE_BIT);
+		b_null = lm.addBinding(b_null_buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+								VK_SHADER_STAGE_COMPUTE_BIT);
+		c_null = lm.addBinding(c_null_buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+								VK_SHADER_STAGE_COMPUTE_BIT);
+		r_null = lm.addBinding(r_null_buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+								VK_SHADER_STAGE_COMPUTE_BIT);
 	}
 
 	ZDescriptorSetLayout	dsLayout = lm.createDescriptorSetLayout();
 	ZPipelineLayout			pipeLayout = lm.createPipelineLayout({ dsLayout }, pushRange);
 	ZPipeline				pipeline = createComputePipeline(pipeLayout, shader, specInfo);
-	ZBuffer					a_buffer = std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(a_binding)).buffer;
-	ZBuffer					b_buffer = std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(b_binding)).buffer;
-	ZBuffer					c_buffer = std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(c_binding)).buffer;
-	ZBuffer					r_buffer = std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(r_binding)).buffer;
 
 	populateData(a_buffer, a_comp, ASize, MatrixTargets::A);
 	populateData(b_buffer, b_comp, BSize, MatrixTargets::B);

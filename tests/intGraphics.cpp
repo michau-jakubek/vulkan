@@ -2,7 +2,7 @@
 #include "vtfOptionParser.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZImage.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfProgramCollection.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfZCommandBuffer.hpp"

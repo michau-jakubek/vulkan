@@ -7,6 +7,7 @@ std::string									getDriverFileName (add_ref<bool> success);
 PFN_vkCreateInstance						getDriverCreateInstanceProc  ();
 PFN_vkDestroyInstance						getDriverDestroyInstanceProc ();
 PFN_vkCreateDevice							getDriverCreateDeviceProc    ();
+PFN_vkCreateDevice							getInstanceCreateDeviceProc	 (VkInstance);
 PFN_vkDestroyDevice							getDriverDestroyDeviceProc   ();
 PFN_vkGetInstanceProcAddr					getDriverGetInstanceProcAddr ();
 PFN_vkGetDeviceProcAddr						getDriverGetDeviceProcAddr   ();

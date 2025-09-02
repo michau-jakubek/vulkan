@@ -587,6 +587,7 @@ bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 					   add_ref<std::string> shaderFileName,
                        add_ref<std::vector<char>> binary,
                        add_ref<std::vector<char>> assembly,
+      [[maybe_unused]] add_ref<std::vector<char>> disassembly,
 					   add_ref<std::string> errors,
 					   bool enableValidation,
 					   bool genDisassmebly,
@@ -864,9 +865,9 @@ add_cref<std::string> _GlSpvProgramCollection::getShaderFile (VkShaderStageFlagB
 	return m_stageToFileName.at({ stage, index });
 }
 
-add_ptr<_GlSpvProgramCollection::ShaderLink> _GlSpvProgramCollection::ShaderLink::head () const
+add_ptr<_GlSpvProgramCollection::ShaderLink> _GlSpvProgramCollection::ShaderLink::head ()
 {
-	add_ptr<ShaderLink> link = const_cast<add_ptr<ShaderLink>>(this);
+	add_ptr<ShaderLink> link = this;
 	while (link->prev) link = link->prev;
 	return link;
 }
@@ -874,7 +875,7 @@ add_ptr<_GlSpvProgramCollection::ShaderLink> _GlSpvProgramCollection::ShaderLink
 uint32_t _GlSpvProgramCollection::ShaderLink::count () const
 {
 	uint32_t n = 1u;
-	add_ptr<ShaderLink> link = const_cast<add_ptr<ShaderLink>>(this);
+	add_cptr<ShaderLink> link = this;
 	while (link->next)
 	{
 		link = link->next;
@@ -901,14 +902,15 @@ void ProgramCollection::buildAndVerify (add_cref<Version> vulkanVer, add_cref<Ve
 			{
 				const auto key = std::make_pair(stage, k);
 				std::string shaderFileName;
-                std::vector<char> binary, assembly;
+                std::vector<char> binary, assembly, disassembly;
 				if (verifyShaderCode(k, stage, vulkanVer, spirvVer,
-									 m_stageToCode[key], shaderFileName, binary, assembly, errors,
-									 enableValidation, genDisassembly, buildAlways, genBinary))
+									 m_stageToCode[key], shaderFileName, binary, assembly, disassembly,
+									 errors, enableValidation, genDisassembly, buildAlways, genBinary))
 				{
-					m_stageToFileName[key]	= std::move(shaderFileName);
-					m_stageToAssembly[key]	= std::move(assembly);
-					m_stageToBinary[key]	= std::move(binary);
+					m_stageToDisassembly[key]	= std::move(disassembly);
+					m_stageToFileName[key]		= std::move(shaderFileName);
+					m_stageToAssembly[key]		= std::move(assembly);
+					m_stageToBinary[key]		= std::move(binary);
 				}
 				else
 				{
@@ -944,7 +946,11 @@ ZShaderModule ProgramCollection::getShader (VkShaderStageFlagBits stage, uint32_
 	auto search = m_stageToBinary.find(stageAndIndex);
 	if (m_stageToBinary.end() != search)
 	{
-		module = createShaderModule(m_device, stage, search->second, m_stageToCode.at(stageAndIndex).at(entryName));
+		add_cref<std::vector<char>> code = search->second;
+		const auto size = code.size();
+		ASSERTMSG(size % 4u == 0u, "Shader raw code size (", size, ") must be aligned to four bytes");
+		module = createShaderModule(m_device, stage,
+			reinterpret_cast<add_cptr<uint32_t>>(code.data()), size_t(size), m_stageToCode.at(stageAndIndex).at(entryName));
 	}
 	else if (verbose)
 	{

@@ -9,43 +9,43 @@ set(tests_files
     triangleTests.hpp
     fractalsTests.cpp
     fractalsTests.hpp
-    viewerTests.cpp
-    viewerTests.hpp
+	viewerTests.cpp
+	viewerTests.hpp
     lineWidthTests.cpp
     lineWidthTests.hpp
-    multiViewTests.cpp
-    multiViewTests.hpp
-    intMatrixTests.cpp
-    intMatrixTests.hpp
-    intCompute.cpp
-    intCompute.hpp
-	nothingCompute.cpp
-	nothingCompute.hpp
+	#multiViewTests.cpp
+	#multiViewTests.hpp
+	intMatrixTests.cpp
+	intMatrixTests.hpp
+	intCompute.cpp
+	intCompute.hpp
+	#nothingCompute.cpp
+	#nothingCompute.hpp
     intGraphics.cpp
     intGraphics.hpp
     intCipher.cpp
     intCipher.hpp
     intThreadPool.cpp
     intThreadPool.hpp
-    intSynchronization2.cpp
-    intSynchronization2.hpp
+	intSynchronization2.cpp
+	intSynchronization2.hpp
     ${daemon_test_files}
     subgroupMatrixTests.cpp
     subgroupMatrixTests.hpp
-    topologyTests.cpp
-    topologyTests.hpp
-    demoteInvocationsTests.cpp
-    demoteInvocationsTests.hpp
+	topologyTests.cpp
+	topologyTests.hpp
+	demoteInvocationsTests.cpp
+	demoteInvocationsTests.hpp
     blendingTests.cpp
     blendingTests.hpp
-    sparseBufferTests.cpp
-    sparseBufferTests.hpp
+	sparseBufferTests.cpp
+	sparseBufferTests.hpp
     deviceTimeoutTests.cpp
     deviceTimeoutTests.hpp
-    shaderObjectTriangleTests.cpp
-    shaderObjectTriangleTests.hpp
-    shaderObjectComputeTests.cpp
-    shaderObjectComputeTests.hpp
+	shaderObjectTriangleTests.cpp
+	shaderObjectTriangleTests.hpp
+	shaderObjectComputeTests.cpp
+	shaderObjectComputeTests.hpp
 	descriptorBufferTests.cpp
 	descriptorBufferTests.hpp
 	intGeomTests.cpp
@@ -58,6 +58,10 @@ set(tests_files
 	taskMeshTriangleTests.hpp
 	banalDRLRTests.cpp
 	banalDRLRTests.hpp
+	mutableDescriptorTests.cpp
+	mutableDescriptorTests.hpp
+	variablePointersTests.cpp
+	variablePointersTests.hpp
     )
 
 if(ENABLE_DAEMON_TEST)

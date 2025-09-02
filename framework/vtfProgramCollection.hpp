@@ -32,8 +32,8 @@ struct _GlSpvProgramCollection
 		add_ptr<ShaderLink>		prev = nullptr;
 		add_ptr<ShaderLink>		next = nullptr;
 		StageAndIndex		key () const { return { stage, index }; }
-		add_ptr<ShaderLink>	head() const;
 		uint32_t			count() const;
+		add_ptr<ShaderLink>	head ();
 	};
 
 	virtual ~_GlSpvProgramCollection () = default;
@@ -59,10 +59,15 @@ protected:
 	std::map<StageAndIndex, std::string> m_stageToFileName;
     std::map<StageAndIndex, std::vector<char>> m_stageToAssembly;
     std::map<StageAndIndex, std::vector<char>> m_stageToBinary;
+	std::map<StageAndIndex, std::vector<char>> m_stageToDisassembly;
 
 private:
+	virtual auto addFromText (VkShaderStageFlagBits, add_cref<std::string>, VkShaderStageFlagBits,
+							  add_cref<strings>, add_cref<std::string>) -> ShaderLink { return {}; }
 	virtual auto addFromText (VkShaderStageFlagBits, add_cref<std::string>, add_cref<ShaderLink>,
 							  add_cref<strings>, add_cref<std::string>) -> ShaderLink { return {}; }
+	virtual auto addFromFile (VkShaderStageFlagBits, add_cref<std::string>, VkShaderStageFlagBits,
+							  add_cref<strings>, add_cref<std::string>, bool) -> ShaderLink { return {}; };
 	virtual auto addFromFile (VkShaderStageFlagBits, add_cref<std::string>, add_cref<ShaderLink>,
 							  add_cref<strings>, add_cref<std::string>, bool) -> ShaderLink { return {}; };
 };

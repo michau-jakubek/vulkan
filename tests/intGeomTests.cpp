@@ -2,7 +2,7 @@
 #include "vtfOptionParser.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZImage.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfProgramCollection.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfZCommandBuffer.hpp"
@@ -297,9 +297,9 @@ TriLogicInt runTests (Canvas& cs, add_cref<Params> params)
 	const VkClearValue	clearColor{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
 
 	LayoutManager		lm(cs.device);
-	const uint32_t		mvpBinding = lm.addBinding<MVP>(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	ZBuffer				mvpBuffer = createBuffer<MVP>(cs.device, 1u, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+	const uint32_t		mvpBinding = lm.addBinding(mvpBuffer, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER); UNREF(mvpBinding);
 	ZDescriptorSetLayout dsLayout = lm.createDescriptorSetLayout();
-	ZBuffer				mvpBuffer = std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(mvpBinding)).buffer;
 	ZPipelineLayout		pipelineLayout = lm.createPipelineLayout({ dsLayout });
 	ZRenderPass			renderPass = createColorRenderPass(cs.device, { format }, { {clearColor} });
 	ZPipeline			pipeline = createGraphicsPipeline(pipelineLayout, renderPass,

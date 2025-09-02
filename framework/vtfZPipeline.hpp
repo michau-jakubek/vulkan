@@ -3,7 +3,7 @@
 
 #include "vtfZDeletable.hpp"
 #include "vtfZUtils.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfVertexInput.hpp"
 #include "vtfZSpecializationInfo.hpp"
 #include <memory>
@@ -101,6 +101,7 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::Stenci
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::SubpassIndex>			subpassIndex);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, ZRenderPass							renderPass);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::BlendAttachmentState>	blendAttachmentState);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<std::vector<gpp::BlendAttachmentState>> blendAttachmentStates);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::BlendConstants>		blendConstants);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::SpecConstants>		specConstants);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::PrimitiveRestart>		primitiveRestartEnable);
@@ -166,16 +167,19 @@ ZPipeline createComputePipeline (
 	ZSpecializationInfo info;
 
 	// Is 'const uvec3 gl_WorkGroupSize' really unsigned?
-	// Validation layers and shader unfortunately see it as signed.
-	const bool autoLocalSizesIDs = make_signed(localSizes.x()) >= 0
-								|| make_signed(localSizes.y()) >= 0
-								|| make_signed(localSizes.z()) >= 0;
-	if (autoLocalSizesIDs)
-	{
-		info.addEntries(ZSpecEntry<int32_t>(make_signed(localSizes.x()), 0u),
-						ZSpecEntry<int32_t>(make_signed(localSizes.y()), 1u),
-						ZSpecEntry<int32_t>(make_signed(localSizes.z()), 2u));
-	}
+	// Validation layers and shader unfortunately see it as signed
+	const uint32_t localSizes_x = localSizes.x();
+	const uint32_t localSizes_y = localSizes.y();
+	const uint32_t localSizes_z = localSizes.z();
+	const bool autoLocalSizesIDs = (localSizes_x != INVALID_UINT32 && localSizes_x != 0u)
+								|| (localSizes_y != INVALID_UINT32 && localSizes_y != 0u) 
+								|| (localSizes_z != INVALID_UINT32 && localSizes_z != 0u);
+	if (localSizes_x != INVALID_UINT32 && localSizes_x != 0u)
+		info.addEntry(make_signed(localSizes_x), 0u);
+	if (localSizes_y != INVALID_UINT32 && localSizes_y != 0u)
+		info.addEntry(make_signed(localSizes_y), 1u);
+	if (localSizes_z != INVALID_UINT32 || localSizes_y != 0u)
+		info.addEntry(make_signed(localSizes_z), 2u);
 
 	info.addEntries(entries...);
 

@@ -13,9 +13,16 @@ struct ShaderObjectCollection : _GlSpvProgramCollection
 
 	ShaderObjectCollection (ZDevice device, add_cref<std::string> basePath = std::string(), uint32_t maxShaders = 64u);
 
-	virtual auto addFromText (VkShaderStageFlagBits type, add_cref<std::string> code, add_cref<ShaderLink> parent = {},
+	virtual auto addFromText (VkShaderStageFlagBits type, add_cref<std::string> code, add_cref<ShaderLink> parent,
 							  add_cref<strings> includePaths = {}, add_cref<std::string> entryName = "main") -> ShaderLink override;
-	virtual auto addFromFile (VkShaderStageFlagBits type, add_cref<std::string> fileName, add_cref<ShaderLink> parent = {},
+	virtual auto addFromText (VkShaderStageFlagBits type, add_cref<std::string> code,
+							  VkShaderStageFlagBits nextStage = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM,
+							  add_cref<strings> includePaths = {}, add_cref<std::string> entryName = "main") -> ShaderLink override;
+	virtual auto addFromFile (VkShaderStageFlagBits type, add_cref<std::string> fileName, add_cref<ShaderLink> parent,
+							  add_cref<strings> includePaths = {}, add_cref<std::string> entryName = "main",
+							  bool verbose = true) -> ShaderLink override;
+	virtual auto addFromFile (VkShaderStageFlagBits type, add_cref<std::string> fileName,
+							  VkShaderStageFlagBits nextStage = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM,
 							  add_cref<strings> includePaths = {}, add_cref<std::string> entryName = "main",
 							  bool verbose = true) -> ShaderLink override;
 
@@ -44,6 +51,7 @@ struct ShaderObjectCollection : _GlSpvProgramCollection
 	void buildAndVerify (add_cref<Version> vulkanVer = Version(1, 3), add_cref<Version> spirvVer = Version(1, 3));
 
 	ZShaderObject getShader (VkShaderStageFlagBits stage, uint32_t index = 0);
+	ZShaderObject getShader (add_cref<ShaderLink> link);
 
 protected:
 	struct ShaderData;
@@ -57,15 +65,16 @@ protected:
 		~IntShaderLink ();
 		IntShaderLink (IntShaderLink&& other) noexcept;
 		IntShaderLink (std::nullptr_t, add_cref<IntShaderLink> other) noexcept;
-		IntShaderLink (add_ref<ShaderObjectCollection>, VkShaderStageFlagBits, uint32_t);
+		IntShaderLink (add_ref<ShaderObjectCollection>, VkShaderStageFlagBits, VkShaderStageFlagBits, uint32_t);
 	};
 
 	auto find	(VkShaderStageFlagBits type, uint32_t shaderIndex, add_ref<std::vector<IntShaderLink>>) -> add_ptr<ShaderLink>;
-	auto add	(VkShaderStageFlagBits type, uint32_t shaderIndex, add_cref<ShaderLink> parent) -> ShaderLink;
+	auto add	(VkShaderStageFlagBits stage, VkShaderStageFlagBits nextStage,
+				 uint32_t shaderIndex, add_cref<ShaderLink> parent) -> ShaderLink;
 	auto spec	(add_cref<ShaderLink> link) -> add_ref<ZSpecializationInfo>;
 	auto pushc	(add_cref<ShaderLink> link) -> add_ref<ZPushConstants>;
-	bool create	(add_cref<Version> vulkanVer, add_cref<Version> spirvVer, add_ref<IntShaderLink> link);
-	int  create (add_cref<Version> vulkanVer, add_cref<Version> spirvVer, add_ref<std::vector<IntShaderLink>> links);
+	int  create (add_cref<Version> vulkanVer, add_cref<Version> spirvVer,
+				 add_ref<std::vector<IntShaderLink>> links, const bool package);
 
 	const uint32_t				m_maxShaders;
 	uint32_t					m_linkCount;

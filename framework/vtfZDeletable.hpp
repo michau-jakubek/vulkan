@@ -202,8 +202,8 @@ struct ZObject
 	virtual ~ZObject () = default;
 	template<class D, int... I> void destroy() {
 		if (handle != VK_NULL_HANDLE && routine != nullptr) {
+			if (verbose) std::cout << "[INFO] Destroing: " << name << ", " << demangledName<Z>() << ' ' << handle << std::endl;
 			std::invoke(routine, ParamTraits<I>()(handle, params)...);
-			if (verbose) std::cout << "[INFO] Destroing: " << demangledName<Z>() << ' ' << handle << std::endl;
 			handle = VK_NULL_HANDLE;
 		}
 	}
@@ -244,6 +244,10 @@ template<class Z, class F, F Ptr, class Tr, class Inh, class... X> struct ZDelet
 		ASSERTMSG(nullptr != obj, "Object must not be null");
 		return (VK_NULL_HANDLE != obj->handle);
 	}
+	explicit operator bool () const
+	{
+		return has_handle();
+	}
 	Z handle () const
 	{
 		return super::get()->handle;
@@ -255,6 +259,10 @@ template<class Z, class F, F Ptr, class Tr, class Inh, class... X> struct ZDelet
 		add_cptr<Z> p = &obj->handle;
 		ASSERTMSG(VK_NULL_HANDLE != *p, "Vulkan handle must not be VK_NULL_HANDLE (", demangledName<Z>(), ")");
 		return p;
+	}
+	std::pair<void_cptr, size_t> object () const
+	{
+		return std::pair<void_cptr, size_t>(super::get(), sizeof(AnObject));
 	}
 	Z operator*() const
 	{
@@ -310,6 +318,7 @@ template<class Z, class F, F Ptr, class Tr, class Inh, class... X> struct ZDelet
 private:
 	void replace(Z z)
 	{
+		ASSERTION(VK_NULL_HANDLE != z);
 		add_ptr<AnObject> obj = super::get();
 		ASSERTION(VK_NULL_HANDLE == obj->handle);
 		obj->handle = z;
@@ -340,6 +349,7 @@ enum ZDistName
 	Width, Height, Depth, ViewMask, PatchControlPoints, SubpassIndex,
 	LayoutIdentifier, PrimitiveRestart,
 	SizeFirst, SizeSecond, SizeThird,
+	SomeZero, SomeOne, SomeTwo, SomeThree,
 	VtfVer, ApiVer, VulkanVer, SpirvVer,
 	QueueFamilyIndex, QueueIndex, QueueFlags,
 	CullModeFlags, DepthTestEnable, DepthWriteEnable, StencilTestEnable,

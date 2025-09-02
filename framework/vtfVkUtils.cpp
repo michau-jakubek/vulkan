@@ -530,7 +530,7 @@ template<> VkClearColorValue makeClearColorValue<float> (add_cref<Vec4> color)
 	return c;
 }
 
-VkColorBlendEquationEXT makeColorBlendEquationExt(add_cref<VkPipelineColorBlendAttachmentState> state)
+VkColorBlendEquationEXT makeColorBlendEquationExt (add_cref<VkPipelineColorBlendAttachmentState> state)
 {
 	VkColorBlendEquationEXT eq{};
 	eq.srcColorBlendFactor	= state.srcColorBlendFactor;

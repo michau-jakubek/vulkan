@@ -5,7 +5,7 @@
 #include "vtfStructUtils.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfProgramCollection.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfZPipeline.hpp"
 #include "vtfZBarriers.hpp"
 #include "vtfCopyUtils.hpp"
@@ -165,7 +165,8 @@ int runTest (add_ref<VulkanContext> ctx, add_cref<Params> params,
 
 	const uint32_t		elementCount	= 256;
 	std::vector<uint32_t> bufferData	(elementCount);
-	const uint32_t		bufferBinding	= lm.addBindingAsVector<uint32_t>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, elementCount);
+	ZBuffer				buffer			= createBuffer<uint32_t>(ctx.device, elementCount);
+	const uint32_t		bufferBinding	= lm.addBinding(buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 
 	programs.addFromFile(VK_SHADER_STAGE_COMPUTE_BIT, "timeout.comp");
 	programs.addFromFile(VK_SHADER_STAGE_COMPUTE_BIT, "device_lost.comp");
@@ -185,8 +186,6 @@ int runTest (add_ref<VulkanContext> ctx, add_cref<Params> params,
 	const uint32_t		data1			= 5u;
 	const uint32_t		data2			= data0 + data1;
 	const uint32_t		data3			= 0u;
-
-	ZBuffer				buffer			= std::get<DescriptorBufferInfo>(lm.getDescriptorInfo(bufferBinding)).buffer;
 
 	std::cout << "Execution index: " << exeNum << std::endl;
 	std::cout << "Binding: " << bufferBinding << " Buffer: " << buffer << std::endl;

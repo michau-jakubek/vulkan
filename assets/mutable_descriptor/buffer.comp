@@ -1,0 +1,15 @@
+#version 450
+
+layout(binding = 0) buffer StoData { uvec4 bufferData[]; };
+layout(binding = 1) buffer MutData { uvec4 mutData[]; };
+layout(rgba32ui, binding = 2) uniform uimage2D imageData;
+
+layout(local_size_x_id = 0) in;
+
+void main()
+{
+	mutData[gl_LocalInvocationID.x] =
+		bufferData[gl_LocalInvocationID.x]
+		+ imageLoad(imageData, ivec2(gl_LocalInvocationID.x, 0));
+}
+

@@ -2,7 +2,7 @@
 #include "vtfCUtils.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfProgramCollection.hpp"
-#include "vtfLayoutManager.hpp"
+#include "vtfDSBMgr.hpp"
 #include "vtfZPipeline.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfGlfwEvents.hpp"
