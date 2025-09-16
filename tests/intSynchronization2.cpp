@@ -335,7 +335,7 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 
 		const VkSubpassContents contents = secondary.has_handle()
 				? VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS : VK_SUBPASS_CONTENTS_INLINE;
-		auto rpbi = commandBufferBeginRenderPass(primary, framebuffer, 0, contents);
+		auto rpbi = commandBufferBeginRenderPass(primary, framebuffer, contents);
 			if (secondary.has_handle())
 			{
 				commandBufferExecuteCommands(primary, { secondary });

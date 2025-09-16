@@ -1,0 +1,6 @@
+#ifndef __VTF_BANAL_RENDER_PASS_HPP_INCLUDED__
+#define __VTF_BANAL_RENDER_PASS_HPP_INCLUDED__
+
+#include "allTests.hpp"
+
+#endif // __VTF_BANAL_RENDER_PASS_HPP_INCLUDED__

@@ -45,7 +45,7 @@ using BlendConstants		= ZDistType<BlendConstants, Vec4>;
 using SpecConstants			= ZDistType<SpecConstants, std::pair<VkShaderStageFlagBits, add_ref<ZSpecializationInfo>>>;
 using PrimitiveRestart		= ZDistType<PrimitiveRestart, bool>;
 using ViewMask				= ZDistType<ViewMask, uint32_t>;
-enum AttachmentDesc { Color, Depth, Stencil, DeptStencil, Resolve, Input };
+enum AttachmentDesc { Color, Depth, Stencil, DeptStencil, Resolve, Input, Undefined };
 struct AttachmentIndex
 {
 	uint32_t index;

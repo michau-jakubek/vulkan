@@ -102,7 +102,9 @@ ZFramebuffer createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t
 	const auto		allocationCallbacks		= device.getParam<VkAllocationCallbacksPtr>();
 
 	ASSERTMSG(attachmentCount > 0, "Attachment count must be greater than zero");
-	ASSERTMSG((renderAttachmentCount <= attachmentCount), "RenderPass attachments must not exceed framebuffer's attachment count being created");
+	ASSERTMSG((renderAttachmentCount <= attachmentCount),
+		"RenderPass attachments (", renderAttachmentCount, ") must not exceed "
+		"framebuffer's attachment count (", attachmentCount, ") being created");
 	add_cref<VkPhysicalDeviceLimits> limits = deviceGetPhysicalLimits(device);
 	ASSERTION(attachmentCount <= limits.maxFragmentOutputAttachments && attachmentCount <= limits.maxColorAttachments);
 
@@ -116,7 +118,7 @@ ZFramebuffer createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t
 
 	VkFramebufferCreateInfo framebufferInfo = makeVkStruct();
 	framebufferInfo.renderPass		= *renderPass;
-	framebufferInfo.attachmentCount	= attachmentCount;
+	framebufferInfo.attachmentCount	= renderAttachmentCount;
 	framebufferInfo.pAttachments	= views.data();
 	framebufferInfo.width			= width;
 	framebufferInfo.height			= height;
@@ -319,11 +321,10 @@ static ZRenderPass	createRenderPassImpl
 	renderPassInfo.dependencyCount	= data_count(subpassDeps);
 	renderPassInfo.pDependencies	= data_or_null(subpassDeps);
 
-
 	const VkAllocationCallbacksPtr	callbacks	= device.getParam<VkAllocationCallbacksPtr>();
 	ZRenderPass	renderPass = ZRenderPass::create(VK_NULL_HANDLE, device, callbacks,
 												 attachmentCount, renderPassInfo.subpassCount,
-												 {/*clearValues*/}, depthStencilFormat, finalColorLayout);
+												 {/*clearValues*/}, depthStencilFormat, finalColorLayout, {}, {});
 	VKASSERT(vkCreateRenderPass(*device, &renderPassInfo, callbacks, renderPass.setter()));
 
 	add_ref<std::vector<VkClearValue>> clearValues = renderPass.getParamRef<std::vector<VkClearValue>>();

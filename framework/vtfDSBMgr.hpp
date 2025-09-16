@@ -75,19 +75,34 @@ public:
 	/// </summary>
 	uint32_t	addBinding	(ZBuffer, VkDescriptorType,
 							VkShaderStageFlags = VK_SHADER_STAGE_ALL, VkDescriptorBindingFlags = 0);
+	uint32_t	addBinding	(uint32_t suggestedBinding, ZBuffer, VkDescriptorType,
+							VkShaderStageFlags = VK_SHADER_STAGE_ALL, VkDescriptorBindingFlags = 0);
 	/// <summary>
 	/// Adds descriptors such as STORAGE_IMAGE, SAMPLED_IMAGE, INPUT_ATTACHMENT
 	/// </summary>
-	uint32_t	addBinding	(ZImageView, VkDescriptorType, VkImageLayout = VK_IMAGE_LAYOUT_GENERAL,
-							VkShaderStageFlags = VK_SHADER_STAGE_ALL, VkDescriptorBindingFlags = 0);
+	uint32_t	addBinding	(ZImageView, VkDescriptorType,
+							VkImageLayout = VK_IMAGE_LAYOUT_GENERAL, VkShaderStageFlags = VK_SHADER_STAGE_ALL,
+							VkDescriptorBindingFlags = 0);
+	uint32_t	addBinding	(uint32_t suggestedBinding, ZImageView, VkDescriptorType,
+							VkImageLayout = VK_IMAGE_LAYOUT_GENERAL, VkShaderStageFlags = VK_SHADER_STAGE_ALL,
+							VkDescriptorBindingFlags = 0);
+
 	uint32_t	addBinding	(ZImageView, ZSampler, VkImageLayout = VK_IMAGE_LAYOUT_GENERAL,
 							VkShaderStageFlags= VK_SHADER_STAGE_ALL, VkDescriptorBindingFlags = 0);
+	uint32_t	addBinding	(uint32_t suggestedBinding, ZImageView, ZSampler,
+							VkImageLayout = VK_IMAGE_LAYOUT_GENERAL, VkShaderStageFlags= VK_SHADER_STAGE_ALL,
+							VkDescriptorBindingFlags = 0);
+
 	uint32_t	addBinding	(ZSampler, VkShaderStageFlags = VK_SHADER_STAGE_ALL, VkDescriptorBindingFlags = 0);
+	uint32_t	addBinding	(uint32_t suggestedBinding, ZSampler, VkShaderStageFlags = VK_SHADER_STAGE_ALL,
+							VkDescriptorBindingFlags = 0);
 
 	/// <summary>
 	/// Special version to create null-descriptors
 	/// </summary>
 	uint32_t	addBinding	(nullptr_t, VkDescriptorType,
+							VkShaderStageFlags = VK_SHADER_STAGE_ALL, VkDescriptorBindingFlags = 0);
+	uint32_t	addBinding	(uint32_t suggestedBinding, nullptr_t, VkDescriptorType,
 							VkShaderStageFlags = VK_SHADER_STAGE_ALL, VkDescriptorBindingFlags = 0);
 
 	/// <summary>
@@ -98,6 +113,11 @@ public:
 							VkShaderStageFlags = VK_SHADER_STAGE_ALL,
 							std::initializer_list<VkDescriptorType> mutableTypes = {},
 							VkDescriptorBindingFlags = 0u);
+	uint32_t	addBinding	(uint32_t suggestedBinding,
+							VkDescriptorType, VkImageLayout = VK_IMAGE_LAYOUT_GENERAL,
+							VkShaderStageFlags = VK_SHADER_STAGE_ALL,
+							std::initializer_list<VkDescriptorType> mutableTypes = {},
+							VkDescriptorBindingFlags = 0u);
 
 	/**
 	 * Allows to write data directly to an associated data buffer.
@@ -105,16 +125,18 @@ public:
 	 * This method is available after createDescriptorSetLayout() is called.
 	 * :( This interface should be more flexible :(
 	 */
-	template<class Data__> void				writeBinding				(uint32_t binding, Data__ const& data,
+	template<class Data__> VkDeviceSize		writeBinding				(uint32_t binding, Data__ const& data,
 																		VkImageLayout finalLayout = VK_IMAGE_LAYOUT_GENERAL) const;
-	void									fillBinding					(uint32_t binding, uint32_t value = 0u);
+
+	template<class Data__> VkDeviceSize		fillBinding					(uint32_t binding, Data__ const& data,
+																		VkImageLayout finalLayout = VK_IMAGE_LAYOUT_GENERAL) const;
 	/**
 	 * Allows to direct read from associated buffer. A type of Data_ is veryfied before read.
 	 * If data is a vector then it must be resized to desired size but only declared elements
 	 * will be read, remaining part of the vector will contain undefined values.
 	 * This method is available after createDescriptorSetLayout() is called.
 	 */
-	template<class Data__> void				readBinding					(uint32_t binding, Data__& data,
+	template<class Data__> VkDeviceSize		readBinding					(uint32_t binding, Data__& data,
 																		 VkImageLayout finalLayout = VK_IMAGE_LAYOUT_GENERAL) const;
 	uint32_t								getBindingElementCount		(uint32_t binding) const;
 	bool									containsSamplers			() const;
@@ -127,6 +149,7 @@ public:
 	 * Each of descritor set has unique identifier of this DescriptorSetBindingManager.
 	 */
 	uint32_t								getIdentifier				() const { return m_identifier; }
+	void									assertDoubledBindings		() const;
 	ZDescriptorSetLayout					createDescriptorSetLayout	(bool performUpdateDescriptorSets = true,
 																		 VkDescriptorSetLayoutCreateFlags = VkDescriptorSetLayoutCreateFlags(0),
 																		 VkDescriptorPoolCreateFlags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
@@ -161,12 +184,14 @@ private:
 	{
 		VkDescriptorSetLayoutBindingAndType ()
 			: index			(typeid(void))
+			, isNull		(false)
 			, imageLayout	(VK_IMAGE_LAYOUT_UNDEFINED)
 			, bindingFlags	(0)
 			, mutableTypes	()
 			, mutableIndex	(INVALID_UINT32)
 		{}
 		std::type_index					index;
+		bool							isNull;
 		VkImageLayout					imageLayout;
 		VkDescriptorBindingFlags		bindingFlags;
 		std::vector<VkDescriptorType>	mutableTypes;
@@ -177,8 +202,8 @@ private:
 	} ExtBinding;
 	typedef std::vector<ExtBinding>	ExtBindings;
 
-	uint32_t	addBinding_	(std::type_index, ZBuffer, ZImageView, ZSampler,
-							VkDescriptorType, VkShaderStageFlags, VkDescriptorBindingFlags,
+	uint32_t	addBinding_	(uint32_t, std::type_index, ZBuffer, ZImageView, ZSampler,
+							VkDescriptorType, bool, VkShaderStageFlags, VkDescriptorBindingFlags,
 							VkImageLayout = VK_IMAGE_LAYOUT_UNDEFINED, std::initializer_list<VkDescriptorType> mutableTypes = {});
 		  ExtBinding&	verifyGetExtBinding		(uint32_t binding);
 	const ExtBinding&	verifyGetExtBinding		(uint32_t binding) const;
@@ -204,20 +229,22 @@ private:
 		}
 	};
 
-	void				writeResource_			(ZImageView view, std::type_index dataIndex, std::type_index resIndex,
+	VkDeviceSize		writeResource_			(ZImageView view, std::type_index dataIndex, std::type_index resIndex,
 												add_cptr<uint8_t> data, VkDeviceSize bytes, VkImageLayout finalLayout) const;
-	void				writeResource_			(ZBuffer buffer, std::type_index dataIndex, std::type_index resIndex,
+	VkDeviceSize		writeResource_			(ZBuffer buffer, std::type_index dataIndex, std::type_index resIndex,
 												add_cptr<uint8_t> data, VkDeviceSize bytes) const;
-	void				writeBinding_			(std::type_index index, uint32_t binding,
+	VkDeviceSize		writeBinding_			(std::type_index index, uint32_t binding,
 												add_cptr<uint8_t> data, VkDeviceSize bytes, VkImageLayout finalLayout) const;
-	void				readResourceUnchecked_	(ZBuffer buffer, std::type_index dataIndex,
+	VkDeviceSize		fillBinding_			(std::type_index index, uint32_t binding,
+												add_cptr<uint8_t> data, VkDeviceSize bytes, VkImageLayout finalLayout) const;
+	VkDeviceSize		readResourceUnchecked_	(ZBuffer buffer, std::type_index dataIndex,
 												 add_ptr<uint8_t> data, uint32_t elementSize, bool isVector, add_cptr<VectorWrapper> pww) const;
-	void				readResource_			(ZBuffer buffer, std::type_index dataIndex, std::type_index resIndex,
+	VkDeviceSize		readResource_			(ZBuffer buffer, std::type_index dataIndex, std::type_index resIndex,
 												 add_ptr<uint8_t> data, uint32_t elementSize, bool isVector, add_cptr<VectorWrapper> pww) const;
-	void				readResource_			(ZImageView view, std::type_index dataIndex, std::type_index resIndex,
+	VkDeviceSize		readResource_			(ZImageView view, std::type_index dataIndex, std::type_index resIndex,
 												 add_ptr<uint8_t> data, uint32_t elementSize, bool isVector, VkImageLayout finalLayout,
 												 add_cptr<VectorWrapper> pww) const;
-	void				readBinding_			(std::type_index index, uint32_t binding,
+	VkDeviceSize		readBinding_			(std::type_index index, uint32_t binding,
 												 add_ptr<uint8_t> data, uint32_t elementSize,
 												 bool isVector, VkImageLayout finalLayout,
 												 add_cptr<VectorWrapper> pww) const;
@@ -251,13 +278,19 @@ template<class X> struct BoundType<std::vector<X>>
 };
 } // namespace hidden
 
-template<class Data__> void DescriptorSetBindingManager::writeBinding (
+template<class Data__> VkDeviceSize DescriptorSetBindingManager::writeBinding (
 	uint32_t binding, Data__ const& data, VkImageLayout finalLayout) const
 {
 	auto index = std::type_index(typeid(typename add_extent<Data__>::type));
-	writeBinding_(index, binding, hidden::BoundType<Data__>::data(data), hidden::BoundType<Data__>::length(data), finalLayout);
+	return writeBinding_(index, binding, hidden::BoundType<Data__>::data(data), hidden::BoundType<Data__>::length(data), finalLayout);
 }
-template<class Data__> void DescriptorSetBindingManager::readBinding (
+template<class Data__> VkDeviceSize DescriptorSetBindingManager::fillBinding (
+	uint32_t binding, Data__ const& data, VkImageLayout finalLayout) const
+{
+	auto index = std::type_index(typeid(typename add_extent<Data__>::type));
+	return fillBinding_(index, binding, hidden::BoundType<Data__>::data(data), hidden::BoundType<Data__>::length(data), finalLayout);
+}
+template<class Data__> VkDeviceSize DescriptorSetBindingManager::readBinding (
 	uint32_t binding, Data__& data, VkImageLayout finalLayout) const
 {
 	add_ptr<VectorWrapper> pww = nullptr;
@@ -270,8 +303,8 @@ template<class Data__> void DescriptorSetBindingManager::readBinding (
 		VectorWrapperImpl ww(onResize, onData);
 		pww = &ww;
 	}
-	readBinding_(index, binding, hidden::BoundType<Data__>::data(data),
-					hidden::BoundType<Data__>::elementSize(), isVactor, finalLayout, pww);
+	return readBinding_(index, binding, hidden::BoundType<Data__>::data(data),
+						hidden::BoundType<Data__>::elementSize(), isVactor, finalLayout, pww);
 }
 template<class... PC__> ZPipelineLayout
 DescriptorSetBindingManager::createPipelineLayout (const ZPushRange<PC__>&... ranges)

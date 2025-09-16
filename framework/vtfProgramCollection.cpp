@@ -606,8 +606,8 @@ bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 	const fs::path tmpPath = std::strlen(tmpDir) ? fs::path(tmpDir) : fs::temp_directory_path();
 	shaderFileName = makeFileName(shaderIndex, stage, codeAndEntryAndIncludes, vulkanVer, spirvVer,
 								  enableValidation, genDisassmebly, buildAlways);
-	add_cref<std::string> fileName(shaderFileName);
-	const std::string pathName((tmpPath / fileName).string());
+	const std::string pathName((tmpPath / shaderFileName).string());
+	shaderFileName += (isGlsl ? ".glsl" : ".spvasm");
 	const fs::path textPath(pathName + (isGlsl ? ".glsl" : ".spvasm"));
 	const fs::path binPath(pathName + ".spvbin");
 	const fs::path asmPath(pathName + ".spvasm");

@@ -1702,7 +1702,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 				else
 				{
 					commandBufferBindPipeline(displayCmd, backgroundPipeline);
-					auto rpbi = commandBufferBeginRenderPass(displayCmd, colorFB, 0);
+					auto rpbi = commandBufferBeginRenderPass(displayCmd, colorFB);
 					vkCmdDrawIndexed(*displayCmd, 12, 1, 0, 0, 0);  // dst color sample
 					vkCmdDrawIndexed(*displayCmd, 12, 1, 18, 0, 1); // src color sample
 					vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 0);  // dst color blending area
@@ -1734,7 +1734,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 				else
 				{
 					commandBufferBindPipeline(displayCmd, blendPipeline);
-					auto rpbi = commandBufferBeginRenderPass(displayCmd, colorFB, 0);
+					auto rpbi = commandBufferBeginRenderPass(displayCmd, colorFB);
 					vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 1);
 					commandBufferEndRenderPass(rpbi);
 				}

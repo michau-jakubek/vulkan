@@ -90,7 +90,7 @@ template<class X> void vector_from_initializer_unique_list (std::initializer_lis
 		dst.emplace_back(x);
 }
 
-bool descriptorTypeOnList (const VkDescriptorType type, add_cref<std::vector<VkDescriptorType>> list)
+bool descriptorTypeOnVector (const VkDescriptorType type, add_cref<std::vector<VkDescriptorType>> list)
 {
 	ASSERTMSG(list.size(), "Mutable type list must not be empty");
 	return list.end() != std::find(list.begin(), list.end(), type);
@@ -101,19 +101,26 @@ bool descriptorTypeOnList (const VkDescriptorType type, std::initializer_list<Vk
 	return list.end() != std::find(list.begin(), list.end(), type);
 }
 
-uint32_t DescriptorSetBindingManager::addBinding_ (
+uint32_t DescriptorSetBindingManager::addBinding_ (uint32_t suggestedBinding,
 	std::type_index index, ZBuffer buffer, ZImageView view, ZSampler sampler,
-	VkDescriptorType type, VkShaderStageFlags stageFlags, VkDescriptorBindingFlags bindingFlags,
+	VkDescriptorType type, bool isNull, VkShaderStageFlags stageFlags, VkDescriptorBindingFlags bindingFlags,
 	VkImageLayout imageLayout, std::initializer_list<VkDescriptorType> mutableTypes)
 {
+	if (VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT == type)
+	{
+		stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	}
+
 	VkDescriptorSetLayoutBindingAndType b{};
-	const uint32_t binding = data_count(m_extbindings);
+	const uint32_t binding = (INVALID_UINT32 == suggestedBinding)
+		? data_count(m_extbindings) : suggestedBinding;
 	b.binding				= binding;
 	b.descriptorCount		= 1;
 	b.descriptorType		= type;
 	b.pImmutableSamplers	= nullptr;
 	b.stageFlags			= stageFlags;
 	b.index					= index;
+	b.isNull				= isNull;
 	b.imageLayout			= imageLayout;
 	b.bindingFlags			= bindingFlags;
 	ASSERTMSG(VK_DESCRIPTOR_TYPE_MUTABLE_EXT != type || mutableTypes.size(),
@@ -127,58 +134,102 @@ uint32_t DescriptorSetBindingManager::addBinding_ (
 	return binding;
 }
 
-
 uint32_t DescriptorSetBindingManager::addBinding (
 	ZBuffer buffer, VkDescriptorType type,
 	VkShaderStageFlags stageFlags, VkDescriptorBindingFlags bindingFlags)
 {
+	return addBinding(INVALID_UINT32, buffer, type, stageFlags, bindingFlags);
+}
+
+uint32_t DescriptorSetBindingManager::addBinding (
+	uint32_t suggestedBinding, ZBuffer buffer, VkDescriptorType type,
+	VkShaderStageFlags stageFlags, VkDescriptorBindingFlags bindingFlags)
+{
 	ASSERTMSG(buffer.has_handle(), "Buffer must have a handle");
 	auto index = std::type_index(typeid(typename add_extent<ZBuffer>::type));
-	return addBinding_(index, buffer, {/*view*/}, {/*sampler*/}, type, stageFlags, bindingFlags);
+	return addBinding_(suggestedBinding, index, buffer, {/*view*/}, {/*sampler*/},
+						type, false, stageFlags, bindingFlags);
 }
 
 uint32_t DescriptorSetBindingManager::addBinding (
 	ZImageView view, VkDescriptorType type,
 	VkImageLayout imageLayout, VkShaderStageFlags stageFlags, VkDescriptorBindingFlags bindingFlags)
 {
+	return addBinding(INVALID_UINT32, view, type, imageLayout, stageFlags, bindingFlags);
+}
+
+uint32_t DescriptorSetBindingManager::addBinding (
+	uint32_t suggestedBinding, ZImageView view, VkDescriptorType type,
+	VkImageLayout imageLayout, VkShaderStageFlags stageFlags, VkDescriptorBindingFlags bindingFlags)
+{
 	ASSERTMSG(view.has_handle(), "View must have a handle");
 	auto index = std::type_index(typeid(typename add_extent<ZImageView>::type));
-	return addBinding_(index, {/*buffer*/}, view, {/*sampler*/}, type, stageFlags, bindingFlags, imageLayout);
+	return addBinding_(suggestedBinding, index, {/*buffer*/}, view, {/*sampler*/},
+						type, false, stageFlags, bindingFlags, imageLayout);
 }
 
 uint32_t DescriptorSetBindingManager::addBinding (
 	ZSampler sampler, VkShaderStageFlags stageFlags, VkDescriptorBindingFlags bindingFlags)
 {
+	return addBinding(INVALID_UINT32, sampler, stageFlags, bindingFlags);
+}
+
+uint32_t DescriptorSetBindingManager::addBinding (uint32_t suggestedBinding,
+	ZSampler sampler, VkShaderStageFlags stageFlags, VkDescriptorBindingFlags bindingFlags)
+{
 	ASSERTMSG(sampler.has_handle(), "Sampler must have a handle");
 	auto index = std::type_index(typeid(typename add_extent<ZSampler>::type));
-	return addBinding_(index, {/*buffer*/ }, {/*view*/ }, sampler,
-						VK_DESCRIPTOR_TYPE_SAMPLER, stageFlags, bindingFlags);
+	return addBinding_(suggestedBinding, index, {/*buffer*/}, {/*view*/}, sampler,
+						VK_DESCRIPTOR_TYPE_SAMPLER, false, stageFlags, bindingFlags);
 }
 
 uint32_t DescriptorSetBindingManager::addBinding (
 	ZImageView view, ZSampler sampler,
 	VkImageLayout imageLayout, VkShaderStageFlags stageFlags, VkDescriptorBindingFlags bindingFlags)
 {
+	return addBinding(INVALID_UINT32, view, sampler, imageLayout, stageFlags, bindingFlags);
+}
+
+uint32_t DescriptorSetBindingManager::addBinding (
+	uint32_t suggestedBinding, ZImageView view, ZSampler sampler,
+	VkImageLayout imageLayout, VkShaderStageFlags stageFlags, VkDescriptorBindingFlags bindingFlags)
+{
 	ASSERTMSG(view.has_handle() && sampler.has_handle(), "Both view and sampler must have a handle");
 	auto index = std::type_index(typeid(typename add_extent<std::pair<ZImageView, ZSampler>>::type));
-	return addBinding_(index, {/*buffer*/}, view, sampler,
-						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, stageFlags, bindingFlags, imageLayout);
+	return addBinding_(suggestedBinding, index, {/*buffer*/}, view, sampler,
+						VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, false, stageFlags, bindingFlags, imageLayout);
 }
 
 uint32_t DescriptorSetBindingManager::addBinding (
 	VkDescriptorType type, VkImageLayout imageLayout, VkShaderStageFlags stageFlags,
 	std::initializer_list<VkDescriptorType> mutableTypes, VkDescriptorBindingFlags bindingFlags)
 {
+	return addBinding(INVALID_UINT32, type, imageLayout, stageFlags, mutableTypes, bindingFlags);
+}
+
+uint32_t DescriptorSetBindingManager::addBinding (uint32_t suggestedBinding,
+	VkDescriptorType type, VkImageLayout imageLayout, VkShaderStageFlags stageFlags,
+	std::initializer_list<VkDescriptorType> mutableTypes, VkDescriptorBindingFlags bindingFlags)
+{
 	auto index = std::type_index(typeid(typename add_extent<VkDescriptorType>::type));
-	return addBinding_(index, {/*buffer*/ }, {/*view*/ }, {/*sampler*/ }, type, stageFlags, bindingFlags, imageLayout, mutableTypes);
+	return addBinding_(suggestedBinding, index, {/*buffer*/}, {/*view*/}, {/*sampler*/},
+						type, false, stageFlags, bindingFlags, imageLayout, mutableTypes);
+}
+
+uint32_t DescriptorSetBindingManager::addBinding(
+	nullptr_t nullValue, VkDescriptorType type,
+	VkShaderStageFlags stageFlags, VkDescriptorBindingFlags bindingFlags)
+{
+	return addBinding(INVALID_UINT32, nullValue, type, stageFlags, bindingFlags);
 }
 
 uint32_t DescriptorSetBindingManager::addBinding (
-	nullptr_t, VkDescriptorType,
-	VkShaderStageFlags, VkDescriptorBindingFlags)
+	uint32_t suggestedBinding, nullptr_t, VkDescriptorType type,
+	VkShaderStageFlags stageFlags, VkDescriptorBindingFlags bindingFlags)
 {
-	ASSERTFALSE("null-descriptor not implemented yet");
-	return 0u;
+	auto index = std::type_index(typeid(typename add_extent<VkDescriptorType>::type));
+	return addBinding_(suggestedBinding, index, {/*buffer*/}, {/*view*/}, {/*sampler*/},
+						type, true, stageFlags, bindingFlags);
 }
 
 ZDescriptorSetLayout DescriptorSetBindingManager::getDescriptorSetLayout (ZPipelineLayout layout, uint32_t index)
@@ -188,11 +239,22 @@ ZDescriptorSetLayout DescriptorSetBindingManager::getDescriptorSetLayout (ZPipel
 	return dsLayouts[index];
 }
 
+void DescriptorSetBindingManager::assertDoubledBindings () const
+{
+	for (auto begin = m_extbindings.begin(), b = begin; b != m_extbindings.end(); ++b)
+		for (auto c = std::next(b); c != m_extbindings.end(); ++c)
+		{
+			ASSERTMSG(b->binding != c->binding, "Doubled binding (", b->binding, ')');
+		}
+}
+
 ZDescriptorSetLayout DescriptorSetBindingManager::createDescriptorSetLayout (
 	bool								performUpdateDescriptorSets,
 	VkDescriptorSetLayoutCreateFlags	layoutCreateFlags,
 	VkDescriptorPoolCreateFlags			poolCreateFlags)
 {
+	assertDoubledBindings();
+
 	VkAllocationCallbacksPtr					callbacks			= device.getParam<VkAllocationCallbacksPtr>();
 	ZDescriptorPool								descriptorPool		(VK_NULL_HANDLE, device, callbacks);
 	ZDescriptorSetLayout						descriptorSetLayout	(VK_NULL_HANDLE, device, callbacks, layoutCreateFlags, ZDescriptorSet(), getIdentifier());
@@ -300,15 +362,15 @@ void DescriptorSetBindingManager::updateDescriptorSet (
 	add_ref<ExtBinding> b = verifyGetExtBinding(binding);
 	ASSERTMSG(VK_DESCRIPTOR_TYPE_MUTABLE_EXT != b.descriptorType
 		? descriptorTypeOnList(b.descriptorType, { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER })
-		: (descriptorTypeOnList(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, b.mutableTypes)
-			|| descriptorTypeOnList(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, b.mutableTypes)), "???");
+		: (descriptorTypeOnVector(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, b.mutableTypes)
+			|| descriptorTypeOnVector(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, b.mutableTypes)), "???");
 	ASSERTMSG(buffer.has_handle(), "Buffer must have a handle");
-	ASSERTMSG(false == bool(mutableVariant) || descriptorTypeOnList(*mutableVariant, b.mutableTypes), "???");
+	ASSERTMSG(false == bool(mutableVariant) || descriptorTypeOnVector(*mutableVariant, b.mutableTypes), "???");
 
 	VkDescriptorBufferInfo	bufferInfo{};
-	bufferInfo.buffer	= *buffer;
+	bufferInfo.buffer	= b.isNull ? VK_NULL_HANDLE : *buffer;
 	bufferInfo.offset	= 0u;
-	bufferInfo.range	= bufferGetSize(buffer);
+	bufferInfo.range	= b.isNull ? 0u : bufferGetSize(buffer);
 
 	VkWriteDescriptorSet	writeParams = makeVkStruct();
 	writeParams.dstSet			= *ds;
@@ -341,9 +403,9 @@ void DescriptorSetBindingManager::updateDescriptorSet (
 	ASSERTMSG(VK_DESCRIPTOR_TYPE_MUTABLE_EXT != b.descriptorType
 		? descriptorTypeOnList(b.descriptorType,
 			{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT })
-		: (descriptorTypeOnList(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, b.mutableTypes)
-			|| descriptorTypeOnList(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, b.mutableTypes)
-			|| descriptorTypeOnList(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, b.mutableTypes)), "???");
+		: (descriptorTypeOnVector(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, b.mutableTypes)
+			|| descriptorTypeOnVector(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, b.mutableTypes)
+			|| descriptorTypeOnVector(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, b.mutableTypes)), "???");
 	ASSERTMSG(view.has_handle(), "View must have a handle");
 
 	VkDescriptorImageInfo	imageInfo{};
@@ -352,7 +414,7 @@ void DescriptorSetBindingManager::updateDescriptorSet (
 								: (VK_IMAGE_LAYOUT_MAX_ENUM == imageLayout)
 									? imageGetLayout(imageViewGetImage(view))
 									: imageLayout;
-	imageInfo.imageView		= *view;
+	imageInfo.imageView		= b.isNull ? VK_NULL_HANDLE : *view;
 	imageInfo.sampler		= VK_NULL_HANDLE;
 
 	VkWriteDescriptorSet	writeParams = makeVkStruct();
@@ -383,12 +445,12 @@ void DescriptorSetBindingManager::updateDescriptorSet (ZDescriptorSet ds, uint32
 	add_ref<ExtBinding> b = verifyGetExtBinding(binding);
 	ASSERTMSG(VK_DESCRIPTOR_TYPE_MUTABLE_EXT != b.binding
 		? VK_DESCRIPTOR_TYPE_SAMPLER == b.descriptorType
-		: descriptorTypeOnList(VK_DESCRIPTOR_TYPE_SAMPLER, b.mutableTypes), "???");
+		: descriptorTypeOnVector(VK_DESCRIPTOR_TYPE_SAMPLER, b.mutableTypes), "???");
 	ASSERTMSG(sampler.has_handle(), "Sampler must have a handle");
 
 	VkDescriptorImageInfo	imageInfo{};
 	imageInfo.imageLayout	= VK_IMAGE_LAYOUT_UNDEFINED;
-	imageInfo.sampler		= *sampler;
+	imageInfo.sampler		= b.isNull ? VK_NULL_HANDLE : *sampler;
 	imageInfo.imageView		= VK_NULL_HANDLE;
 
 	VkWriteDescriptorSet	writeParams = makeVkStruct();
@@ -418,7 +480,7 @@ void DescriptorSetBindingManager::updateDescriptorSet (
 	add_ref<ExtBinding> b = verifyGetExtBinding(binding);
 	ASSERTMSG(VK_DESCRIPTOR_TYPE_MUTABLE_EXT != b.binding
 		? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER == b.descriptorType
-		: descriptorTypeOnList(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, b.mutableTypes), "???");
+		: descriptorTypeOnVector(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, b.mutableTypes), "???");
 	ASSERTMSG(view.has_handle() && sampler.has_handle(), "View and Sampler must have a handle");
 
 	VkDescriptorImageInfo	imageInfo{};
@@ -427,8 +489,8 @@ void DescriptorSetBindingManager::updateDescriptorSet (
 								: (VK_IMAGE_LAYOUT_MAX_ENUM == imageLayout)
 									? imageGetLayout(imageViewGetImage(view))
 									: imageLayout;
-	imageInfo.imageView = *view;
-	imageInfo.sampler	= *sampler;
+	imageInfo.imageView = b.isNull ? VK_NULL_HANDLE : *view;
+	imageInfo.sampler	= b.isNull ? VK_NULL_HANDLE : *sampler;
 
 	VkWriteDescriptorSet	writeParams = makeVkStruct();
 	writeParams.dstSet				= *ds;
@@ -451,7 +513,7 @@ void DescriptorSetBindingManager::updateDescriptorSet (
 							nullptr			// copyParams
 							);
 }
-void DescriptorSetBindingManager::updateDescriptorSet	(ZDescriptorSet	descriptorSet)
+void DescriptorSetBindingManager::updateDescriptorSet (ZDescriptorSet descriptorSet)
 {
 	for (add_cref<ExtBinding> b : m_extbindings)
 	{
@@ -558,9 +620,9 @@ ZDescriptorSet DescriptorSetBindingManager::getDescriptorSet (ZDescriptorSetLayo
 }
 DescriptorSetBindingManager::ExtBinding& DescriptorSetBindingManager::verifyGetExtBinding (uint32_t binding)
 {
-	ASSERTMSG(m_extbindings.size(), "There no bindings to update");
-	ASSERTMSG(binding < m_extbindings.size(), "Binding ", binding, " must be from [0, ", m_extbindings.size(), ")");
-	return m_extbindings[binding];
+	auto ptr = std::find_if(m_extbindings.begin(), m_extbindings.end(), [&](const auto& b) { return b.binding == binding; });
+	ASSERTMSG(ptr != m_extbindings.end(), "Binding ", binding, " not found");
+	return *ptr;
 }
 const DescriptorSetBindingManager::ExtBinding& DescriptorSetBindingManager::verifyGetExtBinding (uint32_t binding) const
 {
@@ -574,47 +636,22 @@ const DescriptorSetBindingManager::ExtBinding& DescriptorSetBindingManager::veri
 	ASSERTMSG(b.index == index, "Mismatch type binding (", binding, ")");
 	return b;
 }
-uint32_t DescriptorSetBindingManager::getBindingElementCount (uint32_t binding) const
+uint32_t DescriptorSetBindingManager::getBindingElementCount (uint32_t binding) const // TODO
 {
-	add_cref<ExtBinding> b = verifyGetExtBinding(binding); UNREF(b); // TODO
-	return 0;
-}
-void DescriptorSetBindingManager::fillBinding (uint32_t binding, uint32_t value)
-{
-	UNREF(binding); UNREF(value);
-	/*
-	uint32_t data[256];
-	std::fill(std::begin(data), std::end(data), value);
 	add_cref<ExtBinding> b = verifyGetExtBinding(binding);
-	const VkDeviceSize fullSize = b.size * b.elementCount;
-	const VkDeviceSize chunkCount = fullSize / ARRAY_LENGTH(data);
-	const VkDeviceSize orphanSize = fullSize % ARRAY_LENGTH(data);
-	auto buffer = m_buffers.at({b.descriptorType, (b.shared ? UNIQUE_IBINDING : static_cast<int>(binding))});
-	for (VkDeviceSize i = 0; i < chunkCount; ++i)
+	if (descriptorTypeOnList(b.descriptorType, { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER }))
 	{
-		const VkBufferCopy writeInfo
-		{
-			0,
-			b.offset + i * ARRAY_LENGTH(data),
-			ARRAY_LENGTH(data)
-		};
-		bufferWriteData(buffer, reinterpret_cast<add_cptr<uint8_t>>(data), writeInfo, false);
+		const VkFormat format = b.buffer.getParam<VkFormat>();
+		ASSERTMSG(VK_FORMAT_UNDEFINED != format, "Unknown buffer format");
+		const VkDeviceSize size = b.buffer.getParam<VkDeviceSize>();
+		return uint32_t(size / formatGetInfo(format).pixelByteSize);
 	}
-	if (orphanSize)
-	{
-		const VkBufferCopy writeInfo
-		{
-			0,
-			b.offset + chunkCount * ARRAY_LENGTH(data),
-			orphanSize,
-		};
-		bufferWriteData(buffer, reinterpret_cast<add_cptr<uint8_t>>(data), writeInfo, false);
-	}
-	bufferFlush(buffer);
-	*/
+	ASSERTFALSE("Unsupported descryptor type: ",
+		vk::to_string(static_cast<vk::DescriptorType>(b.descriptorType)));
+	return 0u;
 }
 
-void DescriptorSetBindingManager::writeResource_ (
+VkDeviceSize DescriptorSetBindingManager::writeResource_ (
 	ZImageView view, std::type_index dataIndex, std::type_index resIndex,
 	add_cptr<uint8_t> data, VkDeviceSize bytes, VkImageLayout finalLayout) const
 {
@@ -636,9 +673,11 @@ void DescriptorSetBindingManager::writeResource_ (
 		VK_ACCESS_NONE, VK_ACCESS_NONE, VK_ACCESS_NONE, VK_ACCESS_NONE,
 		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
 		finalLayout);
+
+	return writeInfo.size;
 }
 
-void DescriptorSetBindingManager::writeResource_(
+VkDeviceSize DescriptorSetBindingManager::writeResource_ (
 	ZBuffer buffer, std::type_index dataIndex, std::type_index resIndex,
 	add_cptr<uint8_t> data, VkDeviceSize bytes) const
 {
@@ -648,35 +687,74 @@ void DescriptorSetBindingManager::writeResource_(
 
 	const VkBufferCopy writeInfo{ 0u, 0u, std::min(bytes, bufferGetSize(buffer)) };
 	bufferWriteData(buffer, data, writeInfo);
+
+	return writeInfo.size;
 }
 
-void DescriptorSetBindingManager::writeBinding_ (
+VkDeviceSize DescriptorSetBindingManager::fillBinding_ (
 	std::type_index index, uint32_t binding,
 	add_cptr<uint8_t> data, VkDeviceSize bytes, VkImageLayout finalLayout) const
 {
+	add_cref<ExtBinding> b = verifyGetExtBinding(binding);
+	std::vector<uint8_t> v;
+	VkDeviceSize vSize = 0u;
+
+	if (descriptorTypeOnList(b.descriptorType,
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER }))
+	{
+		vSize = bufferGetSize(b.buffer);
+	}
+	else if (descriptorTypeOnList(b.descriptorType,
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+			VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER }))
+	{
+		vSize = imageGetMipLevelsOffsetAndSize(imageViewGetImage(b.view)).second;
+	}
+	else
+	{
+		ASSERTFALSE("Unsupported descriptor type: ",
+			vk::to_string(static_cast<vk::DescriptorType>(b.descriptorType)));
+	}
+
+	v.resize(vSize);
+	const uint32_t count = uint32_t(vSize / bytes);
+	for (uint32_t chunk = 0; chunk < count; ++chunk)
+		std::memcpy(&v.data()[chunk * bytes], data, size_t(bytes));
+
+	return writeBinding_(index, binding, v.data(), vSize, finalLayout);
+}
+
+VkDeviceSize DescriptorSetBindingManager::writeBinding_ (
+	std::type_index index, uint32_t binding,
+	add_cptr<uint8_t> data, VkDeviceSize bytes, VkImageLayout finalLayout) const
+{
+	VkDeviceSize saved = 0u;
 	if (nullptr == data || 0u == bytes)
-		return;
+		return saved;
 
 	add_cref<ExtBinding> b = verifyGetExtBinding(binding);
 	switch (b.descriptorType)
 	{
 	case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
 	case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-		writeResource_(b.buffer, index, b.index, data, bytes);
+		saved = writeResource_(b.buffer, index, b.index, data, bytes);
 		break;
 	case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
 	case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
 	case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
 	case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
-		writeResource_(b.view, index, b.index, data, bytes, finalLayout);
+		saved = writeResource_(b.view, index, b.index, data, bytes, finalLayout);
 		break;
 	default:
 		ASSERTFALSE("Unsupported descriptor type: ",
 			vk::to_string(static_cast<vk::DescriptorType>(b.descriptorType)));
 	}
+
+	return saved;
 }
 
-void DescriptorSetBindingManager::readResource_ (
+VkDeviceSize DescriptorSetBindingManager::readResource_ (
 	ZImageView view, std::type_index dataIndex, std::type_index resIndex,
 	add_ptr<uint8_t> data, uint32_t elementSize, bool isVector,
 	VkImageLayout finalLayout, add_cptr<VectorWrapper> pww) const
@@ -695,10 +773,10 @@ void DescriptorSetBindingManager::readResource_ (
 			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
 			finalLayout);
 	}
-	readResourceUnchecked_(buffer, dataIndex, data, elementSize, isVector, pww);
+	return readResourceUnchecked_(buffer, dataIndex, data, elementSize, isVector, pww);
 }
 
-void DescriptorSetBindingManager::readResourceUnchecked_ (
+VkDeviceSize DescriptorSetBindingManager::readResourceUnchecked_ (
 	ZBuffer buffer, std::type_index dataIndex, add_ptr<uint8_t> data,
 	uint32_t elementSize, bool isVector, add_cptr<VectorWrapper> pww) const
 {
@@ -709,39 +787,42 @@ void DescriptorSetBindingManager::readResourceUnchecked_ (
 	add_ptr<uint8_t> usedData = isVector ? pww->data() : data;
 	const VkBufferCopy readInfo{ 0u, 0u, (count * elementSize) };
 	bufferReadData(buffer, usedData, readInfo);
+	return readInfo.size;
 }
 
-void DescriptorSetBindingManager::readResource_ (
+VkDeviceSize DescriptorSetBindingManager::readResource_ (
 	ZBuffer buffer, std::type_index dataIndex, std::type_index resIndex,
 	add_ptr<uint8_t> data, uint32_t elementSize, bool isVector, add_cptr<VectorWrapper> pww) const
 {
 	auto index = std::type_index(typeid(typename add_extent<ZBuffer>::type));
 	ASSERTMSG(index == resIndex, "Given resource is not a buffer");
-	readResourceUnchecked_(buffer, dataIndex, data, elementSize, isVector, pww);
+	return readResourceUnchecked_(buffer, dataIndex, data, elementSize, isVector, pww);
 }
 
-void DescriptorSetBindingManager::readBinding_ (
+VkDeviceSize DescriptorSetBindingManager::readBinding_ (
 	std::type_index index, uint32_t binding, add_ptr<uint8_t> data,
 	uint32_t elementSize, bool isVector, VkImageLayout finalLayout,
 	add_cptr<VectorWrapper> pww) const
 {
+	VkDeviceSize readed = 0u;
 	add_cref<ExtBinding> b = verifyGetExtBinding(binding);
 	switch (b.descriptorType)
 	{
 	case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
 	case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-		readResource_(b.buffer, index, b.index, data, elementSize, isVector, pww);
+		readed = readResource_(b.buffer, index, b.index, data, elementSize, isVector, pww);
 		break;
 	case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
 	case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
 	case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
 	case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
-		readResource_(b.view, index, b.index, data, elementSize, isVector, finalLayout, pww);
+		readed = readResource_(b.view, index, b.index, data, elementSize, isVector, finalLayout, pww);
 		break;
 	default:
 		ASSERTFALSE("Unsupported descriptor type: ",
 			vk::to_string(static_cast<vk::DescriptorType>(b.descriptorType)));
 	}
+	return readed;
 }
 
 size_t getDescriptorBindingSize (add_cref<VkPhysicalDeviceDescriptorBufferPropertiesEXT> p)
@@ -778,6 +859,8 @@ bool DescriptorSetBindingManager::containsSamplers () const
 
 ZBuffer DescriptorSetBindingManager::createDescriptorBuffer (ZDescriptorSetLayout dsLayout)
 {
+	assertDoubledBindings();
+
 	const uint32_t myID = getIdentifier();
 	const uint32_t dsLayoutID = dsLayout.getParam<ZDistType<LayoutIdentifier, uint32_t>>();
 	ASSERTMSG(myID == dsLayoutID,
@@ -811,7 +894,7 @@ ZBuffer DescriptorSetBindingManager::createDescriptorBuffer (ZDescriptorSetLayou
 	for (add_cref<VkDescriptorSetLayoutBindingAndType> b : m_extbindings)
 	{
 		ASSERTMSG(b.descriptorType != VK_DESCRIPTOR_TYPE_MUTABLE_EXT,
-			"In descriptor-buffer model neither binding must be MUTABLE_EXT");
+			"In the descriptor-buffer model, none of the binding can be MUTABLE_EXT");
 
 		VkDescriptorAddressInfoEXT	addressInfo			= makeVkStruct();
 		VkDescriptorGetInfoEXT		getInfo				= makeVkStruct();
@@ -824,10 +907,13 @@ ZBuffer DescriptorSetBindingManager::createDescriptorBuffer (ZDescriptorSetLayou
 
 		if (descriptorTypeOnList(b.descriptorType, {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER}))
 		{
-			ZBuffer buffer = b.buffer;
-			addressInfo.address = bufferGetAddress(buffer, b.binding, b.descriptorType);
-			addressInfo.range = bufferGetSize(buffer);
-			addressInfo.format = buffer.getParam<VkFormat>();
+			if (false == b.isNull)
+			{
+				ZBuffer buffer = b.buffer;
+				addressInfo.address = bufferGetAddress(buffer, b.binding, b.descriptorType);
+				addressInfo.range = bufferGetSize(buffer);
+				addressInfo.format = buffer.getParam<VkFormat>();
+			}
 			if (b.descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
 			{
 				getInfo.data.pUniformBuffer = &addressInfo;
@@ -847,9 +933,12 @@ ZBuffer DescriptorSetBindingManager::createDescriptorBuffer (ZDescriptorSetLayou
 			case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
 			case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
 			{
-				ZImageView	view = b.view;
-				imageInfo.imageView = *view;
-				imageInfo.imageLayout = b.imageLayout;
+				if (false == b.isNull)
+				{
+					ZImageView	view = b.view;
+					imageInfo.imageView = *view;
+					imageInfo.imageLayout = b.imageLayout;
+				}
 				if (b.descriptorType == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
 				{
 					getInfo.data.pStorageImage = &imageInfo;
@@ -864,21 +953,24 @@ ZBuffer DescriptorSetBindingManager::createDescriptorBuffer (ZDescriptorSetLayou
 			break;
 			case VK_DESCRIPTOR_TYPE_SAMPLER:
 			{
-				getInfo.data.pSampler = b.sampler.ptr();
+				getInfo.data.pSampler = b.isNull ? nullptr : b.sampler.ptr();
 				writeDescriptorSize = dbp.samplerDescriptorSize;
 			}
 			break;
 			case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
 			{
-				ZImageView	view = b.view;
-				ZSampler	samp = b.sampler;
-				if (dbp.combinedImageSamplerDescriptorSingleArray)
+				if (false == b.isNull)
 				{
-					// TODO
+					ZImageView	view = b.view;
+					ZSampler	samp = b.sampler;
+					if (dbp.combinedImageSamplerDescriptorSingleArray)
+					{
+						// TODO
+					}
+					imageInfo.sampler = *samp;
+					imageInfo.imageView = *view;
+					imageInfo.imageLayout = b.imageLayout;
 				}
-				imageInfo.sampler = *samp;
-				imageInfo.imageView = *view;
-				imageInfo.imageLayout = b.imageLayout;
 				getInfo.data.pCombinedImageSampler = &imageInfo;
 				writeDescriptorSize = dbp.combinedImageSamplerDescriptorSize;
 			}

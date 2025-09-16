@@ -1,6 +1,7 @@
 #ifndef __VTF_ZDELETABLE_HPP_INCLUDED__
 #define __VTF_ZDELETABLE_HPP_INCLUDED__
 
+#include <any>
 #include <atomic>
 #include <bitset>
 #include <functional>
@@ -33,6 +34,7 @@ template<class P> using add_cptr   = add_ptr<add_cst<P>>;
 template<class R> using add_cref   = add_ref<add_cst<R>>;
 using void_cptr = add_cptr<void>;
 using void_ptr = add_ptr<void>;
+using void_pfn = void(*)(void);
 
 template<class X> struct add_extent	{ typedef X type[]; };
 
@@ -209,7 +211,7 @@ struct ZObject
 	}
 };
 
-struct ZDeletableBase { };
+struct ZDeletableBase { virtual ~ZDeletableBase() = default; };
 template<class Z, class F, F Ptr, class Tr, class Inh, class... X> struct ZDeletable
 	: protected std::shared_ptr<ZObject<Z, F, std::tuple<X...>>>, public Inh, public ZDeletableMark
 {
@@ -260,9 +262,9 @@ template<class Z, class F, F Ptr, class Tr, class Inh, class... X> struct ZDelet
 		ASSERTMSG(VK_NULL_HANDLE != *p, "Vulkan handle must not be VK_NULL_HANDLE (", demangledName<Z>(), ")");
 		return p;
 	}
-	std::pair<void_cptr, size_t> object () const
+	std::pair<add_cptr<AnObject>, size_t> object () const
 	{
-		return std::pair<void_cptr, size_t>(super::get(), sizeof(AnObject));
+		return std::pair<add_cptr<AnObject>, size_t>(super::get(), sizeof(AnObject));
 	}
 	Z operator*() const
 	{
@@ -288,9 +290,10 @@ template<class Z, class F, F Ptr, class Tr, class Inh, class... X> struct ZDelet
 	{
 		return std::get<T>(super::get()->params);
 	}
-	template<class T> void setParam(add_cref<T> param)
+	template<class T> add_ref<ZDeletable> setParam(add_cref<T> param)
 	{
 		std::get<T>(super::get()->params) = param;
+		return *this;
 	}
 	template<class Then, class Else> auto select(const Then& then_, const Else& else_)
 		-> std::common_type_t<::vtf::lambda_result_type<Then>, ::vtf::lambda_result_type<Else>>
@@ -388,7 +391,7 @@ typedef ZDeletable<VkInstance,
 ZInstance;
 
 typedef ZDeletable<VkPhysicalDevice,
-	void(*)(void), nullptr
+	void_pfn, nullptr
 	, swizzle_no_param
 	, ZDeletableBase
 	, VkAllocationCallbacksPtr
@@ -514,16 +517,19 @@ typedef ZDeletable<VkImageView,
 ZUnboundImageView;
 
 typedef ZDeletable<VkRenderPass,
-	decltype(&vkDestroyRenderPass), &vkDestroyRenderPass,
-	swizzle_three_params,
-	ZDeletableBase,
-	ZDevice,
-	VkAllocationCallbacksPtr,
-	ZDistType<AttachmentCount, uint32_t>,
-	ZDistType<SubpassCount, uint32_t>,
-	std::vector<VkClearValue>,
-	VkFormat, /*depth-stencli attachment format*/
-	VkImageLayout /*finalLayout*/>
+	decltype(&vkDestroyRenderPass), &vkDestroyRenderPass
+	, swizzle_three_params
+	, ZDeletableBase
+	, ZDevice
+	, VkAllocationCallbacksPtr
+	, ZDistType<AttachmentCount, uint32_t>
+	, ZDistType<SubpassCount, uint32_t>
+	, std::vector<VkClearValue>
+	, VkFormat /*depth-stencli attachment format*/
+	, VkImageLayout /*finalLayout*/
+	, ZDistType<SomeOne, std::any> /* ZAttachmentPool */
+	, std::vector<ZDistType<SomeTwo, std::any>> /* ZSubpassDescription2's */
+>
 ZRenderPass;
 
 typedef ZDeletable<VkFramebuffer,

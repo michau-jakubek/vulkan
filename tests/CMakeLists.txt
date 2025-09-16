@@ -58,6 +58,8 @@ set(tests_files
 	taskMeshTriangleTests.hpp
 	banalDRLRTests.cpp
 	banalDRLRTests.hpp
+	banalRenderPassTests.cpp
+	banalRenderPassTests.hpp
 	mutableDescriptorTests.cpp
 	mutableDescriptorTests.hpp
 	variablePointersTests.cpp

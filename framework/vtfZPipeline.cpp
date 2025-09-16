@@ -3,6 +3,7 @@
 #include "vtfBacktrace.hpp"
 #include "vtfZImage.hpp"
 #include "demangle.hpp"
+#include "vtfRenderPass2.hpp"
 
 #include <array>
 #include <iostream>
@@ -352,11 +353,11 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 	info.pDepthStencilState		= &settings.m_depthStencilState;
 
 	const uint32_t colorAttachmentCount =
-		settings.m_renderPass.has_handle()
-			? settings.m_renderPass.getParam<ZDistType<AttachmentCount, uint32_t>>().get()
+		settings.m_renderPass
+			? renderPassSubpassGetColorAttachmentCount(settings.m_renderPass, settings.m_createInfo.subpass)
 			: uint32_t(std::count_if(settings.m_drAttachments.begin(), settings.m_drAttachments.end(),
 				[](add_cref<gpp::Attachment> a) { return a.desc == gpp::AttachmentDesc::Color; }));
-	ASSERTMSG(colorAttachmentCount != 0u, "There must be at least one attachment");
+
 	if (settings.m_blendAttachments.size() < colorAttachmentCount)
 	{
 		settings.m_blendAttachments.resize(colorAttachmentCount, gpp::defaultBlendAttachmentState);
@@ -440,7 +441,7 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 
 	info.pNext				= infoPNext;
 	info.layout				= *settings.m_layout;
-	info.renderPass			= settings.m_renderPass.has_handle() ? *settings.m_renderPass : VK_NULL_HANDLE;
+	info.renderPass			= settings.m_renderPass ? *settings.m_renderPass : VK_NULL_HANDLE;
 	info.basePipelineHandle	= VK_NULL_HANDLE;
 	info.basePipelineIndex	= -1;
 

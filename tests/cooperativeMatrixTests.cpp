@@ -1056,10 +1056,10 @@ TriLogicInt performTests(add_ref<VulkanContext> ctx, add_cref<CoopParams> params
 	populateData(r_buffer, r_comp, CRSize, MatrixTargets::R);
 	if (false == params.useSpirvShader)
 	{
-		lm.fillBinding(a_null);
-		lm.fillBinding(b_null);
-		lm.fillBinding(c_null);
-		lm.fillBinding(r_null);
+		lm.fillBinding(a_null, 0);
+		lm.fillBinding(b_null, 0);
+		lm.fillBinding(c_null, 0);
+		lm.fillBinding(r_null, 0);
 	}
 
 	{

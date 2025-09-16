@@ -591,7 +591,7 @@ TriLogicInt runTests (std::shared_ptr<VulkanContext> ctx, add_cref<TestParams> p
 	commandBufferBegin(renderCmd);
 		commandBufferBindPipeline(renderCmd, renderPipeline);
 		commandBufferBindVertexBuffers(renderCmd, vertexInput);
-		auto rpbi = commandBufferBeginRenderPass(renderCmd, renderFramebuffer, 0);
+		auto rpbi = commandBufferBeginRenderPass(renderCmd, renderFramebuffer);
 			vkCmdDraw(*renderCmd, vertexInput.getVertexCount(0), 1, 0, 0);
 		commandBufferEndRenderPass(rpbi);
 		commandBufferPipelineBarriers(renderCmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_HOST_BIT, storeBarrier);

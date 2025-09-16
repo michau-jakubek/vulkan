@@ -690,7 +690,7 @@ TriLogicInt runViewerSingleThread (add_ref<Canvas> cs, add_cref<std::string> ass
 			commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
 			vkCmdSetViewport(*cmdBuffer, 0, 1, &swapchain.viewport);
 			vkCmdSetScissor(*cmdBuffer, 0, 1, &swapchain.scissor);
-			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer, 0);
+			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer);
 				vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1u, 0u, 0u);
 			commandBufferEndRenderPass(rpbi);
 		}

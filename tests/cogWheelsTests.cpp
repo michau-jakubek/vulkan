@@ -599,7 +599,7 @@ TriLogicInt runTests (Canvas& cs, add_cref<Params> params)
 		commandBufferResetQueryPool(cmdBuffer, queryPool);
 
 		auto qpbi = commandBufferBeginQuery(cmdBuffer, queryPool, 0);
-			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer, 0u);
+			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer);
 
 				vkCmdDrawIndexed(*cmdBuffer, bigGearInfo.front.second, 1,  bigGearInfo.front.first, 0, 0);
 				vkCmdDrawIndexed(*cmdBuffer, bigGearInfo.back.second,  1,  bigGearInfo.back.first, 0, 0);

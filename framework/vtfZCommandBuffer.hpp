@@ -79,9 +79,9 @@ void			commandBufferBindDescriptorBuffers (ZCommandBuffer, ZPipeline, std::initi
 void			commandBufferDispatch (ZCommandBuffer cmd, const UVec3& workGroupCount = UVec3(1,1,1));
 
 ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZFramebuffer framebuffer,
-												   uint32_t subpass, VkSubpassContents = VK_SUBPASS_CONTENTS_INLINE);
+												   VkSubpassContents = VK_SUBPASS_CONTENTS_INLINE);
 ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZRenderPass renderPass, ZFramebuffer framebuffer,
-												   uint32_t subpass, VkSubpassContents = VK_SUBPASS_CONTENTS_INLINE);
+												   VkSubpassContents = VK_SUBPASS_CONTENTS_INLINE);
 bool				 commandBufferNextSubpass (add_ref<ZRenderPassBeginInfo> beginInfo);
 void				 commandBufferEndRenderPass (add_cref<ZRenderPassBeginInfo> beginInfo);
 void	commandBufferBeginRendering (ZCommandBuffer cmd, uint32_t width, uint32_t height,

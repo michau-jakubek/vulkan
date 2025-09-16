@@ -326,7 +326,7 @@ TriLogicInt runTests (Canvas& cs, add_cref<Params> params)
 		commandBufferResetQueryPool(cmdBuffer, queryPool);
 
 		auto qpbi = commandBufferBeginQuery(cmdBuffer, queryPool, 0);
-			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer, 0u);
+			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer);
 				vkCmdDrawIndexed(*cmdBuffer, indexCount, 1, 0, 0, 0);
 			commandBufferEndRenderPass(rpbi);
 		commandBufferEndQuery(qpbi);

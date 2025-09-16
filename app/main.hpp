@@ -3,7 +3,7 @@
 
 #include "vtfVkUtils.hpp"
 
-constexpr vtf::Version CurrentVtfVersion(1, 3, 7, 8);
+constexpr vtf::Version CurrentVtfVersion(1, 3, 8, 1);
 
 // 2024-04-10, 1.1.0.0, "Add versioning"
 // 2024-04-15, 1.1.1.0, "Some fixes in int_compute test."
@@ -39,5 +39,6 @@ constexpr vtf::Version CurrentVtfVersion(1, 3, 7, 8);
 // 2025-08-29, 1.3.7.6, "Update banal_drlr test"
 // 2025-08-31, 1.3.7.7, "Errata to banal_drlr"
 // 2025-09-16, 1.3.7.8, "Add mutable_descriptor tests"
+// 2025-09-26, 1.3.8.1, "createRenderPass2() experimental"
 
 #endif  // __MAIN_HPP_INCLUDED__

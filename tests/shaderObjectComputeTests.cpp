@@ -290,9 +290,9 @@ TriLogicInt performTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 
 	ZCommandPool			cmdPool			= ctx.createComputeCommandPool();
 
-	lm.fillBinding(binding1buffer);
-	lm.fillBinding(binding2buffer);
-	lm.fillBinding(binding3buffer);
+	lm.fillBinding(binding1buffer, 0);
+	lm.fillBinding(binding2buffer, 0);
+	lm.fillBinding(binding3buffer, 0);
 
 	printPushConstantStatus(pc3, std::cout);
 

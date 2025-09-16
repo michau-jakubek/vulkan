@@ -543,7 +543,7 @@ TriLogicInt performTest (add_ref<Canvas> cs, add_cref<std::string> assets,
 			commandBufferPushConstants(config, cmdBuffer, pipelineLayout, vui);
 			vkCmdSetViewport(*cmdBuffer, 0, 1, &swapchain.viewport);
 			vkCmdSetScissor(*cmdBuffer, 0, 1, &swapchain.scissor);
-			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer, 0);
+			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer);
 				vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1, 0, 0);
 			commandBufferEndRenderPass(rpbi);
 			commandBufferMakeImagePresentationReady(cmdBuffer, framebufferGetImage(framebuffer));

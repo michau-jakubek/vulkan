@@ -9,6 +9,7 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <limits>
 
 #include "vulkan/vulkan.h"
 #include "vtfVector.hpp"
@@ -17,8 +18,9 @@
 namespace vtf
 {
 
-constexpr uint32_t INVALID_UINT32 = (~(static_cast<uint32_t>(0u)));
-constexpr uint64_t INVALID_UINT64 = (~(static_cast<uint64_t>(0u)));
+constexpr uint16_t INVALID_UINT16 = std::numeric_limits<uint16_t>::max();
+constexpr uint32_t INVALID_UINT32 = std::numeric_limits<uint32_t>::max();
+constexpr uint64_t INVALID_UINT64 = std::numeric_limits<uint64_t>::max();
 
 #define MULTIPLERUP(x__, multipler__) (((x__)+((multipler__)-1))/(multipler__))
 #define ROUNDUP(x__, multipler__) (MULTIPLERUP((x__),(multipler__))*(multipler__))

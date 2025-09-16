@@ -35,17 +35,19 @@ struct Params
 	static inline const uint32_t	rangeAttachments = 16u;
 	VecX<uint32_t, rangeAttachments>	attachmentLocations;
 	VecX<uint32_t, rangeAttachments>	inputAttachmentIndices;
-	bool		locationsEnable		= false;
-	bool		indicesEnable		= false;
-	bool		writePipeDisable	= false;
-	bool		buildAlways			= false;
-	bool		synchronization2	= false;
-	bool		useShaderObjects	= false;
-	bool		useDescriptorBuffer	= false;
-	bool		printParams			= false;
-	bool		printSystemLimits	= false;
-	bool		KHR					= true;
-	bool		discardInFragment	= false;
+	bool		locationsEnable			= false;
+	bool		indicesEnable			= false;
+	bool		writePipeDisable		= false;
+	bool		buildAlways				= false;
+	bool		synchronization2		= false;
+	bool		useShaderObjects		= false;
+	bool		useDescriptorBuffer		= false;
+	bool		printParams				= false;
+	bool		printShaders			= false;
+	bool		changeInputBindings		= false;
+	bool		printSystemLimits		= false;
+	bool		KHR						= true;
+	bool		discardInFragment		= false;
 	Params (add_cref<std::string> testName_, add_cref<std::string> assets_);
 	OptionParser<Params> getParser ();
 	void updateLoactionsAndIndices (add_cref<OptionParser<Params>> parser);
@@ -57,8 +59,10 @@ struct Params
 constexpr Option optionLocationsEnable			{ "--enable-locations", 0 };
 constexpr Option optionIndicesEnable			{ "--enable-indices", 0 };
 constexpr Option optionWritePipelineDisable		{ "--disable-write-pipeline", 0 };
+constexpr Option optionChangeInputBindings		{ "--change-input-bindings", 0 };
 constexpr Option optionBuildAlways				{ "--build-always", 0 };
 constexpr Option optionPrintParams				{ "--print-params", 0 };
+constexpr Option optionPrintShaders				{ "--print-shaders", 0 };
 constexpr Option optionPrintSystemLimits		{ "--print-limits", 0 };
 constexpr Option optionSynchronization2			{ "--enable-synchronization2", 0 };
 constexpr Option optionUseShaderObjects			{ "--use-shader-objects", 0 };
@@ -126,6 +130,11 @@ OptionParser<Params> Params::getParser()
 		"Option " + std::string(optionLocationsEnable.name) + " makes no sense",
 		{ false }, flagsDef)->setParamName("writePipelineDisable");
 
+	parser.addOption(&Params::changeInputBindings, optionChangeInputBindings,
+		"Change input bindings like should be done by "
+		"vkCmdSetRenderingInputAttachmentIndicesKHR() call", { false }, flagsDef)
+		->setParamName("changeInputBindings");
+
 	parser.addOption(&Params::synchronization2, optionSynchronization2,
 		"Use synchronization2 feature", { false }, flagsDef)
 		->setParamName("synchronization2");
@@ -148,6 +157,9 @@ OptionParser<Params> Params::getParser()
 
 	parser.addOption(&Params::printParams, optionPrintParams,
 		"Print app params to the console", { false }, OptionFlags(OptionFlag::DontPrintAsParams));
+
+	parser.addOption(&Params::printShaders, optionPrintShaders,
+		"Print shaders to the console", { false }, OptionFlags(OptionFlag::DontPrintAsParams));
 
 	return parser;
 }
@@ -261,8 +273,11 @@ bool Params::verify (add_ref<std::string> msg) const
 
 TriLogicInt runTests (add_ref<VulkanContext> canvas, add_cref<Params> params);
 TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams);
-std::array<ZShaderModule, 3> buildShaderModules (ZDevice device, add_cref<Params> params);
-std::tuple<ZShaderObject, ZShaderObject, ZShaderObject, ZShaderObject>
+std::tuple<ZShaderModule, ZShaderModule, ZShaderModule,
+			ZDistType<SomeZero, std::string>, ZDistType<SomeOne, std::string>>
+	buildShaderModules (ZDevice device, add_cref<Params> params);
+std::tuple<ZShaderObject, ZShaderObject, ZShaderObject, ZShaderObject,
+	ZDistType<SomeZero, std::string>, ZDistType<SomeOne, std::string>>
 	buildShaderObjects (ZDevice, ZDescriptorSetLayout, add_cref<ZPushRange<uint32_t>>, add_cref<Params>);
 void genVertices (VertexInput& vi);
 
@@ -394,20 +409,20 @@ std::pair<std::string, std::string> genShaderSources (add_cref<Params> params)
 
 	wFrag << "#version 450\n";
 	wrFrag << "#version 450\n";
-	for (uint32_t i = 0u, binding = 0u; i < params.attachmentCount; ++i)
+	for (uint32_t i = 0u; i < params.attachmentCount; ++i)
 	{
 		if (params.gapAttachmentIndex == i)
 			continue;
 
 		wFrag << "layout(location = " << i << ") out uint color" << i << ";\n";
 
-		wrFrag << "layout(binding = " << binding++ << ", input_attachment_index = " << i << ") "
+		wrFrag << "layout(binding = " << i << ", input_attachment_index = " << i << ") "
 			"uniform usubpassInput inColor" << i << ";\n";
 		/*
 		rwFrag << "layout(r32ui, binding = " << binding++ << ") "
 			"uniform uimage2D outColor" << i << ";\n";
 		*/
-		wrFrag << "layout(binding = " << binding++ << ") "
+		wrFrag << "layout(binding = " << (params.attachmentCount + i) << ") "
 			"buffer OutColor" << i << " { uint outColor" << i << "[]; };\n";
 		if (params.discardInFragment)
 		{
@@ -446,7 +461,8 @@ std::pair<std::string, std::string> genShaderSources (add_cref<Params> params)
 	return { wFrag.str(), wrFrag.str() };
 }
 
-std::tuple<ZShaderObject, ZShaderObject, ZShaderObject, ZShaderObject>
+std::tuple<ZShaderObject, ZShaderObject, ZShaderObject, ZShaderObject,
+	ZDistType<SomeZero, std::string>, ZDistType<SomeOne, std::string>>
 buildShaderObjects (
 	ZDevice	device,
 	ZDescriptorSetLayout dsLayout,
@@ -481,10 +497,14 @@ buildShaderObjects (
 		coll.getShader(linkWFrag),
 		coll.getShader(linkWRVert),
 		coll.getShader(linkWRFrag),
+		coll.getShaderFile(VK_SHADER_STAGE_FRAGMENT_BIT, 0u),
+		coll.getShaderFile(VK_SHADER_STAGE_FRAGMENT_BIT, 1u),
 	};
 }
 
-std::array<ZShaderModule, 3> buildShaderModules (ZDevice device, add_cref<Params> params)
+std::tuple<ZShaderModule, ZShaderModule, ZShaderModule,
+	ZDistType<SomeZero, std::string>, ZDistType<SomeOne, std::string>>
+	buildShaderModules (ZDevice device, add_cref<Params> params)
 {
 	std::string wFrag, wrFrag;
 	std::tie(wFrag, wrFrag) = genShaderSources(params);
@@ -500,7 +520,34 @@ std::array<ZShaderModule, 3> buildShaderModules (ZDevice device, add_cref<Params
 		progs.getShader(VK_SHADER_STAGE_VERTEX_BIT),
 		progs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT, 0u),
 		progs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT, 1u),
+		progs.getShaderFile(VK_SHADER_STAGE_FRAGMENT_BIT, 0u),
+		progs.getShaderFile(VK_SHADER_STAGE_FRAGMENT_BIT, 1u),
 	};
+}
+
+void printShaders (add_ref<std::ostream> str, add_cref<std::string> wFragFile, add_cref<std::string> wrFragFile)
+{
+	std::vector<char> buffer;
+	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
+	const fs::path tmpPath = std::strlen(gf.tmpDir) ? fs::path(gf.tmpDir) : fs::temp_directory_path();
+
+	if (auto file = tmpPath / wFragFile; fs::exists(file))
+	{
+		readFile(file, buffer);
+		str << "Write fragment shader source:\n"
+			   "-----------------------------\n";
+		std::copy(buffer.begin(), buffer.end(), std::ostream_iterator<char>(str));
+	}
+	else str << "Unable to read " << std::quoted(wFragFile) << std::endl;
+
+	if (auto file = tmpPath / wrFragFile; fs::exists(file))
+	{
+		readFile(file, buffer);
+		str << "Write-read fragment shader source:\n"
+			   "----------------------------------\n";
+		std::copy(buffer.begin(), buffer.end(), std::ostream_iterator<char>(str));
+	}
+	else str << "Unable to read " << std::quoted(wrFragFile) << std::endl;
 }
 
 std::vector<uint32_t> prepareIndices (add_cref<Params> params, add_cptr<std::vector<uint32_t>> source)
@@ -536,14 +583,17 @@ std::vector<uint32_t> prepareIndices (add_cref<Params> params, add_cptr<std::vec
 	return indices;
 }
 
-void printMap (std::ostream& str, add_cref<std::string> desc, add_cref<std::vector<uint32_t>> m)
+void printMap (std::ostream& str, add_cref<std::string> desc,
+				add_cref<std::vector<uint32_t>> m, const uint32_t select)
 {
 	str << desc << " [";
 	for (uint32_t i = 0u; i < m.size(); ++i)
 	{
 		if (i)
 			str << ", ";
+		if (select == i) str << '(';
 		str << m[i];
+		if (select == i) str << ')';
 	}
 	str << ']' << std::endl;
 };
@@ -587,6 +637,17 @@ void printAttachment (std::ostream& str, add_cref<std::string> desc, uint32_t in
 	}
 }
 
+bool compareAttachments (ZBuffer buffer0, add_cref<std::vector<uint32_t>> buffer1, add_cref<Params> params)
+{
+	ASSERTION(bufferGetElementCount<uint32_t>(buffer0) == buffer1.size());
+	const BufferTexelAccess<uint32_t> a(buffer0, params.frameSize, params.frameSize);
+	const uint32_t renderSize = params.frameSize * params.frameSize;
+	for (uint32_t i = 0; i < renderSize; ++i)
+		if (a.at(i, 0u, 0u) != buffer1[i])
+			return false;
+	return true;
+}
+
 using PixelType = uint32_t;
 UNUSED UVec2 verifyWriteImages(
 	const uint32_t renderSize,
@@ -626,7 +687,7 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 	VertexInput	vertexInput(ctx.device);
 	genVertices(vertexInput);
 
-	auto [vert, wFrag, wrFrag] = buildShaderModules(ctx.device, params);
+	auto [vert, wFrag, wrFrag, wFragFile, wrFragFile] = buildShaderModules(ctx.device, params);
 
 	ZCommandPool				cmdPool	= createCommandPool(ctx.device, ctx.graphicsQueue);
 	LayoutManager				lm0		(ctx.device, cmdPool);
@@ -677,7 +738,6 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 
 	std::vector<uint32_t>	renderingInputAttachmentIndices = params.getInputAttachmentIndices();
 
-	const bool useOutputBuffers = false;
 	const bool verbose = getGlobalAppFlags().verbose != 0u;
 	const bool renderingAttachmentLocationsEnabled = params.locationsEnable;
 	const bool renderingInputAttachmentIndicesEnabled = params.indicesEnable;
@@ -712,6 +772,8 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 		inputBuffers[i].verbose(verbose);
 		inputAttachments[i] = createImageView(inputImages[i]);
 
+		outputBuffers[i] = createBuffer(inputImages[i]);
+
 		inputRenderingAttachments[i] = gpp::Attachment(inputAttachments[i], gpp::AttachmentDesc::Color);
 		readPipelineBlendStates[i] = gpp::BlendAttachmentState(std::make_pair(i, blendAttachmentState));
 
@@ -726,21 +788,29 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 											A::COLOR_ATTACHMENT_WRITE_BIT, S::COLOR_ATTACHMENT_OUTPUT_BIT,
 											A::INPUT_ATTACHMENT_READ_BIT, S::FRAGMENT_SHADER_BIT,
 											VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ);
+	}
 
-		lm1.addBinding(inputAttachments[i], VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-						inputAttachmentsLayout, shaderGetStage(wrFrag));
+	std::vector<uint32_t> inputBindingMap = renderingNullAttachmentLocations;
+	if (params.changeInputBindings)
+	{
+		for (uint32_t i = 0u; i < data_count(inputBindingMap); ++i)
+		{
+			inputBindingMap[renderingInputAttachmentIndices[i]] = i;
+		}
+	}
 
-		if (useOutputBuffers)
-		{
-			outputBuffers[i] = createBuffer<uint32_t>(ctx.device, (params.frameSize * params.frameSize));
-		}
-		else
-		{
-			outputBuffers[i] = createBuffer(inputImages[i]);
-		}
-		const uint32_t bufferBinding = lm1.addBinding(outputBuffers[i], VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, shaderGetStage(wrFrag));
+	for (uint32_t i = 0; i < params.attachmentCount; ++i)
+	{
+		if (params.gapAttachmentIndex == i) continue;
+
+		lm1.addBinding(i, inputAttachments[inputBindingMap[i]], VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+			inputAttachmentsLayout, shaderGetStage(wrFrag));
+
+		const uint32_t bufferBinding = lm1.addBinding(
+			(params.attachmentCount + i),
+			outputBuffers[i], VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, shaderGetStage(wrFrag));
 		lm1.fillBinding(bufferBinding, clearColors[i].color.uint32[0]);
-		outputBuffers[i].name("outputBuffer " + std::to_string(i));
+		outputBuffers[i].name("outputBuffer " + std::to_string(i) + ", binding " + std::to_string(bufferBinding));
 		outputBuffers[i].verbose(verbose);
 	}
 
@@ -789,9 +859,15 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 	ZShaderObject shoWVert, shoWFrag, shoWRVert, shoWRFrag;
 	if (params.useShaderObjects)
 	{
-		std::tie(shoWVert, shoWFrag, shoWRVert, shoWRFrag) = buildShaderObjects(ctx.device, dsLayout, push_const, params);
+		std::tie(shoWVert, shoWFrag, shoWRVert, shoWRFrag,
+					wFragFile, wrFragFile) = buildShaderObjects(ctx.device, dsLayout, push_const, params);
 		ASSERTMSG(shoWVert.has_handle(), "Vertex shader must have valid handle");
 		ASSERTMSG(shoWRVert.has_handle(), "Fragment shader must have valid handle");
+	}
+
+	if (params.printShaders)
+	{
+		printShaders(std::cout, wFragFile, wrFragFile);
 	}
 
 	{
@@ -823,7 +899,7 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 			{
 				if (verbose) {
 					printMap(std::cout, '[' + params.testName + "] vkCmdSetRenderingAttachmentLocations()",
-										renderingAttachmentLocations);
+										renderingAttachmentLocations, params.gapAttachmentIndex);
 				}
 				//(*di.vkCmdSetRenderingAttachmentLocations)(**cmd, &rali);
 				commandBufferSetRenderingAttachmentLocations(*cmd, renderingAttachmentLocations, params.KHR);
@@ -853,7 +929,7 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 		{
 			if (verbose) {
 				printMap(std::cout, '[' + params.testName + "] vkCmdSetRenderingAttachmentLocations()",
-									renderingNullAttachmentLocations);
+									renderingNullAttachmentLocations, params.gapAttachmentIndex);
 			}
 			//(*di.vkCmdSetRenderingAttachmentLocations)(**cmd, &raliNull);
 			commandBufferSetRenderingAttachmentLocations(cmd, renderingNullAttachmentLocations, params.KHR);
@@ -862,7 +938,7 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 		{
 			if (verbose) {
 				printMap(std::cout, '[' + params.testName + "] vkCmdSetRenderingInputAttachmentIndices()",
-									renderingInputAttachmentIndices);
+									renderingInputAttachmentIndices, params.gapAttachmentIndex);
 			}
 			//(*di.vkCmdSetRenderingInputAttachmentIndices)(**cmd, &riai);
 			commandBuffervSetRenderingInputAttachmentIndices(cmd, renderingInputAttachmentIndices, {}, {}, params.KHR);
@@ -871,7 +947,6 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 		commandBufferEndRendering(cmd);
 	}
 
-	if (useOutputBuffers)
 	{
 		OneShotCommandBuffer	cmd(cmdPool);
 		for (uint32_t i = 0u; i < params.attachmentCount; ++i)
@@ -887,34 +962,23 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 	}
 
 	PrettyPrinter printer;
-	printMap(std::cout, "-------\nrenderingAttachmentLocations", renderingAttachmentLocations);
-	printMap(std::cout, "renderingInputAttachmentIndices", renderingInputAttachmentIndices);
-	for (uint32_t i = 0u, imageBinding = 0u, bufferBinding = 1u; i < params.attachmentCount; ++i)
+	std::cout << "------\n";
+	if (params.changeInputBindings)
+	{
+		printMap(std::cout, "Changed input binding map", inputBindingMap, params.gapAttachmentIndex);
+	}
+	printMap(std::cout, "renderingAttachmentLocations",
+				renderingAttachmentLocations, params.gapAttachmentIndex);
+	printMap(std::cout, "renderingInputAttachmentIndices",
+				renderingInputAttachmentIndices, params.gapAttachmentIndex);
+	for (uint32_t i = 0u; i < params.attachmentCount; ++i)
 	{
 		if (params.gapAttachmentIndex == i)
 			continue;
 
-		if (useOutputBuffers)
-		{
-			printAttachment(printer.getCursor(0), "Input attachment", i, inputBuffers[i], params);
-			printAttachment(printer.getCursor(1), "Color attachment", i, outputBuffers[i], params);
-		}
-		else
-		{
-			std::vector<uint32_t> imageData, bufferData;
-			lm1.readBinding(imageBinding, imageData);
-			lm1.readBinding(bufferBinding, bufferData);
-			printAttachment(printer.getCursor(0), "Input attachment", i, imageData, params);
-			printAttachment(printer.getCursor(1), "Color attachment", i, bufferData, params);
-			bufferBinding = bufferBinding + 2u;
-			imageBinding = imageBinding + 2u;
-		}
+		printAttachment(printer.getCursor(0), "Input attachment", i, inputBuffers[i], params);
+		printAttachment(printer.getCursor(1), "Color attachment", i, outputBuffers[i], params);
 	}
-
-	/*
-	aw.sleepCallingThread();
-	watcher.join();
-	*/
 
 	std::vector<uint32_t> writeClearColors(params.attachmentCount);
 	std::vector<uint32_t> readClearColors(params.attachmentCount);
@@ -935,22 +999,40 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 				renderingInputAttachmentIndices.data() + params.attachmentCount),
 			params.writePipeDisable == false,
 			renderingAttachmentLocationsEnabled,
-			false, renderingInputAttachmentIndicesEnabled);
+			false, (renderingInputAttachmentIndicesEnabled || params.changeInputBindings));
+
+	bool attachmentStatus = true;
+	bool allAttachmentStatus = true;
 
 	for (uint32_t i = 0u; i < params.attachmentCount; ++i)
 	{
 		if (params.gapAttachmentIndex == i)
 			continue;
 
-		printAttachment(printer.getCursor(2), "Ref Input", i, ref[0][i], params);
-		printAttachment(printer.getCursor(3), "Ref Color", i, ref[1][i], params);
+		printAttachment(printer.getCursor(2), "Expected Input", i, ref[0][i], params);
+		printAttachment(printer.getCursor(3), "Expected Color", i, ref[1][i], params);
+
+		printer.getCursor(4) << "Compare Input (" << i << ')' << std::endl;
+		attachmentStatus = compareAttachments(inputBuffers[i], ref[0][i], params);
+		allAttachmentStatus &= attachmentStatus;
+		printer.getCursor(4) << std::endl << (attachmentStatus ? "      OK" : "    Mismatch") << std::endl;
+
+		printer.getCursor(5) << "Compare Color (" << i << ')' << std::endl;
+		attachmentStatus = compareAttachments(outputBuffers[i], ref[1][i], params);
+		allAttachmentStatus &= attachmentStatus;
+		printer.getCursor(5) << std::endl << (attachmentStatus ? "      OK" : "    Mismatch") << std::endl;
+		for (uint32_t j = 2; j < params.frameSize; ++j)
+		{
+			printer.getCursor(4) << std::endl;
+			printer.getCursor(5) << std::endl;
+		}
 	}
 
-	printer.merge({ 0, 1, 2, 3 }, std::cout);
+	printer.merge({ 0, 1, 2, 3, 4, 5 }, std::cout);
 
 	std::cout << "Done..." << std::endl;
 
-	return { /*to be continued*/ };
+	return allAttachmentStatus ? 0 : 1;
 }
 
 using PixelType = uint32_t;
@@ -1082,6 +1164,7 @@ offlineGenerator (
 						(renderSize * renderSize * colorAttachmentCount));
 	const uint32_t locStep = uint32_t(std::pow(10.0, std::ceil(std::log10(x))));
 
+	// Generate input images
 	for (uint32_t loc = 0u; loc < colorAttachmentCount; ++loc)
 	{
 		if (gapAttachmentIndex == loc)
@@ -1109,12 +1192,18 @@ offlineGenerator (
 		}
 	}
 
+	std::vector<uint32_t> invIndicesMap(readInputAttachmentIndices.size());
+	for (uint32_t k = 0u; k < colorAttachmentCount; ++k)
+	{
+		invIndicesMap[readInputAttachmentIndices[k]] = k;
+	}
+
 	for (uint32_t loc = 0u; loc < colorAttachmentCount; ++loc)
 	{
 		if (gapAttachmentIndex == loc)
 			continue;
 
-		const uint32_t I = enableReadInputAttachmentIndices ? readInputAttachmentIndices[loc] : loc;
+		const uint32_t I = enableReadInputAttachmentIndices ? invIndicesMap[loc] : loc;
 		const uint32_t data = enableReadAttachmentLocations ? readAttachmentLocations[loc] : loc;
 
 		for (uint32_t Y = 0u; Y < renderSize; ++Y)

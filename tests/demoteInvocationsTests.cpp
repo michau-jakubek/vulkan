@@ -1166,7 +1166,7 @@ TriLogicInt runDemoteInvocationsSingleThread (Canvas& cs, const std::string& ass
 			commandBufferBindPipeline(cmdBuffer, mainThreadPipeline);
 			commandBufferPushConstants(cmdBuffer, pipelineLayout, userData.mPushConstant);
 			commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
-			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, srcFramebuffer, 0);
+			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, srcFramebuffer);
 				vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1, 0, 0);
 			commandBufferEndRenderPass(rpbi);
 			commandBufferPipelineBarriers(cmdBuffer,

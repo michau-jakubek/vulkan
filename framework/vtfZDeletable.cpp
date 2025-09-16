@@ -44,7 +44,7 @@ void writeBackTrace (add_ref<std::ostringstream> ss)
 
 void deletable_selfTest() {}
 
-void freeWindow(add_ptr<GLFWwindow> window)
+void freeWindow (add_ptr<GLFWwindow> window)
 {
 	glfwDestroyWindow(window);
 	if (getGlobalAppFlags().verbose)

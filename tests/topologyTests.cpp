@@ -621,7 +621,7 @@ TriLogicInt runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> asse
 			commandBufferResetQueryPool(cmdBuffer, queryPool);
 
 			auto qpbi = commandBufferBeginQuery(cmdBuffer, queryPool, 0);
-				auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer, 0u);
+				auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer);
 					commandBufferBindPipeline(cmdBuffer, primitivePipeline);
 					//vkCmdDraw(*cmdBuffer, userData.pointCount, 1u, 0u, 0u);
 					vkCmdDrawIndexed(*cmdBuffer, userData.pointCount, 1, 0, 0, 0);
@@ -631,12 +631,12 @@ TriLogicInt runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> asse
 			vkCmdCopyQueryPoolResults(*cmdBuffer, *queryPool, 0, 1, *queryResults, 0, sizeof(uint64_t), 
 										VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
 			
-			rpbi = commandBufferBeginRenderPass(cmdBuffer, renderPassA, framebuffer, 0u);
+			rpbi = commandBufferBeginRenderPass(cmdBuffer, renderPassA, framebuffer);
 				commandBufferBindPipeline(cmdBuffer, linesPipeline);
 				vkCmdDraw(*cmdBuffer, userData.pointCount, 1u, 0u, 1u);
 			commandBufferEndRenderPass(rpbi);
 
-			rpbi = commandBufferBeginRenderPass(cmdBuffer, renderPassA, framebuffer, 0u);
+			rpbi = commandBufferBeginRenderPass(cmdBuffer, renderPassA, framebuffer);
 				commandBufferBindPipeline(cmdBuffer, pointsPipeline);
 				vkCmdDraw(*cmdBuffer, userData.pointCount, 1u, 0u, 2u);
 			commandBufferEndRenderPass(rpbi);

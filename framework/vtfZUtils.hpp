@@ -41,6 +41,7 @@ ZInstance		createInstance (const char*							appName,
 								const strings&						desiredExtensions = {},
 								uint32_t							apiVersion = VK_API_VERSION_1_1,
 								bool								enableDebugPrintf = false);
+Version			getVulkanImplVersion		(std::optional<ZInstance> instance);
 ZPhysicalDevice	getPhysicalDeviceByIndex	(ZInstance									instance,
 											 uint32_t									physicalDeviceIndex);
 ZPhysicalDevice selectPhysicalDevice		(const int									proposedDeviceIndex,

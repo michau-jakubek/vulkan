@@ -405,33 +405,33 @@ void commandBufferDispatch (ZCommandBuffer cmd, const UVec3& workGroupCount)
 	vkCmdDispatch(*cmd, workGroupCount.x(), workGroupCount.y(), workGroupCount.z());
 }
 
-ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZRenderPass renderPass, ZFramebuffer framebuffer,
-												   uint32_t subpass, VkSubpassContents contents)
+extern uint32_t frameBufferTransitAttachments (ZRenderPass, ZFramebuffer, uint32_t subpass, std::optional<bool> initialLayout = {});
+
+ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZRenderPass renderPass,
+												   ZFramebuffer framebuffer,VkSubpassContents contents)
 {
 	const uint32_t subpassCount = renderPass.getParam<ZDistType<SubpassCount, uint32_t>>();
-	ASSERTMSG(subpass < subpassCount, "Subpass index exceeds renderPass subpasses amount");
-	ZRenderPassBeginInfo	renderPassBegin(cmd, renderPass, framebuffer, subpass, contents);
+	ASSERTMSG(subpassCount, "There is no subpasses to process");
+	ZRenderPassBeginInfo	renderPassBegin(cmd, renderPass, framebuffer, 0u, contents);
 	VkRenderPassBeginInfo	info = renderPassBegin();
 	vkCmdBeginRenderPass(*cmd, &info, contents);
-	for (uint32_t i = 0; i < subpass; ++i)
-	{
-		vkCmdNextSubpass(*cmd, contents);
-	}
+	frameBufferTransitAttachments(renderPass, framebuffer, INVALID_UINT32, true);
 	return renderPassBegin;
 }
 
 ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZFramebuffer framebuffer,
-												   uint32_t subpass, VkSubpassContents contents)
+												   VkSubpassContents contents)
 {
-	return commandBufferBeginRenderPass(cmd, framebuffer.getParam<ZRenderPass>(), framebuffer, subpass, contents);
+	return commandBufferBeginRenderPass(cmd, framebuffer.getParam<ZRenderPass>(), framebuffer, contents);
 }
 
 bool commandBufferNextSubpass (add_ref<ZRenderPassBeginInfo> beginInfo)
 {
 	const uint32_t subpassCount = beginInfo.getRenderPass().getParam<ZDistType<SubpassCount, uint32_t>>();
-	if (beginInfo.getSubpass() < subpassCount)
+	if (uint32_t subpass = beginInfo.getSubpass(); subpass < subpassCount)
 	{
 		vkCmdNextSubpass(*beginInfo.getCommandBuffer(), beginInfo.getContents());
+		frameBufferTransitAttachments(beginInfo.getRenderPass(), beginInfo.getFramebuffer(), subpass);
 		beginInfo.consumeSubpass();
 		return true;
 	}
@@ -447,13 +447,7 @@ void commandBufferEndRenderPass (add_cref<ZRenderPassBeginInfo> beginInfo)
 		vkCmdNextSubpass(*cmdBuffer, beginInfo.getContents());
 	}
 	vkCmdEndRenderPass(*cmdBuffer);
-	const VkImageLayout finalLayout = beginInfo.getRenderPass().getParam<VkImageLayout>();
-	ZFramebuffer fb = beginInfo.getFramebuffer();
-	add_cref<std::vector<ZImageView>> views = fb.getParamRef<std::vector<ZImageView>>();
-	for (add_cref<ZImageView> view : views)
-	{
-		imageResetLayout(view.getParam<ZImage>(), finalLayout);
-	}
+	frameBufferTransitAttachments(beginInfo.getRenderPass(), beginInfo.getFramebuffer(), INVALID_UINT32, false);
 }
 
 void commandBufferBeginRendering(

@@ -9,6 +9,7 @@
 #include "vtfBacktrace.hpp"
 #include "vtfVector.hpp"
 #include "vtfZPipeline.hpp"
+#include "vtfRenderPass2.hpp"
 #include <type_traits>
 #include <thread>
 
@@ -67,7 +68,7 @@ bool verifyQueues (add_cref<std::vector<ZQueue>> queues)
 	return true;
 }
 
-TriLogicInt runTriangeSingleThread (Canvas& canvas, const std::string& assets, bool infinityRepeat);
+TriLogicInt runTriangeSingleThread (Canvas& canvas, const std::string& assets, bool infinityRepeat, bool vulkan12);
 TriLogicInt runTriangleMultipleThreads (Canvas& canvas, const std::string& assets, uint32_t threadCount);
 TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
 {
@@ -77,17 +78,29 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 	std::cout << "  [-i]        infinity repeat"				<< std::endl;
 	std::cout << "Navigation keys"								<< std::endl;
 	std::cout << "  Escape: quit this app"						<< std::endl;
+	bool vulkan12 = false;
     add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	CanvasStyle canvasStyle = Canvas::DefaultStyle;
+	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
+	{
+		const Version ver = getVulkanImplVersion(deviceGetInstance(caps.physicalDevice));
+		vulkan12 = ver >= Version(1, 2);
+		if (vulkan12)
+		{
+			caps.addExtension(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
+		}
+	};
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
-	Canvas cs(record.name, gf.layers, strings(), strings(), canvasStyle, nullptr, gf.apiVer);
+	Canvas cs(record.name, gf.layers, strings(), strings(), canvasStyle,
+				onEnablingFeatures, vulkan12 ? Version(1, 2) : gf.apiVer);
+	std::cout << VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME << " enabled: " << boolean(vulkan12) << std::endl;
 	const uint32_t threadCount = userRunOnThreads(cmdLineParams, std::cout);
 	return (threadCount >= 2)
 			? runTriangleMultipleThreads(cs, record.assets, threadCount)
-			: runTriangeSingleThread(cs, record.assets, userInfinityRepeat(cmdLineParams));
+			: runTriangeSingleThread(cs, record.assets, userInfinityRepeat(cmdLineParams), vulkan12);
 }
 
-TriLogicInt runTriangeSingleThread (Canvas& cs, const std::string& assets, bool infinityRepeat)
+TriLogicInt runTriangeSingleThread (Canvas& cs, const std::string& assets, bool infinityRepeat, bool vulkan12)
 {
 	LayoutManager				pl			(cs.device);
 	ProgramCollection			programs	(cs.device, assets);
@@ -108,7 +121,17 @@ TriLogicInt runTriangeSingleThread (Canvas& cs, const std::string& assets, bool 
 
 	const VkFormat				format				= cs.surfaceFormat;
 	const VkClearValue			clearColor			{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
-	ZRenderPass					renderPass			= createColorRenderPass(cs.device, {format}, {{clearColor}});
+	auto makeRenderPass2 = [&]
+	{
+		const std::vector<RPA>		colors{ RPA(AttachmentDesc::Color, format, clearColor,
+															VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) };
+		const ZAttachmentPool		attachmentPool(colors);
+		const ZSubpassDescription2	subpass({ RPR(0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) });
+		return createRenderPass2(cs.device, attachmentPool, subpass);
+	};
+	ZRenderPass					renderPass			= vulkan12
+		? makeRenderPass2()
+		: createColorRenderPass(cs.device, { format }, { {clearColor} });
 	ZPipelineLayout				pipelineLayout		= pl.createPipelineLayout();
 	ZPipeline					mainThreadPipeline	= createGraphicsPipeline(pipelineLayout, renderPass,
 															vertexInput, vertShaderModule, fragShaderModule,
@@ -130,10 +153,13 @@ TriLogicInt runTriangeSingleThread (Canvas& cs, const std::string& assets, bool 
 			commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
 			vkCmdSetViewport(*cmdBuffer, 0, 1, &swapchain.viewport);
 			vkCmdSetScissor(*cmdBuffer, 0, 1, &swapchain.scissor);
-			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer, 0);
+			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer);
 				vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1, 0, 0);
 			commandBufferEndRenderPass(rpbi);
-			commandBufferMakeImagePresentationReady(cmdBuffer, framebufferGetImage(framebuffer));
+			if (false == vulkan12)
+			{
+				commandBufferMakeImagePresentationReady(cmdBuffer, framebufferGetImage(framebuffer));
+			}
 		commandBufferEnd(cmdBuffer);
 	};
 
@@ -201,7 +227,7 @@ TriLogicInt runTriangleMultipleThreads (Canvas& cs, const std::string& assets, c
 		commandBufferBegin(cmdBuffer);
 			commandBufferBindPipeline(cmdBuffer, threadsData[threadID].pipeline);
 			commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
-			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, threadsData[threadID].framebuffer, 0);
+			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, threadsData[threadID].framebuffer);
 				vkCmdDraw(*cmdBuffer, 3, 1, 0, 0);
 			commandBufferEndRenderPass(rpbi);
 		commandBufferEnd(cmdBuffer);

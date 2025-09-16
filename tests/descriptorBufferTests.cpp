@@ -481,7 +481,7 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 		commandBufferBindVertexBuffers(cmd, vertexInput);
 		vkCmdSetViewport(*cmd, 0, 1, &swapchain.viewport);
 		vkCmdSetScissor(*cmd, 0, 1, &swapchain.scissor);
-		auto rpbi = commandBufferBeginRenderPass(cmd, framebuffer, 0);
+		auto rpbi = commandBufferBeginRenderPass(cmd, framebuffer);
 			vkCmdDraw(*cmd, vertexInput.getVertexCount(0), 2, 0, 0);
 		commandBufferEndRenderPass(rpbi);
 		imageCopyToBuffer(cmd, stoImage, outStoBuffer,
