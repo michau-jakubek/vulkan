@@ -363,7 +363,7 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 		settings.m_blendAttachments.resize(colorAttachmentCount, gpp::defaultBlendAttachmentState);
 	}
 	settings.m_blendState.attachmentCount	= data_count(settings.m_blendAttachments);
-	settings.m_blendState.pAttachments		= settings.m_blendAttachments.data();
+	settings.m_blendState.pAttachments		= data_or_null(settings.m_blendAttachments);
 	info.pColorBlendState					= &settings.m_blendState;
 
 	if (settings.m_dynamicState.dynamicStateCount)

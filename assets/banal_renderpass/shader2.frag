@@ -11,7 +11,7 @@ void main()
 	ivec2 xy = ivec2(gl_FragCoord.xy);
 	uvec4 v0 = (subpassLoad(inColor0));
 	uvec4 v1 = (subpassLoad(inColor1));
-	outData0[xy.y * width + xy.x] = v0.x + 1;
-	outData1[xy.y * width + xy.x] = v1.x + 2;
+	outData0[xy.y * width + xy.x] = v0.x + 4;
+	outData1[xy.y * width + xy.x] = v1.x + 5;
 }
 

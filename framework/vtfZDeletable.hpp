@@ -295,6 +295,11 @@ template<class Z, class F, F Ptr, class Tr, class Inh, class... X> struct ZDelet
 		std::get<T>(super::get()->params) = param;
 		return *this;
 	}
+	template<class T> add_ref<ZDeletable> forwardParam(add_rref<T> param)
+	{
+		std::get<T>(super::get()->params) = std::forward<T>(param);
+		return *this;
+	}
 	template<class Then, class Else> auto select(const Then& then_, const Else& else_)
 		-> std::common_type_t<::vtf::lambda_result_type<Then>, ::vtf::lambda_result_type<Else>>
 	{
@@ -522,13 +527,14 @@ typedef ZDeletable<VkRenderPass,
 	, ZDeletableBase
 	, ZDevice
 	, VkAllocationCallbacksPtr
+	, int // version 1 or 2
 	, ZDistType<AttachmentCount, uint32_t>
 	, ZDistType<SubpassCount, uint32_t>
 	, std::vector<VkClearValue>
-	, VkFormat /*depth-stencli attachment format*/
-	, VkImageLayout /*finalLayout*/
-	, ZDistType<SomeOne, std::any> /* ZAttachmentPool */
-	, std::vector<ZDistType<SomeTwo, std::any>> /* ZSubpassDescription2's */
+	, VkFormat // depth-stencli attachment format
+	, VkImageLayout // finalLayout
+	, ZDistType<SomeOne, std::any> // ZAttachmentPool
+	, std::vector<ZDistType<SomeTwo, std::any>> // ZSubpassDescription2's
 >
 ZRenderPass;
 

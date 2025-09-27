@@ -35,7 +35,13 @@ TriLogicInt prepareTests(add_cref<TestRecord> record, add_cref<strings> cmdLineP
 
 	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps)
 	{
-		UNREF(caps);
+		caps.addExtension(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME).checkSupported();
+
+		caps.addExtension(VK_KHR_MAINTENANCE2_EXTENSION_NAME).checkSupported();
+
+		caps.addUpdateFeatureIf(&VkPhysicalDeviceSynchronization2Features::synchronization2)
+			.checkSupported("synchronization2");
+		caps.addExtension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME).checkSupported();
 	};
 
 	VulkanContext ctx(record.name, gf.layers, {}, {}, onEnablingFeatures, Version(1, 3), gf.debugPrintfEnabled);
@@ -50,11 +56,13 @@ TriLogicInt runTests(add_ref<VulkanContext> canvas, add_cref<Params> params)
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader1.frag");
+	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader2.frag");
 	const GlobalAppFlags		flags(getGlobalAppFlags());
 	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, flags.genSpirvDisassembly);
 	ZShaderModule				vertShaderModule = programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
 	ZShaderModule				fragShaderModule = programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT, 0u);
 	ZShaderModule				frag1ShaderModule = programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT, 1u);
+	ZShaderModule				frag2ShaderModule = programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT, 2u);
 
 	VertexInput					vertexInput(canvas.device);
 	{
@@ -94,12 +102,16 @@ TriLogicInt runTests(add_ref<VulkanContext> canvas, add_cref<Params> params)
 	ZSubpassDescription2 desc1(
 		{ RPR(2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
 		  RPR(3, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) });
-	ZSubpassDependency2 dep(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_INPUT_ATTACHMENT_READ_BIT);
-	ZRenderPass rp0 = createRenderPass2(canvas.device, pool0, desc0, dep, desc1);
+	ZSubpassDependency2 dep0rp0(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+								VK_ACCESS_NONE, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+	ZSubpassDependency2 dep1rp0(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+								VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_INPUT_ATTACHMENT_READ_BIT);
+	ZSubpassDependency2 dep2rp0(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+								VK_ACCESS_INPUT_ATTACHMENT_READ_BIT, VK_ACCESS_NONE);
+	ZRenderPass rp0 = createRenderPass2(canvas.device, pool0, dep0rp0, desc0, dep1rp0, desc1, dep2rp0);
 	struct PC {
 		uint32_t width;
-	} pc0{ 123 }, pc1{ ex.width }, pc2{ ex.height };
+	} pc0{ 123 }, pc1{ ex.width }, pc2{ ex.width };
 	ZPushRange<PC> range(VK_SHADER_STAGE_FRAGMENT_BIT);
 	ZPipelineLayout layout0 = lm0.createPipelineLayout(range);
 	ZDescriptorSetLayout dsLayout1 = lm1.createDescriptorSetLayout();
@@ -132,27 +144,31 @@ TriLogicInt runTests(add_ref<VulkanContext> canvas, add_cref<Params> params)
 	}
 	std::vector<RPA> colors2
 	{
-		RPA(AttachmentDesc::Color, VK_FORMAT_R32_UINT, makeClearColor(UVec4(13u)), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-		RPA(AttachmentDesc::Color, VK_FORMAT_R32_UINT, makeClearColor(UVec4(14u)), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+		RPA(AttachmentDesc::Color, VK_FORMAT_R32_UINT, makeClearColor(UVec4(13u)),
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+		RPA(AttachmentDesc::Color, VK_FORMAT_R32_UINT, makeClearColor(UVec4(14u)),
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
 		RPA(AttachmentDesc::Input, 0u),
 		RPA(AttachmentDesc::Input, 1u),
 	};
 	ZAttachmentPool pool2(colors2);
+	ZSubpassDependency2 dep0rp2(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+								VK_ACCESS_NONE, VK_ACCESS_INPUT_ATTACHMENT_READ_BIT);
 	ZSubpassDescription2 desc2(
 		{ RPR(2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
 		  RPR(3, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) });
-	ZRenderPass rp2 = createRenderPass2(canvas.device, pool2, desc2);
+	ZRenderPass rp2 = createRenderPass2(canvas.device, pool2,  desc2);
 	ZPipeline pipeline2 = createGraphicsPipeline(layout2, ex, rp2, vertexInput,
-							vertShaderModule, frag1ShaderModule, gpp::SubpassIndex(0));
+							vertShaderModule, frag2ShaderModule, gpp::SubpassIndex(0));
 	ZFramebuffer framebuffer2 = createFramebuffer(rp2, ex, { view0, view1 });
 
 	ZImageMemoryBarrier bar0(img0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+									VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	ZImageMemoryBarrier bar1(img1, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+									VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	{
-		OneShotCommandBuffer cmd(canvas.device, canvas.graphicsQueue);
+		OneShotCommandBuffer cmd(cmdPool);
 		commandBufferBindVertexBuffers(cmd, vertexInput);
 		{
 			auto rpbi = commandBufferBeginRenderPass(cmd, framebuffer0);
@@ -161,6 +177,7 @@ TriLogicInt runTests(add_ref<VulkanContext> canvas, add_cref<Params> params)
 			vkCmdDraw(**cmd, vertexInput.getVertexCount(0), 1, 0, 0);
 			commandBufferNextSubpass(rpbi);
 			commandBufferBindPipeline(cmd, pipeline1);
+			commandBufferBindVertexBuffers(cmd, vertexInput);
 			commandBufferPushConstants(cmd, layout1, pc1);
 			vkCmdDraw(**cmd, vertexInput.getVertexCount(0), 1, 0, 0);
 			commandBufferEndRenderPass(rpbi);

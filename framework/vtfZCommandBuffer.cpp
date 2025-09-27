@@ -410,11 +410,23 @@ extern uint32_t frameBufferTransitAttachments (ZRenderPass, ZFramebuffer, uint32
 ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZRenderPass renderPass,
 												   ZFramebuffer framebuffer,VkSubpassContents contents)
 {
+	ZDevice device = cmd.getParam<ZDevice>();
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	const int version = renderPass.getParam<int>();
 	const uint32_t subpassCount = renderPass.getParam<ZDistType<SubpassCount, uint32_t>>();
 	ASSERTMSG(subpassCount, "There is no subpasses to process");
 	ZRenderPassBeginInfo	renderPassBegin(cmd, renderPass, framebuffer, 0u, contents);
 	VkRenderPassBeginInfo	info = renderPassBegin();
-	vkCmdBeginRenderPass(*cmd, &info, contents);
+	if (version == 1)
+	{
+		di.vkCmdBeginRenderPass(*cmd, &info, contents);
+	}
+	else
+	{
+		const VkSubpassBeginInfo beginInfo { VK_STRUCTURE_TYPE_SUBPASS_BEGIN_INFO, nullptr, contents };
+		di.vkCmdBeginRenderPass2(*cmd, &info, &beginInfo);
+	}
+
 	frameBufferTransitAttachments(renderPass, framebuffer, INVALID_UINT32, true);
 	return renderPassBegin;
 }
@@ -427,11 +439,23 @@ ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZFramebuf
 
 bool commandBufferNextSubpass (add_ref<ZRenderPassBeginInfo> beginInfo)
 {
-	const uint32_t subpassCount = beginInfo.getRenderPass().getParam<ZDistType<SubpassCount, uint32_t>>();
+	ZCommandBuffer cmd = beginInfo.getCommandBuffer();
+	ZDevice device = cmd.getParam<ZDevice>();
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	ZRenderPass rp = beginInfo.getRenderPass();
+	const int version = rp.getParam<int>();
+	const uint32_t subpassCount = rp.getParam<ZDistType<SubpassCount, uint32_t>>();
 	if (uint32_t subpass = beginInfo.getSubpass(); subpass < subpassCount)
 	{
-		vkCmdNextSubpass(*beginInfo.getCommandBuffer(), beginInfo.getContents());
-		frameBufferTransitAttachments(beginInfo.getRenderPass(), beginInfo.getFramebuffer(), subpass);
+		if (version == 1)
+			di.vkCmdNextSubpass(*cmd, beginInfo.getContents());
+		else
+		{
+			const VkSubpassBeginInfo startInfo{ VK_STRUCTURE_TYPE_SUBPASS_BEGIN_INFO, nullptr, beginInfo.getContents() };
+			const VkSubpassEndInfo endInfo{ VK_STRUCTURE_TYPE_SUBPASS_END_INFO, nullptr };
+			di.vkCmdNextSubpass2(*cmd, &startInfo, &endInfo);
+		}
+		frameBufferTransitAttachments(rp, beginInfo.getFramebuffer(), subpass);
 		beginInfo.consumeSubpass();
 		return true;
 	}
@@ -440,14 +464,25 @@ bool commandBufferNextSubpass (add_ref<ZRenderPassBeginInfo> beginInfo)
 
 void commandBufferEndRenderPass (add_cref<ZRenderPassBeginInfo> beginInfo)
 {
+	const VkSubpassBeginInfo startInfo{ VK_STRUCTURE_TYPE_SUBPASS_BEGIN_INFO, nullptr, beginInfo.getContents() };
+	const VkSubpassEndInfo endInfo{ VK_STRUCTURE_TYPE_SUBPASS_END_INFO, nullptr };
+
 	ZCommandBuffer cmdBuffer = beginInfo.getCommandBuffer();
-	const uint32_t subpassCount = beginInfo.getRenderPass().getParam<ZDistType<SubpassCount, uint32_t>>();
+	ZDevice device = cmdBuffer.getParam<ZDevice>();
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	ZRenderPass rp = beginInfo.getRenderPass();
+	const int version = rp.getParam<int>();
+	const uint32_t subpassCount = rp.getParam<ZDistType<SubpassCount, uint32_t>>();
 	for (uint32_t i = (beginInfo.getSubpass() + 1u); i < subpassCount; ++i)
 	{
-		vkCmdNextSubpass(*cmdBuffer, beginInfo.getContents());
+		if (version == 1)
+			di.vkCmdNextSubpass(*cmdBuffer, beginInfo.getContents());
+		else di.vkCmdNextSubpass2(*cmdBuffer, &startInfo, &endInfo);
 	}
-	vkCmdEndRenderPass(*cmdBuffer);
-	frameBufferTransitAttachments(beginInfo.getRenderPass(), beginInfo.getFramebuffer(), INVALID_UINT32, false);
+	if (version == 1)
+		di.vkCmdEndRenderPass(*cmdBuffer);
+	else di.vkCmdEndRenderPass2(*cmdBuffer, &endInfo);
+	frameBufferTransitAttachments(rp, beginInfo.getFramebuffer(), INVALID_UINT32, false);
 }
 
 void commandBufferBeginRendering(

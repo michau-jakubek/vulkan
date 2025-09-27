@@ -322,9 +322,10 @@ static ZRenderPass	createRenderPassImpl
 	renderPassInfo.pDependencies	= data_or_null(subpassDeps);
 
 	const VkAllocationCallbacksPtr	callbacks	= device.getParam<VkAllocationCallbacksPtr>();
-	ZRenderPass	renderPass = ZRenderPass::create(VK_NULL_HANDLE, device, callbacks,
+	ZRenderPass	renderPass = ZRenderPass::create(VK_NULL_HANDLE, device, callbacks, 1,
 												 attachmentCount, renderPassInfo.subpassCount,
-												 {/*clearValues*/}, depthStencilFormat, finalColorLayout, {}, {});
+												 {/*clearValues*/}, depthStencilFormat, finalColorLayout, 
+												 {/*ZAttachmentPool*/}, {/*subpassDescriptions*/ });
 	VKASSERT(vkCreateRenderPass(*device, &renderPassInfo, callbacks, renderPass.setter()));
 
 	add_ref<std::vector<VkClearValue>> clearValues = renderPass.getParamRef<std::vector<VkClearValue>>();

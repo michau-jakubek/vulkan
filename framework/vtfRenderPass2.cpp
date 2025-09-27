@@ -385,8 +385,15 @@ void pushRenderpassParams (
     {
         add_ref<ZSubpassDependency2> dep = deps[i];
 
-        if (dep.srcSubpass == 0u)
+        if (dep.srcSubpass == 0u) // there was zero descriptions
         {
+            dep.srcSubpass = VK_SUBPASS_EXTERNAL;
+            dep.dstSubpass = 0u;
+        }
+        else if ((data_count(deps) - 1u) == i)
+        {
+            dep.srcSubpass = dep.srcSubpass - 1u;
+            dep.dstSubpass = VK_SUBPASS_EXTERNAL;
         }
         else
         {
@@ -508,10 +515,11 @@ ZRenderPass createRenderPassImpl2 (ZDevice device, ZAttachmentPool pool,
     c.pCorrelatedViewMasks      = (const uint32_t*)nullptr;
 
     const VkAllocationCallbacksPtr	callbacks = device.getParam<VkAllocationCallbacksPtr>();
-    ZRenderPass	renderPass = ZRenderPass::create(VK_NULL_HANDLE, device, callbacks,
+    ZRenderPass	renderPass = ZRenderPass::create(VK_NULL_HANDLE, device, callbacks, 2,
                                                     c.attachmentCount, c.subpassCount,
                                                     clearValues, VK_FORMAT_UNDEFINED, VK_IMAGE_LAYOUT_UNDEFINED,
-                                                    std::any(pool), {});
+                                                    std::any(pool), {/*subpassDescriptions*/});
+
     renderPass.verbose(getGlobalAppFlags().verbose);
     add_ref<std::vector<ZDistType<SomeTwo, std::any>>> ss =
         renderPass.getParamRef<std::vector<ZDistType<SomeTwo, std::any>>>();
