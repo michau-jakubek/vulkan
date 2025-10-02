@@ -1,6 +1,7 @@
 #include "intGraphics.hpp"
 #include "vtfOptionParser.hpp"
 #include "vtfCanvas.hpp"
+#include "vtfZRenderPass.hpp"
 #include "vtfZImage.hpp"
 #include "vtfDSBMgr.hpp"
 #include "vtfProgramCollection.hpp"
@@ -564,7 +565,10 @@ TriLogicInt runTests (std::shared_ptr<VulkanContext> ctx, add_cref<TestParams> p
 
 	const VkFormat				renderFormat		= VK_FORMAT_R32G32B32A32_SFLOAT;
 	const VkClearValue			clearColor			{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
-	ZRenderPass					renderRenderPass	= createColorRenderPass(ctx->device, { renderFormat }, { {clearColor} });
+	const std::vector<RPA>		fbLayout			{ RPA(AttachmentDesc::Color, renderFormat, clearColor) };
+	const ZAttachmentPool		attachmentPool		(fbLayout);
+	const ZSubpassDescription2	subpass				({ RPAR(0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) });
+	ZRenderPass					renderRenderPass	= createRenderPass(ctx->device, attachmentPool, subpass);
 	const uint64_t				size				= (params.extent.width * params.extent.height);
 	ZImage						renderImage			= ctx->createColorImage2D(renderFormat, params.extent.width, params.extent.height);
 	ZImageView					renderView			= createImageView(renderImage);
@@ -605,8 +609,7 @@ TriLogicInt runTests (std::shared_ptr<VulkanContext> ctx, add_cref<TestParams> p
 	{
 		int							displayTrigger		= 1;
 		add_ref<Canvas>				canvas				= *std::static_pointer_cast<Canvas>(ctx);
-		const VkFormat				displayFormat		= canvas.surfaceFormat;
-		ZRenderPass					displayRenderPass	= createColorRenderPass(ctx->device, { displayFormat }, { {clearColor} });
+		ZRenderPass					displayRenderPass	= canvas.createSinglePresentationRenderPass(clearColor);
 
 		auto						onKey				= [](add_ref<Canvas> cs, void*, const int key, int, int action, int) -> void
 															{

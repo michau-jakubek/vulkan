@@ -2,6 +2,7 @@
 #include "vtfBacktrace.hpp"
 #include "vtfCUtils.hpp"
 #include "vtfContext.hpp"
+#include "vtfZRenderPass.hpp"
 #include "vtfStructUtils.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfProgramCollection.hpp"
@@ -253,7 +254,10 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 	ZShaderModule		forwardShader	= programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT, 0);
 	ZShaderModule		backwardShader	= programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT, 1);
 
-	ZRenderPass			renderPass		= createColorRenderPass(ctx.device, { format });
+	const std::vector<RPA>		colors	{ RPA(AttachmentDesc::Color, format, {}) };
+	const ZAttachmentPool		fbLayout(colors);
+	const ZSubpassDescription2	subpass	({ RPAR(0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) });
+	ZRenderPass			renderPass		= createRenderPass(ctx.device, fbLayout, subpass);
 	ZFramebuffer		framebuffer		= createFramebuffer(renderPass, extent, { colorView });	
 	ZPipelineLayout		pipelineLayout	= lm.createPipelineLayout({ lm.createDescriptorSetLayout() });
 	ZPipeline			graphPipeline	= createGraphicsPipeline(pipelineLayout, renderPass,
@@ -362,7 +366,7 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 	// 3. renderpass samples storage image to framebuffer
 	// 4. compute copies framebuffer to buffer2
 	// 5: pipeline copies buffer2 to buffer3
-	/*
+	
 	std::vector<uint32_t> buffer0data(lm.getBindingElementCount(buffer0binding));
 	std::iota(buffer0data.begin(), buffer0data.end(), 1u);
 	lm.writeBinding(buffer0binding, buffer0data);
@@ -378,11 +382,11 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 	std::vector<uint32_t> buffer3data(lm.getBindingElementCount(buffer3binding));
 	std::iota(buffer3data.begin(), buffer3data.end(), 4u);
 	lm.writeBinding(buffer3binding, buffer3data);
-*/
+
 	ZCommandPool graphicsCommandPool = ctx.createGraphicsCommandPool();
 
 	execute(ctx, graphicsCommandPool, beginEndCommand<decltype(record), decltype(draw)>, record, draw, framebuffer, renderPass);
-/*
+
 	lm.readBinding(buffer1binding, buffer1data);
 	lm.readBinding(buffer2binding, buffer2data);
 	lm.readBinding(buffer3binding, buffer3data);
@@ -413,7 +417,6 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 								   buffer1data.at(mismatchIndex),
 								   buffer2data.at(mismatchIndex),
 								   buffer3data.at(mismatchIndex)) << std::endl;
-								   */
 	return 1;
 }
 

@@ -1,6 +1,7 @@
 #include "intGeomTests.hpp"
 #include "vtfOptionParser.hpp"
 #include "vtfCanvas.hpp"
+#include "vtfZRenderPass.hpp"
 #include "vtfZImage.hpp"
 #include "vtfDSBMgr.hpp"
 #include "vtfProgramCollection.hpp"
@@ -301,7 +302,7 @@ TriLogicInt runTests (Canvas& cs, add_cref<Params> params)
 	const uint32_t		mvpBinding = lm.addBinding(mvpBuffer, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER); UNREF(mvpBinding);
 	ZDescriptorSetLayout dsLayout = lm.createDescriptorSetLayout();
 	ZPipelineLayout		pipelineLayout = lm.createPipelineLayout({ dsLayout });
-	ZRenderPass			renderPass = createColorRenderPass(cs.device, { format }, { {clearColor} });
+	ZRenderPass			renderPass = createSinglePresentationRenderPass(cs.device, format, clearColor);
 	ZPipeline			pipeline = createGraphicsPipeline(pipelineLayout, renderPass,
 															vert, geom, frag, params.topology, vertexInput.binding(0),
 															gpp::SubpassIndex(0), gpp::PrimitiveRestart(true),

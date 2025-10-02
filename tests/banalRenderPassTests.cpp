@@ -2,7 +2,7 @@
 #include "vtfContext.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfZUtils.hpp"
-#include "vtfRenderPass2.hpp"
+#include "vtfZRenderPass2.hpp"
 #include "vtfZPipeline.hpp"
 #include "vtfProgramCollection.hpp"
 #include "vtfZImage.hpp"
@@ -97,11 +97,11 @@ TriLogicInt runTests(add_ref<VulkanContext> canvas, add_cref<Params> params)
 	const uint32_t b0_binding = lm1.addBinding(buff0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);
 	const uint32_t b1_binding = lm1.addBinding(buff1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);
 	ZSubpassDescription2 desc0(
-		{ RPR(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL),
-		  RPR(1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) });
+		{ RPAR(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL),
+		  RPAR(1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) });
 	ZSubpassDescription2 desc1(
-		{ RPR(2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-		  RPR(3, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) });
+		{ RPAR(2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+		  RPAR(3, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) });
 	ZSubpassDependency2 dep0rp0(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 								VK_ACCESS_NONE, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
 	ZSubpassDependency2 dep1rp0(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -155,9 +155,9 @@ TriLogicInt runTests(add_ref<VulkanContext> canvas, add_cref<Params> params)
 	ZSubpassDependency2 dep0rp2(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 								VK_ACCESS_NONE, VK_ACCESS_INPUT_ATTACHMENT_READ_BIT);
 	ZSubpassDescription2 desc2(
-		{ RPR(2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
-		  RPR(3, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) });
-	ZRenderPass rp2 = createRenderPass2(canvas.device, pool2,  desc2);
+		{ RPAR(2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+		  RPAR(3, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) });
+	ZRenderPass rp2 = createRenderPass2(canvas.device, pool2, desc2);
 	ZPipeline pipeline2 = createGraphicsPipeline(layout2, ex, rp2, vertexInput,
 							vertShaderModule, frag2ShaderModule, gpp::SubpassIndex(0));
 	ZFramebuffer framebuffer2 = createFramebuffer(rp2, ex, { view0, view1 });

@@ -1,6 +1,7 @@
 #include "allTests.hpp"
 #include "vtfOptionParser.hpp"
 #include "vtfCanvas.hpp"
+#include "vtfZRenderPass.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfZUtils.hpp"
 #include "vtfProgramCollection.hpp"
@@ -494,7 +495,7 @@ TriLogicInt performTest (add_ref<Canvas> cs, add_cref<std::string> assets,
 	LayoutManager			pm					(cs.device);
 	const VkClearValue		clearColor			= {{{0.5f, 0.5f, 0.5, 0.5f}}};
 	const VkFormat			format				= cs.surfaceFormat;
-	ZRenderPass				renderPass			= createColorRenderPass(cs.device, {format}, {{clearColor}});
+	ZRenderPass				renderPass			= createSinglePresentationRenderPass(cs.device, format, clearColor);
 	ZPipelineLayout			pipelineLayout		= config.float32
 													? pm.createPipelineLayout(ZPushRange<PushConstant<float>>())
 													: pm.createPipelineLayout(ZPushRange<PushConstant<double>>());
@@ -546,7 +547,6 @@ TriLogicInt performTest (add_ref<Canvas> cs, add_cref<std::string> assets,
 			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer);
 				vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1, 0, 0);
 			commandBufferEndRenderPass(rpbi);
-			commandBufferMakeImagePresentationReady(cmdBuffer, framebufferGetImage(framebuffer));
 		commandBufferEnd(cmdBuffer);
 	};
 

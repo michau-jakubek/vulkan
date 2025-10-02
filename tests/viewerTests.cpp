@@ -2,6 +2,7 @@
 #include "vtfOptionParser.hpp"
 #include "vtfVertexInput.hpp"
 #include "vtfCanvas.hpp"
+#include "vtfZRenderPass.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfFilesystem.hpp"
 #include "vtfDSBMgr.hpp"
@@ -611,8 +612,7 @@ TriLogicInt runViewerSingleThread (add_ref<Canvas> cs, add_cref<std::string> ass
 						   add_cref<std::vector<ImageFileInfo> > files, const int32_t regularCount, const int32_t panoramaCount)
 {
 	UserData		userData	(static_cast<uint32_t>(files.size()));
-	std::vector<VkFormat> formats{ cs.surfaceFormat };
-	ZRenderPass		renderPass = createColorRenderPass(cs.device, formats, { makeClearColor(Vec4()) });
+	ZRenderPass		renderPass	= cs.createSinglePresentationRenderPass();
 
 	ZShaderModule	faceShader	{};
 	ZShaderModule	vertShader	{};

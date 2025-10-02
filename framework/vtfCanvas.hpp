@@ -24,7 +24,8 @@ struct GlfwInitializerFinalizer
 	bool m_initialized;
 	GlfwInitializerFinalizer (ZInstance instance, bool initialize = true);
 	virtual ~GlfwInitializerFinalizer ();
-	void init(ZInstance instance);
+	void init (ZInstance instance);
+	strings getGlfwRequiredInstanceExtensions ();
 };
 
 struct CanvasStyle
@@ -43,8 +44,8 @@ struct CanvasStyle
 struct CanvasContext
 {
 	VkAllocationCallbacksPtr	cc_callbacks;
-	ZInstance					cc_instance;
 	GlfwInitializerFinalizer	cc_glfw;
+	ZInstance					cc_instance;
 	ZGLFWwindowPtr				cc_window;
 	ZSurfaceKHR					cc_surface;
 	ZPhysicalDevice				cc_physicalDevice;
@@ -103,7 +104,7 @@ public:
 		add_cref<bool> recreateFlag;
 	private:
 		// If rp has no handle then creates only images, otherwise views and framebuffers as well
-		void createFramebuffers (ZRenderPass rp, uint32_t minImageCount);
+		void createFramebuffers (uint32_t minImageCount, ZRenderPass rp);
 		void destroyFramebuffers ();
 		void resetRecreateFlag () { m_recreateFlag = false; }
 		VkSwapchainKHR				m_handle;
@@ -204,9 +205,10 @@ public:
 	add_cref<uint32_t>			height;
 	add_cref<ZQueue>			presentQueue;
 	uint32_t					getPresentQueueFamilyIndex () const;
+	ZRenderPass					createSinglePresentationRenderPass (add_cref<VkClearValue> = {}) const;
 	inline add_ref<GLFWEvents>	events () { return *m_events; }
 
-	void updateExtent();
+	void updateExtent ();
 
 	typedef std::function<void (add_ref<Canvas>)> OnAfterRecording;
 	typedef std::function<void (add_ref<Canvas>, add_ref<int> drawTrigger)> OnIdle;

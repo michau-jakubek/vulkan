@@ -5,25 +5,6 @@
 namespace vtf
 {
 
-ZSubpassDependency::ZSubpassDependency	(VkAccessFlags srcAccess, VkAccessFlags dstAccess,
-										 VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage,
-										 DependencyType type, VkDependencyFlags dependencyFlags, uint32_t multiViewMask)
-	: m_multiViewMask(multiViewMask), m_type(type)
-{
-	add_ref<VkSubpassDependency> dep(*this);
-	dep.srcSubpass		= 0u;
-	dep.dstSubpass		= 0u;
-	dep.srcStageMask	= srcStage;
-	dep.dstStageMask	= dstStage;
-	dep.srcAccessMask	= srcAccess;
-	dep.dstAccessMask	= dstAccess;
-	dep.dependencyFlags	= dependencyFlags;
-}
-VkSubpassDependency ZSubpassDependency::operator ()() const
-{
-	return static_cast<VkSubpassDependency>(*this);
-}
-
 ZMemoryBarrier::ZMemoryBarrier ()
 {
 	add_ref<VkMemoryBarrier> barrier(*this);

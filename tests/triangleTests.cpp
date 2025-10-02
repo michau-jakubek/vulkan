@@ -9,7 +9,8 @@
 #include "vtfBacktrace.hpp"
 #include "vtfVector.hpp"
 #include "vtfZPipeline.hpp"
-#include "vtfRenderPass2.hpp"
+#include "vtfZRenderPass2.hpp"
+#include "vtfZRenderPass.hpp"
 #include <type_traits>
 #include <thread>
 
@@ -121,22 +122,17 @@ TriLogicInt runTriangeSingleThread (Canvas& cs, const std::string& assets, bool 
 
 	const VkFormat				format				= cs.surfaceFormat;
 	const VkClearValue			clearColor			{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
-	auto makeRenderPass2 = [&]
-	{
-		const std::vector<RPA>		colors{ RPA(AttachmentDesc::Color, format, clearColor,
+	const std::vector<RPA>		colors				{ RPA(AttachmentDesc::Presentation, format, clearColor,
 															VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) };
-		const ZAttachmentPool		attachmentPool(colors);
-		const ZSubpassDescription2	subpass({ RPR(0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) });
-		return createRenderPass2(cs.device, attachmentPool, subpass);
-	};
+	const ZAttachmentPool		attachmentPool		(colors);
+	const ZSubpassDescription2	subpass				({ RPAR(0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) });
 	ZRenderPass					renderPass			= vulkan12
-		? makeRenderPass2()
-		: createColorRenderPass(cs.device, { format }, { {clearColor} });
+														? createRenderPass2(cs.device, attachmentPool, subpass)
+														: createRenderPass(cs.device, attachmentPool, subpass);
 	ZPipelineLayout				pipelineLayout		= pl.createPipelineLayout();
 	ZPipeline					mainThreadPipeline	= createGraphicsPipeline(pipelineLayout, renderPass,
 															vertexInput, vertShaderModule, fragShaderModule,
 															VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
-
 	int drawTrigger = 1;
 	cs.events().setDefault(drawTrigger);
 
@@ -156,10 +152,6 @@ TriLogicInt runTriangeSingleThread (Canvas& cs, const std::string& assets, bool 
 			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer);
 				vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1, 0, 0);
 			commandBufferEndRenderPass(rpbi);
-			if (false == vulkan12)
-			{
-				commandBufferMakeImagePresentationReady(cmdBuffer, framebufferGetImage(framebuffer));
-			}
 		commandBufferEnd(cmdBuffer);
 	};
 
@@ -191,7 +183,6 @@ TriLogicInt runTriangleMultipleThreads (Canvas& cs, const std::string& assets, c
 		vertexInput.binding(0).addAttributes(vertices, colors);
 	}
 
-	const VkFormat				format				= cs.surfaceFormat;
 	const VkClearValue			clearColor			{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
 	ZPipelineLayout				pipelineLayout		= LayoutManager(cs.device).createPipelineLayout();
 
@@ -200,7 +191,7 @@ TriLogicInt runTriangleMultipleThreads (Canvas& cs, const std::string& assets, c
 
 	const uint32_t	blitImageWidth	= 1024;
 	const uint32_t	blitImageHeight	= 1024;
-	ZRenderPass		renderPass		= createColorRenderPass(cs.device, {format}, {{clearColor}});
+	ZRenderPass		renderPass		= cs.createSinglePresentationRenderPass(clearColor);
 	struct ThreadLocal
 	{
 		ZPipeline		pipeline;
@@ -214,7 +205,7 @@ TriLogicInt runTriangleMultipleThreads (Canvas& cs, const std::string& assets, c
 		data.pipeline		= createGraphicsPipeline(pipelineLayout, renderPass,
 													 vertexInput, vertShaderModule, fragShaderModule,
 													 makeExtent2D(blitImageWidth, blitImageHeight));
-		data.image			= cs.createColorImage2D(format, blitImageWidth, blitImageHeight);
+		data.image			= cs.createColorImage2D(VK_FORMAT_R32G32B32A32_SFLOAT, blitImageWidth, blitImageHeight);
 		data.view			= createImageView(data.image);
 		data.framebuffer	= createFramebuffer(renderPass, blitImageWidth, blitImageHeight, {data.view});
 		return data;

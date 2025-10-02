@@ -1,4 +1,4 @@
-#include "vtfRenderPass2.hpp"
+#include "vtfZRenderPass2.hpp"
 #include "vtfFormatUtils.hpp"
 #include "vtfStructUtils.hpp"
 #include "vtfZImage.hpp"
@@ -55,13 +55,14 @@ RPA::RPA (AttachmentDesc desc, uint32_t otherRpaIndex)
 {
 }
 
-RPA::RPA (AttachmentDesc desc, VkFormat format, VkClearValue clearValue, VkImageLayout initialLayout, VkImageLayout finalLayout)
+RPA::RPA (AttachmentDesc desc, VkFormat format, VkSampleCountFlagBits samples,
+            VkClearValue clearValue, VkImageLayout initialLayout, VkImageLayout finalLayout)
     : VkAttachmentDescription2 {
         VkAttachmentDescription2(makeVkStruct()).sType,
         nullptr, // const void*                  pNext;
         0,       // VkAttachmentDescriptionFlags flags;
         format,  // VkFormat                     format;
-        VK_SAMPLE_COUNT_1_BIT, // VkSampleCountFlagBits                         samples;
+        samples, // VkSampleCountFlagBits        samples;
         colorLoadOp(format, initialLayout), // VkAttachmentLoadOp   loadOp;
         colorStoreOp(format, finalLayout),  // VkAttachmentStoreOp  storeOp;
         dsLoadOp(format, initialLayout),    // VkAttachmentLoadOp   stencilLoadOp;
@@ -76,6 +77,11 @@ RPA::RPA (AttachmentDesc desc, VkFormat format, VkClearValue clearValue, VkImage
     ASSERTMSG(AttachmentDesc::Input != desc, "Create input attachment as a reference to existing color/depth/stencil attachment");
 }
 
+RPA::RPA(AttachmentDesc desc, VkFormat format, VkClearValue clearValue, VkImageLayout initialLayout, VkImageLayout finalLayout)
+    : RPA(desc, format, VK_SAMPLE_COUNT_1_BIT, clearValue, initialLayout, finalLayout)
+{
+}
+
 VkAttachmentDescription2 RPA::operator()() const
 {
     return static_cast<add_cref<VkAttachmentDescription2>>(*this);
@@ -85,10 +91,10 @@ bool RPA::isResourceAttachment (AttachmentDesc desc)
 {
     switch (desc)
     {
+    case AttachmentDesc::Presentation:
     case AttachmentDesc::Color:
-    case AttachmentDesc::Depth:
-    case AttachmentDesc::Stencil:
     case AttachmentDesc::DeptStencil:
+    case AttachmentDesc::DSAttachment:
         return true;
     default: break;
     }
@@ -99,14 +105,14 @@ add_cptr<char> RPA::descToString (AttachmentDesc desc)
 {
     switch (desc)
     {
+    case AttachmentDesc::Presentation:
+        return "AttachmentDesc::Presentation";
     case AttachmentDesc::Color:
         return "AttachmentDesc::Color";
-    case AttachmentDesc::Depth:
-        return "AttachmentDesc::Depth";
-    case AttachmentDesc::Stencil:
-        return "AttachmentDesc::Stencil";
     case AttachmentDesc::DeptStencil:
         return "AttachmentDesc::DeptStencil";
+    case AttachmentDesc::DSAttachment:
+        return "AttachmentDesc::DSAttachment";
     case AttachmentDesc::Input:
         return "AttachmentDesc::Input";
     case AttachmentDesc::Resolve:
@@ -116,9 +122,6 @@ add_cptr<char> RPA::descToString (AttachmentDesc desc)
     }
     return nullptr;
 }
-
-typedef std::pair<uint32_t, RPA> Item;
-typedef std::vector<Item> ItemVec;
 
 void freeAttachmentPool (add_ptr<ZAttachmentPool>) {}
 ZAttachmentPool::ZAttachmentPool (add_cref<std::vector<RPA>> list)
@@ -218,7 +221,7 @@ uint32_t ZAttachmentPool::updateClearValues (add_ref<std::vector<VkClearValue>> 
 }
 
 void ZAttachmentPool::updateReferences (
-    add_cref<RPRS> referenceIndices,
+    add_cref<RPARS> referenceIndices,
     add_ref<std::vector<VkAttachmentReference2>> inputAttachments,
     add_ref<uint32_t> inputCount, uint32_t inputOffset,
     add_ref<std::vector<VkAttachmentReference2>> colorAttachments,
@@ -237,7 +240,7 @@ void ZAttachmentPool::updateReferences (
 
     add_cref<ItemVec> descriptions = getParamRef<ItemVec>();
     const uint32_t descriptionCount = data_count(descriptions);
-    for (add_cref<RPR> rpr : referenceIndices)
+    for (add_cref<RPAR> rpr : referenceIndices)
     {
         const uint32_t r = rpr.first;
 
@@ -257,6 +260,7 @@ void ZAttachmentPool::updateReferences (
             inputAttachments.push_back(ref);
             break;
         case AttachmentDesc::Color:
+        case AttachmentDesc::Presentation:
             ++colorCount;
             colorAttachments.push_back(ref);
             break;
@@ -287,24 +291,43 @@ add_cref<RPA> ZAttachmentPool::raw (uint32_t at, add_ref<uint32_t> realIndex) co
     return descriptions.at(at).second;
 }
 
-uint32_t ZAttachmentPool::count (AttachmentDesc desc) const
+uint32_t ZAttachmentPool::count (std::initializer_list<AttachmentDesc> descs) const
 {
+    uint32_t result = 0u;
     add_cref<ItemVec> list = getParamRef<ItemVec>();
-    return uint32_t(std::count_if(list.begin(), list.end(), [&](add_cref<Item> a) { return a.second.mDescription == desc; }));
+    for (add_cref<Item> rpa : list)
+        for (auto i = descs.begin(); i != descs.end(); ++i)
+            if (rpa.second.mDescription == *i)
+                result++;
+    return result;
 }
 
-uint32_t ZAttachmentPool::count (add_cref<RPRS> subpassAttachments, AttachmentDesc desc) const
+uint32_t ZAttachmentPool::count (add_cref<RPARS> subpassAttachments, std::initializer_list<AttachmentDesc> descs) const
 {
     uint32_t result = 0u;
     add_cref<ItemVec> list = getParamRef<ItemVec>();
     const uint32_t listSize = data_count(list);
-    for (add_cref<RPR> rpr : subpassAttachments)
+    for (add_cref<RPAR> rpr : subpassAttachments)
     {
         ASSERTMSG(rpr.first < listSize, "???");
-        if (list[rpr.first].second.mDescription == desc)
-            result = result + 1u;
+        for (auto desc = descs.begin(); desc != descs.end(); ++desc)
+            if (list[rpr.first].second.mDescription == *desc)
+                result = result + 1u;
     }
     return result;
+}
+
+uint32_t ZAttachmentPool::getPresentationIndex () const
+{
+    uint32_t index = 0u;
+    add_cref<ItemVec> list = getParamRef<ItemVec>();
+    for (add_cref<Item> item : list)
+    {
+        if (item.second.mDescription == AttachmentDesc::Presentation)
+            return index;
+        ++index;
+    }
+    return INVALID_UINT32;
 }
 
 uint32_t ZAttachmentPool::size () const
@@ -319,7 +342,7 @@ uint32_t ZAttachmentPool::id () const
 
 void freeSubpassDescription2 (add_ptr<ZSubpassDescription2>) {}
 ZSubpassDescription2::ZSubpassDescription2 (
-    add_cref<RPRS>      attachmentReferences,
+    add_cref<RPARS>      attachmentReferences,
     VkPipelineBindPoint pipelineBindPoint,
     uint32_t            viewMask,
     VkSubpassDescriptionFlags flags
@@ -330,7 +353,7 @@ ZSubpassDescription2::ZSubpassDescription2 (
 
     ASSERTMSG(false == attachmentReferences.empty(), "Attachment references must not be empty");
     setParam<ZSubpassDescriptionFlags>(ZSubpassDescriptionFlags::fromFlags(flags));
-    setParam<RPRS>(attachmentReferences);
+    setParam<RPARS>(attachmentReferences);
     setParam<VkPipelineBindPoint>(pipelineBindPoint);
     setParam<uint32_t>(viewMask);
 }
@@ -456,7 +479,7 @@ ZRenderPass createRenderPassImpl2 (ZDevice device, ZAttachmentPool pool,
     for (uint32_t iSubpassDesc = 0; iSubpassDesc < subpassCount; ++iSubpassDesc)
     {
         ZSubpassDescription2 subpassDesc = pSubpasses[iSubpassDesc];
-        pool.updateReferences(subpassDesc.getParamRef<RPRS>(),
+        pool.updateReferences(subpassDesc.getParamRef<RPARS>(),
                                 inputAttachments,   inputCount,     inputOffset,
                                 colorAttachments,   colorCount,     colorOffset,
                                 resolveAttachments, resolveCount,   resolveOffset,
@@ -470,8 +493,10 @@ ZRenderPass createRenderPassImpl2 (ZDevice device, ZAttachmentPool pool,
         desc.pInputAttachments = reinterpret_cast<add_ptr<VkAttachmentReference2>>(static_cast<uintptr_t>(inputOffset));
         desc.colorAttachmentCount = colorCount;
         desc.pColorAttachments = reinterpret_cast<add_ptr<VkAttachmentReference2>>(static_cast<uintptr_t>(colorOffset));
-        desc.pResolveAttachments = data_or_null(resolveAttachments); // TODO
-        desc.pDepthStencilAttachment = data_or_null(dsAttachments); // TODO
+        desc.pResolveAttachments = reinterpret_cast<add_ptr<VkAttachmentReference2>>(static_cast<uintptr_t>(resolveOffset));
+        desc.pDepthStencilAttachment = (0u == dsCount)
+                                        ? nullptr
+                                        : reinterpret_cast<add_ptr<VkAttachmentReference2>>(static_cast<uintptr_t>(dsOffset + 1u));
         desc.preserveAttachmentCount = (uint32_t)0u;
         desc.pPreserveAttachments = (const uint32_t*)nullptr;
 
@@ -489,6 +514,12 @@ ZRenderPass createRenderPassImpl2 (ZDevice device, ZAttachmentPool pool,
             &colorAttachments[static_cast<uint32_t>(reinterpret_cast<uintptr_t>(desc.pColorAttachments))] : nullptr;
         desc.pInputAttachments = desc.inputAttachmentCount ?
             &inputAttachments[static_cast<uint32_t>(reinterpret_cast<uintptr_t>(desc.pInputAttachments))] : nullptr;
+
+        dsOffset = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(desc.pDepthStencilAttachment));
+        if (dsOffset) desc.pDepthStencilAttachment = &dsAttachments[dsOffset - 1u];
+
+        resolveOffset = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(desc.pResolveAttachments));
+        desc.pResolveAttachments = (resolveOffset < data_count(resolveAttachments)) ? &resolveAttachments[resolveOffset] : nullptr;
     }
 
     if (dependencyCount && pDependencies)
@@ -550,7 +581,7 @@ uint32_t renderPassGetAttachmentCount (ZRenderPass renderPass, uint32_t subpass)
     ASSERTMSG(subpass < subpassCount, "Definition subpass ", subpass, " not found among ", subpassCount);
     ZSubpassDescription2 dep = std::any_cast<ZSubpassDescription2>(ss[subpass].get());
 
-    return data_count(dep.getParamRef<RPRS>());
+    return data_count(dep.getParamRef<RPARS>());
 }
 
 uint32_t renderPassSubpassGetColorAttachmentCount (ZRenderPass renderPass, uint32_t subpass)
@@ -568,7 +599,7 @@ uint32_t renderPassSubpassGetColorAttachmentCount (ZRenderPass renderPass, uint3
     ASSERTMSG(subpass < subpassCount, "Definition subpass ", subpass, " not found among ", subpassCount);
     ZSubpassDescription2 dep = std::any_cast<ZSubpassDescription2>(ss[subpass].get());
 
-    return pool.count(dep.getParamRef<RPRS>(), AttachmentDesc::Color);
+    return pool.count(dep.getParamRef<RPARS>(), { AttachmentDesc::Presentation, AttachmentDesc::Color, AttachmentDesc::DeptStencil });
 }
 
 uint32_t frameBufferTransitAttachments (
@@ -611,7 +642,7 @@ uint32_t frameBufferTransitAttachments (
     uint32_t processedAttachments = 0u;
     ASSERTMSG(subpass < subpassCount, "Definition subpass ", subpass, " not found among ", subpassCount);
     ZSubpassDescription2 dep = std::any_cast<ZSubpassDescription2>(ss[subpass].get());
-    for (add_cref<RPR> rpr : dep.getParamRef<RPRS>())
+    for (add_cref<RPAR> rpr : dep.getParamRef<RPARS>())
     {
         uint32_t realIndex = INVALID_UINT32;
         add_cref<RPA> rpa = pool.raw(rpr.first, realIndex);;

@@ -90,8 +90,10 @@ set(framework_files
 	vtfZPushConstants.hpp
 	vtfCogwheelTools.cpp
 	vtfCogwheelTools.hpp
-    vtfRenderPass2.cpp
-    vtfRenderPass2.hpp
+    vtfZRenderPass.cpp
+    vtfZRenderPass.hpp
+    vtfZRenderPass2.cpp
+    vtfZRenderPass2.hpp
 )
 
 set(framework_libs pdriver driver)

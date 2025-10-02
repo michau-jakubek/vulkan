@@ -1,6 +1,7 @@
 #include "topologyTests.hpp"
 #include "vtfOptionParser.hpp"
 #include "vtfCanvas.hpp"
+#include "vtfZRenderPass.hpp"
 #include "vtfZImage.hpp"
 #include "vtfDSBMgr.hpp"
 #include "vtfProgramCollection.hpp"
@@ -518,27 +519,19 @@ TriLogicInt runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> asse
 	ZBuffer						vertexBuffer, indexBuffer;
 	std::tie(vertexBuffer, indexBuffer) = createVertexAndIndexBuffers(vertexInput, params);
 
-	const VkFormat				format				= cs.surfaceFormat;
-	const VkClearValue			clearColor			{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
-	/*
-	ZRenderPass					renderPass			= createColorRenderPass(cs.device, {format}, {{clearColor}},
-														VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-														{
-															ZSubpassDependency::makeBegin(),
-															ZSubpassDependency(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-																				VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
-																				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-																				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-																				ZSubpassDependency::Between),
-															ZSubpassDependency(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-																				VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
-																				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-																				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-																				ZSubpassDependency::Between),
-															ZSubpassDependency::makeEnd()
-														});*/
-	ZRenderPass					renderPass			= createColorRenderPass(cs.device, { format }, { {clearColor} });
-	ZRenderPass					renderPassA			= createColorRenderPass(cs.device, { format }, {}, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	const VkFormat				format		= cs.surfaceFormat;
+	const VkClearValue			clearColor	{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
+	// Define framebuffer attachment layout for drawing primitives
+	const std::vector<RPA>		colors		{ RPA(AttachmentDesc::Presentation, format, clearColor,
+												VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL) };
+	// Define framebuffer attachment layout for drawing points and lines
+	const std::vector<RPA>		colorsA		{ RPA(AttachmentDesc::Presentation, format, clearColor,
+												VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) };
+	// Subpass used two times
+	const ZSubpassDescription2	subpass		({ RPAR(0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) });
+	ZSubpassDependency2 dep					(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+	ZRenderPass					renderPass	= createRenderPass(cs.device, ZAttachmentPool(colors), subpass, dep, subpass);
+	ZRenderPass					renderPassA	= createRenderPass(cs.device, ZAttachmentPool(colorsA), subpass, dep, subpass);
 
 #ifdef _MSC_VER
 #pragma warning(disable: 4324) // structure was padded due to alignment specifier
@@ -580,25 +573,20 @@ TriLogicInt runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> asse
 																	VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_VERTICES_BIT
 																	| VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_PRIMITIVES_BIT);
 	ZBuffer						queryResults		= createBuffer<uint64_t[2]>(cs.device);
-	bufferWrite<uint64_t>(queryResults, 123, 1);
-	bufferWrite<uint64_t>(queryResults, 456, 0);
-	uint64_t queryData[2];
-	bufferRead(queryResults, queryData);
-	std::cout << queryData[0] << ' ' << queryData[1] << std::endl;
 	const VkFrontFace			frontFace			= params.ccwFronFace ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
 	ZPipeline					primitivePipeline	= createGraphicsPipeline(pipelineLayout, renderPass,
 														vertShaderModule, fragShaderModule,
 														makeExtent2D(100,100), vertexInput.binding(0), gpp::SubpassIndex(0),
 														VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR,
 														params.topo, frontFace, gpp::PrimitiveRestart(true));
-	ZPipeline					linesPipeline		= createGraphicsPipeline(pipelineLayout, renderPass,
+	ZPipeline					linesPipeline		= createGraphicsPipeline(pipelineLayout, renderPassA,
 														vertShaderModule, fragShaderModule,
 														makeExtent2D(100,100), vertexInput.binding(0), gpp::SubpassIndex(0),
 														VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR,
 														VK_PRIMITIVE_TOPOLOGY_LINE_STRIP, frontFace);
-	ZPipeline					pointsPipeline		= createGraphicsPipeline(pipelineLayout, renderPass,
+	ZPipeline					pointsPipeline		= createGraphicsPipeline(pipelineLayout, renderPassA,
 														vertShaderModule, fragShaderModule,
-														makeExtent2D(100,100), vertexInput.binding(0), gpp::SubpassIndex(0),
+														makeExtent2D(100,100), vertexInput.binding(0), gpp::SubpassIndex(1),
 														VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR,
 														VK_PRIMITIVE_TOPOLOGY_POINT_LIST, frontFace);
 	UserData userData(params, vertexBuffer, indexBuffer);
@@ -625,6 +613,7 @@ TriLogicInt runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> asse
 					commandBufferBindPipeline(cmdBuffer, primitivePipeline);
 					//vkCmdDraw(*cmdBuffer, userData.pointCount, 1u, 0u, 0u);
 					vkCmdDrawIndexed(*cmdBuffer, userData.pointCount, 1, 0, 0, 0);
+					// Skip next subpass
 				commandBufferEndRenderPass(rpbi);
 			commandBufferEndQuery(qpbi);
 
@@ -634,14 +623,11 @@ TriLogicInt runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> asse
 			rpbi = commandBufferBeginRenderPass(cmdBuffer, renderPassA, framebuffer);
 				commandBufferBindPipeline(cmdBuffer, linesPipeline);
 				vkCmdDraw(*cmdBuffer, userData.pointCount, 1u, 0u, 1u);
-			commandBufferEndRenderPass(rpbi);
-
-			rpbi = commandBufferBeginRenderPass(cmdBuffer, renderPassA, framebuffer);
+				commandBufferNextSubpass(rpbi);
 				commandBufferBindPipeline(cmdBuffer, pointsPipeline);
 				vkCmdDraw(*cmdBuffer, userData.pointCount, 1u, 0u, 2u);
 			commandBufferEndRenderPass(rpbi);
 
-			commandBufferMakeImagePresentationReady(cmdBuffer, renderImage);
 		commandBufferEnd(cmdBuffer);
 	};
 

@@ -1,5 +1,5 @@
-#ifndef __VTF_RENDER_PASS_HPP_INCLUDED__
-#define __VTF_RENDER_PASS_HPP_INCLUDED__
+#ifndef __VTF_ZRENDER_PASS_2_HPP_INCLUDED__
+#define __VTF_ZRENDER_PASS_2_HPP_INCLUDED__
 
 #include "vtfZUtils.hpp"
 #include "vtfZPipeline.hpp"
@@ -13,15 +13,16 @@ class ZAttachmentPool;
 struct ZSubpassDescription2;
 
 /// <summary>
+/// RPAR - Render Pass Attachment Reference
 /// first: the attachment index in the vector passed to the pool
 /// second: equivalent to VkAttachmentReference2::attachment field
 /// </summary>
-struct RPR : public std::pair<uint32_t, VkImageLayout>
+struct RPAR : public std::pair<uint32_t, VkImageLayout>
 {
-	explicit RPR(uint32_t index) : std::pair<uint32_t, VkImageLayout>(index, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL) {}
-	explicit RPR(uint32_t index, VkImageLayout subpassLayout) : std::pair<uint32_t, VkImageLayout>(index, subpassLayout) {}
+	explicit RPAR(uint32_t index) : std::pair<uint32_t, VkImageLayout>(index, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL) {}
+	explicit RPAR(uint32_t index, VkImageLayout subpassLayout) : std::pair<uint32_t, VkImageLayout>(index, subpassLayout) {}
 };
-using RPRS = std::vector<RPR>;
+using RPARS = std::vector<RPAR>;
 
 struct RPA : VkAttachmentDescription2
 {
@@ -29,16 +30,25 @@ struct RPA : VkAttachmentDescription2
 	VkClearValue mClearValue;
 	AttachmentDesc mDescription;
 
+	// if finalLayout == MAX_ENUM then it is set to VK_IMAGE_LAYOUT_(COLOR|DEPTH)_ATTACHMENT_OPTIMAL
+// depending on the format.
+
 	RPA(AttachmentDesc desc, uint32_t otherRpaIndex);
 	RPA(AttachmentDesc desc, VkFormat format, VkClearValue clearValue,
 		VkImageLayout initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		VkImageLayout finalLayout = VK_IMAGE_LAYOUT_MAX_ENUM);
-	RPA(add_cref<RPA>) = default;
+	RPA(AttachmentDesc desc, VkFormat format,
+		VkSampleCountFlagBits samples, VkClearValue clearValue,
+		VkImageLayout initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		VkImageLayout finalLayout = VK_IMAGE_LAYOUT_MAX_ENUM);
 
 	VkAttachmentDescription2 operator()() const;
 	static bool isResourceAttachment (AttachmentDesc desc);
 	static add_cptr<char> descToString (AttachmentDesc desc);
 };
+
+typedef std::pair<uint32_t, RPA> Item;
+typedef std::vector<Item> ItemVec;
 
 void freeAttachmentPool (add_ptr<ZAttachmentPool>);
 class ZAttachmentPool : public
@@ -51,7 +61,16 @@ class ZAttachmentPool : public
 public:
 	ZAttachmentPool (add_cref<std::vector<RPA>> list);
 	void updateDescriptions (add_ref<std::vector<VkAttachmentDescription2>> descs) const;
-	void updateReferences (add_cref<RPRS> referenceIndices,
+	void updateReferences (add_cref<RPARS> referenceIndices,
+						   add_ref<std::vector<VkAttachmentReference>> inputAttachments,
+						   add_ref<uint32_t> inputCount, uint32_t inputOffset,
+						   add_ref<std::vector<VkAttachmentReference>> colorAttachments,
+						   add_ref<uint32_t> colorCount, uint32_t colorOffset,
+						   add_ref<std::vector<VkAttachmentReference>> resolveAttachments,
+						   add_ref<uint32_t> resolveCount, uint32_t resolveOffset,
+						   add_ref<std::vector<VkAttachmentReference>> dsAttachments,
+						   add_ref<uint32_t> dsCount, uint32_t dsOffset) const;
+	void updateReferences (add_cref<RPARS> referenceIndices,
 						   add_ref<std::vector<VkAttachmentReference2>> inputAttachments,
 						   add_ref<uint32_t> inputCount, uint32_t inputOffset,
 						   add_ref<std::vector<VkAttachmentReference2>> colorAttachments,
@@ -63,8 +82,9 @@ public:
 	auto updateClearValues (add_ref<std::vector<VkClearValue>> clearValues) const -> uint32_t;
 	VkAttachmentDescription2 get (uint32_t at, add_ref<uint32_t> realIndex) const;
 	add_cref<RPA> raw (uint32_t at, add_ref<uint32_t> realIndex) const;
-	uint32_t count (add_cref<RPRS> subpassAttachments, AttachmentDesc desc) const;
-	uint32_t count (AttachmentDesc desc) const;
+	uint32_t getPresentationIndex () const;
+	uint32_t count (add_cref<RPARS> subpassAttachments, std::initializer_list<AttachmentDesc> descs) const;
+	uint32_t count (std::initializer_list<AttachmentDesc> descs) const;
 	uint32_t size () const;
 	uint32_t id () const;
 };
@@ -76,7 +96,7 @@ struct ZSubpassDescription2 : public
 	Flags<VkSubpassDescriptionFlags, VkSubpassDescriptionFlagBits>,
 	VkPipelineBindPoint
 	, uint32_t /*viewMask*/
-	, RPRS /*attachmentReferences*/
+	, RPARS /*attachmentReferences*/
 	, ZDistType<SomeZero, uint32_t> /*prevSubpass*/
 	, ZDistType<SomeOne, uint32_t> /*nextSubpass*/
 >
@@ -84,7 +104,7 @@ struct ZSubpassDescription2 : public
 public:
 	using ZSubpassDescriptionFlags =
 		Flags<VkSubpassDescriptionFlags, VkSubpassDescriptionFlagBits>;
-	ZSubpassDescription2 (add_cref<RPRS> attachmentReferences,
+	ZSubpassDescription2 (add_cref<RPARS> attachmentReferences,
 						  VkPipelineBindPoint pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
 						  uint32_t viewMask = 0u,
 						  VkSubpassDescriptionFlags flags = 0);
@@ -134,7 +154,9 @@ using IsDescOrDep = std::bool_constant<std::is_same_v<T, ZSubpassDescription2>
 									|| std::is_same_v<T, ZSubpassDependency2>>;
 
 template<class SubpassDescOrDep, class... SubpassDescsOrDeps>
-ZRenderPass createRenderPass2 (ZDevice device, ZAttachmentPool pool, SubpassDescOrDep const& dd, SubpassDescsOrDeps const&... others)
+ZRenderPass createRenderPass2 (
+	ZDevice device, ZAttachmentPool pool,
+	SubpassDescOrDep const& dd, SubpassDescsOrDeps const&... others)
 {
 	static_assert(
 		std::conjunction_v<IsDescOrDep<SubpassDescOrDep>, IsDescOrDep<SubpassDescsOrDeps>...>,
@@ -155,4 +177,4 @@ ZRenderPass createRenderPass2 (ZDevice device, ZAttachmentPool pool, SubpassDesc
 
 } // namespace vtf
 
-#endif // __VTF_RENDER_PASS_HPP_INCLUDED__
+#endif // __VTF_ZRENDER_PASS_HPP_2_INCLUDED__

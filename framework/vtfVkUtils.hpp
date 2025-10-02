@@ -209,6 +209,36 @@ std::ostream&	operator<<(std::ostream& str, add_cref<ZDeviceQueueCreateInfo> pro
 std::ostream&	operator<<(std::ostream& str, add_cref<VkPrimitiveTopology> topo);
 std::ostream&	operator<<(std::ostream& str, add_cref<VkShaderStageFlagBits> stage);
 
+struct PNextChain
+{
+	PNextChain() { release(); }
+	PNextChain(add_ptr<void_ptr> ppNext_) { reset(ppNext_); }
+	void_ptr release()
+	{
+		void_ptr ptr = pNext;
+		pNext = nullptr;
+		ppNext = &pNext;
+		return ptr;
+	}
+	void_ptr reset(add_ptr<void_ptr> ppNext_)
+	{
+		ASSERTMSG(nullptr != ppNext_, "ppNext must not be null");
+		void_ptr ptr = pNext;
+		ppNext = ppNext_;
+		pNext = *ppNext;
+		return ptr;
+	}
+	void append(void_ptr next)
+	{
+		ASSERTMSG(nullptr != ppNext, "ppNext must not be null, call reset(...)");
+		ASSERTMSG(nullptr != next, "next must not be null");
+		*ppNext = next;
+		ppNext = reinterpret_cast<add_ptr<void_ptr>>(&static_cast<add_ptr<VkBaseOutStructure>>(next)->pNext);
+	}
+private:
+	void_ptr pNext;
+	add_ptr<void_ptr> ppNext;
+};
 } // namespace vtf
 
 #endif // __VTF_VK_UTILS_HPP_INCLUDED__

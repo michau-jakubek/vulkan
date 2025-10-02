@@ -3,6 +3,7 @@
 #include "vtfOptionParser.hpp"
 #include "vtfTermColor.hpp"
 #include "vtfCanvas.hpp"
+#include "vtfZRenderPass.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfProgramCollection.hpp"
 #include "vtfShaderObjectCollection.hpp"
@@ -795,9 +796,14 @@ uint32_t processFile (
 }
 TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
 {
+	const strings instanceExtensions = [] {
+		GlfwInitializerFinalizer gif(ZInstance(), true);
+		return gif.getGlfwRequiredInstanceExtensions();
+	}();
+
 	add_cref<GlobalAppFlags>	appFlags		= getGlobalAppFlags();
 	ZInstance					instance		= createInstance(
-		record.name, getAllocationCallbacks(), appFlags.layers, upgradeInstanceExtensions(strings()), Version(1, 3));
+		record.name, getAllocationCallbacks(), appFlags.layers, upgradeInstanceExtensions(instanceExtensions), Version(1, 3));
 	ZPhysicalDevice				physicalDevice = selectPhysicalDevice(
 		make_signed(appFlags.physicalDeviceIndex), instance, upgradeDeviceExtensions(strings()));
 
@@ -1650,10 +1656,14 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 		}
 
 		const VkFormat colorFormat = VkFormat(currParams.colorFormat);
+		const std::vector<RPA>		colors{ RPA(AttachmentDesc::Color, colorFormat, {},
+												VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL) };
+		const ZAttachmentPool		attachmentPool(colors);
+		const ZSubpassDescription2	subpass({ RPAR(0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) });
 		colorImage			= ctx.createColorImage2D(colorFormat, TestParams::defaultExtent);
 		colorView			= createImageView(colorImage);
 		colorAttachment		= gpp::Attachment(colorView, gpp::AttachmentDesc::Color);
-		colorRenderPass		= createColorRenderPass(ctx.device, { colorFormat }, {}, VK_IMAGE_LAYOUT_GENERAL);
+		colorRenderPass		= createRenderPass(ctx.device, attachmentPool, subpass);
 		colorFB				= createFramebuffer(colorRenderPass, TestParams::defaultExtent, { colorView });
 		colorBuffer			= createBuffer(colorImage, ZBufferUsageStorageFlags, ZMemoryPropertyHostFlags);
 
@@ -1753,7 +1763,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 		commandBufferEnd(displayCmd);
 	};
 
-	ZRenderPass swapRenderPass = createColorRenderPass(ctx.device, { ctx.surfaceFormat }, {}, VK_IMAGE_LAYOUT_MAX_ENUM);
+	ZRenderPass swapRenderPass = createSinglePresentationRenderPass(ctx.device, ctx.surfaceFormat);
 
 	std::vector<BoolVec4> results(data_count(set));
 	auto onAfterRecording = [&](add_ref<Canvas>) -> void
@@ -1776,7 +1786,7 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 		std::cout << beq.getText(results[testIndex]) << std::endl;
 	};
 
-	ctx.run(onCommandRecording, swapRenderPass, std::ref(ev.swapTrigger), {/*onIdle()*/}, onAfterRecording);
+	ctx.run(onCommandRecording, swapRenderPass, std::ref(ev.swapTrigger), {/*onIdle()*/ }, onAfterRecording);
 
 	uint32_t failCount = 0u;
 	for (add_cref<BoolVec4> res : results)

@@ -1,6 +1,7 @@
 #include "lineWidthTests.hpp"
 #include "vtfOptionParser.hpp"
 #include "vtfCanvas.hpp"
+#include "vtfZRenderPass.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfFilesystem.hpp"
 #include "vtfDSBMgr.hpp"
@@ -231,18 +232,20 @@ TriLogicInt runTestSingleThread (add_ref<Canvas> cs, add_cref<std::string> asset
 		vertexInput.binding(1).addAttributes(horzVertices, horzColors);
 	}
 
-	ZRenderPass		dstRenderPass	= createColorRenderPass(cs.device, {cs.surfaceFormat}, {});
+	ZRenderPass		dstRenderPass	= createSinglePresentationRenderPass(cs.device, cs.surfaceFormat);
 	VkFormat		srcFormat		= VK_FORMAT_R32G32B32A32_SFLOAT;
 	uint32_t		srcWidth		= 100;
 	uint32_t		srcHeight		= 100;
 	ZImage			srcImage		= cs.createColorImage2D(srcFormat, srcWidth, srcHeight);
 	ZImageView		srcView			= createImageView(srcImage);
-	ZSubpassDependency	dependency	(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
-									 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-									 ZSubpassDependency::Between);
-	ZRenderPass		srcRenderPass	= createColorRenderPass(cs.device, {srcFormat}, {},
-											VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-											{ dependency });
+
+	const std::vector<RPA>		colors{ RPA(AttachmentDesc::Color, srcFormat, {}) };
+	const ZAttachmentPool		attachmentPool(colors);
+	const ZSubpassDescription2	subpass0({ RPAR(0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) });
+	const ZSubpassDescription2	subpass1({ RPAR(0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) });
+	ZSubpassDependency2			dependency(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+											VK_ACCESS_NONE, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+	ZRenderPass		srcRenderPass	= createRenderPass(cs.device, attachmentPool, subpass0, dependency, subpass1);
 	ZFramebuffer	srcFramebuffer	= createFramebuffer(srcRenderPass, srcWidth, srcHeight, {srcView});
 	ZPipelineLayout	pipelineLayout	= LayoutManager(cs.device).createPipelineLayout();
 	ZPipeline		vertPipeline	= createGraphicsPipeline(pipelineLayout, srcRenderPass,

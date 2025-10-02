@@ -1,6 +1,7 @@
 #include "vtfOptionParser.hpp"
 #include "triangleTests.hpp"
 #include "vtfCanvas.hpp"
+#include "vtfZRenderPass.hpp"
 #include "vtfZImage.hpp"
 #include "vtfDSBMgr.hpp"
 #include "vtfProgramCollection.hpp"
@@ -1129,9 +1130,14 @@ TriLogicInt runDemoteInvocationsSingleThread (Canvas& cs, const std::string& ass
 	}
 	const uint32_t				primitiveStride		= vertexInput.getVertexCount(0) / 3;
 
-	const VkFormat				format				= cs.surfaceFormat;
+    const VkFormat				format				= VK_FORMAT_R8G8B8A8_UNORM;
 	const VkClearValue			clearColor			{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
-	ZRenderPass					renderPass			= createColorRenderPass(cs.device, {format}, {{clearColor}});
+
+	const std::vector<RPA>		colors				{ RPA(AttachmentDesc::Color, format, clearColor,
+														VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL) };
+	const ZAttachmentPool		attachmentPool		(colors);
+	const ZSubpassDescription2	subpass				({ RPAR(0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) });
+	ZRenderPass					renderPass			= createRenderPass(cs.device, attachmentPool, subpass);
 	const uint32_t				srcImageWidth		= make_unsigned(params.width);
 	const uint32_t				srcImageHeight		= make_unsigned(params.height);
 	ZImage						srcImage			= cs.createColorImage2D(format, srcImageWidth, srcImageHeight);
@@ -1177,7 +1183,7 @@ TriLogicInt runDemoteInvocationsSingleThread (Canvas& cs, const std::string& ass
 		commandBufferEnd(cmdBuffer);
 	};
 
-	const int res = cs.run(onCommandRecording, renderPass, std::ref(userData.mDrawTrigger),
+	const int res = cs.run(onCommandRecording, ZRenderPass(), std::ref(userData.mDrawTrigger),
 						Canvas::OnIdle(), std::bind(&PostponedJobs::perform, std::ref(jobs), std::ref(cs)));
 
 	log << hoverClearInfo << hoverOriginInfo << std::endl;

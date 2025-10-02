@@ -64,6 +64,8 @@ set(tests_files
 	mutableDescriptorTests.hpp
 	variablePointersTests.cpp
 	variablePointersTests.hpp
+	transformFeedbackTests.cpp
+	transformFeedbackTests.hpp
     )
 
 if(ENABLE_DAEMON_TEST)

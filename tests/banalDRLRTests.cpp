@@ -833,7 +833,7 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 	ZPipeline					wPipeline	= params.writePipeDisable ? ZPipeline()
 											  : createGraphicsPipeline(wLayout, vert, wFrag, vertexInput,
 													inputRenderingAttachments,
-													gpp::DRAttachmentLocations(writePipelineAttachmentLocations),
+													gpp::RenderingAttachmentLocations(writePipelineAttachmentLocations),
 													gpp::SubpassIndex(0),
 													makeExtent2D(params.frameSize, params.frameSize),
 													VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP);
@@ -850,8 +850,8 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 	ZPipelineLayout				rLayout		= lm1.createPipelineLayout({ dsLayout }, push_const);
 	ZPipeline					rPipeline	= createGraphicsPipeline(rLayout, vert, wrFrag, vertexInput,
 													inputRenderingAttachments,
-													gpp::DRAttachmentLocations(readPipelineAttachmentLocations),
-													gpp::DRInpuAttachmentIndices(readPipelineInputAttachmentIndices),
+													gpp::RenderingAttachmentLocations(readPipelineAttachmentLocations),
+													gpp::RenderingInpuAttachmentIndices(readPipelineInputAttachmentIndices),
 													gpp::SubpassIndex(INVALID_UINT32), readPipelineBlendStates,
 													makeExtent2D(params.frameSize, params.frameSize),
 													VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP);
@@ -920,7 +920,7 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 
 		if (params.useShaderObjects)
 		{
-			VkColorComponentFlags blendWriteMasks[params.rangeAttachments];
+			VkColorComponentFlags blendWriteMasks[Params::rangeAttachments];
 			std::fill_n(std::begin(blendWriteMasks), params.attachmentCount, 0u);
 			di.vkCmdSetColorWriteMaskEXT(**cmd, 0u, params.attachmentCount, blendWriteMasks);
 		}

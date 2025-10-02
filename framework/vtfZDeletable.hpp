@@ -99,16 +99,19 @@ size_t	alloc_get_allocation_size	();
 
 template<class Z> struct ZAccess
 {
-	Z						object;
-	bool					setOrGet;
-	std::function<void(Z)>	callback;
-	ZAccess(bool setOrGet, std::function<void(Z)> cb)
+	typedef std::function<void(Z, add_cref<std::string>)> Callback;
+	Z			object;
+	bool		setOrGet;
+	std::string	message;
+	Callback	callback;
+	ZAccess(bool setOrGet, add_cref<std::string> msg, Callback cb)
 		: object	(VK_NULL_HANDLE)
 		, setOrGet	(setOrGet)
+		, message	(msg)
 		, callback	(cb)
 	{
 	}
-	~ZAccess() { if (setOrGet) callback(object); }
+	~ZAccess() { if (setOrGet) callback(object, message); }
 	operator Z*() { return &object; }
 };
 
@@ -236,9 +239,9 @@ template<class Z, class F, F Ptr, class Tr, class Inh, class... X> struct ZDelet
 	{
 		return ZDeletable(z, x...);
 	}
-	ZAccess<Z> setter()
+	ZAccess<Z> setter(add_cref<std::string> msg = std::string())
 	{
-		return ZAccess<Z>(true, std::bind(&ZDeletable::replace, this, std::placeholders::_1));
+		return ZAccess<Z>(true, msg, std::bind(&ZDeletable::replace, this, std::placeholders::_1, std::placeholders::_2));
 	}
 	bool has_handle () const
 	{
@@ -324,9 +327,9 @@ template<class Z, class F, F Ptr, class Tr, class Inh, class... X> struct ZDelet
 		return (str << demangledName<handle_type>() << ' ' << z.handle() << std::quoted(z.name()));
 	}
 private:
-	void replace(Z z)
+	void replace(Z z, add_cref<std::string> msg)
 	{
-		ASSERTION(VK_NULL_HANDLE != z);
+		ASSERTMSG(VK_NULL_HANDLE != z, demangledName<Z>(), " must not be null ", msg);
 		add_ptr<AnObject> obj = super::get();
 		ASSERTION(VK_NULL_HANDLE == obj->handle);
 		obj->handle = z;
@@ -363,7 +366,7 @@ enum ZDistName
 	CullModeFlags, DepthTestEnable, DepthWriteEnable, StencilTestEnable,
 	LineWidth, AttachmentCount, SubpassCount, ViewportCount, ScissorCount,
 	SpecConstants, BlendAttachmentState, BlendConstants, PipelineCreateFlags,
-	DRAttachmentLocations, DRInpuAttachmentIndices
+	RenderingAttachmentLocations, RenderingInpuAttachmentIndices, RasterizerDiscardEnable,
 };
 template<ZDistName, class CType_>
 struct ZDistType
@@ -542,7 +545,7 @@ typedef ZDeletable<VkFramebuffer,
 	decltype(&vkDestroyFramebuffer), &vkDestroyFramebuffer,
 	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
 	ZDistType<Width, uint32_t>, ZDistType<Height, uint32_t>,
-	ZRenderPass, std::vector<ZImageView>>
+	ZRenderPass, std::vector<ZImageView>, uint32_t /*viewCount*/>
 ZFramebuffer;
 
 typedef ZDeletable<VkSampler,
@@ -553,11 +556,14 @@ ZSampler;
 
 struct type_index_with_default : public std::type_index
 {
+    std::size_t size = 0u;
 	type_index_with_default () : std::type_index(typeid(void)) {}
 	type_index_with_default (add_cref<std::type_info> info) : std::type_index(info) {}
 	type_index_with_default (add_cref<std::type_index> index) : std::type_index(index) {}
 	template<class X> static type_index_with_default make () {
-		return type_index_with_default(typeid(X));
+        type_index_with_default tiwd(typeid(X));
+        tiwd.size = sizeof(X);
+        return tiwd;
 	}
 };
 

@@ -89,15 +89,17 @@ ZShaderModule createShaderModule (
 	return ZShaderModule::create(shaderModule, device, callbacks, stage, entryName);
 }
 
-ZFramebuffer createFramebuffer (ZRenderPass renderPass, add_cref<VkExtent2D> size, const std::vector<ZImageView>& attachments)
+ZFramebuffer createFramebuffer (ZRenderPass renderPass, add_cref<VkExtent2D> size,
+								const std::vector<ZImageView>& attachments, uint32_t viewCount)
 {
-	return createFramebuffer(renderPass, size.width, size.height, attachments);
+	return createFramebuffer(renderPass, size.width, size.height, attachments, viewCount);
 }
 
-ZFramebuffer createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t height, const std::vector<ZImageView>& attachments)
+ZFramebuffer createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t height,
+								const std::vector<ZImageView>& attachments, uint32_t viewCount)
 {
 	const uint32_t	renderAttachmentCount	= renderPass.getParam<ZDistType<AttachmentCount, uint32_t>>();
-	const uint32_t	attachmentCount			= data_count(attachments);
+	const uint32_t	attachmentCount			= INVALID_UINT32 == viewCount ? data_count(attachments) : viewCount;
 	const ZDevice	device					= renderPass.getParam<ZDevice>();
 	const auto		allocationCallbacks		= device.getParam<VkAllocationCallbacksPtr>();
 
@@ -126,7 +128,7 @@ ZFramebuffer createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t
 
 	VKASSERT(vkCreateFramebuffer(*device, &framebufferInfo, allocationCallbacks, &framebuffer));
 
-	return ZFramebuffer::create(framebuffer, device, allocationCallbacks, width, height, renderPass, attachments);
+	return ZFramebuffer::create(framebuffer, device, allocationCallbacks, width, height, renderPass, attachments, attachmentCount);
 }
 
 ZRenderPassBeginInfo::ZRenderPassBeginInfo (ZCommandBuffer cmd, ZFramebuffer framebuffer,
@@ -160,253 +162,6 @@ VkRenderPassBeginInfo ZRenderPassBeginInfo::operator ()() const
 	info.pClearValues				= data_or_null(clearValues);
 
 	return info;
-}
-
-static ZRenderPass	createRenderPassImpl
-(
-	ZDevice device,
-	void* pNext, 
-	VkFormat depthStencilFormat,
-	add_cref<std::vector<VkFormat>> colorFormats,
-	add_cref<std::vector<VkClearValue>> clearColors,
-	VkImageLayout initialColorLayout, VkImageLayout finalColorLayout,
-	add_cref<std::vector<ZSubpassDependency>> deps
-)
-{
-	const uint32_t attachmentCount = data_count(colorFormats);
-	ASSERTMSG(colorFormats.size(), "pColorAttachments must contain at least one element");
-	ASSERTMSG(deviceGetPhysicalLimits(device).maxColorAttachments > attachmentCount,
-			  "Attachments you want exceed maxAttachmens");
-
-	add_cptr<std::vector<VkClearValue>> pClearColors = clearColors.size() ? &clearColors : nullptr;
-	const uint32_t clearColorCount = data_count(clearColors);
-
-	VkAttachmentDescription colorDescTemplate{};
-	colorDescTemplate.flags				= VkAttachmentDescriptionFlags(0);
-	colorDescTemplate.format			= VK_FORMAT_UNDEFINED;
-	colorDescTemplate.samples			= VK_SAMPLE_COUNT_1_BIT;
-	colorDescTemplate.loadOp			= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	colorDescTemplate.storeOp			= VK_ATTACHMENT_STORE_OP_STORE;
-	colorDescTemplate.stencilLoadOp		= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	colorDescTemplate.stencilStoreOp	= VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	colorDescTemplate.initialLayout		= initialColorLayout;
-	colorDescTemplate.finalLayout		= finalColorLayout;
-
-	bool enableDepthStencil = false;
-	VkAttachmentDescription depthStencilDescTemplate{};
-	VkAttachmentReference	depthStencilRefTemplate{};
-	if (VK_FORMAT_UNDEFINED != depthStencilFormat)
-	{
-		const std::pair<bool, bool> isDS = formatIsDepthStencil(device.getParam<ZPhysicalDevice>(), depthStencilFormat, true);
-		if (false == isDS.first)
-		{
-			ASSERTFALSE("depthStencilFormat is not Depth or Stencil format or is not supported by device");
-		}
-		enableDepthStencil = true;
-		depthStencilDescTemplate.flags			= VkAttachmentDescriptionFlags(0);
-		depthStencilDescTemplate.format			= depthStencilFormat;
-		depthStencilDescTemplate.samples		= VK_SAMPLE_COUNT_1_BIT;
-		depthStencilDescTemplate.loadOp			= VK_ATTACHMENT_LOAD_OP_CLEAR;
-		depthStencilDescTemplate.storeOp		= VK_ATTACHMENT_STORE_OP_STORE;
-		depthStencilDescTemplate.stencilLoadOp	= VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		depthStencilDescTemplate.stencilStoreOp	= VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		depthStencilDescTemplate.initialLayout	= VK_IMAGE_LAYOUT_UNDEFINED;
-		depthStencilDescTemplate.finalLayout	= VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-		depthStencilRefTemplate.attachment = attachmentCount;
-		depthStencilRefTemplate.layout = depthStencilDescTemplate.finalLayout;
-	}
-
-	VkAttachmentReference	colorRefTemplate{};
-	colorRefTemplate.attachment	= 0u;
-	colorRefTemplate.layout		= finalColorLayout;
-
-	std::vector<VkAttachmentDescription>	descriptions(attachmentCount, colorDescTemplate);
-	std::vector<VkAttachmentReference>		references(attachmentCount, colorRefTemplate);
-
-	for (uint32_t attachment = 0; attachment < attachmentCount; ++attachment)
-	{
-		ASSERTMSG(colorFormats[attachment] != VK_FORMAT_UNDEFINED, "Format must not be VK_FORMAT_UNDEFINED");
-		add_ref<VkAttachmentDescription> desc = descriptions.at(attachment);
-		desc.format	= colorFormats.at(attachment);
-		if (attachment < clearColorCount)
-		{
-			desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		}
-		else if (initialColorLayout == VK_IMAGE_LAYOUT_MAX_ENUM)
-		{
-			desc.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-			desc.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
-		}
-		else
-		{
-			desc.loadOp =  VK_ATTACHMENT_LOAD_OP_LOAD;
-		}
-		references.at(attachment).attachment = attachment;
-	}
-
-	if (enableDepthStencil)
-	{
-		descriptions.emplace_back(depthStencilDescTemplate);
-	}
-
-	VkSubpassDescription subpassTemplate;
-	subpassTemplate.flags					= VkSubpassDescriptionFlags(0);
-	subpassTemplate.pipelineBindPoint		= VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpassTemplate.colorAttachmentCount	= data_count(references);
-	subpassTemplate.pColorAttachments		= data_or_null(references);
-	subpassTemplate.pDepthStencilAttachment = enableDepthStencil ? &depthStencilRefTemplate : nullptr;
-	subpassTemplate.inputAttachmentCount	= 0;
-	subpassTemplate.pInputAttachments		= nullptr;
-	subpassTemplate.preserveAttachmentCount	= 0;
-	subpassTemplate.pPreserveAttachments	= nullptr;
-	subpassTemplate.pResolveAttachments		= nullptr;
-
-	std::vector<VkSubpassDependency> subpassDeps(deps.size());
-
-	// beg, self,	self	self,	end
-	// x-0	0-0		1-1		2-2		2-y
-
-	// beg,	self,	def,	def,	self,	end
-	// x-0	0-0		0-1		1-2		2-2		2-y
-
-	uint32_t	dependencyIdx	= 0u;
-	uint32_t	selfDependencyCount = 0;
-	// There must be at least one subpass
-	uint32_t	subpassCount = 1u;
-	for (add_cref<ZSubpassDependency> dep : deps)
-	{
-		VkSubpassDependency sd = dep();
-		switch (dep.getType())
-		{
-		case ZSubpassDependency::Begin:
-			sd.srcSubpass = VK_SUBPASS_EXTERNAL;
-			sd.dstSubpass = subpassCount - 1u;
-			break;
-		case ZSubpassDependency::Self:
-			sd.srcSubpass = subpassCount - 1u + selfDependencyCount;
-			sd.dstSubpass = subpassCount - 1u + selfDependencyCount;
-			selfDependencyCount = selfDependencyCount + 1u;
-			if (selfDependencyCount > 1u)
-				subpassCount = subpassCount + 1u;
-			break;
-		case ZSubpassDependency::Between:
-			sd.srcSubpass = subpassCount - 1u;
-			sd.dstSubpass = subpassCount;
-			subpassCount = subpassCount + 1u;
-			break;
-		case ZSubpassDependency::End:
-			sd.srcSubpass = subpassCount - 1u;
-			sd.dstSubpass = VK_SUBPASS_EXTERNAL;
-			break;
-		}
-		subpassDeps[dependencyIdx++] = sd;
-	}
-
-	std::vector<VkSubpassDescription> subpasses(subpassCount, subpassTemplate);
-
-	if (pNext)
-	{
-		((VkRenderPassMultiviewCreateInfo*)pNext)->subpassCount = data_count(subpasses);
-		((VkRenderPassMultiviewCreateInfo*)pNext)->dependencyCount = data_count(subpassDeps);
-	}
-
-	VkRenderPassCreateInfo renderPassInfo = makeVkStruct();
-	renderPassInfo.pNext			= pNext;
-	renderPassInfo.flags			= VkRenderPassCreateFlags(0);
-	renderPassInfo.attachmentCount	= data_count(descriptions);
-	renderPassInfo.pAttachments		= data_or_null(descriptions);
-	renderPassInfo.subpassCount		= data_count(subpasses);
-	renderPassInfo.pSubpasses		= data_or_null(subpasses);
-	renderPassInfo.dependencyCount	= data_count(subpassDeps);
-	renderPassInfo.pDependencies	= data_or_null(subpassDeps);
-
-	const VkAllocationCallbacksPtr	callbacks	= device.getParam<VkAllocationCallbacksPtr>();
-	ZRenderPass	renderPass = ZRenderPass::create(VK_NULL_HANDLE, device, callbacks, 1,
-												 attachmentCount, renderPassInfo.subpassCount,
-												 {/*clearValues*/}, depthStencilFormat, finalColorLayout, 
-												 {/*ZAttachmentPool*/}, {/*subpassDescriptions*/ });
-	VKASSERT(vkCreateRenderPass(*device, &renderPassInfo, callbacks, renderPass.setter()));
-
-	add_ref<std::vector<VkClearValue>> clearValues = renderPass.getParamRef<std::vector<VkClearValue>>();
-	clearValues.resize(renderPassInfo.attachmentCount);
-	for (uint32_t a = 0u; a < renderPassInfo.attachmentCount; ++a)
-	{
-		if (pClearColors && (a < pClearColors->size()))
-			clearValues[a] = pClearColors->at(a);
-	}
-	if (enableDepthStencil)
-	{
-		clearValues.back().depthStencil.depth = 1.0f;
-	}
-
-	return renderPass;
-}
-
-ZRenderPass	createColorRenderPass (ZDevice device, add_cref<std::vector<VkFormat>> colorFormats,
-								   std::vector<VkClearValue> clearColors,
-								   VkImageLayout initialColorLayout, VkImageLayout finalColorLayout,
-								   std::initializer_list<ZSubpassDependency> deps)
-{
-	return createRenderPassImpl(device, nullptr, VK_FORMAT_UNDEFINED, colorFormats, clearColors, initialColorLayout, finalColorLayout, deps);
-}
-
-ZRenderPass	createColorRenderPass (ZDevice device, VkFormat depthStencilFormat,
-								   add_cref<std::vector<VkFormat>> colorFormats,
-								   std::vector<VkClearValue> clearColors,
-								   VkImageLayout initialColorLayout, VkImageLayout finalColorLayout,
-								   std::initializer_list<ZSubpassDependency> deps)
-{
-	return createRenderPassImpl(device, nullptr, depthStencilFormat, colorFormats, clearColors, initialColorLayout, finalColorLayout, deps);
-}
-
-ZRenderPass	createMultiViewRenderPass (ZDevice device, add_cref<std::vector<VkFormat>> colorFormats,
-									   std::vector<VkClearValue> clearColors,
-									   std::initializer_list<ZSubpassDependency> dependencies,
-									   VkImageLayout initialColorLayout, VkImageLayout finalColorLayout)
-{
-	std::vector<uint32_t>	viewMasks(1);
-	std::vector<int32_t>	offsets(dependencies.size());
-
-	uint32_t	selfDependencyCount = 0;
-	// There must be at least one subpass
-	uint32_t	subpassCount = 1u;
-	for (add_cref<ZSubpassDependency> dep : dependencies)
-	{
-		switch (dep.getType())
-		{
-		case ZSubpassDependency::Begin:
-			viewMasks.at(subpassCount - 1u) = dep.getMultiViewMask();
-			break;
-		case ZSubpassDependency::Self:
-			viewMasks.at(subpassCount - 1u + selfDependencyCount) = dep.getMultiViewMask();
-			selfDependencyCount = selfDependencyCount + 1u;
-			if (selfDependencyCount > 1u)
-			{
-				subpassCount = subpassCount + 1u;
-				viewMasks.emplace_back(dep.getMultiViewMask());
-			}
-			break;
-		case ZSubpassDependency::Between:
-			viewMasks.at(subpassCount - 1u) = dep.getMultiViewMask();
-			subpassCount = subpassCount + 1u;
-			viewMasks.emplace_back(dep.getMultiViewMask());
-			break;
-		case ZSubpassDependency::End:
-			viewMasks.at(subpassCount - 1u) = dep.getMultiViewMask();
-			break;
-		}
-	}
-
-	VkRenderPassMultiviewCreateInfo info = makeVkStruct();
-	info.subpassCount			= subpassCount;
-	info.pViewMasks				= viewMasks.data();
-	info.dependencyCount		= data_count(dependencies);
-	info.pViewOffsets			= offsets.data();
-	info.correlationMaskCount	= 0u;
-	info.pCorrelationMasks		= nullptr;
-
-	return createRenderPassImpl(device, &info, VK_FORMAT_UNDEFINED, colorFormats, clearColors, initialColorLayout, finalColorLayout, dependencies);
 }
 
 ZRenderPass framebufferGetRenderPass (ZFramebuffer framebuffer)
@@ -462,22 +217,7 @@ ZInstance getSharedInstance ()
 
 strings upgradeInstanceExtensions (add_cref<strings> desiredExtensions)
 {
-	strings e = desiredExtensions;
-	const strings exts = enumerateInstanceExtensions();
-	auto addExt = [&](std::string ext) -> void
-	{
-		if (containsString(exts, ext))
-			e.emplace_back(std::move(ext));
-	};
-
-	addExt("VK_KHR_surface");
-#if SYSTEM_OS_WINDOWS == 1
-	addExt("VK_KHR_win32_surface");
-#elif SYSTEM_OS_LINUX == 1
-	addExt("VK_KHR_xcb_surface");
-	addExt("VK_KHR_xlib_surface");
-#endif
-	return e;
+	return desiredExtensions;
 }
 
 ZInstance createInstance (

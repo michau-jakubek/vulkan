@@ -6,41 +6,6 @@
 namespace vtf
 {
 
-struct ZSubpassDependency : protected VkSubpassDependency
-{
-	enum DependencyType
-	{
-		Begin,
-		Between,
-		Self,
-		End
-	};
-
-	ZSubpassDependency (VkAccessFlags			srcAccess,	VkAccessFlags			dstAccess,
-						VkPipelineStageFlags	srcStage,	VkPipelineStageFlags	dstStage,
-						DependencyType		dependencyType,
-						VkDependencyFlags	dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
-						uint32_t			multiViewMask	= 0u);
-	static ZSubpassDependency makeBegin (uint32_t multiViewMask = 0u) {
-		return ZSubpassDependency(VK_ACCESS_NONE, VK_ACCESS_SHADER_WRITE_BIT,
-								  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-								  ZSubpassDependency::Begin,
-								  VK_DEPENDENCY_BY_REGION_BIT, multiViewMask);
-	}
-	static ZSubpassDependency makeEnd (uint32_t multiViewMask = 0u) {
-		return ZSubpassDependency(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_NONE,
-								  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-								  ZSubpassDependency::End,
-								  VK_DEPENDENCY_BY_REGION_BIT, multiViewMask);
-	}
-	VkSubpassDependency operator ()() const;
-	uint32_t			getMultiViewMask () const { return m_multiViewMask; }
-	DependencyType		getType () const { return m_type; }
-protected:
-	uint32_t		m_multiViewMask;
-	DependencyType	m_type;
-};
-
 struct ZMemoryBarrier : protected VkMemoryBarrier
 {
 	ZMemoryBarrier ();

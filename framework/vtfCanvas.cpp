@@ -9,6 +9,7 @@
 #include "vtfCUtils.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfCanvas.hpp"
+#include "vtfZRenderPass.hpp"
 #include "vtfCopyUtils.hpp"
 #include "vtfDebugMessenger.hpp"
 #include "vtfBacktrace.hpp"
@@ -69,6 +70,12 @@ GlfwInitializerFinalizer::~GlfwInitializerFinalizer ()
 	}
 }
 
+strings getGlfwRequiredInstanceExtensions ();
+strings GlfwInitializerFinalizer::getGlfwRequiredInstanceExtensions ()
+{
+	return ::vtf::getGlfwRequiredInstanceExtensions();
+}
+
 CanvasContext::~CanvasContext ()
 {
 	if (getGlobalAppFlags().verbose)
@@ -126,12 +133,12 @@ CanvasContext::CanvasContext (add_cptr<char>		appName,
 							  add_cref<CanvasStyle>	style,
 							  add_ptr<Canvas>		canvas)
 	: cc_callbacks		(getAllocationCallbacks())
+	, cc_glfw			(ZInstance())
 	, cc_instance		(getSharedInstance() | ([&,this]() -> ZInstance {
 							return createInstance(appName, cc_callbacks, instanceLayers,
 												  mergeStringsDistinct(getGlfwRequiredInstanceExtensions(), instanceExtensions),
 												  apiVersion, enableDebugPrintf);
 							 }))
-	, cc_glfw			(cc_instance)
 	, cc_window			(createWindow(style, appName, canvas))
 	, cc_surface		(createSurface(cc_instance, cc_callbacks, cc_window))
 	, cc_physicalDevice	(getSharedInstance().select(getSharedPhysicalDevice(), ([&,this]() -> ZPhysicalDevice {
@@ -150,8 +157,8 @@ CanvasContext::CanvasContext	(ZPhysicalDevice		physicalDevice,
 								 add_cref<CanvasStyle>	style,
 								 add_ptr<Canvas>		canvas)
 	: cc_callbacks(physicalDevice.getParam<VkAllocationCallbacksPtr>())
+	, cc_glfw(physicalDevice.getParam<ZInstance>())
 	, cc_instance(physicalDevice.getParam<ZInstance>())
-	, cc_glfw(cc_instance)
 	, cc_window(createWindow(style, cc_instance.getParamRef<std::string>().c_str(), canvas))
 	, cc_surface(createSurface(cc_instance, cc_callbacks, cc_window))
 	, cc_physicalDevice(physicalDevice)
@@ -423,6 +430,11 @@ uint32_t Canvas::getPresentQueueFamilyIndex () const
 	return queueGetFamilyIndex(presentQueue);
 }
 
+ZRenderPass Canvas::createSinglePresentationRenderPass(add_cref<VkClearValue> clearColor) const
+{
+	return ::vtf::createSinglePresentationRenderPass(m_device, m_surfaceFormat, clearColor);
+}
+
 Canvas::Swapchain::Swapchain (add_cref<Canvas> aCanvas)
 	: canvas				(aCanvas)
 	, handle				(m_handle)
@@ -488,38 +500,18 @@ void Canvas::Swapchain::destroyFramebuffers ()
 }
 
 // If rp has no handle then creates only images, otherwise views and framebuffers as well
-void Canvas::Swapchain::createFramebuffers (ZRenderPass rp, uint32_t minImageCount)
+void Canvas::Swapchain::createFramebuffers (uint32_t minImageCount, ZRenderPass rp)
 {
-	ASSERTION(m_handle != VK_NULL_HANDLE);
+	ASSERTMSG(m_handle, "Swapchain must have a handle");
 
 	std::vector<VkImage>		presentImages;
 	const uint32_t				imageCount = enumerateSwapchainImages(*canvas.device, m_handle, presentImages);
 	ASSERTION(imageCount >= minImageCount);
-	const VkFormat				format = canvas.surfaceDetails.formats[canvas.surfaceFormatIndex].format;
-	const ZImageUsageFlags		usage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_IMAGE_USAGE_TRANSFER_DST_BIT);
-
-	bool enableDepthStencil = false;
-	if (const VkFormat dsf = rp.getParam<VkFormat>(); dsf != VK_FORMAT_UNDEFINED)
-	{
-		enableDepthStencil = true;
-		m_depthStencilImage = createImage(canvas.device, dsf, VK_IMAGE_TYPE_2D, m_extent.width, m_extent.height,
-											ZImageUsageFlags(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT));
-		m_depthStencilView = createImageView(m_depthStencilImage, dsf, VK_IMAGE_VIEW_TYPE_MAX_ENUM,
-												(VK_IMAGE_ASPECT_DEPTH_BIT /*| VK_IMAGE_ASPECT_STENCIL_BIT*/));
-	}
-
 	minImageCount = std::min(minImageCount, imageCount);
+	m_framebuffers.resize(imageCount);
 	for (uint32_t i = 0; i < minImageCount; ++i)
 	{
-		ZNonDeletableImage image = ZNonDeletableImage::create(presentImages[i], canvas.device, format, m_extent.width, m_extent.height, usage);
-		m_images.emplace_back(image);
-		if (rp.has_handle())
-		{
-			ZImageView view = ::vtf::createImageView(image);
-			if (enableDepthStencil)
-				m_framebuffers.emplace_back(createFramebuffer(rp, m_extent.width, m_extent.height, { view, m_depthStencilView }));
-			else m_framebuffers.emplace_back(createFramebuffer(rp, m_extent.width, m_extent.height, { view }));
-		}
+		m_framebuffers[i] = _createFramebuffer(presentImages[i], rp, m_extent.width, m_extent.height);
 	}
 }
 
@@ -622,7 +614,7 @@ void Canvas::Swapchain::recreate (ZRenderPass rp, uint32_t acquirableImageCount,
 		di.vkDestroySwapchainKHR(*canvas.device, swapchainCreateInfo.oldSwapchain, canvas.callbacks);
 	}
 
-	createFramebuffers(rp, m_framebufferCount);
+	createFramebuffers(m_framebufferCount, rp);
 	m_renderPass = rp;
 	m_recreateFlag = true;
 }
@@ -1083,8 +1075,11 @@ int Canvas::run (OnCommandRecording				onCommandRecording,
 	const uint32_t			backBufferCount		= m_surfaceDetails.caps.minImageCount + style.acquirableImageCount;
 	ZCommandPool			graphicsPool		= createGraphicsCommandPool();
 	std::vector<BackBuffer>	backBuffers;
+	ZRenderPass				rp					= renderPass
+													? renderPass
+													: createSinglePresentationRenderPass();
 
-	swapchain.recreate(renderPass, backBufferCount, 0, 0, true);
+	swapchain.recreate(rp, backBufferCount, 0, 0, true);
 	for (uint32_t i = 0; i < backBufferCount; ++i)
 	{
 		backBuffers.emplace_back(graphicsPool, graphicsPool);

@@ -75,7 +75,7 @@ Float16 float32ToFloat16 (float f)
         return Float16::construct(uint16_t(sign | 0x7C00 | (mantissa ? 0x03FF : 0)));
     }
 
-    return Float16::construct(uint16_t(sign | (exponent << 10) | mantissa));
+    return Float16::construct(uint16_t(sign | uint32_t(exponent << 10) | mantissa));
 }
 
 } // namespace vtf

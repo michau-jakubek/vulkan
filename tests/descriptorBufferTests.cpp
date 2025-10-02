@@ -3,6 +3,7 @@
 #include "vtfBacktrace.hpp"
 #include "vtfProgressRecorder.hpp"
 #include "vtfCanvas.hpp"
+#include "vtfZRenderPass.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfDSBMgr.hpp"
 #include "vtfProgramCollection.hpp"
@@ -410,8 +411,8 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 	ZPipeline				compPline	= createComputePipeline(pLayout, compShader);
 	ZBuffer					desc0Buffer	= useDescriptorSet ? ZBuffer() : set0.createDescriptorBuffer(ds0Layout);
 	ZBuffer					desc1Buffer = useDescriptorSet ? ZBuffer() : set1.createDescriptorBuffer(ds1Layout);
-	ZRenderPass				renderPass	= createColorRenderPass(canvas.device, { canvas.surfaceFormat },
-																{ makeClearColor(Vec4(0,0,0,1)) });
+	ZRenderPass				renderPass	= createSinglePresentationRenderPass(canvas.device, canvas.surfaceFormat,
+																				makeClearColor(Vec4(0,0,0,1)));
 	ZPipelineCache			graphCache = params.m_cache
 											? createPipelineCache(canvas.device, "descriptor_buffer.cache")
 											: ZPipelineCache();

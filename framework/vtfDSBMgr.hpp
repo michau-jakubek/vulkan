@@ -100,9 +100,9 @@ public:
 	/// <summary>
 	/// Special version to create null-descriptors
 	/// </summary>
-	uint32_t	addBinding	(nullptr_t, VkDescriptorType,
+	uint32_t	addBinding	(std::nullptr_t, VkDescriptorType,
 							VkShaderStageFlags = VK_SHADER_STAGE_ALL, VkDescriptorBindingFlags = 0);
-	uint32_t	addBinding	(uint32_t suggestedBinding, nullptr_t, VkDescriptorType,
+	uint32_t	addBinding	(uint32_t suggestedBinding, std::nullptr_t, VkDescriptorType,
 							VkShaderStageFlags = VK_SHADER_STAGE_ALL, VkDescriptorBindingFlags = 0);
 
 	/// <summary>

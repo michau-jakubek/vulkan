@@ -44,8 +44,9 @@ using BlendAttachmentState	= ZDistType<BlendAttachmentState, std::pair<uint32_t,
 using BlendConstants		= ZDistType<BlendConstants, Vec4>;
 using SpecConstants			= ZDistType<SpecConstants, std::pair<VkShaderStageFlagBits, add_ref<ZSpecializationInfo>>>;
 using PrimitiveRestart		= ZDistType<PrimitiveRestart, bool>;
+using RasterizerDiscardEnable = ZDistType<RasterizerDiscardEnable, bool>;
 using ViewMask				= ZDistType<ViewMask, uint32_t>;
-enum AttachmentDesc { Color, Depth, Stencil, DeptStencil, Resolve, Input, Undefined };
+enum AttachmentDesc { Presentation, Color, DeptStencil, DSAttachment, Resolve, Input, Undefined };
 struct AttachmentIndex
 {
 	uint32_t index;
@@ -69,8 +70,8 @@ struct Attachment
 		, storeOp(storeOp_) {}
 	Attachment () : Attachment(ZImageView(), AttachmentDesc::Color) {}
 };
-using DRAttachmentLocations		= ZDistType<DRAttachmentLocations, add_cptr<std::vector<uint32_t>>>;
-using DRInpuAttachmentIndices	= ZDistType<DRInpuAttachmentIndices, add_cptr<std::vector<uint32_t>>>;
+using RenderingAttachmentLocations		= ZDistType<RenderingAttachmentLocations, add_cptr<std::vector<uint32_t>>>;
+using RenderingInpuAttachmentIndices	= ZDistType<RenderingInpuAttachmentIndices, add_cptr<std::vector<uint32_t>>>;
 
 // VkExtent2D	sets both viewport and scissor
 // VkViewport	sets viewport only
@@ -109,8 +110,9 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings>,	ZPipelineCache						
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::Attachment>			drAttachment);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<std::vector<gpp::Attachment>>	drAttachments);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::ViewMask>				drViewMask);
-void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::DRAttachmentLocations>	locations);
-void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::DRInpuAttachmentIndices>	indices);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::RenderingAttachmentLocations>	locations);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::RenderingInpuAttachmentIndices>	indices);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::RasterizerDiscardEnable>	enable);
 
 // end of template recursion
 void updateSettings (add_ref<GraphicPipelineSettings>);

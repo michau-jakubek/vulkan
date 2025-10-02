@@ -79,12 +79,12 @@ TriLogicInt prepareTests(add_cref<TestRecord>& record, add_cref<strings> cmdLine
 
 		// VkPhysicalDeviceBufferAddressFeaturesEXT
 		// VkPhysicalDeviceBufferDeviceAddressFeaturesEXT
-		caps.addUpdateFeatureIf(&VkPhysicalDeviceBufferDeviceAddressFeaturesEXT::bufferDeviceAddress)
-			.checkSupported("bufferDeviceAddress");
-		caps.addExtension(VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+		//caps.addUpdateFeatureIf(&VkPhysicalDeviceBufferDeviceAddressFeaturesEXT::bufferDeviceAddress)
+		//	.checkSupported("bufferDeviceAddress");
+		//caps.addExtension(VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
 
-		caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::shaderInt64)
-			.checkSupported("shaderInt64");
+		//caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::shaderInt64)
+		//	.checkSupported("shaderInt64");
 
 		VkPhysicalDeviceSubgroupProperties subgroupProps = makeVkStruct();
 		deviceGetPhysicalProperties2(caps.physicalDevice, &subgroupProps);

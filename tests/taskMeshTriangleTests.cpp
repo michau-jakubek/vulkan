@@ -7,6 +7,7 @@
 #include "vtfZCommandBuffer.hpp"
 #include "vtfGlfwEvents.hpp"
 #include "vtfCanvas.hpp"
+#include "vtfZRenderPass.hpp"
 #include "vtfStructUtils.hpp"
 
 namespace
@@ -69,7 +70,7 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 	LayoutManager				lm			(canvas.device);
 	const VkFormat				format		= canvas.surfaceFormat;
 	const VkClearValue			clearColor	{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
-	ZRenderPass					renderPass	= createColorRenderPass(canvas.device, { format }, { {clearColor} });
+	ZRenderPass					renderPass	= createSinglePresentationRenderPass(canvas.device, format, clearColor);
 	ZPipelineLayout				layout		= lm.createPipelineLayout();
 	ZPipeline					pipeline	= createGraphicsPipeline(layout, renderPass,
 														taskShader, meshShader, fragShader,

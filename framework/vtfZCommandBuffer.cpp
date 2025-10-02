@@ -758,7 +758,7 @@ void commandBufferDrawIndirect (ZCommandBuffer cmd, ZBuffer buffer)
 {
 	const type_index_with_default type = buffer.getParam<type_index_with_default>();
 	ASSERTMSG((type == type_index_with_default::make<VkDrawIndirectCommand>()
-			   || type == type_index_with_default::make<VkDrawIndirectCommand[]>()),
+               || type == type_index_with_default::make<VkDrawIndirectCommand[1]>()),
 			  "Buffer must be of type VkDrawIndirectCommand or VkDrawIndirectCommand[]");
 	ASSERTMSG((buffer.getParamRef<VkBufferCreateInfo>().usage & VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT),
 			  "Buffer must created with usage bit VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT set");
@@ -771,7 +771,7 @@ void commandBufferDrawIndexedIndirect (ZCommandBuffer cmd, ZBuffer buffer)
 {
 	const type_index_with_default type = buffer.getParam<type_index_with_default>();
 	ASSERTMSG((type == type_index_with_default::make<VkDrawIndexedIndirectCommand>()
-			   || type == type_index_with_default::make<VkDrawIndexedIndirectCommand[]>()),
+               || type == type_index_with_default::make<VkDrawIndexedIndirectCommand[1]>()),
 			  "Buffer must be of type VkDrawIndexedIndirectCommand or VkDrawIndexedIndirectCommand[]");
 	ASSERTMSG((buffer.getParamRef<VkBufferCreateInfo>().usage & VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT),
 			  "Buffer must created with usage bit VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT set");

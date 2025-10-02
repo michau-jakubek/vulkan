@@ -155,8 +155,8 @@ ZImage createImage (ZDevice device, VkFormat format, VkImageType type, uint32_t 
 				  << "       Layers: " << layers
 				  << std::endl;
 	}
-	const VkResult				status = vkGetPhysicalDeviceImageFormatProperties(*phys, format, type, tiling, effectiveUsage, flags, &props);
-	VKASSERTMSG(status, "Unable to create an image with specified parameters");
+	VKASSERTMSG(vkGetPhysicalDeviceImageFormatProperties(*phys, format, type, tiling, effectiveUsage, flags, &props),
+		"Unable to create an image with specified parameters, Format: ", formatGetString(format));
 	// TODO:
 	// VkExtent3D            maxExtent;
 	// uint32_t              maxMipLevels;

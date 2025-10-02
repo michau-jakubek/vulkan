@@ -3,7 +3,7 @@
 #include "vtfBacktrace.hpp"
 #include "vtfZImage.hpp"
 #include "demangle.hpp"
-#include "vtfRenderPass2.hpp"
+#include "vtfZRenderPass2.hpp"
 
 #include <array>
 #include <iostream>
@@ -134,8 +134,8 @@ struct GraphicPipelineSettings
 	VkGraphicsPipelineCreateInfo						m_createInfo;
 
 	std::vector<gpp::Attachment>						m_drAttachments;
-	add_cptr<std::vector<uint32_t>>						m_drAttachmentLocations;
-	add_cptr<std::vector<uint32_t>>						m_drInputAttachmentIndices;
+	std::vector<uint32_t>								m_drAttachmentLocations;
+	std::vector<uint32_t>								m_drInputAttachmentIndices;
 	uint32_t											m_drViewMask;
 
 	GraphicPipelineSettings (ZPipelineLayout layout);
@@ -166,10 +166,10 @@ GraphicPipelineSettings::GraphicPipelineSettings (ZPipelineLayout layout)
 	, m_dynamicStates		()
 	, m_dynamicState		(makeDynamicStateCreateInfo())
 	, m_createInfo			(makePipelineCreateInfo())
-	, m_drAttachments					()
-	, m_drAttachmentLocations		(nullptr)
-	, m_drInputAttachmentIndices	(nullptr)
-	, m_drViewMask						(0)
+	, m_drAttachments				()
+	, m_drAttachmentLocations		()
+	, m_drInputAttachmentIndices	()
+	, m_drViewMask					(0u)
 {
 }
 
@@ -377,7 +377,7 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 		info.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 	}
 
-	void_ptr infoPNext = nullptr;
+	PNextChain chain;
 	std::vector<VkFormat> drFormats;
 	VkRenderingAttachmentLocationInfo	rali = makeVkStruct();
 	VkRenderingInputAttachmentIndexInfo riai = makeVkStruct();
@@ -404,42 +404,29 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 			}
 		}
 
-		if (settings.m_drAttachmentLocations && settings.m_drInputAttachmentIndices)
-		{
-			riai.colorAttachmentCount = data_count(*settings.m_drInputAttachmentIndices);
-			riai.pColorAttachmentInputIndices = settings.m_drInputAttachmentIndices->data();
-			riai.pNext = nullptr;
-
-			rali.colorAttachmentCount = data_count(*settings.m_drAttachmentLocations);
-			rali.pColorAttachmentLocations = settings.m_drAttachmentLocations->data();
-			rali.pNext = &riai;
-
-			drInfo.pNext = &rali;
-		}
-		else if (settings.m_drAttachmentLocations)
-		{
-			rali.colorAttachmentCount = data_count(*settings.m_drAttachmentLocations);
-			rali.pColorAttachmentLocations = settings.m_drAttachmentLocations->data();
-
-			drInfo.pNext = &rali;
-		}
-		else if (settings.m_drInputAttachmentIndices)
-		{
-			riai.colorAttachmentCount = data_count(*settings.m_drInputAttachmentIndices);
-			riai.pColorAttachmentInputIndices = settings.m_drInputAttachmentIndices->data();
-
-			drInfo.pNext = &riai;
-		}
-
-		infoPNext = &drInfo;
 		drInfo.viewMask					= settings.m_drViewMask;
 		drInfo.colorAttachmentCount		= colorAttachmentCount;
 		drInfo.pColorAttachmentFormats	= drFormats.data();
 		drInfo.depthAttachmentFormat	= VK_FORMAT_UNDEFINED;
 		drInfo.stencilAttachmentFormat	= VK_FORMAT_UNDEFINED;
+		chain.append(&drInfo);
 	}
 
-	info.pNext				= infoPNext;
+	if (settings.m_drAttachmentLocations.size())
+	{
+		rali.colorAttachmentCount = data_count(settings.m_drAttachmentLocations);
+		rali.pColorAttachmentLocations = settings.m_drAttachmentLocations.data();
+		chain.append(&rali);
+	}
+	if (settings.m_drInputAttachmentIndices.size())
+	{
+		riai.colorAttachmentCount = data_count(settings.m_drInputAttachmentIndices);
+		riai.pColorAttachmentInputIndices = settings.m_drInputAttachmentIndices.data();
+		chain.append(&riai);
+	}
+
+
+	info.pNext				= chain.release();
 	info.layout				= *settings.m_layout;
 	info.renderPass			= settings.m_renderPass ? *settings.m_renderPass : VK_NULL_HANDLE;
 	info.basePipelineHandle	= VK_NULL_HANDLE;
@@ -546,14 +533,23 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gp
 	settings.m_drAttachments.push_back(drAttachment);
 }
 
-void updateKnownSettings(add_ref<GraphicPipelineSettings> settings, add_cref<gpp::DRAttachmentLocations> locations)
+void updateKnownSettings(add_ref<GraphicPipelineSettings> settings, add_cref<gpp::RenderingAttachmentLocations> locations)
 {
-	settings.m_drAttachmentLocations = locations;
+	if (locations)
+		settings.m_drAttachmentLocations = *locations;
+	else settings.m_drAttachmentLocations.clear();
 }
 
-void updateKnownSettings(add_ref<GraphicPipelineSettings> settings, add_cref<gpp::DRInpuAttachmentIndices> indices)
+void updateKnownSettings(add_ref<GraphicPipelineSettings> settings, add_cref<gpp::RenderingInpuAttachmentIndices> indices)
 {
-	settings.m_drInputAttachmentIndices = indices;
+	if (indices)
+		settings.m_drInputAttachmentIndices = *indices;
+	else settings.m_drInputAttachmentIndices.clear();
+}
+
+void updateKnownSettings(add_ref<GraphicPipelineSettings> settings, add_cref<gpp::RasterizerDiscardEnable> enable)
+{
+	settings.m_rasterizationState.rasterizerDiscardEnable = enable ? VK_TRUE : VK_FALSE;
 }
 
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<std::vector<gpp::Attachment>>	drAttachments)
@@ -759,7 +755,8 @@ ZPipeline createComputePipelineImpl (
 	VkPipelineCache cache = pipelineCache.has_handle() ? *pipelineCache : VK_NULL_HANDLE;
 	ZPipeline	computePipeline (VK_NULL_HANDLE, aDevice, callbacks, layout, ZRenderPass(),
 								 VK_PIPELINE_BIND_POINT_COMPUTE, ci.flags);
-	VKASSERT(vkCreateComputePipelines(*aDevice, cache, 1u, &ci, callbacks, computePipeline.setter()));
+	VKASSERTMSG(vkCreateComputePipelines(*aDevice, cache, 1u, &ci, callbacks, computePipeline.setter("vkCreateComputePipelines")),
+				"Unable to create compute pipeline");
 
 	return computePipeline;
 }

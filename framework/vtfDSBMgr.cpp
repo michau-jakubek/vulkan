@@ -10,7 +10,7 @@
 #include <vulkan/vulkan_to_string.hpp>
 #include <iostream>
 
-static std::pair<VkDescriptorType, VkBufferUsageFlagBits>
+[[maybe_unused]] static std::pair<VkDescriptorType, VkBufferUsageFlagBits>
 const DescriptorTypeToBufferUsage[]
 {
 	{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT	},
@@ -217,14 +217,14 @@ uint32_t DescriptorSetBindingManager::addBinding (uint32_t suggestedBinding,
 }
 
 uint32_t DescriptorSetBindingManager::addBinding(
-	nullptr_t nullValue, VkDescriptorType type,
+	std::nullptr_t nullValue, VkDescriptorType type,
 	VkShaderStageFlags stageFlags, VkDescriptorBindingFlags bindingFlags)
 {
 	return addBinding(INVALID_UINT32, nullValue, type, stageFlags, bindingFlags);
 }
 
 uint32_t DescriptorSetBindingManager::addBinding (
-	uint32_t suggestedBinding, nullptr_t, VkDescriptorType type,
+	uint32_t suggestedBinding, std::nullptr_t, VkDescriptorType type,
 	VkShaderStageFlags stageFlags, VkDescriptorBindingFlags bindingFlags)
 {
 	auto index = std::type_index(typeid(typename add_extent<VkDescriptorType>::type));
@@ -269,7 +269,7 @@ ZDescriptorSetLayout DescriptorSetBindingManager::createDescriptorSetLayout (
 	{
 		for (auto begin = m_extbindings.begin(), b = begin; b != m_extbindings.end(); ++b)
 		{
-			const auto ii = std::distance(begin, b);
+			const auto ii = make_unsigned(std::distance(begin, b));
 			bindings[ii] = *b;
 			bindingsFlags[ii] = b->bindingFlags;
 		}
@@ -641,10 +641,15 @@ uint32_t DescriptorSetBindingManager::getBindingElementCount (uint32_t binding) 
 	add_cref<ExtBinding> b = verifyGetExtBinding(binding);
 	if (descriptorTypeOnList(b.descriptorType, { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER }))
 	{
-		const VkFormat format = b.buffer.getParam<VkFormat>();
-		ASSERTMSG(VK_FORMAT_UNDEFINED != format, "Unknown buffer format");
-		const VkDeviceSize size = b.buffer.getParam<VkDeviceSize>();
-		return uint32_t(size / formatGetInfo(format).pixelByteSize);
+        std::size_t elementSize = b.buffer.getParam<type_index_with_default>().size;
+        if (0u == elementSize)
+        {
+            const VkFormat format = b.buffer.getParam<VkFormat>();
+            ASSERTMSG(VK_FORMAT_UNDEFINED != format, "Unknown buffer format");
+            elementSize = formatGetInfo(format).pixelByteSize;
+        }
+        const VkDeviceSize size = b.buffer.getParam<VkDeviceSize>();
+        return uint32_t(size / elementSize);
 	}
 	ASSERTFALSE("Unsupported descryptor type: ",
 		vk::to_string(static_cast<vk::DescriptorType>(b.descriptorType)));

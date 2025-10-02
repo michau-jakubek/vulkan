@@ -114,8 +114,10 @@ ZShaderModule	createShaderModule (ZDevice device, VkShaderStageFlagBits stage,
 ZShaderModule	createShaderModule (ZDevice device, VkShaderStageFlagBits stage,
                                     add_cref<std::vector<char>> base64Code, add_cref<std::string> entryName = "main");
 
-ZFramebuffer	createFramebuffer (ZRenderPass renderPass, add_cref<VkExtent2D> size, const std::vector<ZImageView>& attachments);
-ZFramebuffer	createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t height, const std::vector<ZImageView>& attachments);
+ZFramebuffer	createFramebuffer (ZRenderPass renderPass, add_cref<VkExtent2D> size,
+									const std::vector<ZImageView>& attachments, uint32_t viewCount = INVALID_UINT32);
+ZFramebuffer	createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t height,
+									const std::vector<ZImageView>& attachments, uint32_t viewCount = INVALID_UINT32);
 
 struct ZRenderPassBeginInfo : protected VkRenderPassBeginInfo
 {
@@ -135,32 +137,6 @@ protected:
 	uint32_t			m_subpass;
 	VkSubpassContents	m_contents;
 };
-/**
-* @device			A device which render pass is created
-* @colorFormats		Defines a subsequent attachments.
-*                   If colorFormats[attachment].alpha is <> 0 then attachment is OP_CLEAR
-*                   otherwise attachment is considered as OP_LOAD.
-*/
-ZRenderPass		createColorRenderPass (ZDevice device, add_cref<std::vector<VkFormat>> colorFormats,
-									   std::vector<VkClearValue> clearColors = {},
-									   VkImageLayout initialColorLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-									   VkImageLayout finalColorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-									   std::initializer_list<ZSubpassDependency> deps = {});
-/*
-* If depthStencilFormat is not VK_FORMAT_UNDEFINED then depth-stencil attachment
-* will be automatically added to the end of the list of all color attachments
-*/
-ZRenderPass		createColorRenderPass (ZDevice device, VkFormat depthStencilFormat,
-									   add_cref<std::vector<VkFormat>> colorFormats,
-									   std::vector<VkClearValue> clearColors = {},
-									   VkImageLayout initialColorLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-									   VkImageLayout finalColorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-									   std::initializer_list<ZSubpassDependency> deps = {});
-ZRenderPass		createMultiViewRenderPass (ZDevice device, add_cref<std::vector<VkFormat>> colorFormats,
-										   std::vector<VkClearValue> clearColors = {},
-										   std::initializer_list<ZSubpassDependency> dependencies = {},
-										   VkImageLayout initialColorLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-										   VkImageLayout finalColorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 ZRenderPass		framebufferGetRenderPass (ZFramebuffer framebuffer);
 ZImageView		framebufferGetView (ZFramebuffer framebuffer, uint32_t index = 0);

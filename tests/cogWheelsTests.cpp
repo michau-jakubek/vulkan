@@ -2,6 +2,7 @@
 #include "vtfCogwheelTools.hpp"
 #include "vtfOptionParser.hpp"
 #include "vtfCanvas.hpp"
+#include "vtfZRenderPass.hpp"
 #include "vtfZImage.hpp"
 #include "vtfDSBMgr.hpp"
 #include "vtfProgramCollection.hpp"
@@ -551,7 +552,7 @@ createVertexAndIndexBuffers (add_ref<VertexInput> input, add_cref<Params> params
 	return { vertices, indices, infoBig, infoSmall };
 }
 
-TriLogicInt runTests (Canvas& cs, add_cref<Params> params)
+TriLogicInt runTests(Canvas& cs, add_cref<Params> params)
 {
 	VertexInput vertexInput(cs.device);
 	GearOutlineInfo bigGearInfo, smallGearInfo;
@@ -564,14 +565,20 @@ TriLogicInt runTests (Canvas& cs, add_cref<Params> params)
 
 	const VkFormat		format = cs.surfaceFormat;
 	const VkClearValue	clearColor{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
-
+	const std::vector<RPA>		colors{ RPA(AttachmentDesc::Presentation, format, clearColor,
+											VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR),
+										RPA(AttachmentDesc::DSAttachment, VK_FORMAT_D32_SFLOAT, {},
+											VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) };
+	const ZAttachmentPool		attachmentPool(colors);
+	const ZSubpassDescription2	subpass({ RPAR(0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL),
+											RPAR(1u, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) });
 	LayoutManager		lm(cs.device);
 	ZBuffer				mvpBuffer = createBuffer<MVP>(cs.device, 1u, ZBufferUsageUniformFlags);
 	const uint32_t		mvpBinding = lm.addBinding(mvpBuffer, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER); UNREF(mvpBinding);
 	ZDescriptorSetLayout dsLayout = lm.createDescriptorSetLayout();
 
 	ZPipelineLayout		pipelineLayout = lm.createPipelineLayout({ dsLayout });
-	ZRenderPass			renderPass = createColorRenderPass(cs.device, VK_FORMAT_D32_SFLOAT, { format }, { {clearColor} });
+	ZRenderPass			renderPass = createRenderPass(cs.device, attachmentPool, subpass);
 	ZPipeline			pipeline = createGraphicsPipeline(pipelineLayout, renderPass,
 															vert, geom, frag, params.topology, vertexInput.binding(0),
 															gpp::SubpassIndex(0),
@@ -609,7 +616,7 @@ TriLogicInt runTests (Canvas& cs, add_cref<Params> params)
 				vkCmdDrawIndexed(*cmdBuffer, smallGearInfo.back.second,  3, smallGearInfo.back.first, 0, 1);
 				vkCmdDrawIndexed(*cmdBuffer, smallGearInfo.surf.second,  3, smallGearInfo.surf.first, 0, 1);
 
-				commandBufferEndRenderPass(rpbi);
+			commandBufferEndRenderPass(rpbi);
 		commandBufferEndQuery(qpbi);
 
 		vkCmdCopyQueryPoolResults(*cmdBuffer, *queryPool, 0, 1, *queryResults, 0, sizeof(uint64_t),

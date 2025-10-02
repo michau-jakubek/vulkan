@@ -3,6 +3,7 @@
 #include "vtfCUtils.hpp"
 #include "vtfStructUtils.hpp"
 #include "vtfCanvas.hpp"
+#include "vtfZRenderPass.hpp"
 #include "vtfZImage.hpp"
 #include "vtfDSBMgr.hpp"
 #include "vtfProgramCollection.hpp"
@@ -282,7 +283,7 @@ TriLogicInt runTriangeSingleThread (add_ref<Canvas> cs, add_cref<std::string> as
 
 	const VkFormat				format				= cs.surfaceFormat;
 	const VkClearValue			clearColor			{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
-	ZRenderPass					renderPass			= createColorRenderPass(cs.device, {format}, {{clearColor}});
+	ZRenderPass					renderPass			= createSinglePresentationRenderPass(cs.device, format, clearColor);
 
 	ZPipelineLayout				pipelineLayout		= lm.createPipelineLayout({ dsLayout }); // push
 
