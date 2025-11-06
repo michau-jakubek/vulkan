@@ -30,7 +30,8 @@ ZRenderPass createRenderPass (
 								data_count(dependencies), data_or_null(dependencies));
 }
 
-ZFramebuffer _createFramebuffer (VkImage presentImage, ZRenderPass renderpass, uint32_t width, uint32_t height);
+ZFramebuffer _createFramebuffer (VkImage presentImage, ZRenderPass renderpass,
+									uint32_t width, uint32_t height, VkImageUsageFlags swapchainImageUsage);
 
 } // namespace vtf
 

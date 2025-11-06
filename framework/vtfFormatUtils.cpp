@@ -503,10 +503,28 @@ bool formatSupportsLinearFlags (ZPhysicalDevice device, VkFormat format, VkForma
 	return (p.linearTilingFeatures & flags) == flags;
 }
 
+static const VkFormat dfs[]{ VK_FORMAT_D32_SFLOAT, VK_FORMAT_D16_UNORM };
+static const VkFormat dsfs[]{ VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_D16_UNORM_S8_UINT };
+
+VkFormat formatSelectMaxDepthSupported (ZDevice device)
+{
+	ZPhysicalDevice ph = device.getParamRef<ZPhysicalDevice>();
+	for (const VkFormat f : dfs)
+	{
+		if (formatIsDepthStencil(ph, f, true).first)
+			return f;
+	}
+	for (const VkFormat f : dsfs)
+	{
+		if (formatIsDepthStencil(ph, f, true).first)
+			return f;
+	}
+	ASSERTFALSE("Could not find a proper Depth format");
+	return VK_FORMAT_UNDEFINED;
+}
+
 std::pair<bool, bool> formatIsDepthStencil (ZPhysicalDevice device, VkFormat format, bool checkOptimalTilingSupport)
 {
-	static const VkFormat dfs[]{ VK_FORMAT_D16_UNORM, VK_FORMAT_D32_SFLOAT };
-	static const VkFormat dsfs[] { VK_FORMAT_D16_UNORM_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_D32_SFLOAT_S8_UINT };
 	std::pair<bool, bool> result{};
 	for (const VkFormat f : dfs)
 	{

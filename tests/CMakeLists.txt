@@ -66,6 +66,8 @@ set(tests_files
 	variablePointersTests.hpp
 	transformFeedbackTests.cpp
 	transformFeedbackTests.hpp
+	depthTests.cpp
+	depthTests.hpp
     )
 
 if(ENABLE_DAEMON_TEST)

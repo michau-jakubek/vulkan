@@ -19,8 +19,11 @@ struct ZSubpassDescription2;
 /// </summary>
 struct RPAR : public std::pair<uint32_t, VkImageLayout>
 {
-	explicit RPAR(uint32_t index) : std::pair<uint32_t, VkImageLayout>(index, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL) {}
-	explicit RPAR(uint32_t index, VkImageLayout subpassLayout) : std::pair<uint32_t, VkImageLayout>(index, subpassLayout) {}
+	AttachmentDesc cast;
+	explicit RPAR(uint32_t index, AttachmentDesc cast_ = AttachmentDesc::Undefined)
+		: std::pair<uint32_t, VkImageLayout>(index, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL), cast(cast_) {}
+	explicit RPAR(uint32_t index, VkImageLayout subpassLayout, AttachmentDesc cast_ = AttachmentDesc::Undefined)
+		: std::pair<uint32_t, VkImageLayout>(index, subpassLayout), cast(cast_) {}
 };
 using RPARS = std::vector<RPAR>;
 
@@ -29,6 +32,7 @@ struct RPA : VkAttachmentDescription2
 	uint32_t mIndex;
 	VkClearValue mClearValue;
 	AttachmentDesc mDescription;
+	VkImageUsageFlags mAdditionalUsage;
 
 	// if finalLayout == MAX_ENUM then it is set to VK_IMAGE_LAYOUT_(COLOR|DEPTH)_ATTACHMENT_OPTIMAL
 // depending on the format.
@@ -36,11 +40,13 @@ struct RPA : VkAttachmentDescription2
 	RPA(AttachmentDesc desc, uint32_t otherRpaIndex);
 	RPA(AttachmentDesc desc, VkFormat format, VkClearValue clearValue,
 		VkImageLayout initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-		VkImageLayout finalLayout = VK_IMAGE_LAYOUT_MAX_ENUM);
+		VkImageLayout finalLayout = VK_IMAGE_LAYOUT_MAX_ENUM,
+		VkImageUsageFlags additionalUsage = 0);
 	RPA(AttachmentDesc desc, VkFormat format,
 		VkSampleCountFlagBits samples, VkClearValue clearValue,
 		VkImageLayout initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-		VkImageLayout finalLayout = VK_IMAGE_LAYOUT_MAX_ENUM);
+		VkImageLayout finalLayout = VK_IMAGE_LAYOUT_MAX_ENUM,
+		VkImageUsageFlags additionalUsage = 0);
 
 	VkAttachmentDescription2 operator()() const;
 	static bool isResourceAttachment (AttachmentDesc desc);

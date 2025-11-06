@@ -93,6 +93,7 @@ bool				formatSupportsLinearFlags (ZPhysicalDevice device, VkFormat format, VkFo
 bool				formatSupportsLinearFilter (ZPhysicalDevice device, VkFormat format);
 /* <is-depth-or-stencli, is-stencil-also> */
 std::pair<bool, bool> formatIsDepthStencil (ZPhysicalDevice device, VkFormat format, bool checkOptimalTilingSupport = false);
+VkFormat			formatSelectMaxDepthSupported (ZDevice device);
 
 enum FmtMask
 {

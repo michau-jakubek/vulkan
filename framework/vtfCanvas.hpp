@@ -36,6 +36,7 @@ struct CanvasStyle
 	float					maxDepth;
 	bool					visible;
 	bool					resizable;
+	bool					decorated;
 	VkFormatFeatureFlags	surfaceFormatFlags;
 	uint32_t				acquirableImageCount;
 	bool					submitRenderWithFence;
@@ -104,7 +105,7 @@ public:
 		add_cref<bool> recreateFlag;
 	private:
 		// If rp has no handle then creates only images, otherwise views and framebuffers as well
-		void createFramebuffers (uint32_t minImageCount, ZRenderPass rp);
+		void createFramebuffers (uint32_t minImageCount, ZRenderPass rp, VkImageUsageFlags imageUsages);
 		void destroyFramebuffers ();
 		void resetRecreateFlag () { m_recreateFlag = false; }
 		VkSwapchainKHR				m_handle;

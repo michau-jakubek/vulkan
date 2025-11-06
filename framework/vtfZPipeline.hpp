@@ -35,6 +35,8 @@ using PatchControlPoints	= ZDistType<PatchControlPoints, uint32_t>;
 using CullModeFlags			= ZDistType<CullModeFlags, VkCullModeFlags>;
 using DepthTestEnable		= ZDistType<DepthTestEnable, bool>;
 using DepthWriteEnable		= ZDistType<DepthWriteEnable, bool>;
+using DepthMinBounds		= ZDistType<DepthMinBounds, float>;
+using DepthMaxBounds		= ZDistType<DepthMaxBounds, float>;
 using StencilTestEnable		= ZDistType<StencilTestEnable, bool>;
 using SubpassIndex			= ZDistType<SubpassIndex, uint32_t>;
 using ViewportCount			= ZDistType<ViewportCount, uint32_t>;
@@ -46,7 +48,7 @@ using SpecConstants			= ZDistType<SpecConstants, std::pair<VkShaderStageFlagBits
 using PrimitiveRestart		= ZDistType<PrimitiveRestart, bool>;
 using RasterizerDiscardEnable = ZDistType<RasterizerDiscardEnable, bool>;
 using ViewMask				= ZDistType<ViewMask, uint32_t>;
-enum AttachmentDesc { Presentation, Color, DeptStencil, DSAttachment, Resolve, Input, Undefined };
+enum AttachmentDesc { Presentation, Color, DeptStencil, Resolve, Input, Undefined };
 struct AttachmentIndex
 {
 	uint32_t index;
@@ -98,6 +100,9 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<VkViewport>
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<VkRect2D>					scissor);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::DepthTestEnable>		enableDepthTest);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::DepthWriteEnable>		enableDepthWrite);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::DepthMinBounds>		depthMinBounds);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::DepthMaxBounds>		depthMaxBounds);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, VkCompareOp							depthCompareOp);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::StencilTestEnable>	enableStencilTest);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::SubpassIndex>			subpassIndex);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, ZRenderPass							renderPass);

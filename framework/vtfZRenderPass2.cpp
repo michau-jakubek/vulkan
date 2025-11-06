@@ -7,33 +7,37 @@
 namespace vtf
 {
 
-VkAttachmentLoadOp colorLoadOp(VkFormat format, VkImageLayout initialLayout)
+VkAttachmentLoadOp colorLoadOp (VkFormat format, VkImageLayout initialLayout)
 {
-    if (formatIsDepthStencil(ZPhysicalDevice(), format).first)
-        return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    UNREF(format);
+    //if (formatIsDepthStencil(ZPhysicalDevice(), format).first)
+    //    return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     return VK_IMAGE_LAYOUT_UNDEFINED == initialLayout
         ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
 }
-VkAttachmentStoreOp colorStoreOp(VkFormat format, VkImageLayout)
+VkAttachmentStoreOp colorStoreOp (VkFormat format, VkImageLayout)
 {
-    if (formatIsDepthStencil(ZPhysicalDevice(), format).first)
-        return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    UNREF(format);
+    //if (formatIsDepthStencil(ZPhysicalDevice(), format).first)
+    //    return VK_ATTACHMENT_STORE_OP_DONT_CARE;
     return VK_ATTACHMENT_STORE_OP_STORE;
 }
-VkAttachmentLoadOp dsLoadOp(VkFormat format, VkImageLayout initialLayout)
+VkAttachmentLoadOp dsLoadOp (VkFormat format, VkImageLayout initialLayout)
 {
-    if (formatIsDepthStencil(ZPhysicalDevice(), format).first)
-        return VK_IMAGE_LAYOUT_UNDEFINED == initialLayout
-            ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
-    return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    //if (formatIsDepthStencil(ZPhysicalDevice(), format).first)
+    //    return VK_IMAGE_LAYOUT_UNDEFINED == initialLayout
+    //        ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+    //return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    return colorLoadOp(format, initialLayout);
 }
-VkAttachmentStoreOp dsStoreOp(VkFormat format, VkImageLayout)
+VkAttachmentStoreOp dsStoreOp (VkFormat format, VkImageLayout imageLayout)
 {
-    if (formatIsDepthStencil(ZPhysicalDevice(), format).first)
-        return VK_ATTACHMENT_STORE_OP_STORE;
-    return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    //if (formatIsDepthStencil(ZPhysicalDevice(), format).first)
+    //    return VK_ATTACHMENT_STORE_OP_STORE;
+    //return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    return colorStoreOp(format, imageLayout);
 }
-VkImageLayout finaliLayout(VkFormat format, VkImageLayout finalLayout)
+VkImageLayout finaliLayout (VkFormat format, VkImageLayout finalLayout)
 {
     if (VK_IMAGE_LAYOUT_MAX_ENUM == finalLayout)
     {
@@ -52,11 +56,12 @@ RPA::RPA (AttachmentDesc desc, uint32_t otherRpaIndex)
     , mIndex(otherRpaIndex)
     , mClearValue{}
     , mDescription(desc)
+    , mAdditionalUsage(0)
 {
 }
 
-RPA::RPA (AttachmentDesc desc, VkFormat format, VkSampleCountFlagBits samples,
-            VkClearValue clearValue, VkImageLayout initialLayout, VkImageLayout finalLayout)
+RPA::RPA (AttachmentDesc desc, VkFormat format, VkSampleCountFlagBits samples, VkClearValue clearValue,
+    VkImageLayout initialLayout, VkImageLayout finalLayout, VkImageUsageFlags additionalUsage)
     : VkAttachmentDescription2 {
         VkAttachmentDescription2(makeVkStruct()).sType,
         nullptr, // const void*                  pNext;
@@ -73,12 +78,14 @@ RPA::RPA (AttachmentDesc desc, VkFormat format, VkSampleCountFlagBits samples,
     , mIndex(INVALID_UINT32)
     , mClearValue(clearValue)
     , mDescription(desc)
+    , mAdditionalUsage(additionalUsage)
 {
     ASSERTMSG(AttachmentDesc::Input != desc, "Create input attachment as a reference to existing color/depth/stencil attachment");
 }
 
-RPA::RPA(AttachmentDesc desc, VkFormat format, VkClearValue clearValue, VkImageLayout initialLayout, VkImageLayout finalLayout)
-    : RPA(desc, format, VK_SAMPLE_COUNT_1_BIT, clearValue, initialLayout, finalLayout)
+RPA::RPA(AttachmentDesc desc, VkFormat format, VkClearValue clearValue,
+            VkImageLayout initialLayout, VkImageLayout finalLayout, VkImageUsageFlags additionalUsage)
+    : RPA(desc, format, VK_SAMPLE_COUNT_1_BIT, clearValue, initialLayout, finalLayout, additionalUsage)
 {
 }
 
@@ -94,7 +101,6 @@ bool RPA::isResourceAttachment (AttachmentDesc desc)
     case AttachmentDesc::Presentation:
     case AttachmentDesc::Color:
     case AttachmentDesc::DeptStencil:
-    case AttachmentDesc::DSAttachment:
         return true;
     default: break;
     }
@@ -111,8 +117,6 @@ add_cptr<char> RPA::descToString (AttachmentDesc desc)
         return "AttachmentDesc::Color";
     case AttachmentDesc::DeptStencil:
         return "AttachmentDesc::DeptStencil";
-    case AttachmentDesc::DSAttachment:
-        return "AttachmentDesc::DSAttachment";
     case AttachmentDesc::Input:
         return "AttachmentDesc::Input";
     case AttachmentDesc::Resolve:
@@ -253,7 +257,7 @@ void ZAttachmentPool::updateReferences (
         ref.aspectMask = formatGetAspectMask(a.second.format);
         ref.attachment = a.second.mIndex;
 
-        switch (a.second.mDescription)
+        switch (rpr.cast == AttachmentDesc::Undefined ? a.second.mDescription : rpr.cast)
         {
         case AttachmentDesc::Input:
             ++inputCount;
@@ -548,8 +552,7 @@ ZRenderPass createRenderPassImpl2 (ZDevice device, ZAttachmentPool pool,
     const VkAllocationCallbacksPtr	callbacks = device.getParam<VkAllocationCallbacksPtr>();
     ZRenderPass	renderPass = ZRenderPass::create(VK_NULL_HANDLE, device, callbacks, 2,
                                                     c.attachmentCount, c.subpassCount,
-                                                    clearValues, VK_FORMAT_UNDEFINED, VK_IMAGE_LAYOUT_UNDEFINED,
-                                                    std::any(pool), {/*subpassDescriptions*/});
+                                                    clearValues, std::any(pool), {/*subpassDescriptions*/});
 
     renderPass.verbose(getGlobalAppFlags().verbose);
     add_ref<std::vector<ZDistType<SomeTwo, std::any>>> ss =
@@ -599,7 +602,7 @@ uint32_t renderPassSubpassGetColorAttachmentCount (ZRenderPass renderPass, uint3
     ASSERTMSG(subpass < subpassCount, "Definition subpass ", subpass, " not found among ", subpassCount);
     ZSubpassDescription2 dep = std::any_cast<ZSubpassDescription2>(ss[subpass].get());
 
-    return pool.count(dep.getParamRef<RPARS>(), { AttachmentDesc::Presentation, AttachmentDesc::Color, AttachmentDesc::DeptStencil });
+    return pool.count(dep.getParamRef<RPARS>(), { AttachmentDesc::Presentation, AttachmentDesc::Color });
 }
 
 uint32_t frameBufferTransitAttachments (

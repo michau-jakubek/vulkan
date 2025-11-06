@@ -112,6 +112,7 @@ const CanvasStyle Canvas::DefaultStyle
 	1.0f,	// maxDepth
 	true,	// visible
 	true,	// resizable
+	true,	// decorated
 	0,		// surfaceFormatFlags
 	3,		// acquirableImageCount
 	true,	// submitRenderWithFence
@@ -279,6 +280,7 @@ ZGLFWwindowPtr createWindow (const CanvasStyle& style, const char* title, add_pt
 {
 	const char* caption = title ? title : "Vulkan";
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint(GLFW_DECORATED, style.decorated ? GLFW_TRUE : GLFW_FALSE);
 	// invisible at start, if style.visible is set the call glfwShowWindows() later
 	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 	glfwWindowHint(GLFW_RESIZABLE, (style.resizable ? GLFW_TRUE : GLFW_FALSE));
@@ -500,7 +502,7 @@ void Canvas::Swapchain::destroyFramebuffers ()
 }
 
 // If rp has no handle then creates only images, otherwise views and framebuffers as well
-void Canvas::Swapchain::createFramebuffers (uint32_t minImageCount, ZRenderPass rp)
+void Canvas::Swapchain::createFramebuffers (uint32_t minImageCount, ZRenderPass rp, VkImageUsageFlags imageUsage)
 {
 	ASSERTMSG(m_handle, "Swapchain must have a handle");
 
@@ -511,7 +513,7 @@ void Canvas::Swapchain::createFramebuffers (uint32_t minImageCount, ZRenderPass 
 	m_framebuffers.resize(imageCount);
 	for (uint32_t i = 0; i < minImageCount; ++i)
 	{
-		m_framebuffers[i] = _createFramebuffer(presentImages[i], rp, m_extent.width, m_extent.height);
+		m_framebuffers[i] = _createFramebuffer(presentImages[i], rp, m_extent.width, m_extent.height, imageUsage);
 	}
 }
 
@@ -568,6 +570,17 @@ void Canvas::Swapchain::recreate (ZRenderPass rp, uint32_t acquirableImageCount,
 	const VkPresentModeKHR mode = select_if(canvas.surfaceDetails.modes, VK_PRESENT_MODE_FIFO_KHR,
 									  [](const auto& m) { return (m == VK_PRESENT_MODE_MAILBOX_KHR || m == VK_PRESENT_MODE_IMMEDIATE_KHR); });
 
+	const VkImageUsageFlags imageUsage = [&] {
+		VkImageUsageFlags u = 0;
+		const VkImageUsageFlagBits bs[]{ VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_USAGE_STORAGE_BIT,
+										VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
+										VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_IMAGE_USAGE_TRANSFER_DST_BIT };
+		for (const auto b : bs)
+			if (b & caps.supportedUsageFlags)
+				u |= b;
+		return u;
+	}();
+
 	VkSwapchainCreateInfoKHR swapchainCreateInfo = {};
 	swapchainCreateInfo.sType				= VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	//swapchainCreateInfo.pNext:			default
@@ -578,7 +591,7 @@ void Canvas::Swapchain::recreate (ZRenderPass rp, uint32_t acquirableImageCount,
 	swapchainCreateInfo.imageColorSpace		= canvas.surfaceDetails.formats[canvas.surfaceFormatIndex].colorSpace;
 	swapchainCreateInfo.imageExtent			= m_extent;
 	swapchainCreateInfo.imageArrayLayers	= 1;
-	swapchainCreateInfo.imageUsage			= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	swapchainCreateInfo.imageUsage			= caps.supportedUsageFlags;
 	//swapchainCreateInfo.imageSharingMode:			later
 	//swapchainCreateInfo.queueFamilyIndexCount:	later
 	//swapchainCreateInfo.pQueueFamilyIndices:		later
@@ -614,7 +627,7 @@ void Canvas::Swapchain::recreate (ZRenderPass rp, uint32_t acquirableImageCount,
 		di.vkDestroySwapchainKHR(*canvas.device, swapchainCreateInfo.oldSwapchain, canvas.callbacks);
 	}
 
-	createFramebuffers(m_framebufferCount, rp);
+	createFramebuffers(m_framebufferCount, rp, imageUsage);
 	m_renderPass = rp;
 	m_recreateFlag = true;
 }

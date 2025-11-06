@@ -10,6 +10,7 @@
 #include "vtfStructUtils.hpp"
 #include "vtfBacktrace.hpp"
 #include "stb_image.hpp"
+#include "vulkan/vulkan_to_string.hpp"
 #include <algorithm>
 
 namespace vtf
@@ -148,6 +149,9 @@ ZImage createImage (ZDevice device, VkFormat format, VkImageType type, uint32_t 
 		ZFormatInfo formatInfo = formatGetInfo(format);
 		std::cout << "[INFO] trying to create as image with:\n"
 				  << "       Format: " << formatInfo.name << newLine
+				  << "       usage:  " << vk::to_string(static_cast<vk::ImageUsageFlags>(effectiveUsage)) << newLine
+				  << "       tiling: " << vk::to_string(static_cast<vk::ImageTiling>(tiling)) << newLine
+				  << "       flags:  " << vk::to_string(static_cast<vk::ImageCreateFlags>(flags)) << newLine
 				  << "       Width:  " << width << newLine
 				  << "       Height: " << height << newLine
 				  << "       Depth:  " << depth << newLine

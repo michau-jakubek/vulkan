@@ -71,14 +71,13 @@ void ZAttachmentPool::updateReferences (
         // ref.aspectMask = formatGetAspectMask(a.second.format); introduced in VkAttachmentReference2
         ref.attachment = a.second.mIndex;
 
-        switch (a.second.mDescription)
+        switch (rpr.cast == AttachmentDesc::Undefined ? a.second.mDescription : rpr.cast)
         {
         case AttachmentDesc::Input:
             ++inputCount;
             inputAttachments.push_back(ref);
             break;
         case AttachmentDesc::Color:
-        case AttachmentDesc::DeptStencil:
         case AttachmentDesc::Presentation:
             ++colorCount;
             colorAttachments.push_back(ref);
@@ -87,7 +86,7 @@ void ZAttachmentPool::updateReferences (
             ++resolveCount;
             resolveAttachments.push_back(ref);
             break;
-        case AttachmentDesc::DSAttachment:
+        case AttachmentDesc::DeptStencil:
             ++dsCount;
             dsAttachments.push_back(ref);
             break;
@@ -198,9 +197,7 @@ ZRenderPass createRenderPassImpl (ZDevice device, ZAttachmentPool pool,
 
     const VkAllocationCallbacksPtr	callbacks = device.getParam<VkAllocationCallbacksPtr>();
     ZRenderPass	renderPass = ZRenderPass::create(VK_NULL_HANDLE, device, callbacks, 1,
-        c.attachmentCount, c.subpassCount,
-        clearValues, VK_FORMAT_UNDEFINED, VK_IMAGE_LAYOUT_UNDEFINED,
-        std::any(pool), {/*subpassDescriptions*/ });
+        c.attachmentCount, c.subpassCount, clearValues, std::any(pool), {/*subpassDescriptions*/ });
 
     renderPass.verbose(getGlobalAppFlags().verbose);
     add_ref<std::vector<ZDistType<SomeTwo, std::any>>> ss =
@@ -217,7 +214,8 @@ ZRenderPass createRenderPassImpl (ZDevice device, ZAttachmentPool pool,
     return renderPass;
 }
 
-ZFramebuffer _createFramebuffer (VkImage presentImage, ZRenderPass renderpass, uint32_t width, uint32_t height)
+ZFramebuffer _createFramebuffer (VkImage presentImage, ZRenderPass renderpass,
+                                uint32_t width, uint32_t height, VkImageUsageFlags swapchainImageUsage)
 {
     ZDevice device = renderpass.getParam<ZDevice>();
     ZAttachmentPool pool = std::any_cast<ZAttachmentPool>(renderpass.getParamRef<ZDistType<SomeOne, std::any>>().get());
@@ -235,12 +233,12 @@ ZFramebuffer _createFramebuffer (VkImage presentImage, ZRenderPass renderpass, u
             const VkImageUsageFlagBits vkUsage = formatIsDepthStencil(ZPhysicalDevice(), desc.format, false).first
                                                     ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
                                                     : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-            const ZImageUsageFlags		zUsage  (vkUsage, VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 
             if (desc.mDescription == AttachmentDesc::Presentation && false == hasPresentation)
             {
                 hasPresentation = true;
                 wasPresentation = true;
+                const ZImageUsageFlags zUsage = ZImageUsageFlags::fromFlags(swapchainImageUsage) + vkUsage;
                 ZNonDeletableImage image = ZNonDeletableImage::create(presentImage, device, desc.format, width, height, zUsage);
                 ZImageView view = ::vtf::createImageView(image);
                 views[viewCount++] = view;
@@ -248,6 +246,7 @@ ZFramebuffer _createFramebuffer (VkImage presentImage, ZRenderPass renderpass, u
 
             if (false == wasPresentation)
             {
+                const ZImageUsageFlags zUsage = ZImageUsageFlags::fromFlags(desc.mAdditionalUsage) + vkUsage;
                 ZImage image = createImage(device, desc.format, VK_IMAGE_TYPE_2D, width, height, zUsage, desc.samples);
                 ZImageView view = ::vtf::createImageView(image);
                 views[viewCount++] = view;

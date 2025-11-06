@@ -652,6 +652,21 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gp
 	settings.m_depthStencilState.depthWriteEnable = enableDepthWrite ? VK_TRUE : VK_FALSE;
 }
 
+void updateKnownSettings(add_ref<GraphicPipelineSettings> settings, add_cref<gpp::DepthMinBounds> depthMinBounds)
+{
+	settings.m_depthStencilState.minDepthBounds = depthMinBounds;
+}
+
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::DepthMaxBounds> depthMaxBounds)
+{
+	settings.m_depthStencilState.maxDepthBounds = depthMaxBounds;
+}
+
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, VkCompareOp depthCompareOp)
+{
+	settings.m_depthStencilState.depthCompareOp = depthCompareOp;
+}
+
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::StencilTestEnable> enableStencilTest)
 {
 	settings.m_depthStencilState.stencilTestEnable = enableStencilTest ? VK_TRUE : VK_FALSE;

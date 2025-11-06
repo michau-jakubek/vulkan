@@ -111,20 +111,18 @@ TriLogicInt runTests(add_ref<Canvas> canvas, add_cref<Params> params)
 	ZPipelineLayout pipelineLayout = lm.createPipelineLayout();
 	ZPipeline pipeline = createGraphicsPipeline(pipelineLayout, vertexInput, vertexModule, gpp::RasterizerDiscardEnable(false));
 
-	return {};
-
 	//VkPipelineRasterizationStateStreamCreateInfoEXT
 
 
-	{
-		OneShotCommandBuffer cmd(cmdPool);
-		commandBufferBindVertexBuffers(cmd, vertexInput);
-		commandBufferBindPipeline(cmd, pipeline);
-		di.vkCmdBindTransformFeedbackBuffersEXT(**cmd, 0u, 1u, buf.ptr(), &off, &siz);
-		di.vkCmdBeginTransformFeedbackEXT(**cmd, 0u, 0u, nullptr, nullptr);
-		di.vkCmdDraw(**cmd, vertexInput.getVertexCount(0), 1u, 0u, 0u);
-		di.vkCmdEndTransformFeedbackEXT(**cmd, 0u, 0u, nullptr, nullptr);
-	}
+	//{
+	//	OneShotCommandBuffer cmd(cmdPool);
+	//	commandBufferBindVertexBuffers(cmd, vertexInput);
+	//	commandBufferBindPipeline(cmd, pipeline);
+	//	di.vkCmdBindTransformFeedbackBuffersEXT(**cmd, 0u, 1u, buf.ptr(), &off, &siz);
+	//	di.vkCmdBeginTransformFeedbackEXT(**cmd, 0u, 0u, nullptr, nullptr);
+	//	di.vkCmdDraw(**cmd, vertexInput.getVertexCount(0), 1u, 0u, 0u);
+	//	di.vkCmdEndTransformFeedbackEXT(**cmd, 0u, 0u, nullptr, nullptr);
+	//}
 
 	return {};
 }

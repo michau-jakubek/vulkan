@@ -364,6 +364,7 @@ enum ZDistName
 	VtfVer, ApiVer, VulkanVer, SpirvVer,
 	QueueFamilyIndex, QueueIndex, QueueFlags,
 	CullModeFlags, DepthTestEnable, DepthWriteEnable, StencilTestEnable,
+	DepthMinBounds, DepthMaxBounds,
 	LineWidth, AttachmentCount, SubpassCount, ViewportCount, ScissorCount,
 	SpecConstants, BlendAttachmentState, BlendConstants, PipelineCreateFlags,
 	RenderingAttachmentLocations, RenderingInpuAttachmentIndices, RasterizerDiscardEnable,
@@ -534,8 +535,6 @@ typedef ZDeletable<VkRenderPass,
 	, ZDistType<AttachmentCount, uint32_t>
 	, ZDistType<SubpassCount, uint32_t>
 	, std::vector<VkClearValue>
-	, VkFormat // depth-stencli attachment format
-	, VkImageLayout // finalLayout
 	, ZDistType<SomeOne, std::any> // ZAttachmentPool
 	, std::vector<ZDistType<SomeTwo, std::any>> // ZSubpassDescription2's
 >

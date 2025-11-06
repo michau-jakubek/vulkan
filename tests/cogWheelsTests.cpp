@@ -563,11 +563,13 @@ TriLogicInt runTests(Canvas& cs, add_cref<Params> params)
 	ZShaderModule vert, geom, frag;
 	std::tie(vert, geom, frag) = buildProgram(cs.device, params);
 
-	const VkFormat		format = cs.surfaceFormat;
+	const VkFormat		colorFormat = cs.surfaceFormat;
+	const VkFormat		depthFormat = formatSelectMaxDepthSupported(cs.device);
 	const VkClearValue	clearColor{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
-	const std::vector<RPA>		colors{ RPA(AttachmentDesc::Presentation, format, clearColor,
+	const VkClearValue	clearDepth{ { { 1.0f, 0u } } };
+	const std::vector<RPA>		colors{ RPA(AttachmentDesc::Presentation, colorFormat, clearColor,
 											VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR),
-										RPA(AttachmentDesc::DSAttachment, VK_FORMAT_D32_SFLOAT, {},
+										RPA(AttachmentDesc::DeptStencil, depthFormat, clearDepth,
 											VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) };
 	const ZAttachmentPool		attachmentPool(colors);
 	const ZSubpassDescription2	subpass({ RPAR(0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL),
