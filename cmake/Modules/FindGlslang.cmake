@@ -1,0 +1,35 @@
+# FindGlslang.cmake
+
+if (VULKAN_SDK)
+	list(INSERT CMAKE_PREFIX_PATH 0 ${VULKAN_SDK})
+	list(INSERT CMAKE_PREFIX_PATH 0 ${VULKAN_SDK}/Lib)
+else()
+	set(VK_SDK $ENV{VULKAN_SDK})
+	if (VK_SDK)
+		list(INSERT CMAKE_PREFIX_PATH 0 ${VK_SDK})
+		list(INSERT CMAKE_PREFIX_PATH 0 ${VK_SDK}/Lib)
+	endif()
+endif()
+
+#CONFIGURE_DEPENDS
+set(_found_status FALSE)
+set(_glslang_config_file "")
+foreach(_prefix IN LISTS CMAKE_PREFIX_PATH)
+	if (NOT _found_status)
+		file(GLOB_RECURSE _glslang_config_matches "${_prefix}/*glslang-config.cmake")
+		if (_glslang_config_matches)
+			list(GET _glslang_config_matches 0 _glslang_config_file)
+    		get_filename_component(_glslang_config_dir "${_glslang_config_file}" DIRECTORY)
+			set(_found_status TRUE)
+		endif()
+	endif()
+endforeach()
+
+if (_glslang_config_dir)
+	message(STATUS "Found GLSLANG_DIR in ${_glslang_config_dir}")
+    list(APPEND CMAKE_PREFIX_PATH       "${_glslang_config_dir}")
+	set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} PARENT_SCOPE)
+else()
+	message(STATUS GGGGGGGGGG---------)
+endif()
+

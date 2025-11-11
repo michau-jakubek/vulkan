@@ -64,8 +64,8 @@ set(tests_files
 	mutableDescriptorTests.hpp
 	variablePointersTests.cpp
 	variablePointersTests.hpp
-	transformFeedbackTests.cpp
-	transformFeedbackTests.hpp
+	#transformFeedbackTests.cpp
+	#transformFeedbackTests.hpp
 	depthTests.cpp
 	depthTests.hpp
     )

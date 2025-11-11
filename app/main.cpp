@@ -599,7 +599,9 @@ void printUsage (std::ostream& str)
 	    << "                            otherwise spirv-val tool is launched anyway.\n"
 	    << "                            glslang and spirv-val can give different results" <<std::endl;
 	str << "  -spvdisassm:              generate SPIR-V dissassembly file" << std::endl;
-	str << "  -compiler <index>:        set compiler index from looking it on the operating system, default is 0" << std::endl;
+	str << "  -compiler <index>:        set compiler index from looking it on the operating system, default is 0.\n"
+		<< "                            If index is negative value then statically glslan compiler will be used,\n"
+		<< "                            and project needs to be configured with OFFLINE_SHADER_COMPILER enabled." << std::endl;
 	str << "  -nowerror:                allows warnig(s) from external compilators\n" << std::endl;
 	str << "  NOTE: The app internally uses some of the Vulkan SDK tools e.g. glslangValidator or spirv-val\n"
 		<< "        so these have to be visible to it. In order to find where certain tool sits the app\n"

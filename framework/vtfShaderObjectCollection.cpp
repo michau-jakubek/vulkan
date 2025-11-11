@@ -1,6 +1,7 @@
 #include "vtfShaderObjectCollection.hpp"
 #include "vtfStructUtils.hpp"
 #include "vtfZUtils.hpp"
+#include "vtfProgressRecorder.hpp"
 
 namespace vtf
 {
@@ -236,6 +237,7 @@ extern	bool verifyShaderCode (
     add_ref<std::vector<char>>  assembly,
 	add_ref<std::vector<char>>  disassembly,
     add_ref<std::string>        errors,
+	add_ref<ProgressRecorder>	progressRecorder,
     bool enableValidation,
     bool genDisassmebly,
     bool buildAlways,
@@ -304,6 +306,9 @@ int ShaderObjectCollection::create (add_cref<Version> vulkanVer, add_cref<Versio
 	add_cref<ZDeviceInterface>			di		= m_device.getInterface();
 	ASSERTMSG(di.isShaderObjectEnabled(), "ERROR: \"" VK_EXT_SHADER_OBJECT_EXTENSION_NAME "\" not supported");
 
+	add_ref<ProgressRecorder>			progressRecorder = m_device.getParamRef<ZPhysicalDevice>()
+															.getParamRef<ZInstance>().getParamRef<ProgressRecorder>();
+
 	std::vector<VkShaderEXT>			handles	(links.size(), VK_NULL_HANDLE);
 	add_cref<ShaderObjectCollection>	me		(*this);
 	std::vector<ZShaderCreateInfoEXT>	zInfos;
@@ -322,7 +327,7 @@ int ShaderObjectCollection::create (add_cref<Version> vulkanVer, add_cref<Versio
 		const Version buildSpirvVer = options.spirvVer ? options.spirvVer : spirvVer;
 
 		if (verifyShaderCode((link.index + 1024u), link.stage, buildVulkanVer, buildSpirvVer,
-			me.m_stageToCode.at(key), shaderFileName, binary, assembly, disassembly, errors,
+			me.m_stageToCode.at(key), shaderFileName, binary, assembly, disassembly, errors, progressRecorder,
 			data->options.enableValidation, data->options.genAssembly, data->options.buildAlways, true))
 		{
 			m_stageToFileName[key] = std::move(shaderFileName);

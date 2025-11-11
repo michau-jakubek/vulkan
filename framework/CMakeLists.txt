@@ -96,7 +96,7 @@ set(framework_files
     vtfZRenderPass2.hpp
 )
 
-set(framework_libs pdriver driver)
+set(framework_libs pdriver driver compiler)
 
 if(WIN32)
 list(APPEND framework_libs dbghelp)
