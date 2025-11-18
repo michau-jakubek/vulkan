@@ -19,8 +19,8 @@ set(tests_files
 	intMatrixTests.hpp
 	intCompute.cpp
 	intCompute.hpp
-	#nothingCompute.cpp
-	#nothingCompute.hpp
+	nothingCompute.cpp
+	nothingCompute.hpp
     intGraphics.cpp
     intGraphics.hpp
     intCipher.cpp

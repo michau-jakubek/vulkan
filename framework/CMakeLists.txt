@@ -94,6 +94,7 @@ set(framework_files
     vtfZRenderPass.hpp
     vtfZRenderPass2.cpp
     vtfZRenderPass2.hpp
+    vtfStructGenerator.hpp
 )
 
 set(framework_libs pdriver driver compiler)

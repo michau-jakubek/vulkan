@@ -104,7 +104,8 @@ bool descriptorTypeOnList (const VkDescriptorType type, std::initializer_list<Vk
 uint32_t DescriptorSetBindingManager::addBinding_ (uint32_t suggestedBinding,
 	std::type_index index, ZBuffer buffer, ZImageView view, ZSampler sampler,
 	VkDescriptorType type, bool isNull, VkShaderStageFlags stageFlags, VkDescriptorBindingFlags bindingFlags,
-	VkImageLayout imageLayout, std::initializer_list<VkDescriptorType> mutableTypes)
+	VkImageLayout imageLayout, std::initializer_list<VkDescriptorType> mutableTypes,
+	uint32_t descriptorCount, uint32_t stride)
 {
 	if (VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT == type)
 	{
@@ -115,7 +116,7 @@ uint32_t DescriptorSetBindingManager::addBinding_ (uint32_t suggestedBinding,
 	const uint32_t binding = (INVALID_UINT32 == suggestedBinding)
 		? data_count(m_extbindings) : suggestedBinding;
 	b.binding				= binding;
-	b.descriptorCount		= 1;
+	b.descriptorCount		= descriptorCount;
 	b.descriptorType		= type;
 	b.pImmutableSamplers	= nullptr;
 	b.stageFlags			= stageFlags;
@@ -127,6 +128,7 @@ uint32_t DescriptorSetBindingManager::addBinding_ (uint32_t suggestedBinding,
 				"If VK_DESCRIPTOR_TYPE_MUTABLE_EXT then mutableTypes must not be empty");
 	vector_from_initializer_unique_list(mutableTypes, b.mutableTypes);
 	b.mutableIndex			= INVALID_UINT32;
+	b.stride	= stride;
 	b.buffer	= buffer;
 	b.view		= view;
 	b.sampler	= sampler;
@@ -149,6 +151,28 @@ uint32_t DescriptorSetBindingManager::addBinding (
 	auto index = std::type_index(typeid(typename add_extent<ZBuffer>::type));
 	return addBinding_(suggestedBinding, index, buffer, {/*view*/}, {/*sampler*/},
 						type, false, stageFlags, bindingFlags);
+}
+
+uint32_t DescriptorSetBindingManager::addArrayBinding(
+	ZBuffer buffer, VkDescriptorType type, uint32_t elemCount, uint32_t stride,
+	VkShaderStageFlags stageFlags, VkDescriptorBindingFlags bindingFlags)
+{
+	const auto minStorageBufferOffsetAlignment =
+		deviceGetPhysicalLimits(buffer.getParam<ZDevice>()).minStorageBufferOffsetAlignment;
+
+	ASSERTMSG(buffer.has_handle(), "Buffer must have a handle");
+	ASSERTMSG(stride && ((stride % minStorageBufferOffsetAlignment) == 0u),
+		"Stride (", stride, ") is not multiplication of "
+		"minStorageBufferOffsetAlignment (", minStorageBufferOffsetAlignment, ")");
+	const VkDeviceSize requiredSize = elemCount * stride;
+	const VkDeviceSize bufferSize = bufferGetSize(buffer);
+	ASSERTMSG(bufferSize >= requiredSize, "Insufficient buffer memory: "
+		"bufferSize (", bufferSize, ") < elemCount(", elemCount, ") * stride (", stride, ") "
+		" = ", requiredSize);
+	auto index = std::type_index(typeid(typename add_extent<ZBuffer>::type));
+	return addBinding_(INVALID_UINT32, index, buffer, {/*view*/ }, {/*sampler*/ },
+						type, false, stageFlags, bindingFlags, VK_IMAGE_LAYOUT_UNDEFINED, {},
+						elemCount, stride);
 }
 
 uint32_t DescriptorSetBindingManager::addBinding (
@@ -367,18 +391,15 @@ void DescriptorSetBindingManager::updateDescriptorSet (
 	ASSERTMSG(buffer.has_handle(), "Buffer must have a handle");
 	ASSERTMSG(false == bool(mutableVariant) || descriptorTypeOnVector(*mutableVariant, b.mutableTypes), "???");
 
-	VkDescriptorBufferInfo	bufferInfo{};
-	bufferInfo.buffer	= b.isNull ? VK_NULL_HANDLE : *buffer;
-	bufferInfo.offset	= 0u;
-	bufferInfo.range	= b.isNull ? 0u : bufferGetSize(buffer);
+	std::vector<VkDescriptorBufferInfo>	bufferInfos(b.descriptorCount);
 
 	VkWriteDescriptorSet	writeParams = makeVkStruct();
 	writeParams.dstSet			= *ds;
 	writeParams.dstBinding		= b.binding;
 	writeParams.dstArrayElement	= 0u;
-	writeParams.descriptorCount	= 1u;
+	writeParams.descriptorCount = b.descriptorCount;
 	writeParams.descriptorType	= b.descriptorType;
-	writeParams.pBufferInfo		= &bufferInfo;
+	writeParams.pBufferInfo		= bufferInfos.data();
 
 	if (VK_DESCRIPTOR_TYPE_MUTABLE_EXT == b.descriptorType)
 	{
@@ -388,12 +409,25 @@ void DescriptorSetBindingManager::updateDescriptorSet (
 		writeParams.descriptorType = *mutableVariant;
 	}
 
+	VkDeviceSize arrayElementSize = b.descriptorCount == 1u ? bufferGetSize(buffer) : b.stride;
+
+	for (uint32_t arrayElement = 0u; arrayElement < b.descriptorCount; ++arrayElement)
+	{
+		bufferInfos[arrayElement].buffer = b.isNull ? VK_NULL_HANDLE : *buffer;
+		bufferInfos[arrayElement].offset = b.isNull ? 0u : (arrayElement * arrayElementSize);
+		bufferInfos[arrayElement].range  = b.isNull ? 0u : arrayElementSize;
+		if (b.descriptorCount > 1u && arrayElement == (b.descriptorCount - 1u) && (false == b.isNull))
+		{
+			bufferInfos[arrayElement].range += (bufferGetSize(buffer) % b.stride);
+		}
+	}
+
 	vkUpdateDescriptorSets(*device,
-							1u,				// descriptorWriteCount
-							&writeParams,	// pDescriptorWrites
-							0u,				// copyCount,
-							nullptr			// copyParams
-							);
+		1u,				// descriptorWriteCount
+		&writeParams,	// pDescriptorWrites
+		0u,				// copyCount,
+		nullptr			// copyParams
+	);
 }
 void DescriptorSetBindingManager::updateDescriptorSet (
 	ZDescriptorSet ds, uint32_t binding, ZImageView view,

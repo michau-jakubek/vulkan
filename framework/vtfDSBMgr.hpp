@@ -119,6 +119,9 @@ public:
 							std::initializer_list<VkDescriptorType> mutableTypes = {},
 							VkDescriptorBindingFlags = 0u);
 
+	uint32_t	addArrayBinding	(ZBuffer, VkDescriptorType, uint32_t elemCount, uint32_t stride,
+							VkShaderStageFlags = VK_SHADER_STAGE_ALL, VkDescriptorBindingFlags = 0);
+
 	/**
 	 * Allows to write data directly to an associated data buffer.
 	 * A type of Data_ is veryfied before read, if doesn't match then throws an exception.
@@ -189,6 +192,7 @@ private:
 			, bindingFlags	(0)
 			, mutableTypes	()
 			, mutableIndex	(INVALID_UINT32)
+			, stride		(0)
 		{}
 		std::type_index					index;
 		bool							isNull;
@@ -196,6 +200,7 @@ private:
 		VkDescriptorBindingFlags		bindingFlags;
 		std::vector<VkDescriptorType>	mutableTypes;
 		uint32_t						mutableIndex;
+		uint32_t						stride; // TODO: reuse this field for other types than buffer
 		ZBuffer							buffer;
 		ZImageView						view;
 		ZSampler						sampler;
@@ -204,7 +209,9 @@ private:
 
 	uint32_t	addBinding_	(uint32_t, std::type_index, ZBuffer, ZImageView, ZSampler,
 							VkDescriptorType, bool, VkShaderStageFlags, VkDescriptorBindingFlags,
-							VkImageLayout = VK_IMAGE_LAYOUT_UNDEFINED, std::initializer_list<VkDescriptorType> mutableTypes = {});
+							VkImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+							std::initializer_list<VkDescriptorType> mutableTypes = {},
+							uint32_t descriptorCount = 1u, uint32_t stride = 0);
 		  ExtBinding&	verifyGetExtBinding		(uint32_t binding);
 	const ExtBinding&	verifyGetExtBinding		(uint32_t binding) const;
 	const ExtBinding&	verifyGetExtBinding		(std::type_index index, uint32_t binding) const;
