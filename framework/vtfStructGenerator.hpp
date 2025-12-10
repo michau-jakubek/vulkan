@@ -189,7 +189,7 @@ struct Node<Array<X, Elems, IsRuntime>> : public INode
     virtual std::string genFieldName(uint32_t index, bool appendRank) const override {
         const std::string fieldName = INode::genFieldName(index);
         if (appendRank)
-            return fieldName + '[' + (IsRuntime ? std::string() : std::to_string(Elems)) + ']';
+            return fieldName + '[' + (IsRuntime ? ("/* " + std::to_string(Elems) + " */") : std::to_string(Elems)) + ']';
         return fieldName;
     }
     virtual INodePtr getElementType() const override {
@@ -292,7 +292,9 @@ struct Node<Array<INodePtr, Elems, IsRuntime>> : public INode
     virtual std::string genFieldName(uint32_t index, bool appendRank) const override {
         const std::string fieldName = INode::genFieldName(index);
         if (appendRank)
-            return fieldName + '[' + (dynamicIsRuntime ? std::string() : std::to_string(dynamicElems)) + ']';
+            return fieldName + '[' + (dynamicIsRuntime
+                                        ? ("/* " + std::to_string(dynamicElems) + " */")
+                                        : std::to_string(dynamicElems)) + ']';
         return fieldName;
     }
     virtual void printValue(std::ostream& str, int level) const override {
@@ -758,45 +760,7 @@ template<> struct Node<INodePtr> : public INode
     }
 };
 
-template<class Head, class...Tail>
-auto _tuple_tail(const std::tuple<Head, Tail...>& tp) {
-	return std::apply(
-		[](auto, auto... rest) { return std::make_tuple(rest...); }, tp
-	);
-}
-
-template<class X> INodePtr _tryGetChildren(const X&) {
-	return nullptr;
-}
-template<> INodePtr _tryGetChildren<INodePtr>(const INodePtr& structNode)
-{
-	INodePtr children = structNode->getChildren();
-	ASSERT(children, "Children must not be empty");
-	return children;
-}
-template<std::size_t Elems, bool IsRuntime>
-INodePtr _tryGetChildren(const Array<INodePtr, Elems, IsRuntime>& arrayOfStructs)
-{
-    INodePtr children = arrayOfStructs.structure;
-    ASSERT(children, "Children must not be empty");
-    return children;
-}
-
-template<int> void _appendNode(INodePtr, const std::tuple<>&) {}
-template<int K, class X, class...Y> void _appendNode(INodePtr node, const std::tuple<X, Y...>& types)
-{
-    node->next = std::make_shared<Node<X>>(node->typeName, _tryGetChildren(std::get<0>(types)));
-    _appendNode<K>(node->next, _tuple_tail(types));
-}
-
-template<class X, class...Y> INodePtr generateStruct(const std::string& typeName, const std::tuple<X, Y...>& types)
-{
-	INodePtr root = Node<INodePtr>::createEmpty(typeName);
-    _appendNode<0, X, Y...>(root->getChildren(), types);
-	return root;
-}
-
-INodePtr generateStruct(const std::string& typeName, const std::vector<INodePtr> fields)
+inline INodePtr generateStruct(const std::string& typeName, const std::vector<INodePtr> fields)
 {
     INodePtr root = Node<INodePtr>::createEmpty(typeName);
     INodePtr* pNext = &root->getChildren()->next;
@@ -814,12 +778,12 @@ template<class FieldType> INodePtr makeField(const FieldType&)
     return std::make_shared<Node<FieldType>>(std::string(), nullptr);
 }
 
-INodePtr makeArrayField(INodePtr elemType, std::size_t elemCount, bool isRuntime = false)
+inline INodePtr makeArrayField(INodePtr elemType, std::size_t elemCount, bool isRuntime = false)
 {
     return std::make_shared<Node<Array<INodePtr, 1, false>>>(elemType, elemCount, isRuntime);
 }
 
-bool structureAppendField(INodePtr rootStruct, INodePtr field)
+inline bool structureAppendField(INodePtr rootStruct, INodePtr field)
 {
     INodePtr lastField = rootStruct->getLastChild(false);
     if (lastField)
@@ -830,7 +794,7 @@ bool structureAppendField(INodePtr rootStruct, INodePtr field)
     return false;
 }
 
-void printStruct(INodePtr structNode, std::ostream& str, bool declaration = true)
+inline void printStruct(INodePtr structNode, std::ostream& str, bool declaration = true)
 {
     uint32_t fieldNum = 0u;
 	INodePtr ch = structNode->getChildren();
@@ -859,7 +823,7 @@ void printStruct(INodePtr structNode, std::ostream& str, bool declaration = true
     }
 }
 
-void _getStructList(INodePtr rootStruct, std::vector<INodePtr>& list)
+inline void _getStructList(INodePtr rootStruct, std::vector<INodePtr>& list)
 {
     INodePtr ch = rootStruct->getChildren(false);
     for (INodePtr p = ch->next; p; p = p->next)
@@ -877,7 +841,7 @@ void _getStructList(INodePtr rootStruct, std::vector<INodePtr>& list)
     }
 }
 
-std::vector<INodePtr> getStructList(INodePtr rootStruct)
+inline std::vector<INodePtr> getStructList(INodePtr rootStruct)
 {
     std::vector<INodePtr> list { rootStruct };
     _getStructList(rootStruct, list);
@@ -898,29 +862,29 @@ std::vector<INodePtr> getStructList(INodePtr rootStruct)
     return list;
 }
 
-void generateLoops(INodePtr rootStruct, const std::string& rootStructName, std::ostream& str, uint32_t indent, const std::string& rhsCode)
+inline void generateLoops(INodePtr rootStruct, const std::string& rootStructName, std::ostream& str, uint32_t indent, const std::string& rhsCode)
 {
     uint32_t iteratorSeed = 0;
     rootStruct->genLoops(str, rootStructName, rhsCode, 0, indent, iteratorSeed);
 }
 
-void printValues(INodePtr node, std::ostream& str, int level = 0)
+inline void printValues(INodePtr node, std::ostream& str, int level = 0)
 {
 	node->printValue(str, level);
 }
-std::string getValuesString(INodePtr str)
+inline std::string getValuesString(INodePtr str)
 {
     std::ostringstream os;
     printValues(str, os, 0);
     return os.str();
 }
 
-void deserializeStruct(const void* src, INodePtr structNode, int nesting = -1, INode::SDCallback sdCallback = {})
+inline void deserializeStruct(const void* src, INodePtr structNode, int nesting = -1, INode::SDCallback sdCallback = {})
 {
     std::size_t currentOffset = 0;
     structNode->serializeOrDeserialize(src, nullptr, currentOffset, false, false, nesting, sdCallback);
 }
-void serializeStruct(INodePtr structNode, void* dst, int nesting = -1, INode::SDCallback sdCallback = {})
+inline void serializeStruct(INodePtr structNode, void* dst, int nesting = -1, INode::SDCallback sdCallback = {})
 {
     std::size_t currentOffset = 0;
     structNode->serializeOrDeserialize(nullptr, dst, currentOffset, true, false, nesting, sdCallback);

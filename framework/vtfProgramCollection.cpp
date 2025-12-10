@@ -310,11 +310,11 @@ static std::string makeFileName (uint32_t shaderIndex, VkShaderStageFlagBits sta
 		UNREF(entryName);
 		//ss << entryName;
 		ss << (codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName).empty()
-			   ? codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::shaderCode)
+			   ? codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::shaderOriginalCode)
 			   : codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName));
 		if (buildAlways && !codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::fileName).empty())
 		{
-			ss << codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::shaderCode);
+			ss << codeAndEntryAndIncludes.at(ProgramCollection::StageToCode::shaderOriginalCode);
 		}
 		ss << (enableValidation ? 777 : 392);
 		ss << (genDisassembly ? 111 : 577);
@@ -570,7 +570,8 @@ static auto makeBuildSpvDis (const std::string& compilerExecutable, const fs::pa
 	return cmd.str();
 }
 
-static auto makeValidateCommand (const Version& vulkanVer, const Version& spirvVer, const fs::path& output) -> std::string
+static auto makeValidateCommand (add_cref<Version> vulkanVer, add_cref<Version> spirvVer,
+								add_cref<std::string> spirvValArgs, add_cref<fs::path> output) -> std::string
 {
 	const char* space = " ";
 	std::stringstream cmd;
@@ -579,6 +580,12 @@ static auto makeValidateCommand (const Version& vulkanVer, const Version& spirvV
 	cmd << "--target-env vulkan" << vulkanVer.nmajor << "." << vulkanVer.nminor << space;
 	cmd << "--target-env spv" << spirvVer.nmajor << "." << spirvVer.nminor << space;
 	cmd << output << space;
+	if (spirvValArgs.length())
+	{
+		strings spvvalargs = splitString(spirvValArgs, ';');
+		for (add_cref<std::string> arg : spvvalargs)
+			cmd << arg << space;
+	}
 	cmd << "2>&1";
 	cmd.flush();
 	return cmd.str();
@@ -594,11 +601,12 @@ bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 					   add_ref<std::string> errors,
 					   add_ref<ProgressRecorder> progressRecorder,
 					   bool enableValidation,
+					   add_cref<std::string> spirvValArgs,
 					   bool genDisassmebly,
 					   bool buildAlways,
 					   bool genBinary)
 {
-	add_cref<std::string> shaderCode = codeAndEntryAndIncludes[ProgramCollection::StageToCode::shaderCode];
+	add_cref<std::string> shaderOriginalCode = codeAndEntryAndIncludes[ProgramCollection::StageToCode::shaderOriginalCode];
 	add_cref<std::string> codeFileName = codeAndEntryAndIncludes[ProgramCollection::StageToCode::fileName];
 	add_cref<std::string> shaderHdr = codeAndEntryAndIncludes[ProgramCollection::StageToCode::header];
 	const bool isGlsl = shaderHdr.find("#version") != std::string::npos;
@@ -618,7 +626,7 @@ bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 
 	if (buildAlways || !fs::exists(textPath))
 	{
-		if (shaderCode.empty())
+		if (shaderOriginalCode.empty())
 		{
 			fs::copy_file(fs::path(codeFileName), textPath, fs::copy_options::overwrite_existing);
 		}
@@ -626,7 +634,7 @@ bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 		{
 			std::ofstream textFile(textPath.c_str());
 			ASSERTMSG(textFile.is_open(), textPath.string());
-			textFile << shaderCode;
+			textFile << shaderOriginalCode;
 		}
 	}
 	if (gf.verbose && make_signed(gf.compilerIndex) >= 0)
@@ -648,8 +656,8 @@ bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 	}
 	auto assemblyShaderCode = [&]() -> void
 	{
-		assembly.resize(shaderCode.length());
-		std::transform(shaderCode.begin(), shaderCode.end(),
+		assembly.resize(shaderOriginalCode.length());
+		std::transform(shaderOriginalCode.begin(), shaderOriginalCode.end(),
 			assembly.begin(), [](const char c) { return uint8_t(c); });
 	};
 	if (!buildAlways && (!genBinary || fs::exists(binPath)))
@@ -692,15 +700,16 @@ bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 		if (make_signed(gf.compilerIndex) < 0)
 		{
 			std::string tmpShaderCode;
-			if (shaderCode.empty())
+			if (shaderOriginalCode.empty())
 			{
 				bool readStatus = true;
 				tmpShaderCode = readFile(codeFileName, &readStatus);
 			}
-			add_cref<std::string> offShaderCode(shaderCode.empty() ? tmpShaderCode : shaderCode);
+			add_cref<std::string> offShaderCode(shaderOriginalCode.empty() ? tmpShaderCode : shaderOriginalCode);
 			add_cref<std::string> entryPoint = codeAndEntryAndIncludes[ProgramCollection::StageToCode::entryName];
-			binary = compileShader(offShaderCode, stage, entryPoint, isGlsl, enableValidation, genDisassmebly,
-				vulkanVer, spirvVer, binPath, asmPath, disassembly, errorCollection, progressRecorder, status);
+			binary = compileShader(offShaderCode, stage, entryPoint, isGlsl, enableValidation, spirvValArgs,
+									genDisassmebly,	vulkanVer, spirvVer, binPath, asmPath, disassembly, errorCollection,
+									progressRecorder, status);
 		}
 		else
 		{
@@ -733,7 +742,7 @@ bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 
 				if (enableValidation)
 				{
-					const std::string validateCmd = makeValidateCommand(vulkanVer, spirvVer, binPath);
+					const std::string validateCmd = makeValidateCommand(vulkanVer, spirvVer, spirvValArgs, binPath);
 					result = captureSystemCommandResult(validateCmd.c_str(), status, '\n');
 					areErrors = containsErrorString(result);
 					areWarnings = containsWarningString(result);
@@ -912,7 +921,8 @@ ProgramCollection::ProgramCollection (ZDevice device, add_cref<std::string> base
 }
 
 void ProgramCollection::buildAndVerify (add_cref<Version> vulkanVer, add_cref<Version> spirvVer,
-										bool enableValidation, bool genDisassembly, bool buildAlways)
+										bool enableValidation, bool genDisassembly, bool buildAlways,
+										add_cref<std::string> spirvValArgs)
 {
 	add_ref<ProgressRecorder> progressRecorder =
 		m_device.getParamRef<ZPhysicalDevice>().getParamRef<ZInstance>().getParamRef<ProgressRecorder>();
@@ -930,7 +940,7 @@ void ProgramCollection::buildAndVerify (add_cref<Version> vulkanVer, add_cref<Ve
                 std::vector<char> binary, assembly, disassembly;
 				if (verifyShaderCode(k, stage, vulkanVer, spirvVer,
 									 m_stageToCode[key], shaderFileName, binary, assembly, disassembly,
-									 errors, progressRecorder, enableValidation, genDisassembly, buildAlways, genBinary))
+									 errors, progressRecorder, enableValidation, spirvValArgs, genDisassembly, buildAlways, genBinary))
 				{
 					m_stageToDisassembly[key]	= std::move(disassembly);
 					m_stageToFileName[key]		= std::move(shaderFileName);
@@ -940,7 +950,7 @@ void ProgramCollection::buildAndVerify (add_cref<Version> vulkanVer, add_cref<Ve
 				else
 				{
 					std::ostringstream codeWidthLines;
-					add_cref<std::string> code = m_stageToCode[key][ProgramCollection::StageToCode::shaderCode];
+					add_cref<std::string> code = m_stageToCode[key][ProgramCollection::StageToCode::shaderOriginalCode];
 					if (code.empty() == false)
 					{
 						uint32_t num = 0u;

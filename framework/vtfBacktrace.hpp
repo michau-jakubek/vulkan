@@ -47,6 +47,7 @@ struct GlobalAppFlags
 	std::string		assetsPath;
 	std::string		thisAppPath;
 	std::string		vulkanDriver;
+	std::string		spirvValArgs;
 	bool			spirvValidate;
 	bool			genSpirvDisassembly;
 	bool			nowerror;

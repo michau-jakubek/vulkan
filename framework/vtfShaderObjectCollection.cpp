@@ -2,6 +2,7 @@
 #include "vtfStructUtils.hpp"
 #include "vtfZUtils.hpp"
 #include "vtfProgressRecorder.hpp"
+#include "vtfBacktrace.hpp"
 
 namespace vtf
 {
@@ -239,6 +240,7 @@ extern	bool verifyShaderCode (
     add_ref<std::string>        errors,
 	add_ref<ProgressRecorder>	progressRecorder,
     bool enableValidation,
+	add_cref<std::string>		spirvValArgs,
     bool genDisassmebly,
     bool buildAlways,
     bool genBinary);
@@ -323,12 +325,13 @@ int ShaderObjectCollection::create (add_cref<Version> vulkanVer, add_cref<Versio
 		add_ptr<ShaderData> data = link.data;
 		add_cref<ShaderBuildOptions> options = data->options;
 
+		add_cref<GlobalAppFlags> gf = getGlobalAppFlags(); // TODO: read real param from buildAndVerify()
 		const Version buildVulkanVer = options.vulkanVer ? options.vulkanVer : vulkanVer;
 		const Version buildSpirvVer = options.spirvVer ? options.spirvVer : spirvVer;
 
 		if (verifyShaderCode((link.index + 1024u), link.stage, buildVulkanVer, buildSpirvVer,
 			me.m_stageToCode.at(key), shaderFileName, binary, assembly, disassembly, errors, progressRecorder,
-			data->options.enableValidation, data->options.genAssembly, data->options.buildAlways, true))
+			data->options.enableValidation, gf.spirvValArgs, data->options.genAssembly, data->options.buildAlways, true))
 		{
 			m_stageToFileName[key] = std::move(shaderFileName);
 			m_stageToAssembly[key] = std::move(assembly);

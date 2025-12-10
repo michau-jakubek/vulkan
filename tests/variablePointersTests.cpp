@@ -8,6 +8,7 @@
 #include "vtfZCommandBuffer.hpp"
 #include "vtfCopyUtils.hpp"
 #include "vtfOptionParser.hpp"
+#include "vtfStructGenerator.hpp"
 
 namespace
 {
@@ -15,6 +16,7 @@ using namespace vtf;
 
 constexpr Option optionEnableBase64Shader	{ "--enable-base64-shader", 0 };
 constexpr Option optionAlwaysBuildShaders	{ "--always-build-shaders", 0 };
+constexpr Option optionShadersAsText		{ "--shaders-as-text", 0 };
 struct Params
 {
 	add_cref<std::string> assets;
@@ -23,6 +25,8 @@ struct Params
 	OptionParser<Params> getParser();
 	bool enableBase6Shader = false;
 	bool alwaysBuildShaders = false;
+	bool shadersAsText = false;
+	bool usePhysicalAddress = true;
 };
 Params::Params(add_cref<std::string> assets_)
 	: assets(assets_)
@@ -36,6 +40,10 @@ OptionParser<Params> Params::getParser()
 		"Enable Base64 shader instead of SPIR-V assembly", { false }, flags);
 	p.addOption(&Params::alwaysBuildShaders, optionAlwaysBuildShaders,
 		"Force to (re)build shaders every time the application is run", { false }, flags);
+	p.addOption(&Params::shadersAsText, optionShadersAsText,
+		"Force to read shaders as text - files are loaded first then "
+		"framework uses another function to load shaders - it may improve "
+		"readability while some errors occurs when validating", { false }, flags);
 	return p;
 }
 
@@ -71,20 +79,27 @@ TriLogicInt prepareTests(add_cref<TestRecord>& record, add_cref<strings> cmdLine
 			.checkSupported("scalarBlockLayout");
 		caps.addExtension(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME).checkSupported();
 
+		if (params.usePhysicalAddress)
+		{
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceScalarBlockLayoutFeatures::scalarBlockLayout)
+				.checkSupported("scalarBlockLayout");
+			caps.addExtension(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME).checkSupported();
+
+			// VkPhysicalDeviceBufferAddressFeaturesEXT
+			// VkPhysicalDeviceBufferDeviceAddressFeaturesEXT
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceBufferDeviceAddressFeaturesEXT::bufferDeviceAddress)
+				.checkSupported("bufferDeviceAddress");
+			caps.addExtension(VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME).checkSupported();
+
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::shaderInt64)
+				.checkSupported("shaderInt64");
+		}
+
 		caps.addUpdateFeatureIf(&VkPhysicalDeviceVariablePointerFeaturesKHR::variablePointers)
 			.checkSupported("variablePointers");
 		caps.addUpdateFeatureIf(&VkPhysicalDeviceVariablePointerFeaturesKHR::variablePointersStorageBuffer)
 			.checkSupported("variablePointersStorageBuffer");
 		caps.addExtension(VK_KHR_VARIABLE_POINTERS_EXTENSION_NAME).checkSupported();
-
-		// VkPhysicalDeviceBufferAddressFeaturesEXT
-		// VkPhysicalDeviceBufferDeviceAddressFeaturesEXT
-		//caps.addUpdateFeatureIf(&VkPhysicalDeviceBufferDeviceAddressFeaturesEXT::bufferDeviceAddress)
-		//	.checkSupported("bufferDeviceAddress");
-		//caps.addExtension(VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
-
-		//caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::shaderInt64)
-		//	.checkSupported("shaderInt64");
 
 		VkPhysicalDeviceSubgroupProperties subgroupProps = makeVkStruct();
 		deviceGetPhysicalProperties2(caps.physicalDevice, &subgroupProps);
@@ -98,6 +113,7 @@ TriLogicInt prepareTests(add_cref<TestRecord>& record, add_cref<strings> cmdLine
 
 std::tuple<ZShaderModule, ZShaderModule> buildShaders(ZDevice device, add_cref<Params> params)
 {
+	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	ZShaderModule shader;
 	if (params.enableBase6Shader)
 	{
@@ -107,9 +123,25 @@ std::tuple<ZShaderModule, ZShaderModule> buildShaders(ZDevice device, add_cref<P
 	}
 	else
 	{
+		add_cptr<char> shaderFileName = "s.spvasm";
 		ProgramCollection p(device, params.assets);
-		p.addFromFile(VK_SHADER_STAGE_COMPUTE_BIT, "s.spvasm");
-		p.buildAndVerify(params.alwaysBuildShaders);
+		if (params.shadersAsText)
+		{
+			const std::string shaderFileContent = readFile(
+				(fs::path(params.assets) / shaderFileName).string(), nullptr);
+			p.addFromText(VK_SHADER_STAGE_COMPUTE_BIT, shaderFileContent);
+		}
+		else
+		{
+			p.addFromFile(VK_SHADER_STAGE_COMPUTE_BIT, shaderFileName);
+		}
+		std::string spirvValArgs = gf.spirvValArgs;
+		if (gf.spirvValidate || spirvValArgs.length())
+		{
+			spirvValArgs += ";--scalar-block-layout";
+		}
+		p.buildAndVerify(gf.vulkanVer, gf.spirvVer, gf.spirvValidate, gf.genSpirvDisassembly,
+							params.alwaysBuildShaders, spirvValArgs);
 		shader = p.getShader(VK_SHADER_STAGE_COMPUTE_BIT, 0u);
 	}
 	return
@@ -117,6 +149,47 @@ std::tuple<ZShaderModule, ZShaderModule> buildShaders(ZDevice device, add_cref<P
 		ZShaderModule(),
 		shader
 	};
+}
+
+[[maybe_unused]] void testOffsets()
+{
+	//sg::INodePtr fieldUint32 = sg::makeField(uint32_t());
+	//sg::INodePtr arraUint32 = sg::makeArrayField(fieldUint32, 2);
+	char mem[256];
+	sg::INodePtr fieldUVec2 = sg::makeField(sg::vec<2, uint32_t>());
+	sg::INodePtr fieldUVec3 = sg::makeField(sg::vec<3, uint32_t>());
+	sg::INodePtr fieldUVec4 = sg::makeField(sg::vec<4, uint32_t>());
+	sg::INodePtr arrOfUVec3 = sg::makeArrayField(fieldUVec3, 10);
+	sg::INodePtr arrOfUVec4 = sg::makeArrayField(fieldUVec4, 10);
+	sg::INodePtr s3 = sg::generateStruct("S3", { fieldUVec2, arrOfUVec3 });
+	sg::INodePtr s4 = sg::generateStruct("S4", { fieldUVec2, arrOfUVec4 });
+	auto serializeOrDeserializeMonitor = [&](add_cref<sg::INode::SDParams> cb) -> void
+	{
+		UNREF(cb);
+					auto number = [](std::size_t x) -> char
+		{
+			UNREF(x);
+			std::cout << std::right << std::setw(6) << x << std::setw(0) << std::left;
+			return ' ';
+		};
+		if (cb.whenAction == sg::INode::SDAction::Serialize)
+		{
+			const char* action = cb.action == sg::INode::SDAction::UpdatePadBefore ? "update pad" : "serialize";
+			std::cout << std::setfill('0') << std::setw(2) << cb.fieldIndex
+				<< std::setfill(' ') << ") " << std::setw(10) << action << std::setw(0) << ' '
+				<< std::setw(18) << cb.fieldType << std::setw(0)
+				<< ", align: " << number(cb.alignment)
+				<< ", size:" << number(cb.size)
+				<< ", offset: " << number(cb.offset);
+			if (cb.pad)
+			{
+				std::cout << ", pad: " << number(cb.pad);
+			}
+			std::cout << std::endl;
+		}
+	};
+	sg::serializeStruct(s3, mem, -1, serializeOrDeserializeMonitor);
+	sg::serializeStruct(s4, mem, -1, serializeOrDeserializeMonitor);
 }
 
 TriLogicInt runTests(add_ref<VulkanContext> ctx, add_cref<Params> params)
@@ -139,13 +212,25 @@ TriLogicInt runTests(add_ref<VulkanContext> ctx, add_cref<Params> params)
 	const uint32_t				pc0set[4]		{ 0u, 3u, 7u, 5u };
 	const uint32_t				pc1set[4]		{ 1u, 8u, 5u, 11u };
 	const uint32_t				elementCount	= ROUNDUP(std::max(pc0set[1], pc1set[1]) + 10u, 16u);
-	const ZBufferUsageFlags		usage			(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-	ZBuffer						fooBuffer		= createBuffer(ctx.device, VK_FORMAT_R32G32B32A32_UINT, elementCount,
-																usage, ZMemoryPropertyHostFlags,
-																ZBufferCreateFlags());
-	ZBuffer						barBuffer		= createBuffer(ctx.device, VK_FORMAT_R32G32B32A32_UINT, elementCount,
-																ZBufferUsageStorageFlags, ZMemoryPropertyHostFlags,
-																ZBufferCreateFlags());
+	ZBuffer						fooBuffer, barBuffer;
+	if (params.usePhysicalAddress)
+	{
+		ZBufferUsageFlags usage(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+		const VkDeviceSize size = sizeof(uint64_t) + 8u + sizeof(UVec4) * elementCount;
+		fooBuffer = createBuffer(ctx.device, size, usage,
+								ZMemoryPropertyHostFlags, ZBufferCreateFlags());
+		barBuffer = createBuffer(ctx.device, size, usage,
+								ZMemoryPropertyHostFlags, ZBufferCreateFlags());
+		bufferWrite(fooBuffer, bufferGetAddress(fooBuffer));
+		bufferWrite(barBuffer, bufferGetAddress(barBuffer));
+	}
+	else
+	{
+		fooBuffer = createBuffer(ctx.device, VK_FORMAT_R32G32B32A32_UINT, elementCount,
+								ZBufferUsageStorageFlags, ZMemoryPropertyHostFlags, ZBufferCreateFlags());
+		barBuffer = createBuffer(ctx.device, VK_FORMAT_R32G32B32A32_UINT, elementCount,
+								ZBufferUsageStorageFlags, ZMemoryPropertyHostFlags,	ZBufferCreateFlags());
+	}
 	ZCommandPool			cmdPool			= createCommandPool(ctx.device, ctx.computeQueue);
 	LayoutManager			lmFoo			(ctx.device, cmdPool);
 	LayoutManager			lmBar			(ctx.device, cmdPool);
@@ -199,8 +284,18 @@ TriLogicInt runTests(add_ref<VulkanContext> ctx, add_cref<Params> params)
 	const uint32_t sumBar = small_pcBar.x + small_pcBar.y + small_pcBar.z + small_pcBar.w;
 	const uint32_t count = std::min(std::max(small_pcFoo.y, small_pcBar.y) + 1u, elementCount);
 	{
-		std::vector<UVec4> foo;
-		bufferRead(fooBuffer, foo);
+		add_cptr<UVec4> foo;
+		std::vector<std::byte> fooData;
+		bufferRead(fooBuffer, fooData);
+		if (params.usePhysicalAddress)
+		{
+			foo = reinterpret_cast<add_cptr<UVec4>>(fooData.data() + sizeof(uint64_t) + 8u);
+		}
+		else
+		{
+			foo = reinterpret_cast<add_cptr<UVec4>>(fooData.data());
+		}
+		
 		std::cout << "Foo buffer:" << std::endl;
 		for (uint32_t i = 0; i < count; ++i)
 			std::cout << foo[i] << ' ';
@@ -222,8 +317,18 @@ TriLogicInt runTests(add_ref<VulkanContext> ctx, add_cref<Params> params)
 		}
 	}
 	{
-		std::vector<UVec3> bar;
-		bufferRead(barBuffer, bar);
+		add_cptr<UVec3> bar;
+		std::vector<std::byte> barData;
+		bufferRead(barBuffer, barData);
+		if (params.usePhysicalAddress)
+		{
+			bar = reinterpret_cast<add_cptr<UVec3>>(barData.data() + sizeof(uint64_t) + 8u);
+		}
+		else
+		{
+			bar = reinterpret_cast<add_cptr<UVec3>>(barData.data());
+		}
+
 		std::cout << "Bar buffer:" << std::endl;
 		for (uint32_t i = 0; i < count; ++i)
 			std::cout << bar[i] << ' ';

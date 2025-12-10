@@ -9,6 +9,7 @@ std::vector<char> compileShader(
     add_cref<std::string>           /*entryPoint*/,
     bool                            /*isGlsl*/,
     bool                            /*enableValidation*/,
+    add_cref<std::string>           /*validationOptions*/,
     bool                            /*genDisassmebly*/,
     add_cref<vtf::Version>          /*vulkanVer*/,
     add_cref<vtf::Version>          /*spirvVer*/,

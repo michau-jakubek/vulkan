@@ -105,6 +105,7 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	Option vulkan{ "-vulkan", 1 };				options.push_back(vulkan);
 	Option spirv{ "-spirv",  1 };				options.push_back(spirv);
 	Option spvValid{ "-spvvalid", 0 };			options.push_back(spvValid);
+	Option spvValidArgs{ "-spvvalargs", 1 };	options.push_back(spvValidArgs);
 	Option spvDisassm{ "-spvdisassm", 0 };		options.push_back(spvDisassm);
 	Option verbose{ "-verbose", 1 };			options.push_back(verbose);
 	Option nowerror{ "-nowerror", 0 };			options.push_back(nowerror);
@@ -411,6 +412,11 @@ int parseParams (int argc, char* argv[], add_ref<TestRecord> testRecord, add_ref
 	globalAppFlags.assetsPath.assign(ASSETS_PATH);
 	globalAppFlags.debugPrintfEnabled = consumeOptions(dprintf, options, appArgs, sink) > 0;
 	globalAppFlags.spirvValidate = consumeOptions(spvValid, options, appArgs, sink) > 0;
+	if (consumeOptions(spvValidArgs, options, appArgs, sink) > 0)
+	{
+		globalAppFlags.spirvValArgs = sink.back();
+		globalAppFlags.spirvValidate = true;
+	}
 	globalAppFlags.genSpirvDisassembly = consumeOptions(spvDisassm, options, appArgs, sink) > 0;
 	globalAppFlags.nowerror = (consumeOptions(nowerror, options, appArgs, sink) > 0);
 	globalAppFlags.noWarning_VUID_Undefined = (consumeOptions(optLayNoVuid, options, appArgs, sink) > 0);
@@ -598,9 +604,12 @@ void printUsage (std::ostream& str)
 	    << "                            invalid binary file is saved as {hash}.{shader_file_name}.invalid.spvbin,\n"
 	    << "                            otherwise spirv-val tool is launched anyway.\n"
 	    << "                            glslang and spirv-val can give different results" <<std::endl;
+	str << "  -spvvalargs:              text with semicolon separated list passed to spirv-val executable or as\n"
+		<< "                            a parameter to static validator (if available, see -compiler).\n"
+		<< "                            example: \"--relax-block-layout;--max-struct-depth 4;--relax-struct-store\"" << std::endl;
 	str << "  -spvdisassm:              generate SPIR-V dissassembly file" << std::endl;
 	str << "  -compiler <index>:        set compiler index from looking it on the operating system, default is 0.\n"
-		<< "                            If index is negative value then statically glslan compiler will be used,\n"
+		<< "                            If index is negative value then statically glslang compiler will be used,\n"
 		<< "                            and project needs to be configured with OFFLINE_SHADER_COMPILER enabled." << std::endl;
 	str << "  -nowerror:                allows warnig(s) from external compilators\n" << std::endl;
 	str << "  NOTE: The app internally uses some of the Vulkan SDK tools e.g. glslangValidator or spirv-val\n"

@@ -68,6 +68,8 @@ set(tests_files
 	#transformFeedbackTests.hpp
 	depthTests.cpp
 	depthTests.hpp
+	structGeneratorTests.cpp
+	structGeneratorTests.hpp
     )
 
 if(ENABLE_DAEMON_TEST)

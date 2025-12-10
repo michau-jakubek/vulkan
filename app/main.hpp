@@ -3,7 +3,7 @@
 
 #include "vtfVkUtils.hpp"
 
-constexpr vtf::Version CurrentVtfVersion(1, 3, 9, 1);
+constexpr vtf::Version CurrentVtfVersion(1, 3, 9, 2);
 
 // 2024-04-10, 1.1.0.0, "Add versioning"
 // 2024-04-15, 1.1.1.0, "Some fixes in int_compute test."
@@ -45,5 +45,6 @@ constexpr vtf::Version CurrentVtfVersion(1, 3, 9, 1);
 // 2025-11-07, 1.3.8.4, "Add depth tests"
 // 2025-11-18, 1.3.9.0, "Add offline glslang shader compiler"
 // 2025-12-10, 1.3.9.1, "Add struct generator"
+// 2025-12-16, 1.3.9.2, "Add struct_generator test"
 
 #endif  // __MAIN_HPP_INCLUDED__

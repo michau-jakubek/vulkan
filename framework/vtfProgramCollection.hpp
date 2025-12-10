@@ -15,7 +15,7 @@ struct _GlSpvProgramCollection
 {
 	enum StageToCode
 	{
-		shaderCode = 0,
+		shaderOriginalCode = 0,
 		header,
 		entryName,
 		fileName,
@@ -76,7 +76,8 @@ struct ProgramCollection : _GlSpvProgramCollection
 {
 	ProgramCollection (ZDevice device, add_cref<std::string> basePath = std::string());
 	void buildAndVerify (add_cref<Version> vulkanVer = Version(1,0), add_cref<Version> spirvVer = Version(1,0),
-						 bool enableValidation = false, bool genDisassembly = false, bool buildAlways = false);
+						 bool enableValidation = false, bool genDisassembly = false, bool buildAlways = false,
+						 add_cref<std::string> spirvValArgs = {});
 	// Uses information from GlobalAppFlags
 	void buildAndVerify (bool buildAlways);
 	auto getShader (VkShaderStageFlagBits stage, uint32_t index = 0u, bool verbose = true) const -> ZShaderModule;

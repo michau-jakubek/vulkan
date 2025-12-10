@@ -109,6 +109,7 @@ static bool validateSpirv (
     add_cref<std::vector<uint32_t>> binary,
     add_cref<vtf::Version>          vulkanVer,
     add_cref<vtf::Version>          spirvVer,
+    add_cref<std::string>           validationOptions,
     add_ref<std::stringstream>      errorCollection,
     add_ref<vtf::ProgressRecorder>  progressRecorder);
 
@@ -156,6 +157,7 @@ std::vector<char> compileShader (
     add_cref<std::string>           entryPoint,
     bool                            isGlsl,
     bool                            enableValidation,
+    add_cref<std::string>           validationOptions,
     bool                            genDisassmebly,
     add_cref<Version>               vulkanVer,
     add_cref<Version>               spirvVer,
@@ -223,7 +225,7 @@ std::vector<char> compileShader (
 
     if (enableValidation)
     {
-        if (status = validateSpirv(ispirv, vulkanVer, spirvVer, errorCollection, progressRecorder), false == status)
+        if (status = validateSpirv(ispirv, vulkanVer, spirvVer, validationOptions, errorCollection, progressRecorder), false == status)
             return {};
     }
 
@@ -267,6 +269,7 @@ static bool validateSpirv (
     add_cref<std::vector<uint32_t>> binary,
     add_cref<vtf::Version>          vulkanVer,
     add_cref<vtf::Version>          spirvVer,
+    add_cref<std::string>           validationOptions,
     add_ref<std::stringstream>      errorCollection,
     add_ref<vtf::ProgressRecorder>  progressRecorder)
 {
@@ -278,8 +281,14 @@ static bool validateSpirv (
                 << " at line " << position.index << std::endl;
         });
 
+    spv_validator_options options = spvValidatorOptionsCreate();
+    if (validationOptions.find("--scalar-block-layout") != std::string::npos)
+    {
+        spvValidatorOptionsSetScalarBlockLayout(options, true);
+    }
+
     progressRecorder.stamp("Before spvtools::SpirvTools::Validate()");
-    const bool result =  tools.Validate(binary);
+    const bool result =  tools.Validate(binary.data(), binary.size(), options);
     progressRecorder.stamp("After spvtools::SpirvTools::Validate()");
 
     return result;
