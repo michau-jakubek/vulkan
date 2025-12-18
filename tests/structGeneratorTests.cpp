@@ -63,6 +63,7 @@ TriLogicInt prepareTest(const TestRecord& record, const strings& cmdLineParams)
 ZShaderModule genShader(ZDevice device, add_cref<Params> params,
     add_cref<std::vector<INodePtr>> list, uint32_t openSize)
 {
+    StructGenerator sg;
     std::ostringstream code;
     code << "#version 450 core\n";
     if (openSize)
@@ -76,10 +77,10 @@ ZShaderModule genShader(ZDevice device, add_cref<Params> params,
     code << "} pc; \n";
     for (uint32_t s = 0; s < list.size() - 1; ++s)
     {
-        printStruct(list[s], code, true);
+        sg.printStruct(list[s], code, true);
     }
     code << "layout(std430, binding = 0) buffer " << list.back()->typeName << ' ';
-    printStruct(list.back(), code, false);
+    sg.printStruct(list.back(), code, false);
     code << " root";
     if (openSize)
     {
@@ -95,13 +96,13 @@ ZShaderModule genShader(ZDevice device, add_cref<Params> params,
         code << "for (uint root_0 = 0; root_0 < " << openSize << "; ++root_0) {\n";
         INode::putIndent(code, 2);
         code << "if (root_0 == gl_LocalInvocationID.x) {\n";
-        generateLoops(list.back(), "root[nonuniformEXT(root_0)]", code, 3, "seed++");
+        sg.generateLoops(list.back(), "root[nonuniformEXT(root_0)]", code, 3, "seed++");
         INode::putIndent(code, 2);
         code << "}\n";
     }
     else
     {
-        generateLoops(list.back(), "root", code, 2, "seed++");
+        sg.generateLoops(list.back(), "root", code, 2, "seed++");
     }
     INode::putIndent(code, 1);
     code << "}\n";
@@ -131,20 +132,21 @@ ZShaderModule genShader(ZDevice device, add_cref<Params> params,
 INodePtr generateStructure(const float fseed, uint32_t& rootArraySize);
 INodePtr generateStructure(const float fseed, uint32_t& rootArraySize)
 {
+    StructGenerator sg;
     const uint32_t uiseed = uint32_t(fseed);
     std::srand(uiseed);
 
     std::vector<INodePtr> types{
-        makeField(int()), makeField(float()), makeField(vec<2>()), makeField(vec<3>()), makeField(vec<4>()),
-        makeField(mat<2,2>()), makeField(mat<2,3>()), makeField(mat<2,4>()),
-        makeField(mat<3,2>()), makeField(mat<3,3>()), makeField(mat<3,4>()), makeField(mat<4,4>()) };
+        sg.makeField(int()), sg.makeField(float()), sg.makeField(vec<2>()), sg.makeField(vec<3>()), sg.makeField(vec<4>()),
+        sg.makeField(mat<2,2>()), sg.makeField(mat<2,3>()), sg.makeField(mat<2,4>()),
+        sg.makeField(mat<3,2>()), sg.makeField(mat<3,3>()), sg.makeField(mat<3,4>()), sg.makeField(mat<4,4>()) };
     const uint32_t typesSize = uint32_t(types.size());
 
     std::vector<INodePtr> arrays(typesSize);
     for (uint32_t i = 0u; i < typesSize; ++i)
     {
         const uint32_t arraySize = uint32_t(std::rand()) % typesSize;
-        arrays[i] = makeArrayField(types[i], (arraySize + 1u), false);
+        arrays[i] = sg.makeArrayField(types[i], (arraySize + 1u), false);
     }
 
     std::vector<INodePtr> structures(typesSize);
@@ -164,14 +166,14 @@ INodePtr generateStructure(const float fseed, uint32_t& rootArraySize)
         std::copy_n(std::next(types.begin(), startT), countT, fields.begin());
         std::copy_n(std::next(arrays.begin(), startA), countA, std::next(fields.begin(), countT));
 
-        structures[i] = generateStruct("S" + std::to_string(i), fields);
+        structures[i] = sg.generateStruct("S" + std::to_string(i), fields);
     }
 
     std::vector<INodePtr> array_of_structures(typesSize);
     for (uint32_t i = 0u; i < typesSize; ++i)
     {
         const uint32_t arraySize = uint32_t(std::rand()) % typesSize;
-        array_of_structures[i] = makeArrayField(structures[i], (arraySize + 1u), false);
+        array_of_structures[i] = sg.makeArrayField(structures[i], (arraySize + 1u), false);
     }
 
     std::vector<INodePtr>* sources[]{ &array_of_structures, &structures, &arrays, &types};
@@ -197,19 +199,20 @@ INodePtr generateStructure(const float fseed, uint32_t& rootArraySize)
 
     //INodePtr temp = generateStruct("Root", types);
     rootArraySize = ((uint32_t(std::rand()) % typesSize) + 1u) * 4u;
-    INodePtr dyna = generateStruct("Root", all);
+    INodePtr dyna = sg.generateStruct("Root", all);
     const uint32_t nestedArraySize = (uint32_t(std::rand()) % typesSize) + 1u;
-    structureAppendField(dyna, makeArrayField(structures[biggestStructIndex], nestedArraySize, true));
+    sg.structureAppendField(dyna, sg.makeArrayField(structures[biggestStructIndex], nestedArraySize, true));
     return dyna;;
 }
 
 TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
 {
+    StructGenerator         sg;
     const float             testSeed        = params.seed;
     uint32_t                openArrayLength = 2u;
     INodePtr                gen_z           = generateStructure(testSeed, openArrayLength);
     const uint32_t          visits          = gen_z->getVisitCount();
-    const std::vector<INodePtr> list        = getStructList(gen_z);
+    const std::vector<INodePtr> list        = sg.getStructList(gen_z);
     ZShaderModule			shader          = genShader(ctx.device, params, list, openArrayLength);
 
     LayoutManager           lm              (ctx.device);
@@ -297,8 +300,8 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
         for (uint32_t i = 0; i < openArrayLength; ++i)
         {
             clones[i] = gen_z->clone();
-            deserializeStruct(binary.data() + cloneOffset, clones[i]);
-            results[i] = getValuesString(clones[i]);
+            sg.deserializeStruct(binary.data() + cloneOffset, clones[i]);
+            results[i] = sg.getValuesString(clones[i]);
             cloneOffset += structSize;
         }
         //std::cout << "Deserialized shader output:\n";
@@ -316,15 +319,15 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
             simulates[i]->loop(seed);
             if (0u == i)
             {
-                serializeStruct(simulates[i], reinterpret_cast<std::byte*>(host.data()) + hostOffset,
+                sg.serializeStruct(simulates[i], reinterpret_cast<std::byte*>(host.data()) + hostOffset,
                                 -1, serializeOrDeserializeMonitor);
             }
             else
             {
-                serializeStruct(simulates[i], reinterpret_cast<std::byte*>(host.data()) + hostOffset);
+                sg.serializeStruct(simulates[i], reinterpret_cast<std::byte*>(host.data()) + hostOffset);
             }
             hostOffset += structSize;
-            expected[i] = getValuesString(simulates[i]);
+            expected[i] = sg.getValuesString(simulates[i]);
         }
         //std::cout << "Expected:\n";
         //printValues(simulates[0], std::cout);

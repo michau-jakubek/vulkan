@@ -17,6 +17,7 @@ using namespace vtf;
 constexpr Option optionEnableBase64Shader	{ "--enable-base64-shader", 0 };
 constexpr Option optionAlwaysBuildShaders	{ "--always-build-shaders", 0 };
 constexpr Option optionShadersAsText		{ "--shaders-as-text", 0 };
+constexpr Option optionUseGlslShader		{ "--use-glsl-shader", 0 };
 struct Params
 {
 	add_cref<std::string> assets;
@@ -27,6 +28,7 @@ struct Params
 	bool alwaysBuildShaders = false;
 	bool shadersAsText = false;
 	bool usePhysicalAddress = true;
+	bool useGlslShader = false;
 };
 Params::Params(add_cref<std::string> assets_)
 	: assets(assets_)
@@ -44,6 +46,8 @@ OptionParser<Params> Params::getParser()
 		"Force to read shaders as text - files are loaded first then "
 		"framework uses another function to load shaders - it may improve "
 		"readability while some errors occurs when validating", { false }, flags);
+	p.addOption(&Params::useGlslShader, optionUseGlslShader,
+		"Use GLSL shader instead of SPIR-V", { false }, flags);
 	return p;
 }
 
@@ -123,7 +127,7 @@ std::tuple<ZShaderModule, ZShaderModule> buildShaders(ZDevice device, add_cref<P
 	}
 	else
 	{
-		add_cptr<char> shaderFileName = "s.spvasm";
+		add_cptr<char> shaderFileName = params.useGlslShader ? "s.glsl" : "s.spvasm";
 		ProgramCollection p(device, params.assets);
 		if (params.shadersAsText)
 		{
@@ -153,16 +157,17 @@ std::tuple<ZShaderModule, ZShaderModule> buildShaders(ZDevice device, add_cref<P
 
 [[maybe_unused]] void testOffsets()
 {
+	StructGenerator sg;
 	//sg::INodePtr fieldUint32 = sg::makeField(uint32_t());
 	//sg::INodePtr arraUint32 = sg::makeArrayField(fieldUint32, 2);
 	char mem[256];
-	sg::INodePtr fieldUVec2 = sg::makeField(sg::vec<2, uint32_t>());
-	sg::INodePtr fieldUVec3 = sg::makeField(sg::vec<3, uint32_t>());
-	sg::INodePtr fieldUVec4 = sg::makeField(sg::vec<4, uint32_t>());
-	sg::INodePtr arrOfUVec3 = sg::makeArrayField(fieldUVec3, 10);
-	sg::INodePtr arrOfUVec4 = sg::makeArrayField(fieldUVec4, 10);
-	sg::INodePtr s3 = sg::generateStruct("S3", { fieldUVec2, arrOfUVec3 });
-	sg::INodePtr s4 = sg::generateStruct("S4", { fieldUVec2, arrOfUVec4 });
+	sg::INodePtr fieldUVec2 = sg.makeField(sg::vec<2, uint32_t>());
+	sg::INodePtr fieldUVec3 = sg.makeField(sg::vec<3, uint32_t>());
+	sg::INodePtr fieldUVec4 = sg.makeField(sg::vec<4, uint32_t>());
+	sg::INodePtr arrOfUVec3 = sg.makeArrayField(fieldUVec3, 10);
+	sg::INodePtr arrOfUVec4 = sg.makeArrayField(fieldUVec4, 10);
+	sg::INodePtr s3 = sg.generateStruct("S3", { fieldUVec2, arrOfUVec3 });
+	sg::INodePtr s4 = sg.generateStruct("S4", { fieldUVec2, arrOfUVec4 });
 	auto serializeOrDeserializeMonitor = [&](add_cref<sg::INode::SDParams> cb) -> void
 	{
 		UNREF(cb);
@@ -188,8 +193,8 @@ std::tuple<ZShaderModule, ZShaderModule> buildShaders(ZDevice device, add_cref<P
 			std::cout << std::endl;
 		}
 	};
-	sg::serializeStruct(s3, mem, -1, serializeOrDeserializeMonitor);
-	sg::serializeStruct(s4, mem, -1, serializeOrDeserializeMonitor);
+	sg.serializeStruct(s3, mem, -1, serializeOrDeserializeMonitor);
+	sg.serializeStruct(s4, mem, -1, serializeOrDeserializeMonitor);
 }
 
 TriLogicInt runTests(add_ref<VulkanContext> ctx, add_cref<Params> params)
@@ -231,6 +236,7 @@ TriLogicInt runTests(add_ref<VulkanContext> ctx, add_cref<Params> params)
 		barBuffer = createBuffer(ctx.device, VK_FORMAT_R32G32B32A32_UINT, elementCount,
 								ZBufferUsageStorageFlags, ZMemoryPropertyHostFlags,	ZBufferCreateFlags());
 	}
+	ZBuffer					auxBuffer		= createBuffer<uint32_t>(ctx.device, 16u);
 	ZCommandPool			cmdPool			= createCommandPool(ctx.device, ctx.computeQueue);
 	LayoutManager			lmFoo			(ctx.device, cmdPool);
 	LayoutManager			lmBar			(ctx.device, cmdPool);
@@ -240,10 +246,13 @@ TriLogicInt runTests(add_ref<VulkanContext> ctx, add_cref<Params> params)
 															shaderStage, { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER });
 	const uint32_t			bindingBar		= lmFoo.addBinding(VK_DESCRIPTOR_TYPE_MUTABLE_EXT, VK_IMAGE_LAYOUT_GENERAL,
 															shaderStage, { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER });
+	const uint32_t			bindingAux		= lmFoo.addBinding(auxBuffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, shaderStage);
 											lmBar.addBinding(VK_DESCRIPTOR_TYPE_MUTABLE_EXT, VK_IMAGE_LAYOUT_GENERAL,
 															shaderStage, { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER });
 											lmBar.addBinding(VK_DESCRIPTOR_TYPE_MUTABLE_EXT, VK_IMAGE_LAYOUT_GENERAL,
 															shaderStage, { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER });
+											lmBar.addBinding(auxBuffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, shaderStage);
+											UNREF(bindingAux);
 
 	ZDescriptorSetLayout	dsFooLayout		= lmFoo.createDescriptorSetLayout();
 	ZDescriptorSetLayout	dsBarLayout		= lmBar.createDescriptorSetLayout();
@@ -348,6 +357,14 @@ TriLogicInt runTests(add_ref<VulkanContext> ctx, add_cref<Params> params)
 				std::cout << tmp[i] << ' ';
 			std::cout << std::endl;
 		}
+	}
+	{
+		std::vector<uint32_t> auxData;
+		bufferRead(auxBuffer, auxData);
+		std::cout << "Aux buffer content:" << std::endl;
+		for (auto k : auxData)
+			std::cout << k << ' ';
+		std::cout << std::endl;
 	}
 
 	return (condFoo && condBar) ? 0 : 1;

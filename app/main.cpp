@@ -16,6 +16,7 @@
 #include "allTests.hpp"
 #include "vtfOptionParser.hpp"
 #include "vtfPlatformDriver.hpp"
+#include "vtf_git_version.inl"
 
 #include <iostream>
 #include <cstring>
@@ -527,7 +528,7 @@ void printVtfVersion (std::ostream& str, uint32_t level)
 	case 2:
 		// -v, --version
 		str << "Vulkan Trivial Framework (VTF) ";
-		str << "version " << VtfVersion(CurrentVtfVersion) << '\n';
+		str << "version: " << VtfVersion(CurrentVtfVersion) << '\n';
 		{
 			str << "Author: ";
 			if (false == isPolishLocaleInstalled())
@@ -545,6 +546,7 @@ void printVtfVersion (std::ostream& str, uint32_t level)
 			str << ' ' << "Jakubek\n";
 		}
 		str << "E-mail: michau.jakubek@gmail.com\n";
+		str << "Commit: " << VTF_GIT_VERSION << std::endl;
 		break;
 	}
 }

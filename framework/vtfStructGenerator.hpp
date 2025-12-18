@@ -9,6 +9,8 @@
 #include <vector>
 #include <iostream>
 
+namespace vtf
+{
 namespace sg
 {
 struct INode;
@@ -760,136 +762,146 @@ template<> struct Node<INodePtr> : public INode
     }
 };
 
-inline INodePtr generateStruct(const std::string& typeName, const std::vector<INodePtr> fields)
+} //namespace sg
+
+struct StructGenerator
 {
-    INodePtr root = Node<INodePtr>::createEmpty(typeName);
-    INodePtr* pNext = &root->getChildren()->next;
-    for (auto field : fields)
+    using INode = sg::INode;
+    using INodePtr = sg::INodePtr;
+    template<typename X> using Node = sg::Node<X>;
+
+    INodePtr generateStruct(const std::string& typeName, const std::vector<INodePtr> fields)
     {
-        *pNext = field->clone();
-        pNext = &pNext->get()->next;
-    }
-    return root;
-}
-
-// example: makeField(int()), makeField(vec<2,int>()),
-template<class FieldType> INodePtr makeField(const FieldType&)
-{
-    return std::make_shared<Node<FieldType>>(std::string(), nullptr);
-}
-
-inline INodePtr makeArrayField(INodePtr elemType, std::size_t elemCount, bool isRuntime = false)
-{
-    return std::make_shared<Node<Array<INodePtr, 1, false>>>(elemType, elemCount, isRuntime);
-}
-
-inline bool structureAppendField(INodePtr rootStruct, INodePtr field)
-{
-    INodePtr lastField = rootStruct->getLastChild(false);
-    if (lastField)
-    {
-        lastField->next = field->clone();
-        return true;
-    }
-    return false;
-}
-
-inline void printStruct(INodePtr structNode, std::ostream& str, bool declaration = true)
-{
-    uint32_t fieldNum = 0u;
-	INodePtr ch = structNode->getChildren();
-
-    std::string::size_type longest = 0u;
-    for (INodePtr p = ch->next; p; p = p->next)
-    {
-        longest = std::max(longest, p->typeName.length());
-    }
-
-    if (declaration)
-    {
-        str << "struct " << structNode->typeName << ' ';
-    }
-    str << '{' << std::endl;
-	for (INodePtr p = ch->next; p; p = p->next)
-	{
-        str << "    " << p->typeName
-            << std::string((longest - p->typeName.length() + 1), ' ')
-            << p->genFieldName(fieldNum++, true) << ";\n";
-	}
-    str << '}';
-    if (declaration)
-    {
-        str << ";\n";
-    }
-}
-
-inline void _getStructList(INodePtr rootStruct, std::vector<INodePtr>& list)
-{
-    INodePtr ch = rootStruct->getChildren(false);
-    for (INodePtr p = ch->next; p; p = p->next)
-    {
-        if (INodePtr e = p->getElementType(); e && e->getChildren(false))
+        INodePtr root = Node<INodePtr>::createEmpty(typeName);
+        INodePtr* pNext = &root->getChildren()->next;
+        for (auto field : fields)
         {
-            list.insert(list.begin(), e);
-            _getStructList(e, list);
+            *pNext = field->clone();
+            pNext = &pNext->get()->next;
         }
-        if (p->getChildren(false))
+        return root;
+    }
+
+    // example: makeField(int()), makeField(vec<2,int>()),
+    template<class FieldType> INodePtr makeField(const FieldType&)
+    {
+        return std::make_shared<Node<FieldType>>(std::string(), nullptr);
+    }
+
+    INodePtr makeArrayField(INodePtr elemType, std::size_t elemCount, bool isRuntime = false)
+    {
+        return std::make_shared<Node<sg::Array<INodePtr, 1, false>>>(elemType, elemCount, isRuntime);
+    }
+
+    bool structureAppendField(INodePtr rootStruct, INodePtr field)
+    {
+        INodePtr lastField = rootStruct->getLastChild(false);
+        if (lastField)
         {
-            list.insert(list.begin(), p);
-            _getStructList(p, list);
+            lastField->next = field->clone();
+            return true;
+        }
+        return false;
+    }
+
+    void printStruct(INodePtr structNode, std::ostream& str, bool declaration = true)
+    {
+        uint32_t fieldNum = 0u;
+        INodePtr ch = structNode->getChildren();
+
+        std::string::size_type longest = 0u;
+        for (INodePtr p = ch->next; p; p = p->next)
+        {
+            longest = std::max(longest, p->typeName.length());
+        }
+
+        if (declaration)
+        {
+            str << "struct " << structNode->typeName << ' ';
+        }
+        str << '{' << std::endl;
+        for (INodePtr p = ch->next; p; p = p->next)
+        {
+            str << "    " << p->typeName
+                << std::string((longest - p->typeName.length() + 1), ' ')
+                << p->genFieldName(fieldNum++, true) << ";\n";
+        }
+        str << '}';
+        if (declaration)
+        {
+            str << ";\n";
         }
     }
-}
 
-inline std::vector<INodePtr> getStructList(INodePtr rootStruct)
-{
-    std::vector<INodePtr> list { rootStruct };
-    _getStructList(rootStruct, list);
-    for (auto i = list.begin(); i != list.end(); ++i)
+    std::vector<INodePtr> getStructList(INodePtr rootStruct)
     {
-        for (auto j = std::next(i); j != list.end();)
+        std::vector<INodePtr> list{ rootStruct };
+        _getStructList(rootStruct, list);
+        for (auto i = list.begin(); i != list.end(); ++i)
         {
-            if (i->get()->typeName == j->get()->typeName)
+            for (auto j = std::next(i); j != list.end();)
             {
-                j = list.erase(j);
-            }
-            else
-            {
-                ++j;
+                if (i->get()->typeName == j->get()->typeName)
+                {
+                    j = list.erase(j);
+                }
+                else
+                {
+                    ++j;
+                }
             }
         }
+        return list;
     }
-    return list;
-}
 
-inline void generateLoops(INodePtr rootStruct, const std::string& rootStructName, std::ostream& str, uint32_t indent, const std::string& rhsCode)
-{
-    uint32_t iteratorSeed = 0;
-    rootStruct->genLoops(str, rootStructName, rhsCode, 0, indent, iteratorSeed);
-}
+    void generateLoops(INodePtr rootStruct, const std::string& rootStructName, std::ostream& str, uint32_t indent, const std::string& rhsCode)
+    {
+        uint32_t iteratorSeed = 0;
+        rootStruct->genLoops(str, rootStructName, rhsCode, 0, indent, iteratorSeed);
+    }
 
-inline void printValues(INodePtr node, std::ostream& str, int level = 0)
-{
-	node->printValue(str, level);
-}
-inline std::string getValuesString(INodePtr str)
-{
-    std::ostringstream os;
-    printValues(str, os, 0);
-    return os.str();
-}
+    void printValues(INodePtr node, std::ostream& str, int level = 0)
+    {
+        node->printValue(str, level);
+    }
+    std::string getValuesString(INodePtr str)
+    {
+        std::ostringstream os;
+        printValues(str, os, 0);
+        return os.str();
+    }
 
-inline void deserializeStruct(const void* src, INodePtr structNode, int nesting = -1, INode::SDCallback sdCallback = {})
-{
-    std::size_t currentOffset = 0;
-    structNode->serializeOrDeserialize(src, nullptr, currentOffset, false, false, nesting, sdCallback);
-}
-inline void serializeStruct(INodePtr structNode, void* dst, int nesting = -1, INode::SDCallback sdCallback = {})
-{
-    std::size_t currentOffset = 0;
-    structNode->serializeOrDeserialize(nullptr, dst, currentOffset, true, false, nesting, sdCallback);
-}
+    void deserializeStruct(const void* src, INodePtr structNode, int nesting = -1, INode::SDCallback sdCallback = {})
+    {
+        std::size_t currentOffset = 0;
+        structNode->serializeOrDeserialize(src, nullptr, currentOffset, false, false, nesting, sdCallback);
+    }
+    void serializeStruct(INodePtr structNode, void* dst, int nesting = -1, INode::SDCallback sdCallback = {})
+    {
+        std::size_t currentOffset = 0;
+        structNode->serializeOrDeserialize(nullptr, dst, currentOffset, true, false, nesting, sdCallback);
+    }
 
-} // namespace sg
+private:
+    void _getStructList(INodePtr rootStruct, std::vector<INodePtr>& list)
+    {
+        INodePtr ch = rootStruct->getChildren(false);
+        for (INodePtr p = ch->next; p; p = p->next)
+        {
+            if (INodePtr e = p->getElementType(); e && e->getChildren(false))
+            {
+                list.insert(list.begin(), e);
+                _getStructList(e, list);
+            }
+            if (p->getChildren(false))
+            {
+                list.insert(list.begin(), p);
+                _getStructList(p, list);
+            }
+        }
+    }
+};
+
+} // namespace vtf
 
 #endif // __VTF_STRUCT_GENERATOR_HPP_INCLUDED__
