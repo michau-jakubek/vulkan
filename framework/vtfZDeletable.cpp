@@ -89,7 +89,6 @@ void freePipelineCache(VkDevice device, VkPipelineCache cache, VkAllocationCallb
 		std::basic_ofstream<char> file(cachePath.c_str(), std::ios::binary);
 		if (file.is_open())
 		{
-
 			std::copy(data.begin(), data.end(), std::ostream_iterator<char>(file));
 			file.close();
 		}

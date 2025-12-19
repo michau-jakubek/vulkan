@@ -70,6 +70,8 @@ set(tests_files
 	depthTests.hpp
 	structGeneratorTests.cpp
 	structGeneratorTests.hpp
+	rejtrejsingIntroTests.cpp
+	rejtrejsingIntroTests.hpp
     )
 
 if(ENABLE_DAEMON_TEST)
@@ -80,6 +82,7 @@ endif()
 set(tests_libs
     console
     framework
+	rejtrejsing
 	driver)
 
 add_definitions(-DASSETS_PATH="${ASSETS_PATH}")
@@ -89,6 +92,7 @@ target_include_directories(tests
                            BEFORE PRIVATE ${GLFW3_INCLUDE_DIR}
                            BEFORE PRIVATE ${VULKAN_INCLUDE_DIR}
                            AFTER PRIVATE  ${console_headers}
+                           AFTER PRIVATE  ${daemon_header_files}
                            AFTER PRIVATE  ${daemon_header_files}
                            AFTER PRIVATE  ${CMAKE_CURRENT_SOURCE_DIR}
                            )

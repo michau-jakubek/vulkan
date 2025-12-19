@@ -7,17 +7,15 @@ endif()
 set(VTF_GIT_VERSION_FILE_NAME "vtf_git_version.inl")
 set(VTF_GIT_VERSION_FILE ${CMAKE_CURRENT_BINARY_DIR}/${VTF_GIT_VERSION_FILE_NAME})
 execute_process(
-	COMMAND ${CMAKE_COMMAND} -E echo "#define VTF_GIT_VERSION <unknown>"
+	COMMAND ${CMAKE_COMMAND} -E echo "#define VTF_GIT_VERSION \"<unknown>\""
 	OUTPUT_FILE ${VTF_GIT_VERSION_FILE}
 )
 set(GIT_HASH "")
-add_custom_command(
-	OUTPUT ${VTF_GIT_VERSION_FILE}
+add_custom_target(vtf_git_version ALL
 	COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/vtf_git_version.py ${VTF_GIT_VERSION_FILE}
 	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 	COMMENT "Generating ${VTF_GIT_VERSION_FILE_NAME}"
 )
-add_custom_target(vtf_git_version ALL DEPENDS ${VTF_GIT_VERSION_FILE})
 
 add_definitions(-DTHIS_EXECUTABLE_NAME="app")
 message(STATUS "Define preprocessor constant: THIS_EXECUTABLE_NAME=\"app\"")

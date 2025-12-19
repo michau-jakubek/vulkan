@@ -182,7 +182,7 @@ public:
 
 	ZBuffer						 createDescriptorBuffer (ZDescriptorSetLayout dsLayout);
 
-private:	
+protected:	
 	typedef struct VkDescriptorSetLayoutBindingAndType : VkDescriptorSetLayoutBinding
 	{
 		VkDescriptorSetLayoutBindingAndType ()

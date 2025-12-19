@@ -178,6 +178,10 @@ add_subdirectory(framework)
 include_directories(framework)
 add_dependencies(framework external compiler)
 
+add_subdirectory(rejtrejsing)
+include_directories(rejtrejsing)
+add_dependencies(rejtrejsing external compiler)
+
 if(ENABLE_DAEMON_TEST)
 add_definitions(-DENABLE_DAEMON_TEST 1)
 add_subdirectory(daemon)

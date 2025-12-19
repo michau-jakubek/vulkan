@@ -143,13 +143,14 @@ void doCommandBufferPipelineBarriers2 (ZCommandBuffer			cmd,
 									   add_cref<BarriersInfo2>	info,
 									   VkDependencyFlags		dependencyFlags)
 {
-	// TODO: verify VK_KHR_synchronization2 and api >= 1.3
-	add_ref<strings> exts = cmd.getParam<ZDevice>().getParam<ZPhysicalDevice>()
+	ZDevice device = cmd.getParam<ZDevice>();
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	add_cref<strings> exts = device.getParam<ZPhysicalDevice>()
 		.getParamRef<ZDistType<AvailableDeviceExtensions, strings>>();
-	ASSERTMSG(containsString(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, exts),
-			  VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME " not supported by device");
-	ASSERTMSG(!(getGlobalAppFlags().apiVer < Version(1,3)),
-			  "Improper Vulkan API version, expected >= 1.3. Try with -api 13");
+	ASSERTMSG(containsString(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, exts)
+				|| getGlobalAppFlags().apiVer >= Version(1, 3),
+			  VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME " not supported by device or "
+			  "expected Vulkan API version (", getGlobalAppFlags().apiVer.toString(), ") < 1.3. Try with -api 13");
 
 	VkDependencyInfo dependencyInfo
 	{
@@ -164,7 +165,7 @@ void doCommandBufferPipelineBarriers2 (ZCommandBuffer			cmd,
 		info.imageBarrierCount ? info.pImageBarriers : nullptr		// pImageMemoryBarriers
 	};
 
-	vkCmdPipelineBarrier2(*cmd, &dependencyInfo);
+	di.vkCmdPipelineBarrier2(*cmd, &dependencyInfo);
 }
 
 } // namespace vtf

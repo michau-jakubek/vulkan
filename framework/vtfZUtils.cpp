@@ -667,7 +667,7 @@ ZDevice createLogicalDevice	(
 	std::vector<const char*>	layers		(to_cstrings(instance.getParamRef<ZDistType<RequiredLayers,strings>>().get()));
 
 	add_cref<strings>	availableExtensions(physDevice.getParamRef<ZDistType<AvailableDeviceExtensions, strings>>().get());
-	add_cref<strings>	desiredExtensions(physDevice.getParamRef<ZDistType<DesiredRequiredDeviceExtensions, strings>>().get());
+	add_cref<strings>	desiredExtensions(physDevice.getParamRef<ZDistType<RequiredDeviceExtensions, strings>>().get());
 
 	DeviceCaps deviceCaps(availableExtensions, physDevice);
 

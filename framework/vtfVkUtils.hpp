@@ -98,6 +98,10 @@ struct Version
 	{
 		return VK_MAKE_API_VERSION(variant, major, minor, patch);
 	}
+	std::string toString() const
+	{
+		return std::to_string(nmajor) + '.' + std::to_string(nminor);
+	}
 };
 typedef ZDistType<VtfVer, Version> VtfVersion;
 typedef ZDistType<ApiVer, Version> ApiVersion;

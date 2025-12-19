@@ -356,7 +356,7 @@ enum ZDistName
 	None,
 	RequiredLayers,				AvailableLayers,
 	RequiredLayerExtensions,	AvailableLayerExtensions,
-	DesiredRequiredDeviceExtensions,	AvailableDeviceExtensions,
+	RequiredDeviceExtensions,	AvailableDeviceExtensions,
 	Width, Height, Depth, ViewMask, PatchControlPoints, SubpassIndex,
 	LayoutIdentifier, PrimitiveRestart,
 	SizeFirst, SizeSecond, SizeThird,
@@ -369,7 +369,7 @@ enum ZDistName
 	SpecConstants, BlendAttachmentState, BlendConstants, PipelineCreateFlags,
 	RenderingAttachmentLocations, RenderingInpuAttachmentIndices, RasterizerDiscardEnable,
 };
-template<ZDistName, class CType_>
+template<ZDistName name, typename CType_>
 struct ZDistType
 {
 	ZDistType () : data() {}
@@ -407,7 +407,7 @@ typedef ZDeletable<VkPhysicalDevice,
 	, ZInstance
 	, uint32_t /*Physical device index across the system*/
 	, ZDistType<AvailableDeviceExtensions, std::vector<std::string>>
-	, ZDistType<DesiredRequiredDeviceExtensions, std::vector<std::string>>
+	, ZDistType<RequiredDeviceExtensions, std::vector<std::string>>
 	, VkPhysicalDeviceProperties>
 ZPhysicalDevice;
 

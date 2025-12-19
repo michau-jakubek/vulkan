@@ -3,7 +3,7 @@
 
 #include "vtfVkUtils.hpp"
 
-constexpr vtf::Version CurrentVtfVersion(1, 3, 9, 3);
+constexpr vtf::Version CurrentVtfVersion(1, 3, 10, 0);
 
 // 2024-04-10, 1.1.0.0, "Add versioning"
 // 2024-04-15, 1.1.1.0, "Some fixes in int_compute test."
@@ -47,5 +47,6 @@ constexpr vtf::Version CurrentVtfVersion(1, 3, 9, 3);
 // 2025-12-10, 1.3.9.1, "Add struct generator"
 // 2025-12-16, 1.3.9.2, "Add struct_generator test"
 // 2025-12-19, 1.3.9.3, "Improve some tests - struct_generator & variable_pointers"
+// 2025-12-26, 1.3.10.0, "RayTracing (rejtrejsing) experimental - part I"
 
 #endif  // __MAIN_HPP_INCLUDED__
