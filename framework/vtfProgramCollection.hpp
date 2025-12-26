@@ -26,6 +26,7 @@ struct _GlSpvProgramCollection
 
 	class ShaderLink
 	{
+		friend struct RTShaderCollection;
 		friend struct ShaderObjectCollection;
 		VkShaderStageFlagBits	stage = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
 		uint32_t				index = INVALID_UINT32;
@@ -38,18 +39,38 @@ struct _GlSpvProgramCollection
 
 	virtual ~_GlSpvProgramCollection () = default;
 	_GlSpvProgramCollection (ZDevice device, add_cref<std::string> basePath = std::string());
+	uint32_t collectionID () const;
 
-	void addFromText (VkShaderStageFlagBits type, add_cref<std::string> code,
-					  add_cref<strings> includePaths = {}, add_cref<std::string> entryName = "main");
-	bool addFromFile (VkShaderStageFlagBits type,
-					  add_cref<std::string> fileName, add_cref<strings> includePaths = {},
-					  add_cref<std::string> entryName = "main", bool verbose = true);
 	// availailable after build
     auto getShaderCode (VkShaderStageFlagBits stage, uint32_t index, bool binORasm = true) const -> add_cref<std::vector<char>>;
 	auto getShaderFile (VkShaderStageFlagBits stage, uint32_t index, bool inOrout = false) const -> add_cref<std::string>;
 	auto getShaderEntry (VkShaderStageFlagBits stage, uint32_t index) const -> add_cref<std::string>;
 
 protected:
+	class RTShaderGroup
+	{
+		friend struct RTShaderCollection;
+		const uint32_t m_groupIndex;
+		struct Less { bool operator ()(add_cref<RTShaderGroup>, add_cref<RTShaderGroup>) const; };
+		bool operator== (RTShaderGroup const& other) const;
+		bool operator!= (RTShaderGroup const& other) const;
+	public:
+		RTShaderGroup(uint32_t groupIndex = 0u);
+		RTShaderGroup next() const;
+		uint32_t groupIndex() const;
+	};
+
+	auto _addFromText (VkShaderStageFlagBits type, add_cref<std::string> code,
+					  add_cref<strings> includePaths = {}, add_cref<std::string> entryName = "main",
+					  add_cptr<StageAndIndex> hintKey = nullptr) -> StageAndIndex;
+	auto _addFromFile (VkShaderStageFlagBits type,
+					  add_cref<std::string> fileName, add_cref<strings> includePaths = {},
+					  add_cref<std::string> entryName = "main", bool verbose = true,
+					  add_cptr<StageAndIndex> hintKey = nullptr) -> StageAndIndex;
+	void _buildAndVerify (add_cref<Version> vulkanVer = Version(1,0), add_cref<Version> spirvVer = Version(1,0),
+						 bool enableValidation = false, bool genDisassembly = false, bool buildAlways = false,
+						 add_cref<std::string> spirvValArgs = {});
+
 	ZDevice				m_device;
 	const std::string	m_basePath;
 	const std::string	m_tempDir;
@@ -70,20 +91,28 @@ private:
 							  add_cref<strings>, add_cref<std::string>, bool) -> ShaderLink { return {}; };
 	virtual auto addFromFile (VkShaderStageFlagBits, add_cref<std::string>, add_cref<ShaderLink>,
 							  add_cref<strings>, add_cref<std::string>, bool) -> ShaderLink { return {}; };
+	static uint32_t m_collectionID;
 };
 
 struct ProgramCollection : _GlSpvProgramCollection
 {
 	ProgramCollection (ZDevice device, add_cref<std::string> basePath = std::string());
+	void addFromText (VkShaderStageFlagBits type, add_cref<std::string> code,
+					  add_cref<strings> includePaths = {}, add_cref<std::string> entryName = "main");
+	bool addFromFile (VkShaderStageFlagBits type,
+					  add_cref<std::string> fileName, add_cref<strings> includePaths = {},
+					  add_cref<std::string> entryName = "main", bool verbose = true);
 	void buildAndVerify (add_cref<Version> vulkanVer = Version(1,0), add_cref<Version> spirvVer = Version(1,0),
 						 bool enableValidation = false, bool genDisassembly = false, bool buildAlways = false,
 						 add_cref<std::string> spirvValArgs = {});
 	// Uses information from GlobalAppFlags
 	void buildAndVerify (bool buildAlways);
-	auto getShader (VkShaderStageFlagBits stage, uint32_t index = 0u, bool verbose = true) const -> ZShaderModule;
+	auto getShader (VkShaderStageFlagBits stage, uint32_t index = 0, bool verbose = true) const -> ZShaderModule;
 };
 
 VkShaderStageFlagBits shaderGetStage (ZShaderModule module);
+std::string shaderGetStageString (ZShaderModule module);
+std::string shaderStageToString (VkShaderStageFlagBits stage);
 
 } // namespace vtf
 

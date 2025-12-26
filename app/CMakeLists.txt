@@ -11,8 +11,10 @@ execute_process(
 	OUTPUT_FILE ${VTF_GIT_VERSION_FILE}
 )
 set(GIT_HASH "")
+if (NOT ${Python_EXECUTABLE})
+endif()
 add_custom_target(vtf_git_version ALL
-	COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/vtf_git_version.py ${VTF_GIT_VERSION_FILE}
+	COMMAND ${Python_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/vtf_git_version.py ${VTF_GIT_VERSION_FILE}
 	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 	COMMENT "Generating ${VTF_GIT_VERSION_FILE_NAME}"
 )

@@ -19,9 +19,16 @@ static EShLanguage shaderStageToShLanguage (VkShaderStageFlagBits stage)
     case VK_SHADER_STAGE_GEOMETRY_BIT:					return EShLangGeometry;
     case VK_SHADER_STAGE_TASK_BIT_EXT:					return EShLangTask;
     case VK_SHADER_STAGE_MESH_BIT_EXT:					return EShLangMesh;
+    case VK_SHADER_STAGE_RAYGEN_BIT_KHR:                return EShLangRayGen;
+    case VK_SHADER_STAGE_MISS_BIT_KHR:                  return EShLangMiss;
+    case VK_SHADER_STAGE_ANY_HIT_BIT_KHR:               return EShLangAnyHit;
+    case VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR:           return EShLangClosestHit;
+    case VK_SHADER_STAGE_INTERSECTION_BIT_KHR:          return EShLangIntersect;
+    case VK_SHADER_STAGE_CALLABLE_BIT_KHR:              return EShLangCallable;
+
     default: break;
     }
-    ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/);
+    ASSERTFALSE("Unsupported shader stage: VkShaderStageFlagBits(", stage, ")");
     return EShLangVertex;
 }
 

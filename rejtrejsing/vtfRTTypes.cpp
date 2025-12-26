@@ -3,6 +3,11 @@
 #include "vtfZBuffer.hpp"
 #include "vtfZBarriers2.hpp"
 #include "vtfZCommandBuffer.hpp"
+#include "vtfTemplateUtils.hpp"
+#include "vtfRTPipeline.hpp"
+#include "vulkan/vulkan_to_string.hpp"
+
+#include <map>
 
 namespace vtf
 {
@@ -417,6 +422,212 @@ void commandBufferBuildAccelerationStructure(ZCommandBuffer cmd, ZTopAcceleratio
 		A::ACCELERATION_STRUCTURE_READ_BIT_KHR,
 		S::RAY_TRACING_SHADER_BIT_KHR);
 	commandBufferPipelineBarriers2(cmd, barrier);
+}
+
+#define COLLECTION_INDEX		0
+#define SBT_SHADER_GROUP_INDEX	1
+#define PIPELINE_GROUP_INDEX	2
+#define PIPELINE_SHADER_INDEX	3
+#define SHADER_STAGE_INDEX		4
+using tuple4 = std::tuple<uint32_t, uint32_t, uint32_t, uint32_t>;
+using tuple4s = std::tuple<uint32_t, uint32_t, uint32_t, uint32_t, VkShaderStageFlagBits>;
+
+struct SBT::Impl
+{
+	ZPipeline	m_pipeline;
+	ZBuffer		m_sbtBuffer;
+	bool		m_builtFlag;
+	const RTShaderCollection::SBTShaderGroup m_shaderGroup;
+	VkStridedDeviceAddressRegionKHR m_raygenRegion{};
+	VkStridedDeviceAddressRegionKHR m_missRegion{};
+	VkStridedDeviceAddressRegionKHR m_callableRegion{};
+	VkStridedDeviceAddressRegionKHR m_hitRegion{};
+
+	Impl(ZPipeline rtPipeline, add_cref<RTShaderCollection::SBTShaderGroup> shaderGroup)
+		: m_pipeline(rtPipeline), m_sbtBuffer()
+		, m_builtFlag(false), m_shaderGroup(shaderGroup)
+	{
+	}
+	virtual ~Impl() = default;
+};
+
+SBT::~SBT() noexcept = default;
+
+SBT::SBT(ZPipeline rtPipeline, add_cref<RTShaderCollection::SBTShaderGroup> shaderGroup) noexcept
+	: m_impl(std::make_unique<SBT::Impl>(rtPipeline, shaderGroup))
+{
+}
+
+#define COLLECTION_INDEX		0
+// combined hi=hitGroupIndex & low=logicalGroupIndex
+#define SBT_SHADER_GROUP_INDEX	1
+#define PIPELINE_GROUP_INDEX	2
+#define PIPELINE_SHADER_INDEX	3
+using tuple4 = std::tuple<uint32_t, uint32_t, uint32_t, uint32_t>;
+using tuple3 = std::tuple<uint32_t, uint32_t, uint32_t>;
+using SBTShaderGroup = RTShaderCollection::SBTShaderGroup;
+using HitGroupsOrder = RTShaderCollection::HitGroupsOrder;
+
+extern SBTShaderGroup combineGroups(
+	add_cref<SBTShaderGroup> logicalGroup,
+	add_cref<SBTShaderGroup> hitGroup);
+
+extern std::pair<SBTShaderGroup, SBTShaderGroup>
+decombineGroup(add_cref<SBTShaderGroup> combinedGroup);
+
+extern void advance(add_ref<uint32_t> val, uint32_t n = 1u);
+extern void retreat(add_ref<uint32_t> val, uint32_t n = 1u);
+
+extern std::pair<uint32_t, uint32_t> countShaders(
+	add_cref<std::vector<ZShaderModule>::iterator> first,
+	uint32_t count, add_ref<rtdetails::ShaderCounts> counts);
+extern uint32_t shaderGetLogicalGroup(add_cref<ZShaderModule> module);
+extern uint32_t shaderGetHitGroup(add_cref<ZShaderModule> module);
+extern uint32_t shaderGetPipelineGroup(add_cref<ZShaderModule> module);
+
+bool SBT::buildOnce()
+{
+	if (m_impl->m_builtFlag) {
+		return false;
+	}
+
+	ZDevice device = m_impl->m_pipeline.getParam<ZDevice>();
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	add_ref<std::vector<ZShaderModule>> shaders =
+		m_impl->m_pipeline.getParamRef<std::vector<ZShaderModule>>();
+
+	const auto [firstGroup, batchGroupCount, hitGroupCount, shaderCounts] = [&]()
+		-> std::tuple<uint32_t, uint32_t, uint32_t, rtdetails::ShaderCounts>
+	{
+		uint32_t shaderGroupSize = 0u;
+		uint32_t firstShaderIndex = INVALID_UINT32;
+		uint32_t pipelineFirstGroupIndex = INVALID_UINT32;
+		std::vector<ZShaderModule>::iterator firstShaderIter;
+		rtdetails::ShaderCounts counts{};
+
+		for (auto i = shaders.begin(); i != shaders.end(); ++i) {
+			const bool inGroup = shaderGetLogicalGroup(*i) == m_impl->m_shaderGroup.groupIndex();
+			if (inGroup) {
+				if (INVALID_UINT32 == firstShaderIndex) {
+					firstShaderIndex = uint32_t(std::distance(shaders.begin(), i));
+					firstShaderIter = i;
+				}
+				if (INVALID_UINT32 == pipelineFirstGroupIndex) {
+					pipelineFirstGroupIndex = shaderGetPipelineGroup(*i);
+					ASSERTMSG(shaderGetStage(*i) == VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+						"Assume that first shader in group is ray generator");
+				}
+				advance(shaderGroupSize);
+			}
+			else if (INVALID_UINT32 != firstShaderIndex) {
+					break;
+			}
+		}
+		ASSERTMSG((firstShaderIndex != INVALID_UINT32) && (shaderGroupSize != 0u),
+			"Unable to find any shader in shader group ", m_impl->m_shaderGroup.groupIndex());
+		const auto batchAndHitGroupSizes = countShaders(firstShaderIter, shaderGroupSize, counts);
+		ASSERTMSG(shaderGroupSize == counts.together,
+			"Mismatch shader count in group ", m_impl->m_shaderGroup.groupIndex());
+		return { pipelineFirstGroupIndex, batchAndHitGroupSizes.first, batchAndHitGroupSizes.second, counts };
+	}();
+
+	const VkPhysicalDeviceRayTracingPipelinePropertiesKHR props = [device]() {
+			VkPhysicalDeviceRayTracingPipelinePropertiesKHR p{};
+			p.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+			deviceGetPhysicalProperties2(device.getParam<ZPhysicalDevice>(), &p);
+			return p;
+		}();
+		
+	const uint32_t		handleSize		= props.shaderGroupHandleSize;
+	const uint32_t		baseAlignment	= props.shaderGroupBaseAlignment;
+	const uint32_t		userDataSize	= 0u; // na razie brak userData
+	const uint32_t		recordSize		= ROUNDUP(handleSize + userDataSize, baseAlignment);
+	
+	const VkDeviceSize	sbtSize			= batchGroupCount * recordSize;
+	m_impl->m_sbtBuffer = createBuffer(
+		device,
+		sbtSize,
+		ZBufferUsageFlags(
+			VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR,
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			VK_BUFFER_USAGE_TRANSFER_DST_BIT
+		),
+		ZMemoryPropertyHostFlags
+	);
+	const VkDeviceAddress sbtAddr = bufferGetAddress(m_impl->m_sbtBuffer);
+
+	std::vector<std::byte> handles(batchGroupCount * props.shaderGroupHandleSize);
+	VKASSERT(di.vkGetRayTracingShaderGroupHandlesKHR(
+		*device,
+		*m_impl->m_pipeline,
+		firstGroup,
+		batchGroupCount,
+		handles.size(),
+		handles.data()
+	));
+
+	add_ptr<VkStridedDeviceAddressRegionKHR> regions[]
+	{
+		&m_impl->m_raygenRegion,
+		&m_impl->m_missRegion,
+		&m_impl->m_callableRegion,
+		&m_impl->m_hitRegion
+	};
+	const uint32_t handleInfos [] {
+		shaderCounts.rgCount,
+		shaderCounts.missCount,
+		shaderCounts.callCount,
+		hitGroupCount
+	};
+	for (uint32_t i = 0u; i < 4u; ++i)
+	{
+		if (handleInfos[i] == 0u) {
+			continue;
+		}
+
+		uint32_t handleIndex = 0u;
+		for (uint32_t j = 0u; j < i; ++j)
+			handleIndex += handleInfos[j];
+
+		bufferWrite(
+			m_impl->m_sbtBuffer,		// destination
+			handles,					// source
+			handleIndex * recordSize,	// dstIndex
+			handleIndex * handleSize,	// srcIndex
+			handleInfos[i] * handleSize	// count
+		);
+
+		regions[i]->deviceAddress	= sbtAddr + handleIndex * recordSize;
+		regions[i]->size			= handleInfos[i] * recordSize;
+		regions[i]->stride			= recordSize;
+	}
+
+	return (m_impl->m_builtFlag = true);
+}
+
+add_cref<VkStridedDeviceAddressRegionKHR> SBT::raygenRegion() const {
+	return m_impl->m_raygenRegion;
+}
+
+add_cref<VkStridedDeviceAddressRegionKHR> SBT::missRegion() const {
+	return m_impl->m_missRegion;
+}
+
+add_cref<VkStridedDeviceAddressRegionKHR> SBT::callableRegion() const {
+	return m_impl->m_callableRegion;
+}
+
+add_cref<VkStridedDeviceAddressRegionKHR> SBT::hitRegion() const {
+	return m_impl->m_hitRegion;
+}
+
+void SBT::traceRays(ZCommandBuffer cmd, uint32_t width, uint32_t height, uint32_t depth)
+{
+	ZDevice device = cmd.getParam<ZDevice>();
+	add_cref<ZDeviceInterface> di = device.getInterface();
+
+	di.vkCmdTraceRaysKHR(*cmd, &raygenRegion(), &missRegion(), &hitRegion(), &callableRegion(),
+							width, height, depth);
 }
 
 } // namespace vtf

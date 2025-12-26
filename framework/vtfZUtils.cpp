@@ -86,7 +86,9 @@ ZShaderModule createShaderModule (
 
 	VKASSERT(vkCreateShaderModule(*device, &createInfo, callbacks, &shaderModule));
 
-	return ZShaderModule::create(shaderModule, device, callbacks, stage, entryName);
+	// If this is RT shader then last tuple consists of <shader-collection-id, shader-group-index>
+	return ZShaderModule::create(shaderModule, device, callbacks, stage, entryName,
+								{ INVALID_UINT32, INVALID_UINT32, INVALID_UINT32, INVALID_UINT32 });
 }
 
 ZFramebuffer createFramebuffer (ZRenderPass renderPass, add_cref<VkExtent2D> size,

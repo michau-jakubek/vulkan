@@ -101,7 +101,7 @@ auto ShaderObjectCollection::addFromText (VkShaderStageFlagBits type,
 										  add_cref<strings> includePaths, add_cref<std::string> entryName) -> ShaderLink
 {
 	ASSERTMSG((m_links.size() + 1u <= m_maxShaders), "Amount of shaders exceeds maxShaderCount");
-	_GlSpvProgramCollection::addFromText(type, code, includePaths, entryName);
+	_addFromText(type, code, includePaths, entryName);
 	const uint32_t	shaderIndex = m_stageToCount.at(type) - 1u;
 	return add(type, nextStage, shaderIndex, {});
 }
@@ -111,7 +111,7 @@ auto ShaderObjectCollection::addFromText (VkShaderStageFlagBits type,
 										  add_cref<strings> includePaths, add_cref<std::string> entryName) -> ShaderLink
 {
 	ASSERTMSG((m_links.size() + 1u <= m_maxShaders), "Amount of shaders exceeds maxShaderCount");
-	_GlSpvProgramCollection::addFromText(type, code, includePaths, entryName);
+	_addFromText(type, code, includePaths, entryName);
 	const uint32_t	shaderIndex = m_stageToCount.at(type) - 1u;
 	return add(type, VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM, shaderIndex, parent);
 }
@@ -120,7 +120,7 @@ auto ShaderObjectCollection::addFromFile (VkShaderStageFlagBits type, add_cref<s
 										  add_cref<strings> includePaths, add_cref<std::string> entryName,
 										  bool verbose) -> ShaderLink
 {
-	if (_GlSpvProgramCollection::addFromFile(type, fileName, includePaths, entryName, verbose))
+	if (_addFromFile(type, fileName, includePaths, entryName, verbose).second != INVALID_UINT32)
 	{
 		ASSERTMSG((m_links.size() + 1u <= m_maxShaders), "Amount of shaders exceeds maxShaderCount");
 		const uint32_t	shaderIndex = m_stageToCount.at(type) - 1u;
@@ -133,7 +133,7 @@ auto ShaderObjectCollection::addFromFile (VkShaderStageFlagBits type, add_cref<s
 										  add_cref<strings> includePaths, add_cref<std::string> entryName,
 										  bool verbose) -> ShaderLink
 {
-	if (_GlSpvProgramCollection::addFromFile(type, fileName, includePaths, entryName, verbose))
+	if (_addFromFile(type, fileName, includePaths, entryName, verbose).second != INVALID_UINT32)
 	{
 		ASSERTMSG((m_links.size() + 1u <= m_maxShaders), "Amount of shaders exceeds maxShaderCount");
 		const uint32_t	shaderIndex = m_stageToCount.at(type) - 1u;

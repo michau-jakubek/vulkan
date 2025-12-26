@@ -470,7 +470,10 @@ ZSwapchainKHR;
 typedef ZDeletable<VkShaderModule,
 	decltype(&vkDestroyShaderModule), &vkDestroyShaderModule,
 	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
-	VkShaderStageFlagBits, std::string>
+	VkShaderStageFlagBits, std::string,
+	// <Collection:id, SBTShaderGroup:index, pipelineGroupIndex, pipelineShaderIndex>
+	std::tuple<uint32_t, uint32_t, uint32_t, uint32_t>
+>
 ZShaderModule;
 
 typedef ZDeletable<VkCommandPool,
@@ -605,7 +608,9 @@ ZPipelineLayout;
 typedef ZDeletable<VkPipeline,
 	decltype(&vkDestroyPipeline), &vkDestroyPipeline,
 	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
-	ZPipelineLayout, ZRenderPass, VkPipelineBindPoint, VkPipelineCreateFlags>
+	ZPipelineLayout, ZRenderPass, VkPipelineBindPoint, VkPipelineCreateFlags,
+	std::vector<ZShaderModule> // ray-tracing shaders
+>
 ZPipeline;
 
 // Implemented in vtfZPipeline.cpp

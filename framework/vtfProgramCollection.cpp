@@ -258,7 +258,6 @@ void addProgram (ProgramCollection& programCollection,	const std::string& progra
 
 #endif
 
-
 namespace vtf
 {
 
@@ -272,6 +271,13 @@ static const VkShaderStageFlagBits availableShaderStages[]
 	VK_SHADER_STAGE_GEOMETRY_BIT,
 	VK_SHADER_STAGE_TASK_BIT_EXT,
 	VK_SHADER_STAGE_MESH_BIT_EXT,
+
+	VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+	VK_SHADER_STAGE_MISS_BIT_KHR,
+	VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
+	VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+	VK_SHADER_STAGE_INTERSECTION_BIT_KHR,
+	VK_SHADER_STAGE_CALLABLE_BIT_KHR,
 };
 
 static const char* shaderStageToCommand (VkShaderStageFlagBits stage)
@@ -286,6 +292,14 @@ static const char* shaderStageToCommand (VkShaderStageFlagBits stage)
 	case VK_SHADER_STAGE_GEOMETRY_BIT:					return "geom";
 	case VK_SHADER_STAGE_TASK_BIT_EXT:					return "task";
 	case VK_SHADER_STAGE_MESH_BIT_EXT:					return "mesh";
+
+	case VK_SHADER_STAGE_RAYGEN_BIT_KHR:				return "rgen";
+	case VK_SHADER_STAGE_MISS_BIT_KHR:					return "rmiss";
+	case VK_SHADER_STAGE_ANY_HIT_BIT_KHR:				return "rahit";
+	case VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR:			return "rchit";
+	case VK_SHADER_STAGE_INTERSECTION_BIT_KHR:			return "rint";
+	case VK_SHADER_STAGE_CALLABLE_BIT_KHR:				return "rcall";
+
 	default: break;
 	}
 	ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/);
@@ -815,9 +829,12 @@ bool verifyShaderCode (uint32_t shaderIndex, VkShaderStageFlagBits stage,
 	return status;
 }
 
+uint32_t _GlSpvProgramCollection::m_collectionID; // static
+uint32_t _GlSpvProgramCollection::collectionID () const { return m_collectionID; }
+
 _GlSpvProgramCollection::_GlSpvProgramCollection (ZDevice device, add_cref<std::string> basePath)
 	: m_device			(device)
-	, m_basePath		(basePath)
+	, m_basePath		(basePath.empty() ? getGlobalAppFlags().assetsPath : basePath)
 	, m_tempDir			()
 	, m_stageToCount	()
 	, m_stageToCode		()
@@ -825,14 +842,17 @@ _GlSpvProgramCollection::_GlSpvProgramCollection (ZDevice device, add_cref<std::
 	, m_stageToAssembly	()
 	, m_stageToBinary	()
 {
+	m_collectionID += 1u;
 }
 
-void _GlSpvProgramCollection::addFromText (VkShaderStageFlagBits type, add_cref<std::string> code,
-										   add_cref<strings> includePaths, add_cref<std::string> entryName)
+auto _GlSpvProgramCollection::_addFromText (VkShaderStageFlagBits type, add_cref<std::string> code,
+											add_cref<strings> includePaths, add_cref<std::string> entryName,
+											add_cptr<StageAndIndex> hintKey)
+							-> _GlSpvProgramCollection::StageAndIndex
 {
 	std::string header;
 	std::copy_n(code.begin(), 20, std::back_inserter(header));
-	const auto key = std::make_pair(type, m_stageToCount[type]++);
+	const auto key = hintKey ? *hintKey : std::make_pair(type, m_stageToCount[type]++);
 	// [0]: glsl code, [1]: header, [2]: entry name, [3] file name, [4...]: include path(s)
 	m_stageToCode[key].push_back(code);
 	m_stageToCode[key].push_back(header);
@@ -840,13 +860,15 @@ void _GlSpvProgramCollection::addFromText (VkShaderStageFlagBits type, add_cref<
 	m_stageToCode[key].push_back(std::string());
 	for (size_t p = 0; p < includePaths.size(); ++p)
 		m_stageToCode[key].push_back(m_basePath + includePaths[p]);
+	return key;
 }
 
-bool _GlSpvProgramCollection::addFromFile (VkShaderStageFlagBits type,
-										   add_cref<std::string> fileName, add_cref<strings> includePaths,
-										   add_cref<std::string> entryName, bool verbose)
+auto _GlSpvProgramCollection::_addFromFile (VkShaderStageFlagBits type,
+											add_cref<std::string> fileName, add_cref<strings> includePaths,
+											add_cref<std::string> entryName, bool verbose, add_cptr<StageAndIndex> hintKey)
+								-> _GlSpvProgramCollection::StageAndIndex
 {
-	bool				result			(false);
+	auto				key				= std::make_pair(VK_SHADER_STAGE_ALL, INVALID_UINT32);
 	const fs::path		basePath		(m_basePath);
 	const fs::path		sourcePath		= basePath / fileName;
 	const std::string	source_name		(sourcePath.string());
@@ -858,7 +880,7 @@ bool _GlSpvProgramCollection::addFromFile (VkShaderStageFlagBits type,
 		std::string header;
 		std::copy_n(begin, 20, std::back_inserter(header));
 		source_handle.close();
-		const auto key = std::make_pair(type, m_stageToCount[type]++);
+		key = hintKey ? *hintKey : std::make_pair(type, m_stageToCount[type]++);
 		// [0]: glsl code, [1]: header, [2]: entry name, [3] file name, [4...]: include path(s)
 		m_stageToCode[key].push_back(std::string());
 		m_stageToCode[key].push_back(header);
@@ -866,13 +888,12 @@ bool _GlSpvProgramCollection::addFromFile (VkShaderStageFlagBits type,
 		m_stageToCode[key].push_back(source_name);
 		for (size_t p = 0; p < includePaths.size(); ++p)
 			m_stageToCode[key].push_back((basePath / includePaths[p]).string());
-		result = true;
 	}
 	else if (verbose)
 	{
 		ASSERTFALSE("Unable to open \"", source_name, "\"");
 	}
-	return result;
+	return key;
 }
 
 auto _GlSpvProgramCollection::getShaderCode (VkShaderStageFlagBits stage,
@@ -915,14 +936,66 @@ uint32_t _GlSpvProgramCollection::ShaderLink::count () const
 	return n;
 }
 
+bool _GlSpvProgramCollection::RTShaderGroup::Less::operator ()(add_cref<RTShaderGroup> lhs, add_cref<RTShaderGroup> rhs) const
+{
+	return lhs.groupIndex() < rhs.groupIndex();
+}
+
+bool _GlSpvProgramCollection::RTShaderGroup::operator== (RTShaderGroup const& other) const
+{
+	return groupIndex() == other.groupIndex();
+}
+
+bool _GlSpvProgramCollection::RTShaderGroup::operator!= (RTShaderGroup const& other) const
+{
+	return !(*this == other);
+}
+
+_GlSpvProgramCollection::RTShaderGroup::RTShaderGroup (uint32_t groupIndex)
+	: m_groupIndex(groupIndex)
+{
+	ASSERTMSG(groupIndex != INVALID_UINT32, "groupIndex must differ from INVALID_UINT32");
+}
+
+_GlSpvProgramCollection::RTShaderGroup _GlSpvProgramCollection::RTShaderGroup::next () const
+{
+	return _GlSpvProgramCollection::RTShaderGroup(m_groupIndex + 1u);
+}
+
+uint32_t _GlSpvProgramCollection::RTShaderGroup::groupIndex () const
+{
+	return m_groupIndex;
+}
+
 ProgramCollection::ProgramCollection (ZDevice device, add_cref<std::string> basePath)
 	: _GlSpvProgramCollection(device, basePath)
 {
 }
 
+bool ProgramCollection::addFromFile (VkShaderStageFlagBits type,
+										   add_cref<std::string> fileName, add_cref<strings> includePaths,
+										   add_cref<std::string> entryName, bool verbose)
+{
+	return _GlSpvProgramCollection::_addFromFile(type, fileName, includePaths, entryName, verbose)
+										.second != INVALID_UINT32;
+}
+
+void ProgramCollection::addFromText (VkShaderStageFlagBits type, add_cref<std::string> code,
+										   add_cref<strings> includePaths, add_cref<std::string> entryName)
+{
+	/*return*/ _GlSpvProgramCollection::_addFromText(type, code, includePaths, entryName);
+}
+
 void ProgramCollection::buildAndVerify (add_cref<Version> vulkanVer, add_cref<Version> spirvVer,
 										bool enableValidation, bool genDisassembly, bool buildAlways,
 										add_cref<std::string> spirvValArgs)
+{
+	_buildAndVerify(vulkanVer, spirvVer, enableValidation, genDisassembly, buildAlways, spirvValArgs);
+}
+
+void _GlSpvProgramCollection::_buildAndVerify (add_cref<Version> vulkanVer, add_cref<Version> spirvVer,
+												bool enableValidation, bool genDisassembly, bool buildAlways,
+												add_cref<std::string> spirvValArgs)
 {
 	add_ref<ProgressRecorder> progressRecorder =
 		m_device.getParamRef<ZPhysicalDevice>().getParamRef<ZInstance>().getParamRef<ProgressRecorder>();
@@ -971,7 +1044,7 @@ void ProgramCollection::buildAndVerify (add_cref<Version> vulkanVer, add_cref<Ve
 void ProgramCollection::buildAndVerify (bool buildAlways)
 {
 	add_cref<GlobalAppFlags>	gf = getGlobalAppFlags();
-	buildAndVerify(gf.vulkanVer, gf.spirvVer, gf.spirvValidate, gf.genSpirvDisassembly, buildAlways);
+	_buildAndVerify(gf.vulkanVer, gf.spirvVer, gf.spirvValidate, gf.genSpirvDisassembly, buildAlways);
 }
 
 ZShaderModule ProgramCollection::getShader (VkShaderStageFlagBits stage, uint32_t index, bool verbose) const
@@ -998,5 +1071,16 @@ VkShaderStageFlagBits shaderGetStage (ZShaderModule module)
 {
 	return module.getParam<VkShaderStageFlagBits>();
 }
+
+std::string shaderGetStageString (ZShaderModule module)
+{
+	return shaderStageToString(shaderGetStage(module));
+}
+
+std::string shaderStageToString (VkShaderStageFlagBits stage)
+{
+	return vk::to_string(static_cast<vk::ShaderStageFlagBits>(stage));
+}
+
 
 } // namespace vtf

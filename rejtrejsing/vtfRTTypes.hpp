@@ -4,6 +4,7 @@
 #include "vtfZDeletable.hpp"
 #include "vtfVector.hpp"
 #include "vtfExtensions.hpp"
+#include "vtfRTShaderCollection.hpp"
 
 namespace vtf
 {
@@ -83,6 +84,24 @@ ZTopAccelerationStructure createTopAccelerationStructure(
 
 void commandBufferBuildAccelerationStructure(ZCommandBuffer cmd, ZBtmAccelerationStructure bottomAS);
 void commandBufferBuildAccelerationStructure(ZCommandBuffer cmd, ZTopAccelerationStructure topAS);
+
+struct SBT
+{
+	explicit SBT(ZPipeline rtPipeline, add_cref<RTShaderCollection::SBTShaderGroup>) noexcept;
+	~SBT() noexcept;
+
+	bool buildOnce();
+	void traceRays(ZCommandBuffer cmd, uint32_t width, uint32_t height, uint32_t depth = 1u);
+
+	add_cref<VkStridedDeviceAddressRegionKHR> raygenRegion() const;
+	add_cref<VkStridedDeviceAddressRegionKHR> missRegion() const;
+	add_cref<VkStridedDeviceAddressRegionKHR> hitRegion() const;
+	add_cref<VkStridedDeviceAddressRegionKHR> callableRegion() const;
+
+private:
+	struct Impl;
+	std::unique_ptr<Impl> m_impl;
+};
 
 } // namespace vtf
 

@@ -3,6 +3,10 @@ set(rt_files
 	vtfRTTypes.hpp
 	vtfRTLayoutManager.cpp
 	vtfRTLayoutManager.hpp
+	vtfRTShaderCollection.cpp
+	vtfRTShaderCollection.hpp
+	vtfRTPipeline.cpp
+	vtfRTPipeline.hpp
 )
 
 set(rt_libs console framework driver)

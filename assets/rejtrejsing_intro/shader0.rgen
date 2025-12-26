@@ -1,0 +1,11 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+//layout(set = 0, binding = 0, rgba32f) uniform image2D img;
+
+void main()
+{
+    const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+    //imageStore(img, pixel, vec4(1.0, 0.0, 1.0, 1.0)); // magenta test
+}
+

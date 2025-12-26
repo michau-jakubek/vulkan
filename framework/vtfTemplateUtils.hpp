@@ -121,6 +121,133 @@ template<class UserData> bool checkSubsetsDisjoint (add_cref<std::vector<Subset<
 
 } // namespace subset
 
+namespace filter
+{
+
+template <typename It, typename Tp, typename Pred>
+struct FilterIterator
+{
+	using iterator_category = std::forward_iterator_tag;
+	using value_type		= Tp;
+	using difference_type	= std::ptrdiff_t;
+	using pointer			= Tp*;
+	using reference			= Tp&;
+
+	FilterIterator(It it, It end, Pred pred)
+		: m_it(it), m_end(end), m_pred(pred)
+	{
+		skipInvalid();
+	}
+
+	auto& operator*() const { return *m_it; }
+	auto* operator->() const { return &(*m_it); }
+
+	difference_type operator-(const FilterIterator& other) const {
+		return std::distance(other.m_it, m_it);
+	}
+
+	FilterIterator& operator++() {
+		++m_it;
+		skipInvalid();
+		return *this;
+	}
+	FilterIterator operator++(int) {
+		FilterIterator tmp = *this;
+		++(*this);
+		return tmp;
+	}
+
+		bool operator==(const FilterIterator& other) const {
+		return m_it == other.m_it;
+	}
+	bool operator!=(const FilterIterator& other) const {
+		return !(*this == other);
+	}
+
+private:
+	void skipInvalid() {
+		while (m_it != m_end && !m_pred(*m_it))
+			++m_it;
+	}
+
+	It m_it;
+	It m_end;
+	Pred m_pred;
+};
+
+template <class Iter, class Pred>
+class FilterRange {
+public:
+	using iterator = FilterIterator<Iter, typename std::iterator_traits<Iter>::value_type, Pred>;
+
+	FilterRange(Iter first, Iter last, Pred pred)
+		: m_begin(first), m_end(last), m_pred(pred) {
+	}
+
+	auto begin() const { return iterator(m_begin, m_end, m_pred); }
+	auto end()   const { return iterator(m_end, m_end, m_pred); }
+
+private:
+	Iter m_begin;
+	Iter m_end;
+	Pred m_pred;
+};
+
+/*
+* USAGE
+* std::vector<int> v(100);
+* std::iota(v.begin(), v.end(), 1);
+* auto filter17 = filter::FilterRange(v.begin(), v.end(), [](int k) { return k % 17 == 0; });
+* for (auto k : v) std::cout << k << ", ";
+* > 17, 34, 51, ...
+*/
+} // namepsace filter
+
+namespace span
+{
+
+template<class X>
+class span {
+	using pointer = std::conditional_t<std::is_const_v<X>, add_cptr<X>, add_ptr<X>>;
+	using reference = std::conditional_t<std::is_const_v<X>, add_cref<X>, add_ref<X>>;
+	pointer ptr;
+public:
+	const uint32_t start;
+	const std::size_t count;
+
+	span(pointer p, uint32_t s, std::size_t n)
+		: ptr(p), start(s), count(n) {}
+	reference operator[](uint32_t index) const {
+		ASSERTMSG(index < count, "Index (", index, ") of bounds (", count, ')');
+		return ptr[index]; }
+	std::size_t size() const { return count; }
+	pointer data() const { return ptr; }
+};
+template<template<class, class...> class Y, class X, class... Z>
+span<X> make_span(Y<X, Z...> & y, std::size_t n) {
+	ASSERTION(n <= y.size());
+	return span<X>(y.data(), 0u, n);
+}
+template<template<class, class...> class Y, class X, class... Z>
+span<X> make_span(Y<X, Z...> const& y, std::size_t n) {
+	ASSERTION(n <= y.size());
+	return span<X>(y.data(), 0u, n);
+}
+template<template<class, class...> class Y, class X, class... Z>
+span<X> make_span(Y<X, Z...>& y, uint32_t start, std::size_t n) {
+	ASSERTION(start + n <= y.size());
+	return span<X>(y.data() + start, start, n);
+}
+template<template<class, class...> class Y, class X, class... Z>
+span<X> make_span(Y<X, Z...> const& y, uint32_t start, std::size_t n) {
+	ASSERTION(start + n <= y.size());
+	return span<X>(y.data() + start, start, n);
+}
+
+} // namespace span
+
+// EPDM, Torpol
+
 } // namesapce vtf
 
 #endif // __VTF_TEMPLATE_UTILS_HPP_INCLUDED__
