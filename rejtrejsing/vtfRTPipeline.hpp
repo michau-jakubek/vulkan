@@ -16,9 +16,17 @@ struct ShaderCounts
 	uint32_t intCount;
 	uint32_t callCount;
 	uint32_t together;
+	uint32_t hitCount() const {	return std::max({ ahitCount, chitCount, intCount }); }
+	uint32_t batchCount() const { return rgCount + missCount + callCount + hitCount(); }
 };
+template<class X> constexpr size_t RegionDataSizeImpl =
+std::is_void_v<X> ? 0 : sizeof(std::conditional_t<std::is_void_v<X>, std::byte, X>);
+template<class X> constexpr size_t RegionDataSize =
+std::is_void_v<X> ? std::min<size_t>(0, RegionDataSizeImpl<X>) : std::max<size_t>(RegionDataSizeImpl<X>, 0);
+
 struct RTPipelineSettings;
 std::shared_ptr<RTPipelineSettings> makeRTPipelineSettings();
+
 ZPipeline createRayTracingPipeline(
 	ZPipelineLayout layout,
 	add_cref<std::vector<ZShaderModule>> rtShaders,

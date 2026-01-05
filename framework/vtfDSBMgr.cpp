@@ -547,6 +547,23 @@ void DescriptorSetBindingManager::updateDescriptorSet (
 							nullptr			// copyParams
 							);
 }
+bool DescriptorSetBindingManager::isDescryptorTypeSupported(VkDescriptorType type) const
+{
+	switch (type)
+	{
+	case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+	case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+	case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+	case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+	case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+	case VK_DESCRIPTOR_TYPE_SAMPLER:
+	case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+	case VK_DESCRIPTOR_TYPE_MUTABLE_EXT:
+		return true;
+	default:
+		return false;
+	}
+}
 void DescriptorSetBindingManager::updateDescriptorSet (ZDescriptorSet descriptorSet)
 {
 	for (add_cref<ExtBinding> b : m_extbindings)
@@ -571,7 +588,8 @@ void DescriptorSetBindingManager::updateDescriptorSet (ZDescriptorSet descriptor
 			updateDescriptorSet(descriptorSet, b.binding, b.view, b.sampler, b.imageLayout);
 			break;
 		default:
-			ASSERTFALSE("Unsupported descryptor type: ",
+			ASSERTMSG(isDescryptorTypeSupported(b.descriptorType),
+				"Unsupported descryptor type: ",
 				vk::to_string(static_cast<vk::DescriptorType>(b.descriptorType)));
 		}
 	}

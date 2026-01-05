@@ -58,6 +58,7 @@ typedef std::variant<std::monostate, DescriptorBufferInfo, DescriptorImageInfo>	
 
 class DescriptorSetBindingManager
 {
+	friend class RTLayoutManager;
 public:
 				ZDevice			device;
 				ZQueue			queue;
@@ -86,7 +87,7 @@ public:
 	uint32_t	addBinding	(uint32_t suggestedBinding, ZImageView, VkDescriptorType,
 							VkImageLayout = VK_IMAGE_LAYOUT_GENERAL, VkShaderStageFlags = VK_SHADER_STAGE_ALL,
 							VkDescriptorBindingFlags = 0);
-
+		
 	uint32_t	addBinding	(ZImageView, ZSampler, VkImageLayout = VK_IMAGE_LAYOUT_GENERAL,
 							VkShaderStageFlags= VK_SHADER_STAGE_ALL, VkDescriptorBindingFlags = 0);
 	uint32_t	addBinding	(uint32_t suggestedBinding, ZImageView, ZSampler,
@@ -172,7 +173,8 @@ public:
 								std::optional<VkDescriptorType> mutableVariant = {});
 	void	updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZImageView view,
 								ZSampler sampler, VkImageLayout layout = VK_IMAGE_LAYOUT_MAX_ENUM);
-	void	updateDescriptorSet	(ZDescriptorSet	descriptorSet);
+	virtual void updateDescriptorSet (ZDescriptorSet descriptorSet);
+	virtual bool isDescryptorTypeSupported (VkDescriptorType type) const;
 
 	ZPipelineLayout				 createPipelineLayout ();
 	ZPipelineLayout				 createPipelineLayout (add_cref<ZPushConstants> pushConstants);
@@ -204,6 +206,7 @@ protected:
 		ZBuffer							buffer;
 		ZImageView						view;
 		ZSampler						sampler;
+		std::any						tlas;
 	} ExtBinding;
 	typedef std::vector<ExtBinding>	ExtBindings;
 

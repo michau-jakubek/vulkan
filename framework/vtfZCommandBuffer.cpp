@@ -37,6 +37,7 @@ ZCommandBuffer createCommandBuffer (ZCommandPool commandPool, bool primary, cons
 {
 	VkCommandBuffer	commandBuffer	= VK_NULL_HANDLE;
 	auto			device			= commandPool.getParam<ZDevice>();
+	auto&			di				= device.getInterface();
 
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType					= VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -45,7 +46,7 @@ ZCommandBuffer createCommandBuffer (ZCommandPool commandPool, bool primary, cons
 	allocInfo.level					= primary ? VK_COMMAND_BUFFER_LEVEL_PRIMARY : VK_COMMAND_BUFFER_LEVEL_SECONDARY;
 	allocInfo.commandBufferCount	= 1;
 
-	VKASSERT(vkAllocateCommandBuffers(*device, &allocInfo, &commandBuffer));
+	VKASSERT(di.vkAllocateCommandBuffers(*device, &allocInfo, &commandBuffer));
 
 	return ZCommandBuffer::create(commandBuffer, device, commandPool, primary);
 }
@@ -888,13 +889,22 @@ OneShotCommandBuffer::OneShotCommandBuffer (ZDevice device, ZQueue queue)
 {
 }
 
-void OneShotCommandBuffer::endRecordingAndSubmit (ZFence hintFence, uint64_t timeout)
+void OneShotCommandBuffer::endRecordingAndSubmit (bool enableException, ZFence hintFence, uint64_t timeout)
 {
-	if (!m_submitted)
-	{
+	if (m_submitted) {
+		return;
+	}
+
+	try {
+		m_submitted = true;
 		commandBufferEnd(m_commandBuffer);
 		commandBufferSubmitAndWait(m_commandBuffer, hintFence, timeout);
-		m_submitted = true;
+	}
+	catch (add_cref<std::exception> e)
+	{
+		std::cout << e.what() << std::endl;
+		if (enableException)
+			throw;
 	}
 }
 

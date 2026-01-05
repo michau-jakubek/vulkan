@@ -899,12 +899,13 @@ bool queueSupportSwapchain (ZQueue queue)
 ZFence createFence (ZDevice device, bool signaled)
 {
 	VkFence handle = VK_NULL_HANDLE;
+	add_cref<ZDeviceInterface> di = device.getInterface();
 	auto callbacks = device.getParam<VkAllocationCallbacksPtr>();
 
 	VkFenceCreateInfo fenceInfo = makeVkStruct();
 	fenceInfo.flags = signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0;
 
-	VKASSERT(vkCreateFence(*device, &fenceInfo, callbacks, &handle));
+	VKASSERT(di.vkCreateFence(*device, &fenceInfo, callbacks, &handle));
 	return ZFence::create(handle, device, callbacks);
 }
 

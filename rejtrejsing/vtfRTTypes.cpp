@@ -18,7 +18,7 @@ void freeAccelerationStructure(ZDevice dev, VkAccelerationStructureKHR str, VkAl
 	di.vkDestroyAccelerationStructureKHR(*dev, str, cbs);
 }
 
-void onEnablingRTFeatures(add_ref<DeviceCaps> caps)
+void onEnablingRayTracingFeatures(add_ref<DeviceCaps> caps)
 {
 	caps.addUpdateFeatureIf(&VkPhysicalDeviceAccelerationStructureFeaturesKHR::accelerationStructure)
 		.checkSupported("accelerationStructure");
@@ -78,7 +78,8 @@ ZAccelerationStructureGeometry::ZAccelerationStructureGeometry(ZDevice device,
 
 	ZBuffer vertexBuffer = createBuffer<Vec3>(device, vertexCount,
 		ZBufferUsageFlags(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-							VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR));
+							VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+							VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR));
 	bufferWrite(vertexBuffer, vertices);
 
 	this->geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
@@ -87,7 +88,7 @@ ZAccelerationStructureGeometry::ZAccelerationStructureGeometry(ZDevice device,
 	triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
 	triangles.vertexData.deviceAddress = bufferGetAddress(vertexBuffer);
 	triangles.vertexStride = sizeof(Vec3);
-	triangles.maxVertex = data_count(vertices);
+	triangles.maxVertex = vertexCount;
 	m_buffers.emplace_back(vertexBuffer);
 	m_primitiveCount = vertexCount / 3u;
 
@@ -99,9 +100,10 @@ ZAccelerationStructureGeometry::ZAccelerationStructureGeometry(ZDevice device,
 			ASSERTMSG(indices[i] < vertexCount, "Index (", i, ") exceeds vertex count (", vertexCount, ")");
 		}
 
-		ZBuffer indexBuffer = createBuffer<uint32_t>(device, data_count(indices),
+		ZBuffer indexBuffer = createBuffer<uint32_t>(device, indexCount,
 			ZBufferUsageFlags(VK_BUFFER_USAGE_INDEX_BUFFER_BIT,	VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-								VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR));
+								VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+								VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR));
 		bufferWrite(indexBuffer, indices);
 
 		triangles.indexType = VK_INDEX_TYPE_UINT32;
@@ -140,6 +142,19 @@ buildGeometryInfo(add_cref<std::vector<ZAccelerationStructureGeometry>> geoms,
 	return buildInfo;
 }
 
+template<class AccStruct>
+VkDeviceAddress accelerationStructureGetDeviceAddress(AccStruct str)
+{
+	ZDevice device = str.getParam<ZDevice>();
+	add_cref<ZDeviceInterface> di = device.getInterface();
+
+	VkAccelerationStructureDeviceAddressInfoKHR addressInfo{};
+	addressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+	addressInfo.accelerationStructure = *str;
+
+	return di.vkGetAccelerationStructureDeviceAddressKHR(*device, &addressInfo);
+}
+
 ZBtmAccelerationStructure
 createBtmAccelerationStructure(ZAccelerationStructureGeometry::Geoms geoms)
 {
@@ -149,10 +164,12 @@ createBtmAccelerationStructure(ZAccelerationStructureGeometry::Geoms geoms)
 	add_cref<ZDeviceInterface> di = device.getInterface();
 	const VkAllocationCallbacksPtr callbacks = device.getParam<VkAllocationCallbacksPtr>();
 
-	ZBtmAccelerationStructure str(VK_NULL_HANDLE, device, callbacks, {/*blasBuffer*/}, {/*geoms*/}, VK_FALSE);
-	add_ref<std::vector<ZAccelerationStructureGeometry>> strGeoms =
-		str.getParamRef<std::vector<ZAccelerationStructureGeometry>>();
-	strGeoms.resize(geoms.size());
+	ZBtmAccelerationStructure blas(VK_NULL_HANDLE, device, callbacks,
+									{/*blasBuffer*/}, {/*scratchBuffer*/}, {/*geoms*/},
+									0u, 0u, 0u, VK_FALSE);
+	add_ref<std::vector<ZAccelerationStructureGeometry>> blasGeoms =
+		blas.getParamRef<std::vector<ZAccelerationStructureGeometry>>();
+	blasGeoms.resize(geoms.size());
 
 	std::vector<uint32_t> primitiveCounts(geoms.size());
 	//std::vector<VkAccelerationStructureGeometryKHR> gs(geoms.size());
@@ -160,11 +177,11 @@ createBtmAccelerationStructure(ZAccelerationStructureGeometry::Geoms geoms)
 	{
 		const auto idx = make_unsigned(std::distance(begin, g));
 		primitiveCounts[idx] = (*g)->primitiveCount();
-		strGeoms[idx] = *(*g);
+		blasGeoms[idx] = *(*g);
 	}
 
 	std::vector<VkAccelerationStructureGeometryKHR> auxGeoms;
-	const VkAccelerationStructureBuildGeometryInfoKHR buildInfo = buildGeometryInfo(strGeoms, auxGeoms);
+	const VkAccelerationStructureBuildGeometryInfoKHR buildInfo = buildGeometryInfo(blasGeoms, auxGeoms);
 	
 	VkAccelerationStructureBuildSizesInfoKHR sizeInfo{};
 	sizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
@@ -177,10 +194,14 @@ createBtmAccelerationStructure(ZAccelerationStructureGeometry::Geoms geoms)
 		&sizeInfo
 	);
 
+	blas.setParam<ZDistType<SizeFirst, VkDeviceSize>>(sizeInfo.accelerationStructureSize);
+	blas.setParam<ZDistType<SizeSecond, VkDeviceSize>>(sizeInfo.updateScratchSize);
+	blas.setParam<ZDistType<SizeThird, VkDeviceSize>>(sizeInfo.buildScratchSize);
+
 	const ZBufferUsageFlags blasUsage(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR,
 										VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 	ZBuffer blasBuffer = createBuffer(device, sizeInfo.accelerationStructureSize, blasUsage, ZMemoryPropertyDeviceFlags);
-	str.setParam<ZBuffer>(blasBuffer);
+	blas.setParam<ZDistType<SomeZero, ZBuffer>>(blasBuffer);
 
 	VkAccelerationStructureCreateInfoKHR createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
@@ -188,9 +209,9 @@ createBtmAccelerationStructure(ZAccelerationStructureGeometry::Geoms geoms)
 	createInfo.size = sizeInfo.accelerationStructureSize;
 	createInfo.buffer = *blasBuffer;
 
-	VKASSERT(di.vkCreateAccelerationStructureKHR(*device, &createInfo, callbacks, str.setter()));
+	VKASSERT(di.vkCreateAccelerationStructureKHR(*device, &createInfo, callbacks, blas.setter()));
 
-	return str;
+	return blas;
 }
 
 VkTransformMatrixKHR getTransformMatrix()
@@ -220,7 +241,7 @@ BLAS::BLAS(
 {
 }
 
-static std::vector<ZBtmAccelerationStructure>
+[[maybe_unused]] static std::vector<ZBtmAccelerationStructure>
 distinctBottomsByHandle(BLAS btm, std::optional<std::vector<BLAS>> otherBtms)
 {
 	const uint32_t btmCount = 1u + (otherBtms.has_value() ? data_count(*otherBtms) : 0u);
@@ -240,40 +261,20 @@ distinctBottomsByHandle(BLAS btm, std::optional<std::vector<BLAS>> otherBtms)
 }
 
 ZTopAccelerationStructure
-createTopAccelerationStructure(BLAS btm, std::optional<std::vector<BLAS>> otherBtms)
+createTopAccelerationStructure(ZDevice device, uint32_t maxInstances)
 {
-	ZDevice device = btm.structure.getParam<ZDevice>();
 	add_cref<ZDeviceInterface> di = device.getInterface();
 	const VkAllocationCallbacksPtr callbacks = device.getParam<VkAllocationCallbacksPtr>();
 
-	const uint32_t instanceCount = 1u + (otherBtms.has_value() ? data_count(*otherBtms) : 0u);
-	ZTopAccelerationStructure tlas(VK_NULL_HANDLE, device, callbacks,
-									{/*tlas buffer*/}, {/*instances buffer*/ },
-									distinctBottomsByHandle(btm, otherBtms), 0u, 0u, 0u, instanceCount);
-
-	ZBuffer instancesBuffer = createBuffer<VkAccelerationStructureInstanceKHR>(device, instanceCount,
+	ZBuffer instancesBuffer = createBuffer<VkAccelerationStructureInstanceKHR>(device, maxInstances,
 										ZBufferUsageFlags(VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-											VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR));
-
-	for (uint32_t b = 0u; b < instanceCount; ++b)
-	{
-		add_ref<BLAS> blas = (0u == b) ? btm : (*otherBtms)[b - 1u];
-
-		VkAccelerationStructureInstanceKHR i{};
-		i.mask = blas.mask;
-		i.flags = blas.flags;
-		i.transform = blas.transform;
-		i.instanceCustomIndex = blas.instanceCustomIndex;
-		i.instanceShaderBindingTableRecordOffset = blas.instanceShaderBindingTableRecordOffset;
-		i.accelerationStructureReference = bufferGetAddress(blas.structure.getParam<ZBuffer>());
-		bufferWrite(instancesBuffer, i, b);
-	}
-	tlas.setParam<ZDistType<SomeOne, ZBuffer>>(instancesBuffer);
+											VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR),
+										ZMemoryPropertyHostFlags);
 
 	VkAccelerationStructureGeometryKHR tlasGeom{};
 	tlasGeom.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
 	tlasGeom.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
-	tlasGeom.geometry.instances.sType =	VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+	tlasGeom.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
 	tlasGeom.geometry.instances.arrayOfPointers = VK_FALSE;
 	tlasGeom.geometry.instances.data.deviceAddress = bufferGetAddress(instancesBuffer);
 
@@ -291,17 +292,18 @@ createTopAccelerationStructure(BLAS btm, std::optional<std::vector<BLAS>> otherB
 		*device,
 		VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
 		&buildInfo,
-		&instanceCount,
+		&maxInstances,
 		&sizeInfo
 	);
-	tlas.setParam<ZDistType<SizeFirst, VkDeviceSize>>(sizeInfo.accelerationStructureSize);
-	tlas.setParam<ZDistType<SizeSecond, VkDeviceSize>>(sizeInfo.updateScratchSize);
-	tlas.setParam<ZDistType<SizeThird, VkDeviceSize>>(sizeInfo.buildScratchSize);
+
+	ZBuffer scratchBuffer = createBuffer(device, sizeInfo.buildScratchSize,
+		ZBufferUsageFlags(VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
 
 	ZBuffer tlasBuffer = createBuffer(device, sizeInfo.accelerationStructureSize,
-										ZBufferUsageFlags(VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-											VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR));
-	tlas.setParam<ZDistType<SomeZero, ZBuffer>>(tlasBuffer);
+		ZBufferUsageFlags(VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR),
+		ZMemoryPropertyDeviceFlags);
 
 	VkAccelerationStructureCreateInfoKHR createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
@@ -309,14 +311,20 @@ createTopAccelerationStructure(BLAS btm, std::optional<std::vector<BLAS>> otherB
 	createInfo.size = sizeInfo.accelerationStructureSize;
 	createInfo.buffer = *tlasBuffer;
 
+	ZTopAccelerationStructure tlas(VK_NULL_HANDLE, device, callbacks,
+		tlasBuffer, instancesBuffer, scratchBuffer,
+		{}, sizeInfo.accelerationStructureSize, sizeInfo.updateScratchSize, sizeInfo.buildScratchSize, maxInstances);
+
+
 	VKASSERT(di.vkCreateAccelerationStructureKHR(*device, &createInfo, callbacks, tlas.setter()));
 
 	return tlas;
 }
 
-void commandBufferBuildAccelerationStructure(ZCommandBuffer cmd, ZBtmAccelerationStructure bottomAS)
+void commandBufferBuildAccelerationStructure(
+	ZCommandBuffer cmd, ZBtmAccelerationStructure blas)
 {
-	if (bottomAS.getParam<VkBool32>())
+	if (blas.getParam<VkBool32>())
 	{
 		return;
 	}
@@ -325,74 +333,89 @@ void commandBufferBuildAccelerationStructure(ZCommandBuffer cmd, ZBtmAcceleratio
 	add_cref<ZDeviceInterface> di = device.getInterface();
 	//const VkAllocationCallbacksPtr callbacks = device.getParam<VkAllocationCallbacksPtr>();
 
-	add_ref<std::vector<ZAccelerationStructureGeometry>> strGeoms =
-		bottomAS.getParamRef<std::vector<ZAccelerationStructureGeometry>>();
+	add_ref<std::vector<ZAccelerationStructureGeometry>> blasGeoms =
+		blas.getParamRef<std::vector<ZAccelerationStructureGeometry>>();
 
 	std::vector<VkAccelerationStructureGeometryKHR> aux;
-	VkAccelerationStructureBuildGeometryInfoKHR buildInfo = buildGeometryInfo(strGeoms, aux);
+	VkAccelerationStructureBuildGeometryInfoKHR buildInfo = buildGeometryInfo(blasGeoms, aux);
 
-	std::vector<VkAccelerationStructureBuildRangeInfoKHR> rangeInfos(strGeoms.size());
-	std::vector<add_cptr<VkAccelerationStructureBuildRangeInfoKHR>> rangeInfosPtrs(strGeoms.size());
-	std::vector<uint32_t> primitiveCounts(strGeoms.size());
+	std::vector<VkAccelerationStructureBuildRangeInfoKHR> rangeInfos(blasGeoms.size());
+	std::vector<add_cptr<VkAccelerationStructureBuildRangeInfoKHR>> rangeInfosPtrs(blasGeoms.size());
+	std::vector<uint32_t> primitiveCounts(blasGeoms.size());
 
-	for (auto begin = strGeoms.begin(), g = begin; g != strGeoms.end(); ++g)
+	for (auto begin = blasGeoms.begin(), geom = begin; geom != blasGeoms.end(); ++geom)
 	{
-		const auto idx = make_unsigned(std::distance(begin, g));
-		primitiveCounts[idx] = g->primitiveCount();
+		const auto idx = make_unsigned(std::distance(begin, geom));
+		primitiveCounts[idx] = geom->primitiveCount();
 
 		rangeInfos[idx].firstVertex = 0u;
-		rangeInfos[idx].primitiveCount = g->primitiveCount();
+		rangeInfos[idx].primitiveCount = geom->primitiveCount();
 		rangeInfos[idx].primitiveOffset = 0u;
 		rangeInfos[idx].transformOffset = 0u;
 		rangeInfosPtrs[idx] = &rangeInfos[idx];
 	}
 
-	VkAccelerationStructureBuildSizesInfoKHR sizeInfo{};
-	sizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
-
-	di.vkGetAccelerationStructureBuildSizesKHR(
-		*device,
-		VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-		&buildInfo,
-		primitiveCounts.data(),
-		&sizeInfo
-	);
-
-	ZBuffer scratchBuffer = createBuffer(device, sizeInfo.buildScratchSize,
+	const VkDeviceSize buildScratchSize = blas.getParam<ZDistType<SizeThird, VkDeviceSize>>().get();
+	ZBuffer scratchBuffer = createBuffer(device, buildScratchSize,
 							ZBufferUsageFlags(VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 												VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
+	blas.setParam<ZDistType<SomeTwo, ZBuffer>>(scratchBuffer);
 	buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
 	buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-	buildInfo.dstAccelerationStructure = *bottomAS;
+	buildInfo.dstAccelerationStructure = *blas;
 	buildInfo.scratchData.deviceAddress = bufferGetAddress(scratchBuffer);
 
-	di.vkCmdBuildAccelerationStructuresKHR(*cmd, 1, &buildInfo, rangeInfosPtrs.data());
+	di.vkCmdBuildAccelerationStructuresKHR(*cmd, 1u, &buildInfo, rangeInfosPtrs.data());
 
-	bottomAS.setParam<VkBool32>(VK_TRUE); // already built
+	using A = ZBarrierConstants::Access;
+	using S = ZBarrierConstants::Stage;
+	ZMemoryBarrier2 barrier(
+		A::ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
+		S::ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+		A::ACCELERATION_STRUCTURE_READ_BIT_KHR,
+		S::ACCELERATION_STRUCTURE_BUILD_BIT_KHR);
+	commandBufferPipelineBarriers2(cmd, barrier);
+
+	blas.setParam<VkBool32>(VK_TRUE); // already built
 }
 
-void commandBufferBuildAccelerationStructure(ZCommandBuffer cmd, ZTopAccelerationStructure topAS)
+void commandBufferBuildAccelerationStructure(
+	ZCommandBuffer cmd,	ZTopAccelerationStructure tlas,
+	BLAS firstInstance,	std::optional<std::vector<BLAS>> otherInstances)
 {
-	add_ref<std::vector<ZBtmAccelerationStructure>> bottoms =
-		topAS.getParamRef<std::vector<ZBtmAccelerationStructure>>();
-	for (add_ref<ZBtmAccelerationStructure> btm : bottoms)
-	{
-		commandBufferBuildAccelerationStructure(cmd, btm);
-	}
+	const uint32_t declaredInstanceCount = tlas.getParam<uint32_t>();
+	const uint32_t instanceCount = 1u + (otherInstances.has_value() ? data_count(*otherInstances) : 0u);
+	ASSERTMSG(instanceCount <= declaredInstanceCount, "Build instance count (", instanceCount,
+		") exceeds declared TLAS instance count (", declaredInstanceCount, ")");
 
 	ZDevice device = cmd.getParam<ZDevice>();
 	add_cref<ZDeviceInterface> di = device.getInterface();
-	//const VkAllocationCallbacksPtr callbacks = device.getParam<VkAllocationCallbacksPtr>();
-	//ZBuffer tlasBuffer = topAS.getParam<ZDistType<ZDistName::SomeZero, ZBuffer>>();
-	ZBuffer instancesBuffer = topAS.getParam<ZDistType<ZDistName::SomeOne, ZBuffer>>();
-	ZBuffer scratchBuffer = createBuffer(device, topAS.getParam<ZDistType<SizeThird, VkDeviceSize>>(),
-											ZBufferUsageFlags(VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-												VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
+	ZBuffer instancesBuffer = tlas.getParam<ZDistType<SomeOne, ZBuffer>>();
+	ZBuffer scratchBuffer = tlas.getParam<ZDistType<SomeTwo, ZBuffer>>();
+
+	for (uint32_t b = 0u; b < instanceCount; ++b)
+	{
+		add_ref<BLAS> blas = (0u == b) ? firstInstance : (*otherInstances)[b - 1u];
+		commandBufferBuildAccelerationStructure(cmd, blas.structure);
+	}
+
+	for (uint32_t b = 0u; b < instanceCount; ++b)
+	{
+		add_ref<BLAS> blas = (0u == b) ? firstInstance : (*otherInstances)[b - 1u];
+
+		VkAccelerationStructureInstanceKHR i{};
+		i.mask = blas.mask;
+		i.flags = blas.flags;
+		i.transform = blas.transform;
+		i.instanceCustomIndex = blas.instanceCustomIndex;
+		i.instanceShaderBindingTableRecordOffset = blas.instanceShaderBindingTableRecordOffset;
+		i.accelerationStructureReference = accelerationStructureGetDeviceAddress(blas.structure);
+		bufferWrite(instancesBuffer, i, b);
+	}
 
 	VkAccelerationStructureGeometryKHR geom{};
 	geom.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
 	geom.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
-
 	geom.geometry.instances.sType =
 		VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
 	geom.geometry.instances.arrayOfPointers = VK_FALSE;
@@ -406,56 +429,31 @@ void commandBufferBuildAccelerationStructure(ZCommandBuffer cmd, ZTopAcceleratio
 	buildInfo.geometryCount = 1u;
 	buildInfo.pGeometries = &geom;
 	buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-	buildInfo.dstAccelerationStructure = *topAS;
+	buildInfo.dstAccelerationStructure = *tlas;
 	buildInfo.scratchData.deviceAddress = bufferGetAddress(scratchBuffer);
 
 	VkAccelerationStructureBuildRangeInfoKHR range{};
-	range.primitiveCount = topAS.getParam<uint32_t>();
+	range.primitiveCount = instanceCount;
+
+	using A = ZBarrierConstants::Access;
+	using S = ZBarrierConstants::Stage;
+
+	ZBufferMemoryBarrier2 bufferBarrier(instancesBuffer,
+		A::HOST_WRITE_BIT,
+		S::HOST_BIT,
+		A::ACCELERATION_STRUCTURE_READ_BIT_KHR,
+		S::ACCELERATION_STRUCTURE_BUILD_BIT_KHR);
+	commandBufferPipelineBarriers2(cmd, bufferBarrier);
 
 	const VkAccelerationStructureBuildRangeInfoKHR* pRanges[] = { &range };
 	di.vkCmdBuildAccelerationStructuresKHR(*cmd, 1u, &buildInfo, pRanges);
 
-	using A = ZBarrierConstants::Access;
-	using S = ZBarrierConstants::Stage;
-	ZMemoryBarrier2 barrier(A::ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
+	ZMemoryBarrier2 buildBarrier(
+		A::ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
 		S::ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
 		A::ACCELERATION_STRUCTURE_READ_BIT_KHR,
 		S::RAY_TRACING_SHADER_BIT_KHR);
-	commandBufferPipelineBarriers2(cmd, barrier);
-}
-
-#define COLLECTION_INDEX		0
-#define SBT_SHADER_GROUP_INDEX	1
-#define PIPELINE_GROUP_INDEX	2
-#define PIPELINE_SHADER_INDEX	3
-#define SHADER_STAGE_INDEX		4
-using tuple4 = std::tuple<uint32_t, uint32_t, uint32_t, uint32_t>;
-using tuple4s = std::tuple<uint32_t, uint32_t, uint32_t, uint32_t, VkShaderStageFlagBits>;
-
-struct SBT::Impl
-{
-	ZPipeline	m_pipeline;
-	ZBuffer		m_sbtBuffer;
-	bool		m_builtFlag;
-	const RTShaderCollection::SBTShaderGroup m_shaderGroup;
-	VkStridedDeviceAddressRegionKHR m_raygenRegion{};
-	VkStridedDeviceAddressRegionKHR m_missRegion{};
-	VkStridedDeviceAddressRegionKHR m_callableRegion{};
-	VkStridedDeviceAddressRegionKHR m_hitRegion{};
-
-	Impl(ZPipeline rtPipeline, add_cref<RTShaderCollection::SBTShaderGroup> shaderGroup)
-		: m_pipeline(rtPipeline), m_sbtBuffer()
-		, m_builtFlag(false), m_shaderGroup(shaderGroup)
-	{
-	}
-	virtual ~Impl() = default;
-};
-
-SBT::~SBT() noexcept = default;
-
-SBT::SBT(ZPipeline rtPipeline, add_cref<RTShaderCollection::SBTShaderGroup> shaderGroup) noexcept
-	: m_impl(std::make_unique<SBT::Impl>(rtPipeline, shaderGroup))
-{
+	commandBufferPipelineBarriers2(cmd, buildBarrier);
 }
 
 #define COLLECTION_INDEX		0
@@ -485,99 +483,140 @@ extern uint32_t shaderGetLogicalGroup(add_cref<ZShaderModule> module);
 extern uint32_t shaderGetHitGroup(add_cref<ZShaderModule> module);
 extern uint32_t shaderGetPipelineGroup(add_cref<ZShaderModule> module);
 
-bool SBT::buildOnce()
+SBTHandles::SBTHandles (ZPipeline pipeline, add_cref<RTShaderCollection::SBTShaderGroup> group)
+	: m_pipeline(pipeline)
+	, m_handles()
+	, m_group(group)
+	, m_counts()
 {
-	if (m_impl->m_builtFlag) {
-		return false;
-	}
-
-	ZDevice device = m_impl->m_pipeline.getParam<ZDevice>();
+	ZDevice device = pipeline.getParam<ZDevice>();
 	add_cref<ZDeviceInterface> di = device.getInterface();
 	add_ref<std::vector<ZShaderModule>> shaders =
-		m_impl->m_pipeline.getParamRef<std::vector<ZShaderModule>>();
+		pipeline.getParamRef<std::vector<ZShaderModule>>();
 
-	const auto [firstGroup, batchGroupCount, hitGroupCount, shaderCounts] = [&]()
-		-> std::tuple<uint32_t, uint32_t, uint32_t, rtdetails::ShaderCounts>
-	{
-		uint32_t shaderGroupSize = 0u;
-		uint32_t firstShaderIndex = INVALID_UINT32;
-		uint32_t pipelineFirstGroupIndex = INVALID_UINT32;
-		std::vector<ZShaderModule>::iterator firstShaderIter;
-		rtdetails::ShaderCounts counts{};
+	const VkPhysicalDeviceRayTracingPipelinePropertiesKHR props = [&]() {
+		VkPhysicalDeviceRayTracingPipelinePropertiesKHR p{};
+		p.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+		deviceGetPhysicalProperties2(device.getParam<ZPhysicalDevice>(), &p);
+		return p;
+		}();
 
-		for (auto i = shaders.begin(); i != shaders.end(); ++i) {
-			const bool inGroup = shaderGetLogicalGroup(*i) == m_impl->m_shaderGroup.groupIndex();
-			if (inGroup) {
-				if (INVALID_UINT32 == firstShaderIndex) {
-					firstShaderIndex = uint32_t(std::distance(shaders.begin(), i));
-					firstShaderIter = i;
+	const auto [firstGroup, shaderCounts] = [&]()
+		-> std::tuple<uint32_t, rtdetails::ShaderCounts>
+		{
+			uint32_t shaderGroupSize = 0u;
+			uint32_t firstShaderIndex = INVALID_UINT32;
+			uint32_t pipelineFirstGroupIndex = INVALID_UINT32;
+			std::vector<ZShaderModule>::iterator firstShaderIter;
+			rtdetails::ShaderCounts counts{};
+
+			for (auto i = shaders.begin(); i != shaders.end(); ++i) {
+				const bool inGroup = shaderGetLogicalGroup(*i) == group.groupIndex();
+				if (inGroup) {
+					if (INVALID_UINT32 == firstShaderIndex) {
+						firstShaderIndex = uint32_t(std::distance(shaders.begin(), i));
+						firstShaderIter = i;
+					}
+					if (INVALID_UINT32 == pipelineFirstGroupIndex) {
+						pipelineFirstGroupIndex = shaderGetPipelineGroup(*i);
+						ASSERTMSG(shaderGetStage(*i) == VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+							"Assume that first shader in group is ray generator");
+					}
+					advance(shaderGroupSize);
 				}
-				if (INVALID_UINT32 == pipelineFirstGroupIndex) {
-					pipelineFirstGroupIndex = shaderGetPipelineGroup(*i);
-					ASSERTMSG(shaderGetStage(*i) == VK_SHADER_STAGE_RAYGEN_BIT_KHR,
-						"Assume that first shader in group is ray generator");
-				}
-				advance(shaderGroupSize);
-			}
-			else if (INVALID_UINT32 != firstShaderIndex) {
+				else if (INVALID_UINT32 != firstShaderIndex) {
 					break;
+				}
 			}
-		}
-		ASSERTMSG((firstShaderIndex != INVALID_UINT32) && (shaderGroupSize != 0u),
-			"Unable to find any shader in shader group ", m_impl->m_shaderGroup.groupIndex());
-		const auto batchAndHitGroupSizes = countShaders(firstShaderIter, shaderGroupSize, counts);
-		ASSERTMSG(shaderGroupSize == counts.together,
-			"Mismatch shader count in group ", m_impl->m_shaderGroup.groupIndex());
-		return { pipelineFirstGroupIndex, batchAndHitGroupSizes.first, batchAndHitGroupSizes.second, counts };
-	}();
+			ASSERTMSG((firstShaderIndex != INVALID_UINT32) && (shaderGroupSize != 0u),
+				"Unable to find any shader in shader group ", group.groupIndex());
+			countShaders(firstShaderIter, shaderGroupSize, counts);
+			ASSERTMSG(shaderGroupSize == counts.together,
+				"Mismatch shader count in group ", group.groupIndex());
+			return { pipelineFirstGroupIndex, counts };
+		}();
+	m_counts = shaderCounts;
+
+	const uint32_t batchGroupCount = shaderCounts.batchCount();
+	m_handles.resize(batchGroupCount * props.shaderGroupHandleSize);
+	VKASSERT(di.vkGetRayTracingShaderGroupHandlesKHR(
+		*device,
+		*pipeline,
+		firstGroup,
+		batchGroupCount,
+		m_handles.size(),
+		m_handles.data()
+	));
+}
+
+void SBTAny::setRegionData (uint32_t region, void_cptr data)
+{
+	const std::pair<std::size_t, std::size_t> dataOffsetsAndSizes[]{
+		{ 0u, m_rgenDataSize },
+		{ m_rgenDataSize, m_missDataSize },
+		{ m_missDataSize, m_hitDataSize },
+		{ m_hitDataSize, m_callDataSize }
+	};
+	std::copy_n(static_cast<add_cptr<std::byte>>(data), dataOffsetsAndSizes[region].second,
+		std::next(m_data.begin(), dataOffsetsAndSizes[region].first));
+}
+
+bool SBTAny::buildOnce ()
+{
+	ZDevice device = m_handles.getPipeline().getParam<ZDevice>();
 
 	const VkPhysicalDeviceRayTracingPipelinePropertiesKHR props = [device]() {
-			VkPhysicalDeviceRayTracingPipelinePropertiesKHR p{};
-			p.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
-			deviceGetPhysicalProperties2(device.getParam<ZPhysicalDevice>(), &p);
-			return p;
+		VkPhysicalDeviceRayTracingPipelinePropertiesKHR p{};
+		p.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+		deviceGetPhysicalProperties2(device.getParam<ZPhysicalDevice>(), &p);
+		return p;
 		}();
-		
-	const uint32_t		handleSize		= props.shaderGroupHandleSize;
-	const uint32_t		baseAlignment	= props.shaderGroupBaseAlignment;
-	const uint32_t		userDataSize	= 0u; // na razie brak userData
-	const uint32_t		recordSize		= ROUNDUP(handleSize + userDataSize, baseAlignment);
-	
-	const VkDeviceSize	sbtSize			= batchGroupCount * recordSize;
-	m_impl->m_sbtBuffer = createBuffer(
+
+	const uint32_t		rgenDataSize = uint32_t(m_rgenDataSize);
+	const uint32_t		missDataSize = uint32_t(m_missDataSize);
+	const uint32_t		hitDataSize = uint32_t(m_hitDataSize);
+	const uint32_t		callDataSize = uint32_t(m_callDataSize);
+	const uint32_t		handleSize = props.shaderGroupHandleSize;
+	const uint32_t		baseAlignment = props.shaderGroupBaseAlignment;
+	const uint32_t		userDataSize = std::max({ rgenDataSize, missDataSize,
+													hitDataSize, callDataSize }) * 0;
+	const uint32_t		recordSize = ROUNDUP(handleSize + userDataSize, baseAlignment);
+
+	const VkDeviceSize	sbtSize = m_handles.getCounts().batchCount() * recordSize;
+	m_sbtBuffer = createBuffer(
 		device,
 		sbtSize,
 		ZBufferUsageFlags(
+			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
 			VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR,
 			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 			VK_BUFFER_USAGE_TRANSFER_DST_BIT
 		),
 		ZMemoryPropertyHostFlags
 	);
-	const VkDeviceAddress sbtAddr = bufferGetAddress(m_impl->m_sbtBuffer);
+	const VkDeviceAddress sbtAddr = bufferGetAddress(m_sbtBuffer);
 
-	std::vector<std::byte> handles(batchGroupCount * props.shaderGroupHandleSize);
-	VKASSERT(di.vkGetRayTracingShaderGroupHandlesKHR(
-		*device,
-		*m_impl->m_pipeline,
-		firstGroup,
-		batchGroupCount,
-		handles.size(),
-		handles.data()
-	));
+	std::vector<std::byte> testHandle(handleSize);
+	add_cref<Data> handles(m_handles.getHandles());
 
 	add_ptr<VkStridedDeviceAddressRegionKHR> regions[]
 	{
-		&m_impl->m_raygenRegion,
-		&m_impl->m_missRegion,
-		&m_impl->m_callableRegion,
-		&m_impl->m_hitRegion
+		&m_raygenRegion,
+		&m_missRegion,
+		&m_callRegion,
+		&m_hitRegion
 	};
-	const uint32_t handleInfos [] {
-		shaderCounts.rgCount,
-		shaderCounts.missCount,
-		shaderCounts.callCount,
-		hitGroupCount
+	const uint32_t handleInfos[]{
+		m_handles.getCounts().rgCount,
+		m_handles.getCounts().missCount,
+		m_handles.getCounts().callCount,
+		m_handles.getCounts().hitCount()
+	};
+	const std::pair<uint32_t, uint32_t> dataOffsetsAndSizes[]{
+		{ 0u, rgenDataSize },
+		{ rgenDataSize, missDataSize },
+		{ missDataSize, callDataSize },
+		{ callDataSize, hitDataSize }
 	};
 	for (uint32_t i = 0u; i < 4u; ++i)
 	{
@@ -589,46 +628,55 @@ bool SBT::buildOnce()
 		for (uint32_t j = 0u; j < i; ++j)
 			handleIndex += handleInfos[j];
 
+		{
+			std::copy_n(handles.begin() + handleIndex * handleSize, handleSize, testHandle.begin());
+			bool handleEmpty = std::all_of(testHandle.begin(), testHandle.end(),
+				[](add_cref<std::byte> b) { return b == std::byte(0); });
+			UNREF(handleEmpty);
+		}
+
 		bufferWrite(
-			m_impl->m_sbtBuffer,		// destination
+			m_sbtBuffer,		// destination
 			handles,					// source
 			handleIndex * recordSize,	// dstIndex
 			handleIndex * handleSize,	// srcIndex
 			handleInfos[i] * handleSize	// count
 		);
 
-		regions[i]->deviceAddress	= sbtAddr + handleIndex * recordSize;
-		regions[i]->size			= handleInfos[i] * recordSize;
-		regions[i]->stride			= recordSize;
+		//bufferWrite(
+		//	m_impl->m_sbtBuffer,
+		//	m_impl->m_userData,
+		//	handleIndex* recordSize + handleSize,
+		//	dataOffsetsAndSizes[handleIndex].first,
+		//	dataOffsetsAndSizes[handleIndex].second
+		//);
+
+		regions[i]->deviceAddress = sbtAddr + handleIndex * recordSize;
+		regions[i]->size = handleInfos[i] * recordSize;
+		regions[i]->stride = recordSize;
 	}
 
-	return (m_impl->m_builtFlag = true);
+	return (m_builtFlag = true);
 }
 
-add_cref<VkStridedDeviceAddressRegionKHR> SBT::raygenRegion() const {
-	return m_impl->m_raygenRegion;
-}
-
-add_cref<VkStridedDeviceAddressRegionKHR> SBT::missRegion() const {
-	return m_impl->m_missRegion;
-}
-
-add_cref<VkStridedDeviceAddressRegionKHR> SBT::callableRegion() const {
-	return m_impl->m_callableRegion;
-}
-
-add_cref<VkStridedDeviceAddressRegionKHR> SBT::hitRegion() const {
-	return m_impl->m_hitRegion;
-}
-
-void SBT::traceRays(ZCommandBuffer cmd, uint32_t width, uint32_t height, uint32_t depth)
+void SBTAny::traceRays(
+	ZCommandBuffer cmd,
+	uint32_t width, uint32_t height, uint32_t depth)
 {
 	ZDevice device = cmd.getParam<ZDevice>();
 	add_cref<ZDeviceInterface> di = device.getInterface();
 
-	di.vkCmdTraceRaysKHR(*cmd, &raygenRegion(), &missRegion(), &hitRegion(), &callableRegion(),
-							width, height, depth);
+	buildOnce();
+
+	di.vkCmdTraceRaysKHR(*cmd,
+		&m_raygenRegion, &m_missRegion, &m_hitRegion, &m_callRegion,
+		width, height, depth);
 }
+
+//void commandBufferTraceRays (ZCommandBuffer cmd, add_ref<SBTAny> sbt, uint32_t width, uint32_t height, uint32_t depth)
+//{
+//	sbt.traceRays(cmd, width, height, depth);
+//}
 
 } // namespace vtf
 

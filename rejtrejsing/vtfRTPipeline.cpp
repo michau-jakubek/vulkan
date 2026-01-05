@@ -46,12 +46,12 @@ std::pair<uint32_t, uint32_t> countShaders(
 	{
 		switch (shaderGetStage(*itShader))
 		{
-		case VK_SHADER_STAGE_RAYGEN_BIT_KHR:		++counts.rgCount;	++counts.together; break;
-		case VK_SHADER_STAGE_MISS_BIT_KHR:		++counts.missCount;	++counts.together; break;
-		case VK_SHADER_STAGE_CALLABLE_BIT_KHR:		++counts.callCount;	++counts.together; break;
-		case VK_SHADER_STAGE_ANY_HIT_BIT_KHR:		++counts.ahitCount;	++counts.together; break;
-		case VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR:	++counts.chitCount;	++counts.together; break;
-		case VK_SHADER_STAGE_INTERSECTION_BIT_KHR:	++counts.intCount;	++counts.together; break;
+		case VK_SHADER_STAGE_RAYGEN_BIT_KHR:        ++counts.rgCount;	++counts.together; break;
+		case VK_SHADER_STAGE_MISS_BIT_KHR:          ++counts.missCount;	++counts.together; break;
+		case VK_SHADER_STAGE_CALLABLE_BIT_KHR:      ++counts.callCount;	++counts.together; break;
+		case VK_SHADER_STAGE_ANY_HIT_BIT_KHR:       ++counts.ahitCount;	++counts.together; break;
+		case VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR:   ++counts.chitCount;	++counts.together; break;
+		case VK_SHADER_STAGE_INTERSECTION_BIT_KHR:  ++counts.intCount;	++counts.together; break;
 		default: ASSERTFALSE("Improper shader stage ", shaderGetStageString(*itShader));
 		}
 	}
@@ -459,9 +459,7 @@ ZPipeline createRayTracingPipeline(
 	add_ref<std::vector<ZShaderModule>> pipelineShaders = pipeline.getParamRef<std::vector<ZShaderModule>>();
 	std::vector<VkPipelineShaderStageCreateInfo> pipelineStages(pipelineShaders.size());
 
-	if (getGlobalAppFlags().verbose) {
-		progressRecorder.stamp("Before create ray-tracing pipeline");
-	}
+	progressRecorder.stamp("Before create ray-tracing pipeline");
 
 	std::stable_sort(pipelineShaders.begin(), pipelineShaders.end(),
 		[&](add_cref<ZShaderModule> lhs, add_cref<ZShaderModule> rhs) {
@@ -578,9 +576,9 @@ ZPipeline createRayTracingPipeline(
 						&info, callbacks, pipeline.setter("vkCreateRayTracingPipelinesKHR")),
 						"Fail to cretae ray tracing pipeline");
 
+	progressRecorder.stamp("After create ray-tracing pipeline");
 	if (getGlobalAppFlags().verbose)
 	{
-		progressRecorder.stamp("After create ray-tracing pipeline");
 		printGroupCreateInfoTable(std::cout,
 			info.pGroups, info.groupCount, info.pStages, info.stageCount,
 			pipelineShaders);

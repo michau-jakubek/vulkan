@@ -226,13 +226,13 @@ VkDeviceSize bufferWriteData (
 	ZBuffer			buffer,
 	const uint8_t*	src,
 	std::size_t		elementSize,	// in bytes
-	std::size_t		elementCount,
+	std::size_t		srcElementCount,// in elements
 	uint32_t		dstIndex,		// in elements
 	uint32_t		srcIndex,		// in elements
 	uint32_t		count)			// in elements
 {
 	const VkDeviceSize cpySize = count * elementSize;
-	const VkDeviceSize srcSize = elementCount * elementSize;
+	const VkDeviceSize srcSize = srcElementCount * elementSize;
 	const VkDeviceSize dstSize = buffer.getParam<VkDeviceSize>();
 
 	VkDeviceSize dstOffset = dstIndex * elementSize;

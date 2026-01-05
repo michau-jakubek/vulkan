@@ -114,31 +114,29 @@ template<class ResultFlags, class Bits> //, class... OtherBits>
 struct Flags
 {
 	static_assert(!std::is_same<ResultFlags, Bits>::value, "");
-	Flags() : m_flags{} {}
+	constexpr Flags() : m_flags{} {}
 	template<class... OtherBits>
-	Flags(const Bits& bit, const OtherBits&... others)
-		: Flags(nullptr, std::forward<const Bits>(bit), std::forward<const OtherBits>(others)...) {}
-	// Implicit definition is deprecated because it provided by the compiler
-	// Flags(const Flags& other) : m_flags(other.m_flags) {}
-	explicit operator ResultFlags() const { return m_flags; }
-	ResultFlags operator()() const { return m_flags; }
-	static Flags empty() { return Flags(ResultFlags(0)); }
-	bool isEmpty() const { return m_flags == empty(); }
-	Flags& operator+=(Bits bit) { m_flags |= bit; return *this; }
-	Flags& operator|=(Bits bit) { m_flags |= bit; return *this; }
-	Flags& operator-=(Bits bit) { m_flags &= (~bit); return *this; }
-	Flags operator+(Bits bit) const { Flags f(*this); f.m_flags |= bit; return f; }
-	Flags operator-(Bits bit) const { Flags f(*this); f.m_flags &= (~bit); return f; }
-	static Flags fromFlags(const ResultFlags& flags) { return Flags(flags); }
-	bool contain(const Bits& bit) const { return ((m_flags & ResultFlags(bit)) == ResultFlags(bit)); }
+	constexpr Flags(const Bits& bit, const OtherBits&... others) : Flags(nullptr, bit, others...) {}
+	constexpr explicit operator ResultFlags() const { return m_flags; }
+	constexpr ResultFlags operator()() const { return m_flags; }
+	static constexpr Flags empty() { return Flags(ResultFlags(0)); }
+	constexpr bool isEmpty() const { return m_flags == ResultFlags(0); }
+	constexpr Flags& operator+=(Bits bit) { m_flags |= bit; return *this; }
+	constexpr Flags& operator|=(Bits bit) { m_flags |= bit; return *this; }
+	constexpr Flags& operator-=(Bits bit) { m_flags &= (~bit); return *this; }
+	constexpr Flags operator+(Bits bit) const { Flags f(*this); f.m_flags |= bit; return f; }
+	constexpr Flags operator-(Bits bit) const { Flags f(*this); f.m_flags &= (~bit); return f; }
+	static constexpr Flags fromFlags(const ResultFlags& flags) { return Flags(flags); }
+	constexpr bool contain(const Bits& bit) const { return ((m_flags & ResultFlags(bit)) == ResultFlags(bit)); }
 protected:
 	ResultFlags m_flags;
-	Flags(const ResultFlags& flags) : m_flags(flags) {}
+	constexpr Flags(const ResultFlags& flags) : m_flags(flags) {}
 	template<class... OtherBits>
-	Flags(std::nullptr_t sink, const Bits& bit, const OtherBits&... others)
-		: Flags(sink, std::forward<const OtherBits>(others)...) { m_flags |= bit; }
-	Flags(std::nullptr_t, const Bits& bit) { m_flags = ResultFlags(bit); }
+	constexpr Flags(std::nullptr_t sink, const Bits& bit, const OtherBits&... others)
+		: Flags(sink, others...) { m_flags |= bit; }
+	constexpr Flags(std::nullptr_t, const Bits& bit) : m_flags(ResultFlags(bit)) {}
 };
+
 typedef Flags<VkBufferUsageFlags, VkBufferUsageFlagBits>			ZBufferUsageFlags;
 typedef Flags<VkBufferCreateFlags, VkBufferCreateFlagBits>			ZBufferCreateFlags;
 typedef Flags<VkImageUsageFlags, VkImageUsageFlagBits>				ZImageUsageFlags;

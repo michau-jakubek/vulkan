@@ -111,12 +111,13 @@ VkDeviceSize	bufferWrite (
 		ZBuffer buffer,
 		const uint8_t * src,
 		std::size_t elementSize,
-		std::size_t	elementCount,
+		std::size_t	srcElementCount,
 		uint32_t dstIndex,
 		uint32_t srcIndex,
 		uint32_t count);
 
-	return bufferWriteData(buffer, reinterpret_cast<const uint8_t*>(source.data()), sizeof(T), source.size(), dstIndex, srcIndex, count);
+	return bufferWriteData(buffer, reinterpret_cast<const uint8_t*>(source.data()),
+							sizeof(T), source.size(), dstIndex, srcIndex, count);
 }
 
 template<class T>
@@ -126,7 +127,7 @@ VkDeviceSize   bufferWrite (ZBuffer buffer, const T & data, uint32_t dstIndex = 
 		ZBuffer buffer,
 		const uint8_t * src,
 		std::size_t elementSize,
-		std::size_t	elementCount,
+		std::size_t	srcElementCount,
 		uint32_t dstIndex,
 		uint32_t srcIndex,
 		uint32_t count);
