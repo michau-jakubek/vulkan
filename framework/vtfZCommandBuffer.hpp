@@ -42,7 +42,7 @@ public:
 	OneShotCommandBuffer&	operator=(const OneShotCommandBuffer&) = delete;
 	~OneShotCommandBuffer	() { endRecordingAndSubmit(false); }
 
-	void endRecordingAndSubmit (bool enableException = true, ZFence hintFence = {}, uint64_t timeout = INVALID_UINT64);
+	VkResult endRecordingAndSubmit (bool enableException = true, ZFence hintFence = {}, uint64_t timeout = INVALID_UINT64);
 };
 std::unique_ptr<OneShotCommandBuffer> createOneShotCommandBuffer (ZCommandPool commandPool);
 

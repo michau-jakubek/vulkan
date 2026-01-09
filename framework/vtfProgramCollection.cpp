@@ -19,6 +19,7 @@
 #include <sstream>
 #include <iostream>
 #include <regex>
+#include <numeric>
 
 #include "vtfBacktrace.hpp"
 #include "vtfZUtils.hpp"
@@ -260,7 +261,7 @@ void addProgram (ProgramCollection& programCollection,	const std::string& progra
 
 namespace vtf
 {
-
+/*
 static const VkShaderStageFlagBits availableShaderStages[]
 {
 	VK_SHADER_STAGE_VERTEX_BIT,
@@ -279,7 +280,7 @@ static const VkShaderStageFlagBits availableShaderStages[]
 	VK_SHADER_STAGE_INTERSECTION_BIT_KHR,
 	VK_SHADER_STAGE_CALLABLE_BIT_KHR,
 };
-
+*/
 static const char* shaderStageToCommand (VkShaderStageFlagBits stage)
 {
 	switch (stage)
@@ -302,7 +303,7 @@ static const char* shaderStageToCommand (VkShaderStageFlagBits stage)
 
 	default: break;
 	}
-	ASSERTFALSE(""/*-Wgnu-zero-variadic-macro-arguments*/);
+	ASSERTFALSE("Unknown stage ", shaderStageToString(stage));
 	return 0;
 }
 
@@ -463,7 +464,8 @@ static std::string getCompilerExecutable ()
 		"[ERROR] No GLSL compiler found. Try update environment PATH variable");
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	uint32_t compilerIndex = gf.compilerIndex;
-	ASSERTMSG(make_signed(compilerIndex) >= 0, "[ERROR] compilerIndex (", make_signed(compilerIndex), ")must be a positive value");
+	ASSERTMSG(make_signed(compilerIndex) >= 0,
+		"[ERROR] compilerIndex (", make_signed(compilerIndex), ") must be a positive value");
 	if (compilerIndex >= data_count(compilers))
 	{
 		compilerIndex = 0u;
@@ -473,6 +475,12 @@ static std::string getCompilerExecutable ()
 		}
 	}
 	return compilers.at(compilerIndex).first;
+}
+
+std::vector<std::pair<std::string, std::string>>
+ProgramCollection::getAvailableCompilerList (bool glslangValidator)
+{
+	return makeCompilerSignature(glslangValidator);
 }
 
 /*
@@ -936,30 +944,10 @@ uint32_t _GlSpvProgramCollection::ShaderLink::count () const
 	return n;
 }
 
-bool _GlSpvProgramCollection::RTShaderGroup::Less::operator ()(add_cref<RTShaderGroup> lhs, add_cref<RTShaderGroup> rhs) const
-{
-	return lhs.groupIndex() < rhs.groupIndex();
-}
-
-bool _GlSpvProgramCollection::RTShaderGroup::operator== (RTShaderGroup const& other) const
-{
-	return groupIndex() == other.groupIndex();
-}
-
-bool _GlSpvProgramCollection::RTShaderGroup::operator!= (RTShaderGroup const& other) const
-{
-	return !(*this == other);
-}
-
 _GlSpvProgramCollection::RTShaderGroup::RTShaderGroup (uint32_t groupIndex)
 	: m_groupIndex(groupIndex)
 {
 	ASSERTMSG(groupIndex != INVALID_UINT32, "groupIndex must differ from INVALID_UINT32");
-}
-
-_GlSpvProgramCollection::RTShaderGroup _GlSpvProgramCollection::RTShaderGroup::next () const
-{
-	return _GlSpvProgramCollection::RTShaderGroup(m_groupIndex + 1u);
 }
 
 uint32_t _GlSpvProgramCollection::RTShaderGroup::groupIndex () const
@@ -988,63 +976,129 @@ void ProgramCollection::addFromText (VkShaderStageFlagBits type, add_cref<std::s
 
 void ProgramCollection::buildAndVerify (add_cref<Version> vulkanVer, add_cref<Version> spirvVer,
 										bool enableValidation, bool genDisassembly, bool buildAlways,
-										add_cref<std::string> spirvValArgs)
+										add_cref<std::string> spirvValArgs, uint32_t threads)
 {
-	_buildAndVerify(vulkanVer, spirvVer, enableValidation, genDisassembly, buildAlways, spirvValArgs);
+	_buildAndVerify(vulkanVer, spirvVer, enableValidation, genDisassembly, buildAlways, spirvValArgs, threads);
 }
 
+// ESC: Entity-Component System
+// DSL: Domain-Specific Language
 void _GlSpvProgramCollection::_buildAndVerify (add_cref<Version> vulkanVer, add_cref<Version> spirvVer,
 												bool enableValidation, bool genDisassembly, bool buildAlways,
-												add_cref<std::string> spirvValArgs)
+												add_cref<std::string> spirvValArgs, uint32_t threads)
 {
+	UNREF(threads); // Unimplemented yet
+
 	add_ref<ProgressRecorder> progressRecorder =
 		m_device.getParamRef<ZPhysicalDevice>().getParamRef<ZInstance>().getParamRef<ProgressRecorder>();
 
-	std::string errors;
-	const bool genBinary = true;
-	for (auto stage : availableShaderStages)
+	using Item = std::pair<const VkShaderStageFlagBits, uint32_t>;
+	const uint32_t stageToCount2 = std::accumulate(
+		m_stageToCount.begin(), m_stageToCount.end(), 0u,
+		[](uint32_t a, add_cref<Item> b) { return a + b.second; });
+
+	std::vector<std::tuple<VkShaderStageFlagBits, uint32_t, uint32_t>>
+		stageToCounts(stageToCount2, std::make_tuple(VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM, INVALID_UINT32, INVALID_UINT32));
+
 	{
-		if (mapHasKey(stage, m_stageToCount))
-		{
-			for (uint32_t k = 0; k < add_const_ref(m_stageToCount).at(stage); ++k)
-			{
-				const auto key = std::make_pair(stage, k);
-				std::string shaderFileName;
-                std::vector<char> binary, assembly, disassembly;
-				if (verifyShaderCode(k, stage, vulkanVer, spirvVer,
-									 m_stageToCode[key], shaderFileName, binary, assembly, disassembly,
-									 errors, progressRecorder, enableValidation, spirvValArgs, genDisassembly, buildAlways, genBinary))
+		uint32_t k = 0u;
+		for (add_cref<Item> i : m_stageToCount)	{
+			for (uint32_t j = 0u; j < i.second; ++j, ++k) {
+				std::get<0>(stageToCounts[k]) = i.first;
+				std::get<1>(stageToCounts[k]) = j;
+				if (INVALID_UINT32 == std::get<2>(stageToCounts[k]))
 				{
-					m_stageToDisassembly[key]	= std::move(disassembly);
-					m_stageToFileName[key]		= std::move(shaderFileName);
-					m_stageToAssembly[key]		= std::move(assembly);
-					m_stageToBinary[key]		= std::move(binary);
-				}
-				else
-				{
-					std::ostringstream codeWidthLines;
-					add_cref<std::string> code = m_stageToCode[key][ProgramCollection::StageToCode::shaderOriginalCode];
-					if (code.empty() == false)
+					std::get<2>(stageToCounts[k]) = k;
+					const auto key = std::make_pair(i.first, j);
+					add_cref<strings> params = m_stageToCode[key];
+					add_cref<std::string> sFileName1 = params[fileName];
+					if (sFileName1.length())
 					{
-						uint32_t num = 0u;
-						std::string line;
-						std::istringstream is(code);
-						while (std::getline(is, line) && ++num)
+						const fs::path file1(sFileName1);
+
+						for (uint32_t f = j + 1u, g = k + 1u; f < i.second; ++f, ++g)
 						{
-							codeWidthLines << num << ": " << std::move(line) << std::endl;
+							add_cref<std::string> sFileName2 = m_stageToCode[std::make_pair(i.first, f)][fileName];
+							if (sFileName2.empty()) {
+								continue;
+							}
+							if (const fs::path file2(sFileName2); file2 == file1)
+							{
+								std::get<2>(stageToCounts[g]) = k;
+							}
 						}
 					}
-					ASSERTFALSE(errors, codeWidthLines.str());
 				}
 			}
 		}
 	}
+
+	const bool genBinary = true;
+	for (uint32_t stcc = 0u; stcc < stageToCount2; ++stcc)
+	{
+		const uint32_t j =  stcc;
+		const auto stage = std::get<0>(stageToCounts[j]);
+		const auto k = std::get<1>(stageToCounts[j]);
+		const auto key = std::make_pair(stage, k);
+
+		/*
+		add_cref<strings> params = m_stageToCode[key];
+		add_cref<std::string> sShaderOriginalCode = params[shaderOriginalCode];
+		add_cref<std::string> sHeader = params[header];
+		add_cref<std::string> sEntryName = params[entryName];
+		add_cref<std::string> sFileName = params[fileName];
+		*/
+		if (const uint32_t k2 = std::get<2>(stageToCounts[j]); k2 == j)
+		{
+			std::string shaderFileName, errors;
+			std::vector<char> binary, assembly, disassembly;
+			const bool status = verifyShaderCode(k, stage, vulkanVer, spirvVer,
+				m_stageToCode[key], shaderFileName, binary, assembly, disassembly,
+				errors, progressRecorder, enableValidation, spirvValArgs, genDisassembly, buildAlways, genBinary);
+			if (status)
+			{
+				m_stageToDisassembly[key] = std::move(disassembly);
+				m_stageToFileName[key] = std::move(shaderFileName);
+				m_stageToAssembly[key] = std::move(assembly);
+				m_stageToBinary[key] = std::move(binary);
+			}
+			else
+			{
+				std::ostringstream codeWidthLines;
+				add_cref<std::string> code = m_stageToCode[key][ProgramCollection::StageToCode::shaderOriginalCode];
+				if (code.empty() == false)
+				{
+					uint32_t num = 0u;
+					std::string line;
+					std::istringstream is(code);
+					while (std::getline(is, line) && ++num)
+					{
+						codeWidthLines << num << ": " << std::move(line) << std::endl;
+					}
+				}
+				ASSERTFALSE(errors, codeWidthLines.str());
+			}
+		}
+		else
+		{
+			const auto key2 = StageAndIndex({ stage, std::get<1>(stageToCounts[k2]) });
+			ASSERTMSG(key.first == key2.first
+				&& mapHasKey(m_stageToBinary, key2)
+				&& false == m_stageToBinary[key2].empty(),
+					"Key{", shaderStageToString(key.first), ", ", key.second,
+					"}, Hey2{", shaderStageToString(key2.first), ", ", key2.second, "}");
+			m_stageToDisassembly[key] = m_stageToDisassembly[key2];
+			m_stageToFileName[key] = m_stageToFileName[key2];
+			m_stageToAssembly[key] = m_stageToAssembly[key2];
+			m_stageToBinary[key] = m_stageToBinary[key2];
+		}
+	}
 }
 
-void ProgramCollection::buildAndVerify (bool buildAlways)
+void ProgramCollection::buildAndVerify (bool buildAlways, uint32_t threads)
 {
 	add_cref<GlobalAppFlags>	gf = getGlobalAppFlags();
-	_buildAndVerify(gf.vulkanVer, gf.spirvVer, gf.spirvValidate, gf.genSpirvDisassembly, buildAlways);
+	_buildAndVerify(gf.vulkanVer, gf.spirvVer, gf.spirvValidate, gf.genSpirvDisassembly, buildAlways, {}, threads);
 }
 
 ZShaderModule ProgramCollection::getShader (VkShaderStageFlagBits stage, uint32_t index, bool verbose) const

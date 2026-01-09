@@ -449,7 +449,7 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 
 	return ZPipeline::create(pipelineHandle, device, callbacks, settings.m_layout,
 							 settings.m_renderPass, VK_PIPELINE_BIND_POINT_GRAPHICS, info.flags,
-							 {/*ray-tracing shaders*/});
+							 {/*ray-tracing shaders*/}, {/*uint32_t:ray-tracing pipeline shader group order*/});
 }
 
 void updateSettings (add_ref<GraphicPipelineSettings>) { /* end of template recursion */ }
@@ -770,7 +770,8 @@ ZPipeline createComputePipelineImpl (
 
 	VkPipelineCache cache = pipelineCache.has_handle() ? *pipelineCache : VK_NULL_HANDLE;
 	ZPipeline	computePipeline (VK_NULL_HANDLE, aDevice, callbacks, layout, ZRenderPass(),
-								 VK_PIPELINE_BIND_POINT_COMPUTE, ci.flags, {/*ray-tracing shaders*/});
+								 VK_PIPELINE_BIND_POINT_COMPUTE, ci.flags,
+								 {/*ray-tracing shaders*/}, {/*uint32_t:ray-tracing pipeline shader group order*/});
 	VKASSERTMSG(vkCreateComputePipelines(*aDevice, cache, 1u, &ci, callbacks,
 				computePipeline.setter("vkCreateComputePipelines")), "Unable to create compute pipeline");
 

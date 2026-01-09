@@ -12,9 +12,9 @@ using namespace vtf;
 
 TriLogicInt runIntMatrixSingleThread (VulkanContext& ctx, const std::string& assets);
 
-TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests (const TestRecord& record, add_ref<CommandLine> cmdLine)
 {
-	UNREF(cmdLineParams);
+	UNREF(cmdLine);
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	VulkanContext ctx(record.name, gf.layers, {}, {}, nullptr, gf.apiVer);
 	return runIntMatrixSingleThread(ctx, record.assets);

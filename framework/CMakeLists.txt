@@ -20,6 +20,7 @@ set(framework_files
 	vtfVkUtils.cpp
 	vtfZUtils.cpp
 	vtfZUtils.hpp
+	vtfZSharedObjects.cpp
 	vtfTemplateUtils.hpp
 	vtfCopyUtils.hpp
 	vtfFloat16.cpp
@@ -32,8 +33,8 @@ set(framework_files
 	vtfExtensions.hpp
 	vtfTermColor.cpp
 	vtfTermColor.hpp
-	vtfOptionParser.hpp
-	vtfOptionParser.cpp
+	vtfCommandLine.hpp
+	vtfCommandLine.cpp
 	vtfPrettyPrinter.cpp
 	vtfPrettyPrinter.hpp
 	vtfVector.hpp

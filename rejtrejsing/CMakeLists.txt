@@ -7,6 +7,7 @@ set(rt_files
 	vtfRTShaderCollection.hpp
 	vtfRTPipeline.cpp
 	vtfRTPipeline.hpp
+	vtfRTUnitTests.cpp
 )
 
 set(rt_libs console framework driver)

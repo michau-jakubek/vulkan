@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <sstream>
+#include <stack>
 #include <vector>
 #include <iostream>
 
@@ -44,11 +45,22 @@ struct INode
         }
 		return nullptr;
 	}
+    struct Cmp {
+        std::string result;
+        INodePtr comparedNode;
+        uint32_t index = 0u;
+    };
+    virtual bool isArray(add_ref<std::size_t> /*elemCount*/) const { return false; }
+    virtual void cmp(INodePtr /*thiz*/, INodePtr /*other*/, uint32_t /*fieldIndex*/,
+                         add_ref<std::stack<Cmp>>, add_ref<int> result) {
+        result = (-1);
+        throw std::runtime_error("No overriden " + typeName + "::cmp() found");
+    }
     virtual void loop(float& /*seedValue*/) { }
     virtual std::string genFieldName(uint32_t index, bool /*appendRank*/ = false) const {
         return typeName + '_' + std::to_string(index);
     }
-    virtual void printValue(std::ostream&, int) const {}
+    virtual void printValue(std::ostream&, uint32_t) const {}
     virtual std::size_t getBaseAlignment() const {
         ASSERT(false, "getBaseAlignment() not defined");
         return 0u;
@@ -106,7 +118,7 @@ template<class X> struct Node : public INode
 {
 	X value{};
 	Node(const std::string& /*typeName*/, INodePtr) : INode(type_to_string<X>, nullptr) {}
-	virtual void printValue(std::ostream& str, int level) const override
+	virtual void printValue(std::ostream& str, uint32_t level) const override
 	{
 		str << typeName << ' ' << typeName << level << " = " << value << ' ';
 	}
@@ -117,6 +129,36 @@ template<class X> struct Node : public INode
 		value = X(seed);
         seed += 1.0f;
 	}
+    virtual void cmp(INodePtr thiz, INodePtr other, uint32_t fieldIndex,
+                     add_ref<std::stack<Cmp>> nodeStack, add_ref<int> result) override {
+        int status = 0;
+        Cmp c{ std::string(), thiz, 0u };
+        std::stringstream os;
+        if (typeName != other->typeName) {
+            std::size_t elemCount = 0u;
+            printValue(os, fieldIndex);
+            os << "compared with " << other->typeName;
+            if (other->isArray(elemCount))
+            {
+                os << '[' << elemCount << ']';
+            }
+            status = (-1);
+        }
+        else
+        {
+            const X otherValue = std::static_pointer_cast<Node>(other)->value;
+            if (otherValue != value)
+            {
+                os << genFieldName(fieldIndex) << " is " << value << ", expected " << otherValue;
+                status = +1;
+            }
+        }
+        if ((result = status))
+        {
+            c.result = os.str();
+            nodeStack.push(c);
+        }
+    }
 
     virtual std::size_t getBaseAlignment() const override {
         return 4u;
@@ -181,6 +223,7 @@ struct Node<Array<X, Elems, IsRuntime>> : public INode
         "In Node<Array<X, Elems, IsRuntime>> the X must not be of INodePtr");
 
     X value[Elems];
+    using ValueType = X[Elems];
     Node(const std::string& /*typeName*/, INodePtr)
         : INode(type_to_string<X>, nullptr)
     {
@@ -197,7 +240,7 @@ struct Node<Array<X, Elems, IsRuntime>> : public INode
     virtual INodePtr getElementType() const override {
         return std::make_shared<Node<X>>(std::string(), nullptr);
     }
-    virtual void printValue(std::ostream& str, int level) const override {
+    virtual void printValue(std::ostream& str, uint32_t level) const override {
 		str << typeName << ' ' << typeName << level << '[' << Elems << "] = ";
 		for (std::size_t i = 0; i < Elems; ++i)
 		{
@@ -211,6 +254,42 @@ struct Node<Array<X, Elems, IsRuntime>> : public INode
             seed += 1;
         }
     }
+    virtual void cmp(INodePtr thiz, INodePtr other, uint32_t fieldIndex,
+        add_ref<std::stack<Cmp>> nodeStack, add_ref<int> result) override {
+        int status = 0;
+        Cmp c{ std::string(), thiz, 0u };
+        std::stringstream os;
+        std::size_t otherElemCount = 0u;
+        const bool otherIsArray = other->isArray(otherElemCount);
+        if ((false == (typeName == other->typeName)) || (otherIsArray && (Elems == otherElemCount))) {
+            os << genFieldName(fieldIndex, true) <<  " compared with " << other->typeName;
+            if (otherIsArray)
+            {
+                os << '[' << otherElemCount << ']';
+            }
+            status = (-1);
+        }
+        else
+        {
+            add_cref<ValueType> otherValue = std::static_pointer_cast<Node>(other)->value;
+            for (uint32_t i = 0u; i < Elems; ++i)
+            {
+                if (otherValue[i] != value[i])
+                {
+                    os << typeName << genFieldName(fieldIndex) << '[' << i << ']'
+                        << " is " << value[i] << ", expected " << otherValue[i];
+                    status = (-1);
+                    break;
+                }
+            }
+        }
+        if ((result = status))
+        {
+            c.result = os.str();
+            nodeStack.push(c);
+        }
+    }
+
     virtual std::size_t getBaseAlignment() const override {
         return getElementType()->getBaseAlignment();
     }
@@ -299,7 +378,7 @@ struct Node<Array<INodePtr, Elems, IsRuntime>> : public INode
                                         : std::to_string(dynamicElems)) + ']';
         return fieldName;
     }
-    virtual void printValue(std::ostream& str, int level) const override {
+    virtual void printValue(std::ostream& str, uint32_t level) const override {
         str << typeName << ' ' << typeName << level << '[' << dynamicElems << "] = ";
         for (std::size_t i = 0; i < dynamicElems; ++i)
         {
@@ -393,7 +472,7 @@ struct Node<mat<Cols, Rows, T, ColumnMajor>> : public INode
 
     Node(const std::string&, INodePtr) : INode(genTypeName(), nullptr) {}
 
-    virtual void printValue(std::ostream& str, int level) const override {
+    virtual void printValue(std::ostream& str, uint32_t level) const override {
         str << typeName << ' ' << typeName << '_' << level << " = ";
         for (std::size_t C = 0u; C < Cols; ++C) {
             for (std::size_t R = 0u; R < Rows; ++R) {
@@ -492,6 +571,7 @@ struct Node<vec<K, T>> : public INode
 {
     static_assert(false == std::is_same_v<T, INodePtr>, "???");
     T value[K]{};
+    using ValueType = T [K];
 
     virtual INodePtr clone(bool) const override {
         return std::make_shared<Node<vec<K, T>>>(genTypeName(), nullptr);
@@ -507,7 +587,7 @@ struct Node<vec<K, T>> : public INode
 
     Node(const std::string&, INodePtr) : INode(genTypeName(), nullptr) {}
 
-    virtual void printValue(std::ostream& str, int level) const override {
+    virtual void printValue(std::ostream& str, uint32_t level) const override {
         str << typeName << ' ' << typeName << level << " = ";
         for (std::size_t X = 0u; X < K; ++X) {
             str << '[' << X << "](" << value[X] << ")";
@@ -523,6 +603,49 @@ struct Node<vec<K, T>> : public INode
         for (std::size_t X = 0u; X < K; ++X) {
             value[X] = T(seed);
             seed += 1.f;
+        }
+    }
+
+    virtual void cmp(INodePtr thiz, INodePtr other, uint32_t fieldIndex,
+        add_ref<std::stack<Cmp>> nodeStack, add_ref<int> result) override {
+        int status = 0;
+        Cmp c{ std::string(), thiz, 0u };
+        std::stringstream os;
+        if (typeName != other->typeName) {
+            std::size_t elemCount = 0u;
+            printValue(os, fieldIndex);
+            os << "compared with " << other->typeName;
+            if (other->isArray(elemCount))
+            {
+                os << '[' << elemCount << ']';
+            }
+            status = (-1);
+        }
+        else
+        {
+            add_cref<ValueType> otherValue = std::static_pointer_cast<Node>(other)->value;
+            for (uint32_t k = 0u; k < K; ++k) {
+                if (otherValue[k] != value[k]) {
+                    std::ostringstream valueStream, otherValueStream;
+                    valueStream << '['; otherValueStream << '[';
+                    for (uint32_t i = 0; i < K; ++i) {
+                        if (i) {
+                            valueStream << ", "; otherValueStream << ", ";
+                        }
+                        valueStream << value[i]; otherValueStream << otherValue[i];
+                    }
+                    valueStream << ']'; otherValueStream << ']';
+                    os << genFieldName(fieldIndex) << " is " << valueStream.str()
+                        << ", expected " << otherValueStream.str();
+                    status = (-1);
+                    break;
+                }
+            }
+        }
+        if ((result = status))
+        {
+            c.result = os.str();
+            nodeStack.push(c);
         }
     }
 
@@ -587,7 +710,7 @@ template<> struct Node<INodePtr> : public INode
     virtual INodePtr getChildren(bool) const override {
 		return children;
 	}
-	virtual void printValue(std::ostream& str, int level) const override
+	virtual void printValue(std::ostream& str, uint32_t level) const override
 	{
 		str << typeName << ' ' << typeName << level << " { ";
 		for (INodePtr p = children->next; p; p = p->next)
@@ -860,7 +983,7 @@ struct StructGenerator
         rootStruct->genLoops(str, rootStructName, rhsCode, 0, indent, iteratorSeed);
     }
 
-    void printValues(INodePtr node, std::ostream& str, int level = 0)
+    void printValues(INodePtr node, std::ostream& str, uint32_t level = 0)
     {
         node->printValue(str, level);
     }

@@ -1,14 +1,15 @@
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
+
 #include <iterator>
+#include <numeric>
+#include <string_view>
 
 namespace vtf
 {
 
 bool Option::operator== (const Option& other) const
 {
-	if (name == nullptr && name == other.name)
-		return other.follows == follows;
-	return std::string(name).compare(other.name) == 0 && other.follows == follows;
+	return std::string_view(name) == std::string_view(other.name) && other.follows == follows;
 }
 
 static int consumeOptions (add_cref<Option>							opt,
@@ -143,7 +144,8 @@ strings _OptionParserImpl::parse (add_cref<strings> cmdLineParams, bool allMustB
 	strings sink, args(cmdLineParams);
 	const std::string truestring("true");
 	std::vector<add_cptr<Option>> opts(m_options.size());
-	std::transform(m_options.begin(), m_options.end(), opts.begin(), [](add_cref<std::shared_ptr<Option>> ptr) { return ptr.get(); });
+	std::transform(m_options.begin(), m_options.end(), opts.begin(),
+					[](add_cref<std::shared_ptr<Option>> ptr) { return ptr.get(); });
 	for (add_ref<_OptIPtr> opt : m_options)
 	{
 		if (consumeOptions(*opt, opts, args, sink) > 0)
@@ -161,6 +163,40 @@ strings _OptionParserImpl::parse (add_cref<strings> cmdLineParams, bool allMustB
 	}
 
 	return args;
+}
+
+strings _OptionParserImpl::parse (add_ref<CommandLine> commandLine, bool allMustBeConsumed, parse_cb onParsing)
+{
+	strings sink;
+	const std::string truestring("true");
+	std::vector<Option> opts;
+	opts.reserve(m_options.size());
+	std::transform(m_options.begin(), m_options.end(), std::back_inserter(opts),
+					[](add_cref<std::shared_ptr<Option>> ptr) { return *ptr; });
+	for (add_ref<_OptIPtr> opt : m_options)
+	{
+		const int c = commandLine.consumeOptions(*opt, opts, sink);
+		if (c > 0)
+		{
+			if (false == (onParsing && onParsing(opt, (opt->follows == 0) ? truestring : sink.back(), m_state.get())))
+			{
+				opt->parse((opt->follows == 0) ? truestring : sink.back(), *m_state);
+			}
+		}
+		else if (c < 0)
+		{
+			m_state->messages << "ERROR: \"" << opt->getName() << "\" must have a value";
+			m_state->hasErrors = true;
+		}
+	}
+	const strings unconsumed = commandLine.getUnconsumedTokens();
+	if (allMustBeConsumed && unconsumed.size())
+	{
+		m_state->messages << "ERROR: Unknown parameter " << std::quoted(unconsumed[0]) << std::endl;
+		m_state->hasErrors = true;
+	}
+
+	return unconsumed;
 }
 
 void _OptionParserImpl::verifyExistingOptions () const
@@ -347,5 +383,223 @@ void _OptionParserImpl::printOptions (add_ref<std::ostream> str, uint32_t descWi
 		OptionParserImplPutDescrition(opt, str, descWidth, maxOptNameLength, indent);
 	}
 }
+
+CommandLine::CommandLine (int argc, char** argv, add_cref<std::string> userData)
+	: m_anchors()
+	, m_commandLine()
+	, m_appName()
+	, m_userData(userData)
+{
+	makeAnchors(argc, argv);
+}
+
+CommandLine::CommandLine (add_cref<strings> input, add_cref<std::string> userData)
+	: m_anchors()
+	, m_commandLine()
+	, m_appName()
+	, m_userData(userData)
+{
+	const uint32_t argc = data_count(input);
+	std::vector<add_ptr<char>> argv(argc);
+
+	for (uint32_t arg = 0u; arg < argc; ++arg)
+		argv[arg] = const_cast<add_ptr<char>>(input[arg].c_str());
+
+	makeAnchors(make_signed(argc), argv.data());
+}
+
+CommandLine::CommandLine (add_cref<std::string> multiString, add_cref<std::string> userData)
+	: CommandLine(parseMultiString(multiString), userData)
+{
+}
+
+void CommandLine::makeAnchors (int argc, char** argv)
+{
+	m_anchors.resize(make_unsigned(argc - 1));
+
+	m_appName.assign(argv[0]);
+	std::vector<uint32_t> lengths(m_anchors.size());
+
+	for (uint32_t i = 0; i < make_unsigned(argc); ++i)
+	{
+		if (0u == i) continue; // skipp program name
+
+		lengths[i - 1] = uint32_t(std::strlen(argv[i]));
+		m_commandLine.append(argv[i]);
+	}
+
+	uint32_t offset = 0;
+	const std::string_view cmdLine(m_commandLine);
+
+	for (uint32_t i = 0; i < make_unsigned(argc); ++i)
+	{
+		if (0u == i) continue; // skipp program name
+
+		m_anchors[i - 1].view = cmdLine.substr(offset, lengths[i - 1]);
+		m_anchors[i - 1].consumed = false;
+
+		offset += lengths[i - 1];
+	}
+
+	ASSERTION(m_commandLine.length() == offset);
+}
+
+int CommandLine::consumeOptions (
+	add_cref<Option> opt, add_cref<std::vector<Option>> opts,
+	add_ref<strings> values, add_cref<strings> breakValues)
+{
+	int  depth = 0;
+	const auto count = int(m_anchors.size());
+	return consumeOptions(0, count, opt, opts, values, breakValues, depth);
+}
+
+uint32_t CommandLine::getConsumedTokenCount () const
+{
+	return uint32_t(std::count_if(m_anchors.begin(), m_anchors.end(),
+								  [](add_cref<Anchor> a) { return a.consumed; }));
+}
+
+strings CommandLine::getUnconsumedTokens() const
+{
+	strings unconsumed(m_anchors.size() - getConsumedTokenCount());
+	int i = 0;
+	for (add_cref<Anchor> a : m_anchors)
+		if (a.consumed == false)
+			unconsumed[i++] = a.view;
+	return unconsumed;
+}
+
+uint32_t CommandLine::truncateConsumed ()
+{
+	const auto oldSize = m_anchors.size();
+	auto isConsumed = [](add_cref<Anchor> a) { return a.consumed; };
+	m_anchors.erase(std::remove_if(m_anchors.begin(), m_anchors.end(), isConsumed), m_anchors.end());
+	return uint32_t(oldSize - m_anchors.size());
+}
+
+strings CommandLine::getStrings () const
+{
+	const auto c = data_count(m_anchors);
+	strings ss(1u + c);
+	ss[0] = m_appName;
+	for (uint32_t i = 0u; i < c; ++i)
+		ss[i + 1u].assign(m_anchors[i].view.data(), m_anchors[i].view.size());
+	return ss;
+}
+
+std::string CommandLine::getMultiString () const
+{
+	std::string result;
+
+	// count needed size in advance (optimization)
+	size_t total = (m_appName.length() + 1u) + 1u; // ending \0
+	for (add_cref<Anchor> a : m_anchors)
+		total += a.view.size() + 1u;
+
+	result.reserve(total);
+
+	result.append(m_appName.data(), m_appName.length());
+	result.push_back('\0');
+
+	// build final multi-string
+	for (add_cref<Anchor> a : m_anchors) {
+		result.append(a.view.data(), a.view.size());
+		result.push_back('\0');
+	}
+
+	result.push_back('\0'); // ending \0\0
+
+	return result;
+}
+
+std::string CommandLine::getParams () const
+{
+	int i = 0;
+	std::ostringstream os;
+	for (add_cref<Anchor> a : m_anchors)
+	{
+		if (i++) os << ' ';
+		os << std::string(a.view.data(), a.view.size());
+	}
+	return os.str();
+}
+
+add_cref<std::string> CommandLine::getAppName() const { return m_appName; }
+add_cref<std::string> CommandLine::getUserData () const { return m_userData; }
+
+int CommandLine::consumeOptions (
+	const int first, const int count,
+	add_cref<Option> opt, add_cref<std::vector<Option>> opts, add_ref<strings> values,
+	add_cref<strings> breakValues, add_ref<int> depth)
+{
+	depth += 1;
+	auto isBreakValue = [&](add_cref<Anchor> a) -> bool {
+		for (add_cref<std::string> bv : breakValues)
+			if (a.view == std::string_view(bv))
+				return true;
+		return false;
+	};
+	auto findOption = [&](add_cref<Anchor> a, add_ref<Option> x) -> bool
+	{
+		auto ptr = std::find_if(opts.begin(), opts.end(),
+			[&](add_cref<Option> y) { return a.view == std::string_view(y.name); });
+		if (ptr != opts.end()) {
+			x = *ptr;
+			return true;
+		}
+		return false;
+	};
+
+	for (int i = first; i < count; ++i)
+	{
+		add_ref<Anchor> a = m_anchors[i];
+		if (a.consumed) continue;
+
+		if (isBreakValue(a)) {
+			break;
+		}
+
+		Option o(opt);
+
+		if (findOption(a, o))
+		{
+			if (opt != o) {
+				i += (o.follows ? 1 : 0);
+				continue;
+			}
+
+			if (o.follows == 0u) {
+				a.consumed = true;
+				return 1u;
+			}
+			else {
+				a.consumed = true;
+				if (const int k = i + 1; k < count) {
+					m_anchors[k].consumed = true;
+					values.emplace_back(m_anchors[k].view.data(), m_anchors[k].view.size());
+					if (make_unsigned(depth) < o.follows) {
+						const int n = consumeOptions(k + 1, count, opt, opts, values, breakValues, depth);
+						if (n < 0)
+							return (-1);
+						else if (n == 0)
+							return depth;
+						else
+							return n;
+					}
+					else {
+						return depth;
+					}
+				}
+				else {
+					return (-1);
+				}
+			}
+		}
+	}
+
+	depth -= 1;
+	return 0;
+}
+
 
 } // namespace vtf

@@ -3,48 +3,48 @@
 #include "vtfTemplateUtils.hpp"
 #include "vtfBacktrace.hpp"
 
+#include <algorithm>
 #include <iostream>
 #include <numeric>
+#include <set>
+#include <string_view>
 
 namespace vtf
 {
 
+// combined hi=normalized logical group index, lo=collection ID
 #define COLLECTION_INDEX		0
 // combined hi=hitGroupIndex & low=logicalGroupIndex
 #define SBT_SHADER_GROUP_INDEX	1
+// combined hi=pipelineGroupCoun & lo=pipelineGroupIndex
 #define PIPELINE_GROUP_INDEX	2
-#define PIPELINE_SHADER_INDEX	3
+#define PIPELINE_FIRST_GROUP	3
 using tuple4 = std::tuple<uint32_t, uint32_t, uint32_t, uint32_t>;
 using tuple3 = std::tuple<uint32_t, uint32_t, uint32_t>;
 using SBTShaderGroup = RTShaderCollection::SBTShaderGroup;
-using HitGroupsOrder = RTShaderCollection::HitGroupsOrder;
 
-extern SBTShaderGroup combineGroups(
+extern SBTShaderGroup combineGroups (
 	add_cref<SBTShaderGroup> logicalGroup,
 	add_cref<SBTShaderGroup> hitGroup);
 
 extern std::pair<SBTShaderGroup, SBTShaderGroup>
-decombineGroup(add_cref<SBTShaderGroup> combinedGroup);
+decombineGroup (add_cref<SBTShaderGroup> combinedGroup);
 
-void advance(add_ref<uint32_t> val, uint32_t n = 1u)
+void advance (add_ref<uint32_t> val, uint32_t n = 1u)
 {
 	val = val + n;
 }
-void retreat(add_ref<uint32_t> val, uint32_t n = 1u)
+void retreat (add_ref<uint32_t> val, uint32_t n = 1u)
 {
 	val = val - n;
 }
 
-std::pair<uint32_t, uint32_t> countShaders(
-	add_cref<std::vector<ZShaderModule>::iterator> first,
-	uint32_t count,	add_ref<rtdetails::ShaderCounts> counts)
+rtdetails::ShaderCounts countShaders (span::span<const ZShaderModule> shaders)
 {
-	counts = {};
-
-	auto last = std::next(first, count);
-	for (auto itShader = first; itShader != last; ++itShader)
+	rtdetails::ShaderCounts counts{};
+	for (uint32_t i = 0u; i < shaders.count; ++i)
 	{
-		switch (shaderGetStage(*itShader))
+		switch (auto stage = shaderGetStage(shaders[i]))
 		{
 		case VK_SHADER_STAGE_RAYGEN_BIT_KHR:        ++counts.rgCount;	++counts.together; break;
 		case VK_SHADER_STAGE_MISS_BIT_KHR:          ++counts.missCount;	++counts.together; break;
@@ -52,219 +52,370 @@ std::pair<uint32_t, uint32_t> countShaders(
 		case VK_SHADER_STAGE_ANY_HIT_BIT_KHR:       ++counts.ahitCount;	++counts.together; break;
 		case VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR:   ++counts.chitCount;	++counts.together; break;
 		case VK_SHADER_STAGE_INTERSECTION_BIT_KHR:  ++counts.intCount;	++counts.together; break;
-		default: ASSERTFALSE("Improper shader stage ", shaderGetStageString(*itShader));
+		default: ASSERTFALSE("Improper shader stage ", shaderStageToString(stage));
 		}
 	}
-
-	const uint32_t hitGroupCount = std::max({ counts.ahitCount, counts.chitCount, counts.intCount });
-	const uint32_t batchGroupCount = 0u
-		+ counts.rgCount
-		+ counts.missCount
-		+ hitGroupCount
-		+ counts.callCount;
-
-	return { batchGroupCount, hitGroupCount };
+	return counts;
 }
 
-uint32_t shaderGetLogicalGroup(add_cref<ZShaderModule> module)
+uint32_t shaderGetLogicalGroup (add_cref<ZShaderModule> module)
 {
 	return decombineGroup(SBTShaderGroup(
 		std::get<SBT_SHADER_GROUP_INDEX>(module.getParamRef<tuple4>()))).first.groupIndex();
 }
 
-uint32_t shaderGetHitGroup(add_cref<ZShaderModule> module)
+uint32_t shaderGetHitGroup (add_cref<ZShaderModule> module)
 {
 	return decombineGroup(SBTShaderGroup(
 		std::get<SBT_SHADER_GROUP_INDEX>(module.getParamRef<tuple4>()))).second.groupIndex();
 }
 
-uint32_t shaderGetPipelineGroup(add_cref<ZShaderModule> module)
+std::pair<uint32_t, uint32_t> shaderGetPipelineGroup (add_cref<ZShaderModule> module)
 {
-	return std::get<PIPELINE_GROUP_INDEX>(module.getParamRef<tuple4>());
+	const uint32_t val = std::get<PIPELINE_GROUP_INDEX>(module.getParamRef<tuple4>());
+	return { (val & 0xFFFF), (val >> 16) };
 }
 
-void sortShaders(
-	add_ref<std::vector<ZShaderModule>> shaders,
-	uint32_t start, uint32_t count,
-	HitGroupsOrder hitGroupsOrder)
+static std::pair<uint32_t, uint32_t> shaderSetPipelineGroup (
+	add_ref<ZShaderModule> module, uint32_t group, uint32_t groupCount)
 {
-	auto begin = std::next(shaders.begin(), start);
-	auto end = std::next(begin, count);
-	const VkShaderStageFlagBits desiredStagesOrder[]
-	{
-		VK_SHADER_STAGE_RAYGEN_BIT_KHR,
-		VK_SHADER_STAGE_MISS_BIT_KHR,
-		VK_SHADER_STAGE_CALLABLE_BIT_KHR,
-		VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
-		VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
-		VK_SHADER_STAGE_INTERSECTION_BIT_KHR
-	};
-	std::stable_sort(begin, end,
-		[&](add_cref<ZShaderModule> a, add_cref<ZShaderModule> b) {
-			auto sa = shaderGetStage(a);
-			auto sb = shaderGetStage(b);
-
-			auto ia = std::find(std::begin(desiredStagesOrder), std::end(desiredStagesOrder), sa);
-			auto ib = std::find(std::begin(desiredStagesOrder), std::end(desiredStagesOrder), sb);
-
-			return ia < ib;
-		});
-
-	UNREF(hitGroupsOrder);
+	add_ref<uint32_t> field = std::get<PIPELINE_GROUP_INDEX>(module.getParamRef<tuple4>());
+	uint32_t old = field;
+	field = (group & 0xFFFF) | (groupCount << 16);
+	return { (old & 0xFFFF), (old >> 16) };
 }
 
-void mapShadersToPipelineGroups(
-	add_ref<std::vector<ZShaderModule>> shaders,
-	const uint32_t start, const uint32_t count,
-	span::span<VkRayTracingShaderGroupCreateInfoKHR> pgs,
-	HitGroupsOrder hitGroupsOrder,
+uint32_t shaderGetPipelineFirstGroup (add_cref<ZShaderModule> module)
+{
+	return std::get<PIPELINE_FIRST_GROUP>(module.getParamRef<tuple4>());
+}
+
+static uint32_t shaderSetPipelineFirstGroup (add_ref<ZShaderModule> module, uint32_t group)
+{
+	add_ref<uint32_t> field = std::get<PIPELINE_FIRST_GROUP>(module.getParamRef<tuple4>());
+	uint32_t old = field;
+	field = group;
+	return old;
+}
+
+bool isHitStage (VkShaderStageFlagBits stage)
+{
+	return VK_SHADER_STAGE_ANY_HIT_BIT_KHR == stage
+		|| VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR == stage
+		|| VK_SHADER_STAGE_INTERSECTION_BIT_KHR == stage;
+}
+
+void mapShadersToPipelineGroups (
+	span::span<ZShaderModule> shaders,
+	span::span<VkRayTracingShaderGroupCreateInfoKHR> groups,
+	add_cref<rtdetails::PipelineShaderGroupOrder> order,
 	add_ref<std::vector<uint32_t>> hitGroupsMap)
 {
-	rtdetails::ShaderCounts counts{};
-	const auto batchAndHintGroupCount	= countShaders(std::next(shaders.begin(), start), count, counts);
-	const uint32_t batchGroupCount		= batchAndHintGroupCount.first;
-	const uint32_t hitGroupCount		= batchAndHintGroupCount.second;
-	const uint32_t generalGroupCount	= batchGroupCount - hitGroupCount;
-	ASSERTION(batchGroupCount <= pgs.size());
+	rtdetails::ShaderCounts counts = countShaders(shaders);
+	const uint32_t batchGroupCount = counts.batchCount();
+	const uint32_t hitGroupCount = counts.hitCount();
+	ASSERTION(batchGroupCount <= groups.size());
 	ASSERTION(hitGroupCount <= hitGroupsMap.size());
+	const bool applyOffsets = false;
 
-	uint32_t generalVisitIndex		= 0u;
-	uint32_t anyVisitIndex			= 0u;
-	uint32_t closestVisitIndex		= 0u;
-	uint32_t intersectionVisitIndex	= 0u;
+	const auto [rgenBaseOffset, missBaseOffset, callBaseOffset, hitBaseOffset] =
+		applyOffsets
+		? [&]() -> std::array<uint32_t, 4> {
+			auto indexToStage = [](const uint32_t index, const uint32_t) -> VkShaderStageFlagBits
+			{
+				switch (index)
+				{
+				case 0: return VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+				case 1: return VK_SHADER_STAGE_MISS_BIT_KHR;
+				case 2: return VK_SHADER_STAGE_CALLABLE_BIT_KHR;
+				case 3: return VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
+				default: break;
+				}
+				return VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
+			};
+			const auto orderString = order.toString(); UNREF(orderString);
+			rtdetails::PipelineShaderGroupOrder::HitShadersOrder hitShadersOrder{};
+			std::array<uint32_t, STED_ARRAY_SIZE(order.getOrder())> ids{ 0, 1, 2, 3 };
+			std::array<uint32_t, 4> sizes{ counts.rgCount, counts.missCount, counts.callCount, hitGroupCount };
+			order.apply(sizes.begin(), sizes.end(), indexToStage, hitShadersOrder, false);
+			order.apply(ids.begin(), ids.end(), indexToStage, hitShadersOrder, false);
+			std::array<uint32_t, 4> offsets{
+				sizes[ids[0]],
+				sizes[ids[0]] + sizes[ids[1]],
+				sizes[ids[0]] + sizes[ids[1]] + sizes[ids[2]],
+				sizes[ids[0]] + sizes[ids[1]] + sizes[ids[2]] + sizes[ids[3]]
+			};
 
-	for (uint32_t iShader = 0u; (iShader < count) && (generalVisitIndex < generalGroupCount); ++iShader)
+			std::array<uint32_t, 4> offsets2{
+				counts.rgCount,
+				counts.rgCount + counts.missCount,
+				counts.rgCount + counts.missCount + counts.callCount,
+				counts.rgCount + counts.missCount + counts.callCount + hitGroupCount
+			};
+
+			order.apply(offsets2.begin(), offsets2.end(), indexToStage, hitShadersOrder, false);
+			return offsets;
+		}()
+		: std::array<uint32_t, 4>{ 0u,
+								   counts.rgCount,
+								   counts.rgCount + counts.missCount,
+								   counts.rgCount + counts.missCount + counts.callCount };
+
+	uint32_t rgenVisitCount = 0u;
+	uint32_t missVisitCount = 0u;
+	uint32_t callVisitCount = 0u;
+	uint32_t anyVisitCount = 0u;
+	uint32_t closestVisitCount = 0u;
+	uint32_t intersectionVisitCount = 0u;
+
+	// sort shaders by their hit subgroup index and ubdate hitGroupMap
 	{
-		const uint32_t shaderIndex = start + iShader;
-		const auto stage = shaderGetStage(shaders[shaderIndex]);
+		auto shadersRange = makeStdBeginEnd<ZShaderModule>(shaders.data(), shaders.size());
+		std::stable_sort(shadersRange.first, shadersRange.second,
+			[](add_cref<ZShaderModule> m1, add_cref<ZShaderModule> m2)
+			{ return shaderGetHitGroup(m1) < shaderGetHitGroup(m2); });
 
-		ASSERTMSG((stage == VK_SHADER_STAGE_RAYGEN_BIT_KHR)
-					|| (stage == VK_SHADER_STAGE_MISS_BIT_KHR)
-					|| (stage == VK_SHADER_STAGE_CALLABLE_BIT_KHR),
-			"Improper shader stage ", shaderStageToString(stage));
-		ASSERTION(VK_RAY_TRACING_SHADER_GROUP_TYPE_MAX_ENUM_KHR == pgs[generalVisitIndex].type);
-
-		pgs[generalVisitIndex].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-		pgs[generalVisitIndex].generalShader = shaderIndex;
-		std::get<PIPELINE_GROUP_INDEX>(shaders[shaderIndex].getParamRef<tuple4>()) =
-			pgs.start + generalVisitIndex;
-		advance(generalVisitIndex);
+		anyVisitCount = 0u;
+		closestVisitCount = 0u;
+		intersectionVisitCount = 0u;
+		for (uint32_t i = 0u; i < shaders.size(); ++i)
+		{
+			const uint32_t hitGroup = shaderGetHitGroup(shaders[i]);
+			if (hitGroup) {
+				switch (shaderGetStage(shaders[i]))
+				{
+				case VK_SHADER_STAGE_ANY_HIT_BIT_KHR: advance(anyVisitCount); break;
+				case VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR: advance(closestVisitCount); break;
+				case VK_SHADER_STAGE_INTERSECTION_BIT_KHR: advance(intersectionVisitCount); break;
+				default: ASSERTFALSE("???");
+				}
+				const uint32_t hitGroupIndex = std::max(
+					{ anyVisitCount, closestVisitCount, intersectionVisitCount }) - 1u;
+				ASSERTION(hitGroupIndex < hitGroupCount);
+				hitGroupsMap[hitGroupIndex] = hitGroup;
+			}
+		}
+		const auto beginHitGroupsMap = hitGroupsMap.begin();
+		const auto endHitGroupsMap = std::next(beginHitGroupsMap, hitGroupCount);
+		std::stable_sort(beginHitGroupsMap, endHitGroupsMap);
+		ASSERTION(hitGroupCount == std::max({ anyVisitCount, closestVisitCount, intersectionVisitCount }));
+		intersectionVisitCount = 0u;
+		closestVisitCount = 0u;
+		anyVisitCount = 0u;
 	}
 
-	if (HitGroupsOrder::InsertOrder == hitGroupsOrder)
+	for (uint32_t relativeShaderIndex = 0u; relativeShaderIndex < shaders.count; ++relativeShaderIndex)
 	{
-		ASSERTMSG(HitGroupsOrder::InsertOrder != hitGroupsOrder,
-			"HitGroupsOrder::InsertOrder not supported yet");
+		add_ref<ZShaderModule> module = shaders[relativeShaderIndex];
+		const auto stage = shaderGetStage(module);
+		const uint32_t shaderIndex = uint32_t(shaders.start + relativeShaderIndex);
 
-		for (uint32_t iShader = 0u; iShader < count; ++iShader)
+		if (isHitStage(stage))
 		{
-			const uint32_t shaderIndex = start + iShader;
-			const auto stage = shaderGetStage(shaders[shaderIndex]);
+			const auto beginHitGroupsMap = hitGroupsMap.begin();
+			const auto endHitGroupsMap = std::next(beginHitGroupsMap, hitGroupCount);
+			const auto foundHitGroupMap = std::find_if(beginHitGroupsMap, endHitGroupsMap,
+				[&](add_cref<uint32_t> hitGroupIndex) { return hitGroupIndex == shaderGetHitGroup(module); });
+			ASSERTION(foundHitGroupMap != endHitGroupsMap);
+			const uint32_t hitGroupOffset = uint32_t(std::distance(beginHitGroupsMap, foundHitGroupMap));
+			const uint32_t relativeGroupIndex = hitBaseOffset + hitGroupOffset;
+			add_ref<SPAN_TYPE(groups)> group = groups[relativeGroupIndex];
+			ASSERTION(VK_RAY_TRACING_SHADER_GROUP_TYPE_MAX_ENUM_KHR == group.type
+						&& VK_SHADER_UNUSED_KHR == group.generalShader);
 
 			if (stage == VK_SHADER_STAGE_ANY_HIT_BIT_KHR && counts.ahitCount)
 			{
-				const uint32_t idx = generalGroupCount + anyVisitIndex;
-				pgs[idx].anyHitShader = shaderIndex;
-				advance(anyVisitIndex);
+				ASSERTION(VK_SHADER_UNUSED_KHR == group.anyHitShader);
+				group.anyHitShader = shaderIndex;
+				advance(anyVisitCount);
 				retreat(counts.ahitCount);
 			}
 
 			if (stage == VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR && counts.chitCount)
 			{
-				const uint32_t idx = generalGroupCount + closestVisitIndex;
-				pgs[idx].closestHitShader = shaderIndex;
-				advance(closestVisitIndex);
+				ASSERTION(VK_SHADER_UNUSED_KHR == group.closestHitShader);
+				group.closestHitShader = shaderIndex;
+				advance(closestVisitCount);
 				retreat(counts.chitCount);
 			}
 
 			if (stage == VK_SHADER_STAGE_INTERSECTION_BIT_KHR && counts.intCount)
 			{
-				const uint32_t idx = generalGroupCount + intersectionVisitIndex;
-				pgs[idx].intersectionShader = shaderIndex;
-				advance(generalVisitIndex);
+				ASSERTION(VK_SHADER_UNUSED_KHR == group.intersectionShader);
+				group.intersectionShader = shaderIndex;
+				advance(intersectionVisitCount);
 				retreat(counts.intCount);
 			}
+
+			shaderSetPipelineGroup(module, relativeGroupIndex, uint32_t(groups.count));
 		}
-	}
-	else if (HitGroupsOrder::NumberOrder == hitGroupsOrder)
-	{
-		uint32_t hitGroupIndex = 0;
-
-		auto begin = hitGroupsMap.begin();
-
+		else
 		{
-			for (uint32_t iShader = generalGroupCount; iShader < count; ++iShader){
-				const uint32_t shaderIndex = start + iShader;
-				const uint32_t hitGroupNum = shaderGetHitGroup(shaders[shaderIndex]);
+			if (stage == VK_SHADER_STAGE_RAYGEN_BIT_KHR && counts.rgCount)
+			{
+				const uint32_t relativeGroupIndex = rgenBaseOffset + rgenVisitCount;
+				add_ref<SPAN_TYPE(groups)> group = groups[relativeGroupIndex];
+				ASSERTION(VK_RAY_TRACING_SHADER_GROUP_TYPE_MAX_ENUM_KHR == group.type
+					&& VK_SHADER_UNUSED_KHR == group.generalShader);
+				group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+				group.generalShader = shaderIndex;
 
-				auto end = std::next(begin, hitGroupIndex);
-				auto found = std::find_if(begin, end,
-					[&](add_cref<uint32_t> num) {
-						return num == hitGroupNum;
-					});
-				if (found == end) {
-					hitGroupsMap[hitGroupIndex] = { hitGroupNum };
-					advance(hitGroupIndex);
+				shaderSetPipelineGroup(module, relativeGroupIndex, uint32_t(groups.count));
+				advance(rgenVisitCount);
+				retreat(counts.rgCount);
+			}
+
+			if (stage == VK_SHADER_STAGE_MISS_BIT_KHR && counts.missCount)
+			{
+				const uint32_t relativeGroupIndex = missBaseOffset + missVisitCount;
+				add_ref<SPAN_TYPE(groups)> group = groups[relativeGroupIndex];
+				ASSERTION(VK_RAY_TRACING_SHADER_GROUP_TYPE_MAX_ENUM_KHR == group.type
+					&& VK_SHADER_UNUSED_KHR == group.generalShader);
+				group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+				group.generalShader = shaderIndex;
+
+				shaderSetPipelineGroup(module, relativeGroupIndex, uint32_t(groups.count));
+				advance(missVisitCount);
+				retreat(counts.missCount);
+			}
+
+			if (stage == VK_SHADER_STAGE_CALLABLE_BIT_KHR && counts.callCount)
+			{
+				const uint32_t relativeGroupIndex = callBaseOffset + callVisitCount;
+				add_ref<SPAN_TYPE(groups)> group = groups[relativeGroupIndex];
+				ASSERTION(VK_RAY_TRACING_SHADER_GROUP_TYPE_MAX_ENUM_KHR == group.type
+					&& VK_SHADER_UNUSED_KHR == group.generalShader);
+				group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+				group.generalShader = shaderIndex;
+
+				shaderSetPipelineGroup(module, relativeGroupIndex, uint32_t(groups.count));
+				advance(callVisitCount);
+				retreat(counts.callCount);
+			}
+		}
+	}
+
+	ASSERTMSG(0u == counts.rgCount && 0u == counts.ahitCount
+		&& 0u == counts.chitCount && 0u == counts.intCount,
+		counts.rgCount, ", ", counts.ahitCount, ", ", counts.chitCount, ", ", counts.intCount);
+
+	auto groupsRange = makeStdBeginEnd<SPAN_TYPE(groups)>(groups.data(), applyOffsets ? 0u : groups.size());
+	order.apply(groupsRange.first, groupsRange.second,
+		[&](uint32_t, add_cref<SPAN_TYPE(groups)> group) {
+			VkShaderStageFlagBits stage = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
+			if (group.type == VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR)
+			{
+				ASSERTION(VK_SHADER_UNUSED_KHR != group.generalShader);
+				stage = shaderGetStage(shaders[group.generalShader - shaders.start]);
+			}
+			else
+			{
+				stage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
+			}
+			return stage;
+		},
+		rtdetails::PipelineShaderGroupOrder::HitShadersOrder(), false);
+
+	anyVisitCount = 0u;
+	missVisitCount = 0u;
+	for (uint32_t relGroupIndex = 0u; relGroupIndex < groups.size(); ++relGroupIndex)
+	{
+		auto updateShader = [&](const uint32_t shaderIndex, const VkShaderStageFlagBits stage)
+			-> bool
+		{
+			const bool process = shaderIndex != VK_SHADER_UNUSED_KHR;
+			if (process)
+			{
+				add_ref<ZShaderModule> module = shaders[shaderIndex - shaders.start];
+				if (isHitStage(stage))
+				{
+					ASSERTION(stage == shaderGetStage(module));
 				}
+				else
+				{
+					ASSERTION(false == isHitStage(shaderGetStage(module)));
+				}
+				const uint32_t groupIndex = relGroupIndex + groups.start;
+				shaderSetPipelineGroup(module, groupIndex, uint32_t(groups.count));
+				shaderSetPipelineFirstGroup(module, groups.start);
 			}
-			ASSERTION(hitGroupCount == hitGroupIndex);
-			std::sort(begin, std::next(begin, hitGroupIndex),
-				[](add_cref<uint32_t> a, add_cref<uint32_t> b) { return a < b; });
+			return process;
+		};
+		add_ref<SPAN_TYPE(groups)> group = groups[relGroupIndex];
+		updateShader(group.generalShader, VK_SHADER_STAGE_MISS_BIT_KHR);
+		updateShader(group.anyHitShader, VK_SHADER_STAGE_ANY_HIT_BIT_KHR);
+		updateShader(group.closestHitShader, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
+		updateShader(group.intersectionShader, VK_SHADER_STAGE_INTERSECTION_BIT_KHR);
+		if (VK_RAY_TRACING_SHADER_GROUP_TYPE_MAX_ENUM_KHR == group.type)
+		{
+			group.type = VK_SHADER_UNUSED_KHR == group.intersectionShader
+				? VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR
+				: VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR;
+			advance(anyVisitCount);
 		}
-
-		for (uint32_t iShader = generalGroupCount; iShader < count; ++iShader) {
-			const uint32_t shaderIndex = start + iShader;
-			const auto stage = shaderGetStage(shaders[shaderIndex]);
-			const uint32_t hitGroupOffset = uint32_t(std::distance(
-				begin, std::find_if(begin, std::next(begin, hitGroupCount),
-					[&](add_cref<uint32_t> g) { return g == shaderGetHitGroup(shaders[shaderIndex]); })));
-
-			ASSERTMSG(stage == VK_SHADER_STAGE_ANY_HIT_BIT_KHR
-					|| stage == VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
-					|| stage == VK_SHADER_STAGE_INTERSECTION_BIT_KHR,
-				"Improper shader stage ", shaderStageToString(stage));
-
-			hitGroupIndex = generalGroupCount + hitGroupOffset;
-
-			if (stage == VK_SHADER_STAGE_ANY_HIT_BIT_KHR && counts.ahitCount) {
-				ASSERTMSG(VK_SHADER_UNUSED_KHR == pgs[hitGroupIndex].anyHitShader, "group ", hitGroupIndex);
-				pgs[hitGroupIndex].anyHitShader = shaderIndex;
-				retreat(counts.ahitCount);
-			}
-			if (stage == VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR && counts.chitCount) {
-				ASSERTMSG(VK_SHADER_UNUSED_KHR == pgs[hitGroupIndex].closestHitShader, "group ", hitGroupIndex);
-				pgs[hitGroupIndex].closestHitShader = shaderIndex;
-				retreat(counts.chitCount);
-			}
-			if (stage == VK_SHADER_STAGE_INTERSECTION_BIT_KHR && counts.intCount) {
-				ASSERTMSG(VK_SHADER_UNUSED_KHR == pgs[hitGroupIndex].intersectionShader, "group ", hitGroupIndex);
-				pgs[hitGroupIndex].intersectionShader = shaderIndex;
-				retreat(counts.intCount);
-			}
-
-			std::get<PIPELINE_GROUP_INDEX>(shaders[shaderIndex].getParamRef<tuple4>()) =
-				pgs.start + hitGroupIndex;
+		else
+		{
+			ASSERTION(VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR == group.type);
+			advance(missVisitCount);
 		}
 	}
-	else
-	{
-		ASSERTFALSE("Unknown ordering: ", uint16_t(hitGroupsOrder));
-	}
 
-	for (uint32_t hitGroupIndex = generalGroupCount; hitGroupIndex < batchGroupCount; ++hitGroupIndex)
-	{
-		add_ref<VkRayTracingShaderGroupCreateInfoKHR> hitGroup = pgs[hitGroupIndex];
-		ASSERTION(hitGroup.type == VK_RAY_TRACING_SHADER_GROUP_TYPE_MAX_ENUM_KHR);
-		hitGroup.type = VK_SHADER_UNUSED_KHR == hitGroup.intersectionShader
-			? VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR
-			: VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR;
+	ASSERTION(batchGroupCount - hitGroupCount == missVisitCount);
+	ASSERTION(hitGroupCount == anyVisitCount);
+}
+
+rtdetails::PipelineShaderGroupOrder pipelineGetOrder (ZPipeline rtPipeline)
+{
+	return rtdetails::PipelineShaderGroupOrder(
+		rtPipeline.getParam<ZDistType<LayoutIdentifier, uint32_t>>());
+}
+
+std::pair<uint32_t, rtdetails::ShaderCounts>
+pipelineGetGroupsInfo (
+	ZPipeline rtPipeline,
+	add_cref<RTShaderCollection::SBTShaderGroup> group)
+{
+	uint32_t shaderGroupSize = 0u;
+	uint32_t firstShaderIndex = INVALID_UINT32;
+	uint32_t pipelineFirstGroupIndex = INVALID_UINT32;
+	std::vector<ZShaderModule>::const_iterator firstShaderIter;
+	add_cref<std::vector<ZShaderModule>> shaders = rtPipeline.getParamRef<std::vector<ZShaderModule>>();
+
+	for (auto i = shaders.begin(); i != shaders.end(); ++i) {
+		// looks for raygen shader
+		const bool inGroup = group == SBTShaderGroup(shaderGetLogicalGroup(*i));
+		if (inGroup) {
+			if (INVALID_UINT32 == firstShaderIndex) {
+				firstShaderIndex = uint32_t(std::distance(shaders.begin(), i));
+				firstShaderIter = i;
+			}
+			if (INVALID_UINT32 == pipelineFirstGroupIndex) {
+				pipelineFirstGroupIndex = shaderGetPipelineFirstGroup(*i);
+			}
+			advance(shaderGroupSize);
+		}
+		else if (INVALID_UINT32 != firstShaderIndex) {
+			break;
+		}
 	}
+	const uint32_t groupIndex = decombineGroup(group).first.groupIndex();
+	ASSERTMSG((firstShaderIndex != INVALID_UINT32) && (shaderGroupSize != 0u),
+		"Unable to find any shader in shader group ", groupIndex);
+	const rtdetails::ShaderCounts counts = countShaders(span::make_span(
+		shaders, uint32_t(std::distance(shaders.begin(), firstShaderIter)), shaderGroupSize));
+	ASSERTMSG(shaderGroupSize == counts.together,
+		"Mismatch shader count in group ", groupIndex);
+	ASSERTMSG(shaderGetPipelineGroup(*firstShaderIter).second == counts.batchCount(),
+		"Mismatch pipeline shader group ", groupIndex);
+
+	return { pipelineFirstGroupIndex, counts };
 }
 
 } // namespace vtf
 
-void printGroupCreateInfoTable(
+void printGroupCreateInfoTable (
 	add_ref<std::ostream> str,
+	ZPipeline pipeline,
 	add_cptr<VkRayTracingShaderGroupCreateInfoKHR> pGroups,
 	const uint32_t groupCount,
 	add_cptr<VkPipelineShaderStageCreateInfo> pStages,
@@ -273,7 +424,7 @@ void printGroupCreateInfoTable(
 {
 	add_cptr<char> nl = "\n";
 
-	str << "const VkPipelineShaderStageCreateInfo[" << stageCount << ']' << nl;
+	str << "[INFO] const VkPipelineShaderStageCreateInfo[" << stageCount << ']' << nl;
 	for (uint32_t i = 0u; i < stageCount; ++i)
 	{
 		const auto stage1 = pStages[i].stage;
@@ -332,16 +483,26 @@ void printGroupCreateInfoTable(
 
 			return ok ? ' ' : mode ? '?' : '*';
 		};
-	auto testPipelineGroupIndex = [&](uint32_t groupIndex, uint32_t shader) -> char {
-		bool ok = true;
+	auto testPipelineGroupIndex = [&](uint32_t groupIndex, uint32_t shader) -> std::string {
+		UNREF(groupIndex);
+		std::ostringstream os;
 		if (VK_SHADER_UNUSED_KHR != shader) {
 			if (shader >= shaders.size())
-				return 'I';
-			ok = std::get<PIPELINE_GROUP_INDEX>(shaders[shader].getParamRef<vtf::tuple4>()) == groupIndex;
+				os << "(shader " << shader << " out of bounds " << shaders.size();
+			else
+			{
+				add_cref<ZShaderModule> module = shaders[shader];
+				os << "logical group: " << vtf::shaderGetLogicalGroup(module);
+				if (vtf::isHitStage(vtf::shaderGetStage(module)))
+					os << ", subgroup: " << vtf::shaderGetHitGroup(module);
+			}
 		}
-		return ok ? ' ' : 'I';
+		os.flush();
+		return os.str();
 	};
-	str << "const VkRayTracingShaderGroupCreateInfoKHR[" << groupCount << "] {" << nl;
+	str << "[INFO] Used pipeline shader group order rule "
+		<< pipelineGetOrder(pipeline).toString() << nl;
+	str << "[INFO] const VkRayTracingShaderGroupCreateInfoKHR[" << groupCount << "] {" << nl;
 	for (uint32_t i = 0u; i < groupCount; ++i)
 	{
 		add_cref<VkRayTracingShaderGroupCreateInfoKHR> c = pGroups[i];
@@ -410,6 +571,237 @@ namespace rtdetails
 {
 using namespace vtf;
 
+constexpr size_t pipelineShaderGroupOrderCount = sted_array_size<PipelineShaderGroupOrder::Order>;
+
+const std::pair<VkShaderStageFlagBits, add_cptr<char>> shaderToText[pipelineShaderGroupOrderCount] {
+	{ VK_SHADER_STAGE_RAYGEN_BIT_KHR, "R" },
+	{ VK_SHADER_STAGE_ANY_HIT_BIT_KHR, "H" },
+	// { VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, "CH" },
+	// { VK_SHADER_STAGE_INTERSECTION_BIT_KHR, "IH" },
+	{ VK_SHADER_STAGE_MISS_BIT_KHR, "M" },
+	{ VK_SHADER_STAGE_CALLABLE_BIT_KHR, "C" }
+};
+auto findSTTbyStage (VkShaderStageFlagBits stage)
+{
+	return std::find_if(std::begin(shaderToText), std::end(shaderToText),
+		[&](add_cref<std::pair<VkShaderStageFlagBits, add_cptr<char>>> stt)
+		{ return stt.first == stage; });
+}
+auto findSTTbyText (std::string_view text)
+{
+	return std::find_if(std::begin(shaderToText), std::end(shaderToText),
+		[&](add_cref<std::pair<VkShaderStageFlagBits, add_cptr<char>>> stt)
+		{ return std::string_view(stt.second) == text; });
+}
+/*
+PipelineShaderGroupOrder::PipelineShaderGroupOrder(add_cref<PipelineShaderGroupOrder> other)
+	: m_order(other.m_order)
+{
+}
+*/
+PipelineShaderGroupOrder::PipelineShaderGroupOrder (add_cref<std::string> list)
+	: PipelineShaderGroupOrder(fromString(list))
+{
+}
+PipelineShaderGroupOrder::PipelineShaderGroupOrder (add_cref<Order> order)
+	: m_order(order)
+{
+	std::set<VkShaderStageFlagBits> s;
+	for (uint32_t i = 0; i < pipelineShaderGroupOrderCount; ++i)
+	{
+		ASSERTMSG(std::end(shaderToText) != findSTTbyStage(order[i]),
+			demangledName(*this), "::", __func__, "(...) "
+			"Invalid shader stage (", shaderStageToString(order[i]), ") at ", i);
+		ASSERTMSG(s.end() == s.find(order[i]),
+			demangledName(*this), "::", __func__, "(...) "
+			"Multiple shader group definition (", shaderStageToString(order[i]), ')');
+		s.insert(order[i]);
+	}
+}
+PipelineShaderGroupOrder::PipelineShaderGroupOrder (uint32_t order)
+	: PipelineShaderGroupOrder(fromInt(order))
+{
+}
+PipelineShaderGroupOrder::PipelineShaderGroupOrder (std::function<VkShaderStageFlagBits(uint32_t)> fn)
+	: PipelineShaderGroupOrder(fn ? makeOrder(fn) : Default)
+{
+}
+
+PipelineShaderGroupOrder::Order PipelineShaderGroupOrder::makeOrder (
+	std::function<VkShaderStageFlagBits(uint32_t)> fn)
+{
+	Order order{};
+	for (uint32_t i = 0u; i < STED_ARRAY_SIZE(order); ++i)
+		order[i] = fn(i);
+	return order;
+}
+
+bool PipelineShaderGroupOrder::operator== (add_cref<PipelineShaderGroupOrder> other) const
+{
+	return m_order == other.m_order;
+}
+bool PipelineShaderGroupOrder::operator!= (add_cref<PipelineShaderGroupOrder> other) const
+{
+	return !(*this == other);
+}
+std::string PipelineShaderGroupOrder::toString () const
+{
+	std::ostringstream str;
+	for (uint32_t i = 0; i < pipelineShaderGroupOrderCount; ++i)
+	{
+		if (i) str << ',';
+		str << findSTTbyStage(m_order[i])->second;
+	}
+	str.flush();
+	return str.str();
+}
+PipelineShaderGroupOrder PipelineShaderGroupOrder::fromString (
+	add_cref<std::string> list,
+	add_ptr<bool> raiseException)
+{
+	Order order;
+	strings ss = splitString(list, ',');
+	std::string s = std::accumulate(ss.begin(), ss.end(), std::string(),
+		[](add_cref<std::string> a, add_cref<std::string> b) { return a + b; });
+	toUpper(s);
+	bool error = false;
+	const std::string_view sv(s);
+	for (uint32_t i = 0u; i < pipelineShaderGroupOrderCount; ++i)
+	{
+		const std::string_view chunk = sv.substr(i, 1u);
+		if (auto stt = findSTTbyText(chunk); stt != std::end(shaderToText) && !chunk.empty()) {
+			order[i] = stt->first;
+		}
+		else if (raiseException) {
+			error = true;
+			*raiseException = false;
+			break;
+		}
+		else {
+			ASSERTFALSE("Unable to parse shader group order list from \"", list, "\". "
+			"Try format \"", Default.toString(), '\"');
+		}
+	}
+	if (false == error && raiseException)
+	{
+		*raiseException = true;
+	}
+	return PipelineShaderGroupOrder(order);
+}
+uint32_t PipelineShaderGroupOrder::toInt () const
+{
+	Order order = Default.getOrder();
+	if (m_order == order) {
+		return 0u;
+	}
+	uint32_t counter = 1u;
+	while (std::next_permutation(order.begin(), order.end()))
+	{
+		if (m_order == order)
+			return counter;
+		counter = counter + 1u;
+	}
+	return INVALID_UINT32;
+}
+PipelineShaderGroupOrder PipelineShaderGroupOrder::fromInt (
+	uint32_t order, add_ptr<bool> raiseException)
+{
+	Order tmpOrder(Default.getOrder());
+	if (0u == order) {
+		return PipelineShaderGroupOrder(tmpOrder);
+	}
+	uint32_t counter = 1u;
+	while (std::next_permutation(tmpOrder.begin(), tmpOrder.end()))
+	{
+		if (counter++ == order)
+			return PipelineShaderGroupOrder(tmpOrder);
+	}
+	if (raiseException)	{
+		*raiseException = false;
+	}
+	else {
+		ASSERTFALSE(raiseException, "Unable to parse shader order int from ", order);
+	}
+	return Default;
+}
+bool PipelineShaderGroupOrder::checkHitShaders (
+	add_cref<HitShadersOrder> hitShaders, add_ref<std::string> msg)
+{
+	std::set<HitShadersOrder::value_type> s;
+
+	for (uint32_t i = 0u; i < STED_ARRAY_SIZE(hitShaders); ++i)
+	{
+		if (!(hitShaders[i] == VK_SHADER_STAGE_ANY_HIT_BIT_KHR
+			|| hitShaders[i] == VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+			|| hitShaders[i] == VK_SHADER_STAGE_INTERSECTION_BIT_KHR))
+		{
+			std::ostringstream os;
+			os << "Improper shader stage (" << shaderStageToString(hitShaders[i]) << ". "
+				"Only " << shaderStageToString(VK_SHADER_STAGE_ANY_HIT_BIT_KHR)
+				<< ", " << shaderStageToString(VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)
+				<< " and " << shaderStageToString(VK_SHADER_STAGE_INTERSECTION_BIT_KHR)
+				<< " might be on hitShaders list.";
+			os.flush();
+			msg = os.str();
+			return false;
+		}
+		if (s.end() != s.find(hitShaders[i]))
+		{
+			std::ostringstream os;
+			os << "Multiple " << shaderStageToString(hitShaders[i]) << " stage on hitSHaders list";
+			os.flush();
+			msg = os.str();
+			return false;
+		}
+		s.insert(hitShaders[i]);
+	}
+	return true;
+}
+PipelineShaderGroupOrder::HitShadersOrder
+PipelineShaderGroupOrder::makeHitShadersOrder ()
+{
+	return HitShadersOrder{
+		VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
+		VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+		VK_SHADER_STAGE_INTERSECTION_BIT_KHR
+	};
+}
+PipelineShaderGroupOrder::ExtendedOrder
+PipelineShaderGroupOrder::makeExtendedOrder (
+	add_cref<HitShadersOrder> hitShaders, bool considerHitShaders) const
+{
+	std::string msg;
+	ASSERTMSG((false == considerHitShaders) || checkHitShaders(hitShaders, msg), msg);
+
+	uint32_t hitOffset = 0u;
+	ExtendedOrder extendedOrder{};
+	for (uint32_t i = 0u; i < pipelineShaderGroupOrderCount; ++i)
+	{
+		if (considerHitShaders && m_order[i] == VK_SHADER_STAGE_ANY_HIT_BIT_KHR)
+		{
+			extendedOrder[i + hitOffset] = hitShaders[hitOffset]; ++hitOffset;
+			extendedOrder[i + hitOffset] = hitShaders[hitOffset]; ++hitOffset;
+			extendedOrder[i + hitOffset] = hitShaders[hitOffset];
+		}
+		else
+		{
+			extendedOrder[i + hitOffset] = m_order[i];
+		}
+	}
+	if (false == considerHitShaders)
+	{
+		for (uint32_t i = pipelineShaderGroupOrderCount; i < STED_ARRAY_SIZE(extendedOrder); ++i)
+			extendedOrder[i] = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
+	}
+	return extendedOrder;
+}
+
+PipelineShaderGroupOrder PipelineShaderGroupOrder::Default(Order{
+	VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+	VK_SHADER_STAGE_ANY_HIT_BIT_KHR, // VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, VK_SHADER_STAGE_INTERSECTION_BIT_KHR,
+	VK_SHADER_STAGE_MISS_BIT_KHR,
+	VK_SHADER_STAGE_CALLABLE_BIT_KHR });
+
 struct RTPipelineSettings
 {
 	VkPipelineCreateFlags	flags;
@@ -419,6 +811,7 @@ struct RTPipelineSettings
 	VkPipeline	basePipelineHandle;
 	int32_t		basePipelineIndex;
 	uint32_t	maxPipelineRayRecursionDepth;
+	PipelineShaderGroupOrder shaderOrder;
 	RTPipelineSettings()
 		: flags(0)
 		, pLibraryInfo(nullptr)
@@ -431,12 +824,17 @@ struct RTPipelineSettings
 	}
 };
 
-std::shared_ptr<RTPipelineSettings> makeRTPipelineSettings()
+std::shared_ptr<RTPipelineSettings> makeRTPipelineSettings ()
 {
 	return std::make_unique<RTPipelineSettings>();
 }
 
-ZPipeline createRayTracingPipeline(
+void updateKnownSettings (add_ref<RTPipelineSettings> settings, add_cref<PipelineShaderGroupOrder> order) {
+	settings.shaderOrder = order;
+}
+void updateSettings (add_ref<RTPipelineSettings>) {}
+
+ZPipeline createRayTracingPipeline (
 	ZPipelineLayout layout,
 	add_cref<std::vector<ZShaderModule>> rtShaders,
 	add_cptr<RTPipelineSettings> pSettings)
@@ -444,8 +842,7 @@ ZPipeline createRayTracingPipeline(
 	ASSERTMSG(rtShaders.size(), "Shader list must not be empty");
 	const uint32_t collectionNum = decombineGroup(SBTShaderGroup(
 		std::get<COLLECTION_INDEX>(rtShaders[0].getParam<tuple4>()))).first.groupIndex();
-	const HitGroupsOrder collectionOrder = HitGroupsOrder(decombineGroup(SBTShaderGroup(
-		std::get<COLLECTION_INDEX>(rtShaders[0].getParam<tuple4>()))).second.groupIndex());
+	add_cref<PipelineShaderGroupOrder> pipelineShaderGroupOrder = pSettings->shaderOrder;
 
 	ZDevice device = layout.getParam<ZDevice>();
 	add_cref<ZDeviceInterface> di = device.getInterface();
@@ -455,7 +852,8 @@ ZPipeline createRayTracingPipeline(
 	using SBTShaderGroup = RTShaderCollection::SBTShaderGroup;
 
 	ZPipeline pipeline(VK_NULL_HANDLE, device, callbacks, layout,
-		{/*renderpass*/ }, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, VkPipelineCreateFlags(0), rtShaders);
+		{/*renderpass*/ }, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, VkPipelineCreateFlags(0),
+		rtShaders, pipelineShaderGroupOrder.toInt());
 	add_ref<std::vector<ZShaderModule>> pipelineShaders = pipeline.getParamRef<std::vector<ZShaderModule>>();
 	std::vector<VkPipelineShaderStageCreateInfo> pipelineStages(pipelineShaders.size());
 
@@ -488,14 +886,12 @@ ZPipeline createRayTracingPipeline(
 		uint32_t shaderIndex = 0u;
 		for (uint32_t groupIndex = 0u; groupIndex < result.size(); ++groupIndex)
 		{
-			ShaderCounts counts;
 			const uint32_t groupShaderCount = std::get<1>(result[groupIndex]);
-			const auto batchAndHintGroupCount =
-				countShaders(std::next(pipelineShaders.begin(), shaderIndex), groupShaderCount, counts);
+			const ShaderCounts counts = countShaders(span::make_span(pipelineShaders, shaderIndex, groupShaderCount));
 			ASSERTION(groupShaderCount == counts.together);
 			// { ..., ..., batchGroupCount, hitGroupCount }
-			std::get<2>(result[groupIndex]) = batchAndHintGroupCount.first;
-			std::get<3>(result[groupIndex]) = batchAndHintGroupCount.second;
+			std::get<2>(result[groupIndex]) = counts.batchCount();
+			std::get<3>(result[groupIndex]) = counts.hitCount();
 			advance(shaderIndex, groupShaderCount);
 		}
 		ASSERTION(pipelineShaders.size() == shaderIndex);
@@ -530,11 +926,10 @@ ZPipeline createRayTracingPipeline(
 	{
 		const uint32_t groupShaderCount = std::get<1>(groupToShaderCount[indiceGroupIndex]);
 		const uint32_t pipelineGroupCount = std::get<2>(groupToShaderCount[indiceGroupIndex]);
-		sortShaders(pipelineShaders, pipelineShaderIndex, groupShaderCount, collectionOrder);
 
-		mapShadersToPipelineGroups(pipelineShaders, pipelineShaderIndex, groupShaderCount,
+		mapShadersToPipelineGroups(span::make_span(pipelineShaders, pipelineShaderIndex, groupShaderCount),
 									span::make_span(pipelineGroups, pipelineGroupIndex, pipelineGroupCount),
-									collectionOrder, hitGroupMap);
+									pipelineShaderGroupOrder, hitGroupMap);
 
 		advance(pipelineShaderIndex, groupShaderCount);
 		advance(pipelineGroupIndex, pipelineGroupCount);
@@ -579,7 +974,7 @@ ZPipeline createRayTracingPipeline(
 	progressRecorder.stamp("After create ray-tracing pipeline");
 	if (getGlobalAppFlags().verbose)
 	{
-		printGroupCreateInfoTable(std::cout,
+		printGroupCreateInfoTable(std::cout, pipeline,
 			info.pGroups, info.groupCount, info.pStages, info.stageCount,
 			pipelineShaders);
 	}

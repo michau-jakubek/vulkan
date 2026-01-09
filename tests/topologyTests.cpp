@@ -1,5 +1,5 @@
 #include "topologyTests.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZRenderPass.hpp"
 #include "vtfZImage.hpp"
@@ -235,7 +235,7 @@ bool isTopologyList(const VkPrimitiveTopology topo)
 		|| topo == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY;
 }
 
-TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests (const TestRecord& record, add_ref<CommandLine> cmdLine)
 {
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	CanvasStyle canvasStyle = Canvas::DefaultStyle;

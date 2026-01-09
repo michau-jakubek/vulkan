@@ -24,11 +24,11 @@ struct Params
 };
 
 TriLogicInt runTests(add_ref<VulkanContext> canvas, add_cref<Params> params);
-TriLogicInt prepareTests(add_cref<TestRecord> record, add_cref<strings> cmdLineParams);
+TriLogicInt prepareTests(add_cref<TestRecord> record, add_ref<CommandLine> cmdLine);
 
-TriLogicInt prepareTests(add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
+TriLogicInt prepareTests(add_cref<TestRecord> record, add_ref<CommandLine> cmdLine)
 {
-	UNREF(cmdLineParams);
+	UNREF(cmdLine);
 	add_cref<GlobalAppFlags> gf(getGlobalAppFlags());
 
 	Params params(record.assets);

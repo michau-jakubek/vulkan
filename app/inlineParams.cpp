@@ -1,5 +1,6 @@
 #include "vtfVkUtils.hpp"
 #include "vtfZUtils.hpp"
+#include "vtfProgramCollection.hpp"
 #include <iostream>
 
 using namespace vtf;
@@ -36,4 +37,23 @@ void printLayersAndExtensions (add_ref<std::ostream> str)
 			printLayerExtensions(str, name, i++);
 	}
 
+}
+
+void printCompilerList (add_ref<std::ostream> str)
+{
+	std::string versionLine;
+	auto compilers = ProgramCollection::getAvailableCompilerList(true);
+    str << "Available compiler list consists of " << data_count(compilers) << " compiler(s):\n"
+           "---------------------------------------------------\n";
+	for (uint32_t cv = 0u; cv < data_count(compilers); ++cv)
+	{
+		add_ref<std::pair<std::string, std::string>> item = compilers.at(cv);
+		str << "  " << cv << ": " << std::quoted(item.first) << '\n';
+		str << "  Version:\n";
+		std::istringstream version(std::move(item.second));
+		while (std::getline(version, versionLine))
+		{
+			str << "    " << versionLine << '\n';
+		}
+	}
 }

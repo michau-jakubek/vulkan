@@ -5,10 +5,10 @@ namespace
 {
 using namespace vtf;
 
-TriLogicInt runTest (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
+TriLogicInt runTest (add_cref<TestRecord> record, add_ref<CommandLine> cmdLine)
 {
 	UNREF(record);
-	UNREF(cmdLineParams);
+	UNREF(cmdLine);
 	return ThreadPool::selfTest() ? 0 : 1;
 }
 

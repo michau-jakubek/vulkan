@@ -1,5 +1,5 @@
 #include "descriptorBufferTests.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfProgressRecorder.hpp"
 #include "vtfCanvas.hpp"
@@ -28,14 +28,14 @@ struct Params
 	};
 
 	add_cref<std::string>	m_assets;
-	add_cref<strings>		m_cmdLineParams;
+	add_ref<CommandLine>	m_cmdLine;
 	bool					m_set;
 	bool					m_fps;
 	bool					m_cache;
 	bool					m_samplerAnisotropy;
-	Params(add_cref<std::string> assets, add_cref<strings> cmdLineParams)
+	Params(add_cref<std::string> assets, add_ref<CommandLine> cmdLine)
 		: m_assets				(assets)
-		, m_cmdLineParams		(cmdLineParams)
+		, m_cmdLine				(cmdLine)
 		, m_set					(false)
 		, m_fps					(false)
 		, m_cache				(false)
@@ -52,9 +52,9 @@ private:
 
 TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params);
 
-TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests (const TestRecord& record, add_ref<CommandLine> cmdLine)
 {
-	Params p(record.assets, cmdLineParams);
+	Params p(record.assets, cmdLine);
 	if (p.parse() != Params::State::Run)
 	{
 		return {};
@@ -112,7 +112,7 @@ OptionParser<Params> Params::getParser ()
 Params::State Params::parse ()
 {
 	OptionParser<Params>	parser	(getParser());
-	parser.parse(m_cmdLineParams);
+	parser.parse(m_cmdLine);
 	OptionParserState		state = parser.getState();
 
 	if (state.hasHelp)

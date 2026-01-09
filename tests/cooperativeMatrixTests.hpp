@@ -4,7 +4,7 @@
 #include "allTests.hpp"
 
 #include "vtfContext.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 
 #include <iostream>
 

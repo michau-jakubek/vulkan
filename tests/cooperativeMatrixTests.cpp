@@ -139,17 +139,17 @@ add_cref<VkCooperativeMatrixPropertiesKHR> CoopParams::getSelectedConfiguration(
 	return confs.at(Configuration >= confs.size() ? 0u : Configuration);
 }
 
-TriLogicInt prepareTests(add_cref<TestRecord> record, add_cref<strings> cmdLineParams);
+TriLogicInt prepareTests(add_cref<TestRecord> record, add_ref<CommandLine> cmdLine);
 TriLogicInt createDeviceAndPerformTest(ZInstance instance, ZPhysicalDevice physicalDevice, add_cref<CoopParams> params);
 TriLogicInt performTests(add_ref<VulkanContext> ctx, add_cref<CoopParams> params);
 
-TriLogicInt prepareTests(add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
+TriLogicInt prepareTests(add_cref<TestRecord> record, add_ref<CommandLine> cmdLine)
 {
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 
 	CoopParams					params(record.assets);
 	OptionParser<CoopParams>	parser = params.getParser();
-	parser.parse(cmdLineParams);
+	parser.parse(cmdLine);
 	OptionParserState			state = parser.getState();
 
 	if (state.hasErrors || state.hasWarnings)

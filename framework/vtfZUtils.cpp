@@ -15,6 +15,8 @@
 #include "vtfProgressRecorder.hpp"
 #include "vtfVulkanDriver.hpp"
 
+#include <memory>
+
 void releaseQueue (const QueueParams& params)
 {
 	const uint32_t	queueFamilyIndex	= std::get<ZDistType<QueueFamilyIndex, uint32_t>>(params);
@@ -186,37 +188,6 @@ Version getVulkanImplVersion (std::optional<ZInstance> instance)
 	return version;
 }
 
-ZDevice getSharedDevice()
-{
-	//if (getGlobalAppFlags().verbose)
-	//{
-	//	std::cout << "[INFO] " << __func__ << ' ' << globalSharedDevice << std::endl;
-	//}
-	//return globalSharedDevice;
-	return {};
-}
-
-ZPhysicalDevice getSharedPhysicalDevice ()
-{
-	//ZPhysicalDevice dev = globalSharedDevice.getParam<ZPhysicalDevice>();
-	//if (getGlobalAppFlags().verbose)
-	//{
-	//	std::cout << "[INFO] " << __func__ << ' ' << dev << std::endl;
-	//}
-	//return dev;
-	return {};
-}
-ZInstance getSharedInstance ()
-{
-	//ZInstance inst = globalSharedDevice.getParam<ZPhysicalDevice>().getParam<ZInstance>();
-	//if (getGlobalAppFlags().verbose)
-	//{
-	//	std::cout << "[INFO] " << __func__ << ' ' << inst << std::endl;
-	//}
-	//return inst;
-	return {};
-}
-
 strings upgradeInstanceExtensions (add_cref<strings> desiredExtensions)
 {
 	return desiredExtensions;
@@ -233,6 +204,7 @@ ZInstance createInstance (
 	Logger						logger{};
 	ZInstance					instance(VkInstance(VK_NULL_HANDLE)
 		, callbacks
+		, 0 // !Undeletable
 		, (appName ? appName : "VTF")
 		, apiVersion
 		, {/*AvailableLayers*/ }
@@ -351,10 +323,22 @@ ZInstance createInstance (
 	validationFeatures.pDisabledValidationFeatures		= nullptr;
 	validationFeatures.disabledValidationFeatureCount	= 0u;
 	*/
+	PNextChain pNextChain;
+
+	/*
+	const VkValidationFeatureEnableEXT validationEnables[] = {
+		VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+		VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
+	};
+	VkValidationFeaturesEXT validationFeatures{};
+	validationFeatures.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+	validationFeatures.enabledValidationFeatureCount = ARRAY_LENGTH_CAST(validationEnables, uint32_t);
+	validationFeatures.pEnabledValidationFeatures = validationEnables;
+	pNextChain.append(&validationFeatures);
+	*/
 
 	VkDebugUtilsMessengerCreateInfoEXT debugMessengerInfo{};
 	VkDebugReportCallbackCreateInfoEXT debugReportInfo{};
-	void* instanceCreateInfoPnext = nullptr;
 
 	if (utilsRequired)
 	{
@@ -383,7 +367,7 @@ ZInstance createInstance (
 		flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 	}
 
-	VkInstanceCreateInfo createInfo		= makeVkStruct(instanceCreateInfoPnext);
+	VkInstanceCreateInfo createInfo		= makeVkStruct(pNextChain.release());
 	createInfo.flags					= flags;
 	createInfo.pApplicationInfo			= &appInfo;
 	createInfo.enabledExtensionCount	= data_count(v_extensions);
@@ -503,7 +487,7 @@ ZPhysicalDevice selectPhysicalDevice (
 
 	uint32_t					physicalDeviceIndex	= INVALID_UINT32;
 	add_cref<strings>			layers				= instance.getParamRef<ZDistType<RequiredLayers, strings>>();
-	const strings				extensionToRemove	{ VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME };
+	//const strings				extensionToRemove	{ VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME };
 	strings						availableExtensions;
 	VkPhysicalDeviceProperties	deviceProperties;
 
@@ -603,6 +587,7 @@ ZDevice createLogicalDevice	(
 	std::vector<VkDeviceQueueCreateInfo>	queueCreateInfos;
 	std::vector<ZDeviceQueueCreateInfo>		queueCreateExInfos;
 
+	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	add_ref<Logger>	logger = physDevice.getParam<ZInstance>().getParamRef<Logger>();
 	add_cref<ZInstanceInterface> ii = physDevice.getParamRef<ZInstance>().getInterface();
 
@@ -623,7 +608,7 @@ ZDevice createLogicalDevice	(
 		return qci;
 	};
 
-	if (getGlobalAppFlags().verbose)
+	if (gf.verbose)
 	{
 		logger << "[INFO} Create device with " << queueFamilyPropCount << " queue family indices" << std::endl;
 	}
@@ -655,7 +640,7 @@ ZDevice createLogicalDevice	(
 			queueCreateExInfo.queues.set(availableIndex);
 		}
 
-		if (getGlobalAppFlags().verbose)
+		if (gf.verbose)
 		{
 			//::vtf::operator<<(logger, queueCreateExInfo) << std::endl;
 			// TODO logger << queueCreateExInfo << std::endl;
@@ -676,6 +661,7 @@ ZDevice createLogicalDevice	(
 	add_ref<strings> requiredExtensions(deviceCaps.requiredExtension);
 	removeStrings(getGlobalAppFlags().excludedDevExtensions, requiredExtensions);
 	mergeStringsDistinct(requiredExtensions, desiredExtensions);
+	mergeStringsDistinct(requiredExtensions, gf.deviceExtensions);
 
 	if (onEnablingFeatures)
 	{
@@ -707,7 +693,7 @@ ZDevice createLogicalDevice	(
 
 	DeviceCaps::Features deviceCapsFeatures(deviceCaps.updateDeviceCreateInfo(createInfo));
 
-	if (getGlobalAppFlags().verbose)
+	if (gf.verbose)
 	{
 		std::cout << "[APP] Trying to create logical device" << std::endl;
 		std::cout << "      enabledLayerCount:     " << createInfo.enabledLayerCount << std::endl;
@@ -765,7 +751,7 @@ ZDevice createLogicalDevice	(
 	const VkResult createResult = pfnInstanceCreateDevice(*physDevice, &createInfo, callbacks, &deviceHandle);
 	recorder.stamp("After vkCreateDevice()");
 	VKASSERTMSG(createResult, "Failed to create logical device");
-	ZDevice logicalDevice(deviceHandle, callbacks, physDevice, std::move(queueCreateExInfos));
+	ZDevice logicalDevice(deviceHandle, callbacks, physDevice, 0/*!undeletable*/, std::move(queueCreateExInfos));
 	logicalDevice.verbose(getGlobalAppFlags().verbose != 0);
 
 	struct AInstance : public ZInstance	{
@@ -788,6 +774,17 @@ ZDevice createLogicalDevice	(
 ZPhysicalDevice	deviceGetPhysicalDevice (ZDevice device)
 {
 	return device.getParam<ZPhysicalDevice>();
+}
+
+VkResult deviceWaitIdle (ZDevice device, bool raiseException)
+{
+	VkResult res = VK_SUCCESS;
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	if (raiseException) {
+		VKASSERT(res = di.vkDeviceWaitIdle(*device));
+	}
+	else res = di.vkDeviceWaitIdle(*device);
+	return res;
 }
 
 ZInstance deviceGetInstance(ZPhysicalDevice device)
@@ -952,7 +949,8 @@ void waitForFences (std::vector<ZFence> fences, uint64_t timeout)
 void resetFence (ZFence fence)
 {
 	VkDevice device = *fence.getParam<ZDevice>();
-	VKASSERT(vkResetFences(device, 1, fence.ptr()));
+	add_cref<ZDeviceInterface> di = fence.getParam<ZDevice>().getInterface();
+	VKASSERT(di.vkResetFences(device, 1, fence.ptr()));
 }
 
 void resetFences (std::initializer_list<ZFence> fences)
@@ -967,7 +965,8 @@ void resetFences (std::initializer_list<ZFence> fences)
 			ASSERTION(device == i->getParam<ZDevice>());
 			handles[make_unsigned(std::distance(b, i))] = **i;
 		}
-		VKASSERT(vkResetFences(*device, count, handles.data()));
+		add_cref<ZDeviceInterface> di = fences.begin()->getParam<ZDevice>().getInterface();
+		VKASSERT(di.vkResetFences(*device, count, handles.data()));
 	}
 }
 
@@ -983,13 +982,15 @@ void resetFences (std::vector<ZFence> fences)
 			ASSERTION(device == i->getParam<ZDevice>());
 			handles[make_unsigned(std::distance(b, i))] = **i;
 		}
-		VKASSERT(vkResetFences(*device, count, handles.data()));
+		add_cref<ZDeviceInterface> di = fences[0].getParam<ZDevice>().getInterface();
+		VKASSERT(di.vkResetFences(*device, count, handles.data()));
 	}
 }
 
 bool fenceStatus (ZFence fence)
 {
-	const VkResult res = vkGetFenceStatus(*fence.getParamRef<ZDevice>(), *fence);
+	add_cref<ZDeviceInterface> di = fence.getParam<ZDevice>().getInterface();
+	const VkResult res = di.vkGetFenceStatus(*fence.getParamRef<ZDevice>(), *fence);
 	const bool status = res == VK_SUCCESS;
 	ASSERTION(res != VK_ERROR_DEVICE_LOST);
 	return status;

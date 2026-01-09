@@ -51,12 +51,8 @@ protected:
 	{
 		friend struct RTShaderCollection;
 		const uint32_t m_groupIndex;
-		struct Less { bool operator ()(add_cref<RTShaderGroup>, add_cref<RTShaderGroup>) const; };
-		bool operator== (RTShaderGroup const& other) const;
-		bool operator!= (RTShaderGroup const& other) const;
 	public:
 		RTShaderGroup(uint32_t groupIndex = 0u);
-		RTShaderGroup next() const;
 		uint32_t groupIndex() const;
 	};
 
@@ -69,7 +65,7 @@ protected:
 					  add_cptr<StageAndIndex> hintKey = nullptr) -> StageAndIndex;
 	void _buildAndVerify (add_cref<Version> vulkanVer = Version(1,0), add_cref<Version> spirvVer = Version(1,0),
 						 bool enableValidation = false, bool genDisassembly = false, bool buildAlways = false,
-						 add_cref<std::string> spirvValArgs = {});
+						 add_cref<std::string> spirvValArgs = {}, uint32_t threads = 1u);
 
 	ZDevice				m_device;
 	const std::string	m_basePath;
@@ -104,10 +100,12 @@ struct ProgramCollection : _GlSpvProgramCollection
 					  add_cref<std::string> entryName = "main", bool verbose = true);
 	void buildAndVerify (add_cref<Version> vulkanVer = Version(1,0), add_cref<Version> spirvVer = Version(1,0),
 						 bool enableValidation = false, bool genDisassembly = false, bool buildAlways = false,
-						 add_cref<std::string> spirvValArgs = {});
+						 add_cref<std::string> spirvValArgs = {}, uint32_t threads = 1u);
 	// Uses information from GlobalAppFlags
-	void buildAndVerify (bool buildAlways);
+	void buildAndVerify (bool buildAlways, uint32_t threads = 1u);
 	auto getShader (VkShaderStageFlagBits stage, uint32_t index = 0, bool verbose = true) const -> ZShaderModule;
+
+	static std::vector<std::pair<std::string, std::string>> getAvailableCompilerList (bool glslangValidator);
 };
 
 VkShaderStageFlagBits shaderGetStage (ZShaderModule module);

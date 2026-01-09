@@ -19,7 +19,7 @@ layout(push_constant) uniform PC {
 
 void main()
 {
-	payload = vec3(0,1,0);
+	payload = vec3(-2,-2,-2);
 
     vec2 uv = (vec2(gl_LaunchIDEXT.xy) + 0.5) / vec2(gl_LaunchSizeEXT.xy);
 
@@ -27,6 +27,7 @@ void main()
 	float aspect = float(gl_LaunchSizeEXT.x) / float(gl_LaunchSizeEXT.y);
 	vec2 d = uv * 2.0 - 1.0;
 	vec3 direction = normalize(vec3(d.x * aspect, d.y, +1.0));
+	direction = vec3(0,0,1);
 
     traceRayEXT(
         topLevelAS,
@@ -42,5 +43,5 @@ void main()
         0
     );
 
-    imageStore(outputImage, ivec2(gl_LaunchIDEXT.xy), vec4(payload, 1.0));
+    imageStore(outputImage, ivec2(gl_LaunchIDEXT.xy), vec4(2, payload));
 }

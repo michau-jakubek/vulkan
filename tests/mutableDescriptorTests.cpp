@@ -23,12 +23,12 @@ Params::Params (add_cref<std::string> assets_)
 {
 }
 
-TriLogicInt prepareTests (add_cref<TestRecord>& record, add_cref<strings> cmdLineParams);
+TriLogicInt prepareTests (add_cref<TestRecord>& record, add_ref<CommandLine> cmdLine);
 TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params);
 
-TriLogicInt prepareTests (add_cref<TestRecord>& record, add_cref<strings> cmdLineParams)
+TriLogicInt prepareTests (add_cref<TestRecord>& record, add_ref<CommandLine> cmdLine)
 {
-	UNREF(cmdLineParams);
+	UNREF(cmdLine);
 	add_cref<GlobalAppFlags> gf(getGlobalAppFlags());
 
 	Params params(record.assets);

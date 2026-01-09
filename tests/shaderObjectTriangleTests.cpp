@@ -1,5 +1,5 @@
 #include "shaderObjectTriangleTests.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "vtfCUtils.hpp"
 #include "vtfStructUtils.hpp"
 #include "vtfCanvas.hpp"
@@ -127,12 +127,12 @@ OptionParser<TestParams> TestParams::getParser ()
 
 TriLogicInt runTriangeSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets, add_cref<TestParams> params);
 TriLogicInt runTriangleMultipleThreads (add_ref<Canvas> cs, add_cref<std::string> assets, add_cref<TestParams> params);
-TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
+TriLogicInt prepareTests (add_cref<TestRecord> record, add_ref<CommandLine> cmdLine)
 {
 	add_cref<GlobalAppFlags>	gf		= getGlobalAppFlags();
 	TestParams					params	(gf);
 	OptionParser<TestParams>	parser	= params.getParser();
-	parser.parse(cmdLineParams);
+	parser.parse(cmdLine);
 	OptionParserState			state	= parser.getState();
 
 	if (state.hasHelp)

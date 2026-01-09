@@ -31,9 +31,9 @@ struct Params
 
 TriLogicInt runTest(add_ref<VulkanContext> ctx, add_cref<Params> params);
 
-TriLogicInt prepareTest(const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTest(const TestRecord& record, add_ref<CommandLine> cmdLine)
 {
-    UNREF(cmdLineParams);
+    UNREF(cmdLine);
     add_cref<GlobalAppFlags> gf(getGlobalAppFlags());
     Params params(record.assets);
 

@@ -23,12 +23,12 @@ struct Params
 };
 
 TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params);
-TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams);
+TriLogicInt prepareTests (add_cref<TestRecord> record, add_ref<CommandLine> cmdLine);
 std::tuple<ZShaderModule, ZShaderModule, ZShaderModule> buildProgram (ZDevice device, add_cref<Params> params);
 
-TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
+TriLogicInt prepareTests (add_cref<TestRecord> record, add_ref<CommandLine> cmdLine)
 {
-	UNREF(cmdLineParams);
+	UNREF(cmdLine);
 	add_cref<GlobalAppFlags> gf(getGlobalAppFlags());
 
 	auto onEnablingFeatures = [](add_ref<DeviceCaps> caps)

@@ -1,6 +1,6 @@
 #include "cogWheelsTests.hpp"
 #include "vtfCogwheelTools.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZRenderPass.hpp"
 #include "vtfZImage.hpp"
@@ -15,7 +15,7 @@
 #include "vtfStructUtils.hpp"
 #include "vtfCopyUtils.hpp"
 #include "vtfTemplateUtils.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 
 #include <iostream>
 #include <vector>
@@ -71,13 +71,11 @@ void Params::printHelp (add_cref<Params> defaultValue, add_ref<std::ostream> str
 
 TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params);
 
-TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
+TriLogicInt prepareTests (add_cref<TestRecord> record, add_ref<CommandLine> cmdLine)
 {
-	UNREF(cmdLineParams);
-
 	Params params(record.assets);
 	auto parser = params.getParser();
-	auto unresolvedParams = parser.parse(cmdLineParams); UNREF(unresolvedParams);
+	auto unresolvedParams = parser.parse(cmdLine); UNREF(unresolvedParams);
 	OptionParserState state = parser.getState();
 	if (state.hasErrors)
 	{

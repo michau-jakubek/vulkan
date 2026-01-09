@@ -9,7 +9,7 @@
 #include "vtfZPipeline.hpp"
 #include "vtfZBarriers.hpp"
 #include "vtfCopyUtils.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 
 #include <bitset>
 #include <numeric>
@@ -76,17 +76,17 @@ OptionParser<Params> Params::getParser ()
 	return parser;
 }
 
-TriLogicInt prepareTest (const TestRecord& record, const strings& cmdLineParams);
+TriLogicInt prepareTest (const TestRecord& record, add_ref<CommandLine> cmdLine);
 int			runTest (add_ref<VulkanContext> ctx, add_cref<Params> params,
 					 const time_point start, const int exeNum, const int exeCount);
 
-TriLogicInt prepareTest (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTest (const TestRecord& record, add_ref<CommandLine> cmdLine)
 {
 	Params					params	(record.assets);
 	OptionParser<Params>	parser	= params.getParser();
 	OptionParserState		state	{};
 
-	parser.parse(cmdLineParams);
+	parser.parse(cmdLine);
 	state = parser.getState();
 
 	if (state.hasHelp)

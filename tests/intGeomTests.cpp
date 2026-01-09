@@ -1,5 +1,5 @@
 #include "intGeomTests.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZRenderPass.hpp"
 #include "vtfZImage.hpp"
@@ -57,9 +57,9 @@ bool needsTopologyGeometry (const VkPrimitiveTopology topo)
 		|| topo == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY;
 }
 
-TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
+TriLogicInt prepareTests (add_cref<TestRecord> record, add_ref<CommandLine> cmdLine)
 {
-	UNREF(cmdLineParams);
+	UNREF(cmdLine);
 
 	Params params(record.assets);
 

@@ -22,8 +22,8 @@ ZCommandPool createCommandPool (ZDevice device, ZQueue queue, VkCommandPoolCreat
 
 	VkAllocationCallbacksPtr	callbacks = device.getParam<VkAllocationCallbacksPtr>();
 	ZCommandPool				commandPool(VK_NULL_HANDLE, device, callbacks, queue);
-
-	VKASSERT(vkCreateCommandPool(*device, &poolInfo, callbacks, commandPool.setter()));
+	add_cref<ZDeviceInterface>	di = device.getInterface();
+	VKASSERT(di.vkCreateCommandPool(*device, &poolInfo, callbacks, commandPool.setter()));
 
 	return commandPool;
 }
@@ -63,7 +63,8 @@ void commandBufferReset (ZCommandBuffer commandBuffer)
 
 void commandBufferEnd (ZCommandBuffer commandBuffer)
 {
-	VKASSERT(vkEndCommandBuffer(*commandBuffer));
+	add_cref<ZDeviceInterface> di = commandBuffer.getParam<ZDevice>().getInterface();
+	VKASSERT(di.vkEndCommandBuffer(*commandBuffer));
 }
 
 void commandBufferBegin (ZCommandBuffer commandBuffer, VkCommandBufferUsageFlags usage, add_ptr<void> pNext)
@@ -96,7 +97,8 @@ void commandBufferBegin (ZCommandBuffer commandBuffer, ZFramebuffer fb, ZRenderP
 	}
 	beginInfo.pInheritanceInfo	= commandBuffer.getParam<bool>() ? nullptr : &inheritInfo;
 
-	VKASSERT(vkBeginCommandBuffer(*commandBuffer, &beginInfo));
+	add_cref<ZDeviceInterface> di = commandBuffer.getParam<ZDevice>().getInterface();
+	VKASSERT(di.vkBeginCommandBuffer(*commandBuffer, &beginInfo));
 }
 
 void commandBufferExecuteCommands (ZCommandBuffer primary, std::initializer_list<ZCommandBuffer> secondaryCommands)
@@ -125,8 +127,9 @@ VkResult commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFe
 	submitInfo.commandBufferCount	= 1u;
 	submitInfo.pCommandBuffers		= commandBuffer.ptr();
 
-	VKASSERT(vkQueueSubmit(*queue, 1u, &submitInfo, *fence));
-	const VkResult waitResult = vkWaitForFences(*device, 1u, fence.ptr(), VK_TRUE, timeout);
+	add_cref<ZDeviceInterface> di = commandBuffer.getParam<ZDevice>().getInterface();
+	VKASSERT(di.vkQueueSubmit(*queue, 1u, &submitInfo, *fence));
+	const VkResult waitResult = di.vkWaitForFences(*device, 1u, fence.ptr(), VK_TRUE, timeout);
 	if (assertWaitResult) VKASSERT(waitResult);
 	if (hintFence.has_handle() == false)
 	{
@@ -889,10 +892,12 @@ OneShotCommandBuffer::OneShotCommandBuffer (ZDevice device, ZQueue queue)
 {
 }
 
-void OneShotCommandBuffer::endRecordingAndSubmit (bool enableException, ZFence hintFence, uint64_t timeout)
+VkResult OneShotCommandBuffer::endRecordingAndSubmit (bool enableException, ZFence hintFence, uint64_t timeout)
 {
+	VkResult res = VK_SUCCESS;
+
 	if (m_submitted) {
-		return;
+		return res;
 	}
 
 	try {
@@ -900,12 +905,20 @@ void OneShotCommandBuffer::endRecordingAndSubmit (bool enableException, ZFence h
 		commandBufferEnd(m_commandBuffer);
 		commandBufferSubmitAndWait(m_commandBuffer, hintFence, timeout);
 	}
+	catch (add_cref<ZVulkanResultException> e)
+	{
+		std::cout << e.what() << std::endl;
+		res = e.getResult();
+		if (enableException)
+			throw;
+	}
 	catch (add_cref<std::exception> e)
 	{
 		std::cout << e.what() << std::endl;
 		if (enableException)
 			throw;
 	}
+	return res;
 }
 
 std::unique_ptr<OneShotCommandBuffer> createOneShotCommandBuffer (ZCommandPool commandPool)

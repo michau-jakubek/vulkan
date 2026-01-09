@@ -38,12 +38,15 @@ struct GlobalAppFlags
 	vtf::Version	vulkanVer;
 	vtf::Version	spirvVer;
 	vtf::strings	layers;
+	vtf::strings	deviceExtensions;
 	vtf::strings	excludedDevExtensions;
 	vtf::strings	suppressedVUIDs;
 	uint32_t		physicalDeviceIndex;
+	uint32_t		vtfAsDllInstance;
 	uint32_t		verbose;
 	uint32_t		compilerIndex;
 	char			tmpDir[_MAX_PATH];
+	std::string		cmdSignature; // filled in main.cpp::parseParams
 	std::string		assetsPath;
 	std::string		thisAppPath;
 	std::string		vulkanDriver;

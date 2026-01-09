@@ -1,7 +1,7 @@
-# app project
+# vtf project
 
 if(NOT EXISTS ${ASSETS_PATH})
-    message(FATAL_ERROR "APP: ${ASSETS_PATH} not defined")
+	message(FATAL_ERROR "VTF: ${ASSETS_PATH} not defined")
 endif()
 
 set(VTF_GIT_VERSION_FILE_NAME "vtf_git_version.inl")
@@ -19,20 +19,24 @@ add_custom_target(vtf_git_version ALL
 	COMMENT "Generating ${VTF_GIT_VERSION_FILE_NAME}"
 )
 
-add_definitions(-DTHIS_EXECUTABLE_NAME="app")
-message(STATUS "Define preprocessor constant: THIS_EXECUTABLE_NAME=\"app\"")
+add_definitions(-DTHIS_EXECUTABLE_NAME="vtf")
+message(STATUS "Define preprocessor constant: THIS_EXECUTABLE_NAME=\"vtf\"")
 add_definitions(-DASSETS_PATH="${ASSETS_PATH}")
 message(STATUS "Define preprocessor constant: ASSETS_PATH=${ASSETS_PATH}")
 add_definitions(-DVULKAN_DRIVER="${VULKAN_DRIVER}")
 message(STATUS "Define preprocessor constant: VULKAN_DRIVER=${VULKAN_DRIVER}")
 
-set(app_files
+if(VTF_AS_DLL)
+	set(vtf_app_hpp vtf_app.cpp vtf_app.hpp)
+endif()
+set(vtf_files
         main.cpp
         main.hpp
 		${VTF_GIT_VERSION_FILE}
-		inlineParams.cpp)
+		inlineParams.cpp
+		${vtf_app_hpp})
 
-set(app_libs
+set(vtf_libs
 	    pdriver
         framework
         console
@@ -40,19 +44,22 @@ set(app_libs
         driver)
 
 if(ENABLE_DAEMON_TEST)
-list(APPEND app_libs daemon)
+list(APPEND vtf_libs daemon)
 endif()
 
-
-add_executable(app ${app_files})
-target_include_directories(app BEFORE PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-target_include_directories(app BEFORE PRIVATE ${VULKAN_INCLUDE_DIR})
-target_include_directories(app BEFORE PRIVATE ${GLFW3_INCLUDE_DIR})
-target_link_libraries(app ${app_libs})
-add_dependencies(app vtf_git_version)
+if(VTF_AS_DLL)
+    add_library(vtf SHARED ${vtf_files})
+else()
+    add_executable(vtf ${vtf_files})
+endif()
+target_include_directories(vtf BEFORE PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(vtf BEFORE PRIVATE ${VULKAN_INCLUDE_DIR})
+target_include_directories(vtf BEFORE PRIVATE ${GLFW3_INCLUDE_DIR})
+target_link_libraries(vtf ${vtf_libs})
+add_dependencies(vtf vtf_git_version)
 
 if (${DETECTED_COMPILER} EQUAL ${DETECTED_COMPILER_MSVC})
-    set_property(TARGET app PROPERTY LINK_FLAGS "/DELAYLOAD:${VULKAN_DRIVER}")
-    target_link_libraries(app ${app_libs} delayimp)
+    set_property(TARGET vtf PROPERTY LINK_FLAGS "/DELAYLOAD:${VULKAN_DRIVER}")
+    target_link_libraries(vtf ${vtf_libs} delayimp)
 endif()
 

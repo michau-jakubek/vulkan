@@ -1,4 +1,4 @@
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfContext.hpp"
 #include "vtfVector.hpp"
@@ -915,18 +915,19 @@ void printDeviceLimits (ZDevice device, add_ref<std::ostream> log)
 	log << "gl_SubgroupSize:                " << gl_SubgroupSize << std::endl;
 }
 
-TriLogicInt prepareTests(const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests(const TestRecord& record, add_ref<CommandLine> cmdLine)
 {
 	UNREF(record);
-	UNREF(cmdLineParams);
+	UNREF(cmdLine);
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 
 	auto hasCmdLineSUCF = [&]() -> bool
 	{
 		Option optSUCF { "--enable-sucf", 0 };
 		const std::vector<Option> options { optSUCF };
-		strings sink, cmdLineParamsCopy(cmdLineParams);
-		return (consumeOptions(optSUCF, options, cmdLineParamsCopy, sink) > 0);
+		//strings sink, cmdLineParamsCopy(cmdLineParams);
+		//return (consumeOptions(optSUCF, options, cmdLineParamsCopy, sink) > 0);
+		return false; // TODO CommandLine
 	};
 	const bool sucfEnabled = hasCmdLineSUCF();
 	VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR sucfFeatures = makeVkStruct();

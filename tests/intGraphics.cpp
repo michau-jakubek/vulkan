@@ -1,5 +1,5 @@
 #include "intGraphics.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZRenderPass.hpp"
 #include "vtfZImage.hpp"
@@ -49,7 +49,7 @@ struct TestParams
 		uint32_t	pad					: 12;
 	} flags { };
 	static_assert(sizeof(flags) == sizeof(uint32_t), "???");
-	static	auto parseCmdLine	(add_cref<std::string> assets, add_cref<strings> cmdLineParams) -> std::tuple<TestParams, std::string>;
+	static	auto parseCmdLine	(add_cref<std::string> assets, add_ref<CommandLine> cmdLine) -> std::tuple<TestParams, std::string>;
 	static	void printHelp		(add_cref<std::string> assets, ostream_ref str);
 	static	void printBrief		(add_cref<std::string> assets, ostream_ref str);
 			void print			(ostream_ref str) const;
@@ -155,12 +155,12 @@ void TestParams::printHelp (add_cref<std::string> assets, ostream_ref str)
 		str << content << std::endl;
 	else str << "[WARNING] Unable to open " << shortHelpFile << std::endl;
 }
-std::tuple<TestParams, std::string> TestParams::parseCmdLine (add_cref<std::string> assets, add_cref<strings> cmdLineParams)
+std::tuple<TestParams, std::string> TestParams::parseCmdLine (add_cref<std::string> assets, add_ref<CommandLine> cmdLine)
 {
 	bool				status;
 	std::array<bool, 4> vecStatus;
 	strings				sink;
-	strings				args(cmdLineParams);
+	strings				args({}); // TODO CommandLine cmdLineParams);
 	std::ostringstream	messages;
 	TestParams			res;
 
@@ -433,7 +433,7 @@ std::tuple<TestParams, std::string> TestParams::parseCmdLine (add_cref<std::stri
 	return { res, messages.str() };
 }
 TriLogicInt runTests (std::shared_ptr<VulkanContext> ctx, add_cref<TestParams> params);
-TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests (const TestRecord& record, add_ref<CommandLine> cmdLine)
 {
 	const auto [prms, messages]	= TestParams::parseCmdLine(record.assets, cmdLineParams);
 	add_cref<TestParams> params(prms);

@@ -1,5 +1,5 @@
-#ifndef __VTF_OPTION_PARSER_HPP_INCLUDED__
-#define __VTF_OPTION_PARSER_HPP_INCLUDED__
+#ifndef __VTF_COMMAND_LINE_HPP_INCLUDED__
+#define __VTF_COMMAND_LINE_HPP_INCLUDED__
 
 #include "vtfCUtils.hpp"
 #include "vtfVkUtils.hpp"
@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <optional>
+#include <string_view>
 
 namespace vtf
 {
@@ -22,6 +23,7 @@ struct Option
 	constexpr Option (const char* name_, uint32_t follows_, uint32_t id_ = 0u)
 		: name(name_), follows(follows_), id(id_) {}
 	bool operator== (const Option& other) const;
+	bool operator!= (const Option& other) const { return !(*this == other); };
 };
 int consumeOptions (add_cref<Option> opt, add_cref<std::vector<Option>> opts, add_ref<strings> args, add_ref<strings> values);
 int consumeOptions (add_cref<Option> opt, add_cref<std::vector<add_cptr<Option>>> opts, add_ref<strings> args, add_ref<strings> values);
@@ -123,6 +125,8 @@ struct OptionT : public OptionInterface
 							add_ref<OptionParserState>	state)> parse_cb;
 	typedef std::function<std::string(add_cref<OptionT<X>> sender)> format_cb;
 
+	// TODO: add helpers for create default callbacks
+
 	OptionT (add_ref<X> storage, add_cref<Option> opt, add_cref<std::string> desc, std::optional<X> def,
 			OptionFlags flags, parse_cb parseCallback, format_cb formatCallback)
 		: OptionInterface(opt)
@@ -176,6 +180,7 @@ struct OptionParserState
 	auto				operator= (add_cref<OptionParserState>) -> add_ref<OptionParserState>;
 };
 
+class CommandLine;
 struct _OptionParserImpl
 {
 	typedef std::function<bool(std::shared_ptr<OptionInterface> option, add_cref<std::string> value, add_ptr<OptionParserState> state)> parse_cb;
@@ -183,6 +188,7 @@ struct _OptionParserImpl
 	_OptionParserImpl (std::unique_ptr<OptionParserState>, bool includeHelp = true);
 	_OptionParserImpl (_OptionParserImpl&& other) noexcept;
 	auto	parse (add_cref<strings> cmdLineParams, bool allMustBeConsumed = true, parse_cb = {}) -> strings;
+	auto	parse (add_ref<CommandLine> commandLine, bool allMustBeConsumed = true, parse_cb = {}) -> strings;
 	void	printOptions (add_ref<std::ostream> str, uint32_t descWidth = 40u, uint32_t indent = 2u) const;
 	auto	getMaxOptionNameLength (bool includeTypeName = false, bool onlyTouched = false) const -> uint32_t;
 	auto	getOptions () const -> _OptIPtrVec;
@@ -309,6 +315,40 @@ bool OptionT<X>::parse (add_cref<std::string> text, add_ref<OptionParserState> s
 	return m_parseState;
 }
 
+class CommandLine
+{
+	struct Anchor
+	{
+		std::string_view view;
+		bool consumed;
+	};
+	std::vector<Anchor> m_anchors;
+	std::string m_commandLine;
+	std::string m_appName;
+	const std::string m_userData;
+
+	void makeAnchors (int argc, char** argv);
+	int consumeOptions (const int first, const int count,
+		add_cref<Option> opt, add_cref<std::vector<Option>> opts, add_ref<strings> values,
+		add_cref<strings> breakValues, add_ref<int> depth);
+
+public:
+	CommandLine (int argc, char** argv, add_cref<std::string> userData = {});
+	CommandLine (add_cref<strings> input, add_cref<std::string> userData = {});
+	CommandLine (add_cref<std::string> multiString, add_cref<std::string> userData = {});
+	int consumeOptions (add_cref<Option> opt, add_cref<std::vector<Option>> opts,
+						add_ref<strings> values, add_cref<strings> breakValues = {});
+	add_cref<std::string> getAppName () const;
+	add_cref<std::string> getUserData () const;
+	std::string getParams () const; // parameters only separated by space
+	strings     getStrings () const; // Everything, including executable name
+	std::string getMultiString () const; // Everything, separating by '\0', endings with '\0'
+	uint32_t    getAllTokenCount () const { return data_count(m_anchors); }
+	uint32_t    getConsumedTokenCount () const;
+	strings     getUnconsumedTokens () const;
+	uint32_t    truncateConsumed ();
+};
+
 } // namespace vtf
 
-#endif // __VTF_OPTION_PARSER_HPP_INCLUDED__
+#endif // __VTF_COMMAND_LINE_HPP_INCLUDED__

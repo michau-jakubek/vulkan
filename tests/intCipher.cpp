@@ -1,5 +1,5 @@
 #include "intCipher.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "vtfBacktrace.hpp"
 
 #include <iomanip>
@@ -46,7 +46,7 @@ struct Params
 	void print (ostream_ref log) const;
 	static void usage (cstring_ref appName, add_cptr<char> testName, ostream_ref log);
 	static std::string readPhrase (ostream_ref log, add_ref<std::stringstream> errColl);
-	static auto parseCommandLine (add_cref<strings> cmdLineParams, ostream_ref log) -> std::tuple<bool, Params, std::string>;
+	static auto parseCommandLine (add_ref<CommandLine> cmd, ostream_ref log) -> std::tuple<bool, Params, std::string>;
 };
 Params::Params ()
 	: action	(Action::None)
@@ -85,7 +85,7 @@ void Params::usage (cstring_ref appName, add_cptr<char> testName, ostream_ref lo
 		<< "   " << appName << ' ' << testName << " --encode -file file1 -hex-input file2 -output file3\n"
 		<< std::endl;
 }
-std::tuple<bool, Params, std::string> Params::parseCommandLine (add_cref<strings> cmdLineParams, ostream_ref log)
+std::tuple<bool, Params, std::string> Params::parseCommandLine (add_ref<CommandLine> cmd, ostream_ref log)
 {
 	const Option	optPhrase		{ "-phrase",     0 };
 	const Option	optFile			{ "-file",       1 };
@@ -98,7 +98,7 @@ std::tuple<bool, Params, std::string> Params::parseCommandLine (add_cref<strings
 	const std::vector<Option> opts { optPhrase, optFile, optEncode, optDecode,
 										optInput, optOutput, optHexInput, optHexOutput };
 	Params	params;
-	strings sink, args	(cmdLineParams);
+	strings sink;
 	std::stringstream	errColl;
 
 	auto makeResult = [&](bool result) -> std::tuple<bool, Params, std::string>
@@ -260,10 +260,10 @@ std::string Params::readPhrase (ostream_ref log, add_ref<std::stringstream> errC
 
 TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams);
 TriLogicInt runIntComputeSingleThread (cstring_ref assets, add_cref<Params> params);
-TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
+TriLogicInt prepareTests (add_cref<TestRecord> record, add_ref<CommandLine> cmdLine)
 {
 	const auto [status, params, errorString] =
-			Params::parseCommandLine(cmdLineParams, std::cout);
+			Params::parseCommandLine(cmdLine, std::cout);
 	TriLogicInt result(-1);
 	if (status)
 		result = runIntComputeSingleThread(record.assets, params);

@@ -1,6 +1,6 @@
 #include "shaderObjectComputeTests.hpp"
 #include "vtfBacktrace.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "vtfShaderObjectCollection.hpp"
 #include "vtfContext.hpp"
 #include "vtfZUtils.hpp"
@@ -115,14 +115,14 @@ void Params::print (add_ref<std::ostream> str) const
 	str << "Effective SPIR-V version: " << params.effectiveSpvVersion << std::endl;
 }
 
-TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams);
+TriLogicInt prepareTests (add_cref<TestRecord> record, add_ref<CommandLine> cmdLine);
 TriLogicInt performTests (add_ref<VulkanContext> ctx, add_cref<Params> params);
 
-TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
+TriLogicInt prepareTests (add_cref<TestRecord> record, add_ref<CommandLine> cmdLine)
 {
 	Params					params	(record.assets);
 	OptionParser<Params>	parser	= params.getParser();
-	parser.parse(cmdLineParams);
+	parser.parse(cmdLine);
 	OptionParserState		state	= parser.getState();
 
 	if (state.hasHelp)

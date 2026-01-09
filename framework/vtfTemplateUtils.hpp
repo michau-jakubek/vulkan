@@ -2,6 +2,7 @@
 #define __VTF_TEMPLATE_UTILS_HPP_INCLUDED__
 
 #include "vtfVector.hpp"
+#include <array>
 
 namespace vtf
 {
@@ -214,10 +215,17 @@ class span {
 public:
 	const uint32_t start;
 	const std::size_t count;
+	template<class> friend class span;
 
+	template<class Y,
+		std::enable_if_t<
+			std::is_same_v<std::remove_const_t<Y>, std::remove_const_t<X>>
+			&& std::is_const_v<X> && !std::is_const_v<Y>, int> = 13>
+	span(const span<Y>& other)
+		: ptr(other.ptr), start(other.start), count(other.count) {}
 	span(pointer p, uint32_t s, std::size_t n)
 		: ptr(p), start(s), count(n) {}
-	reference operator[](uint32_t index) const {
+	reference operator[](std::size_t index) const {
 		ASSERTMSG(index < count, "Index (", index, ") of bounds (", count, ')');
 		return ptr[index]; }
 	std::size_t size() const { return count; }
@@ -229,7 +237,7 @@ span<X> make_span(Y<X, Z...> & y, std::size_t n) {
 	return span<X>(y.data(), 0u, n);
 }
 template<template<class, class...> class Y, class X, class... Z>
-span<X> make_span(Y<X, Z...> const& y, std::size_t n) {
+span<std::add_const_t<X>> make_span(Y<X, Z...> const& y, std::size_t n) {
 	ASSERTION(n <= y.size());
 	return span<X>(y.data(), 0u, n);
 }
@@ -239,12 +247,29 @@ span<X> make_span(Y<X, Z...>& y, uint32_t start, std::size_t n) {
 	return span<X>(y.data() + start, start, n);
 }
 template<template<class, class...> class Y, class X, class... Z>
-span<X> make_span(Y<X, Z...> const& y, uint32_t start, std::size_t n) {
+span<std::add_const_t<X>> make_span(Y<X, Z...> const& y, uint32_t start, std::size_t n) {
 	ASSERTION(start + n <= y.size());
-	return span<X>(y.data() + start, start, n);
+	return span<std::add_const_t<X>>(y.data() + start, start, n);
 }
-
+template<class SPAN> struct _span_type_extractor;
+template<class SPAN> struct _span_type_extractor<span<SPAN>> {
+	using type = SPAN;
+};
+template<class SPAN> using span_type = typename _span_type_extractor<SPAN>::type;
 } // namespace span
+#define SPAN_TYPE(span__) span::span_type<std::remove_reference_t<decltype(span__)>>
+
+template<class ARR> struct StedArraySize;
+template<class _Ty, size_t _Size> struct StedArraySize<std::array<_Ty, _Size>> {
+	static inline const size_t size = _Size;
+};
+template<class ARR> constexpr size_t sted_array_size = StedArraySize<ARR>::size;
+#define STED_ARRAY_SIZE(a__) sted_array_size<std::remove_const_t<std::remove_reference_t<decltype(a__)>>>
+/* USAGE
+	constexpr size_t size = 33;
+	std::array<int,size> a;
+	static_assert(sted_array_size<std::remove_reference_t<decltype(a)>>::size == size, "???");
+*/
 
 // EPDM, Torpol
 

@@ -9,15 +9,17 @@ namespace vtf
 
 struct RTShaderCollection : public _GlSpvProgramCollection
 {
-	enum class HitGroupsOrder : uint16_t
-	{
-		InsertOrder = 1,
-		NumberOrder = 2
-	};
-	using SBTShaderGroup = _GlSpvProgramCollection::RTShaderGroup;
+	using _GlSpvProgramCollection::_GlSpvProgramCollection;
 
-	RTShaderCollection(ZDevice device, HitGroupsOrder = HitGroupsOrder::InsertOrder,
-						add_cref<std::string> basePath = std::string());
+	struct SBTShaderGroup : _GlSpvProgramCollection::RTShaderGroup
+	{
+		SBTShaderGroup (uint32_t groupIndex = 0u);
+		SBTShaderGroup (add_cref<SBTShaderGroup> other);
+		struct Less { bool operator () (add_cref<SBTShaderGroup>, add_cref<SBTShaderGroup>) const; };
+		bool operator== (add_cref<SBTShaderGroup> other) const;
+		bool operator!= (add_cref<SBTShaderGroup> other) const;
+		SBTShaderGroup next () const;
+	};
 
 	void addFromText (add_cref<SBTShaderGroup> logicalGroup, VkShaderStageFlagBits stage, add_cref<std::string> code,
 					  add_cref<strings> includePaths = {}, add_cref<std::string> entryName = "main");
@@ -32,14 +34,12 @@ struct RTShaderCollection : public _GlSpvProgramCollection
 					  add_cref<std::string> entryName = "main", bool verbose = true);
 	void buildAndVerify (add_cref<Version> vulkanVer = Version(1,0), add_cref<Version> spirvVer = Version(1,0),
 						 bool enableValidation = false, bool genDisassembly = false, bool buildAlways = false,
-						 add_cref<std::string> spirvValArgs = {});
+						 add_cref<std::string> spirvValArgs = {}, uint32_t threads = 1u);
 	// Uses information from GlobalAppFlags
-	void buildAndVerify (bool buildAlways);
-	auto getAllShaders (add_cref<SBTShaderGroup>) const ->std::vector<ZShaderModule>;
-	auto getAllShaders () const -> std::vector<ZShaderModule>;
+	void buildAndVerify (bool buildAlways, uint32_t threads = 1);
+	auto getAllShaders (std::initializer_list<SBTShaderGroup> = {/*empty means all*/}) const -> std::vector<ZShaderModule>;
 
 protected:
-	const HitGroupsOrder m_hitGroupsOrder;
 	bool findShaderKey (add_cref<SBTShaderGroup>, add_cref<SBTShaderGroup>,
 						VkShaderStageFlagBits, add_ref<StageAndIndex> key) const;
 	ZShaderModule	makeShader (add_cref<StageAndIndex> key) const;

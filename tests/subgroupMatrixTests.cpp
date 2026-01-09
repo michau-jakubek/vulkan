@@ -12,10 +12,10 @@ struct Params
 
 TriLogicInt runSubgroupMatrixSingleThread (VulkanContext& ctx, const std::string& assets, const Params& params);
 
-TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests (const TestRecord& record, add_ref<CommandLine> cmdLine)
 {
 	UNREF(record);
-	UNREF(cmdLineParams);
+	UNREF(cmdLine);
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 
 	Params params;

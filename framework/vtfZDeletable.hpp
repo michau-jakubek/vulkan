@@ -41,6 +41,7 @@ template<class X> struct add_extent	{ typedef X type[]; };
 VkAllocationCallbacks* getAllocationCallbacks();
 void deletable_selfTest ();
 
+void throwCorrectException (VkResult res, add_cref<std::string> msg);
 void writeBackTrace (add_ref<std::ostringstream> ss);
 void writeExpression (add_ref<std::ostringstream> ss,
 					  const char* func, const char* file, int line, const char* expr, VkResult res, int ind);
@@ -67,7 +68,7 @@ void assertion (
 	}
 	writeBackTrace(ss);
 	ss.flush();
-	throw std::runtime_error(ss.str());
+	throwCorrectException(res, ss.str());
 }
 
 bool	backtraceEnabled			();
@@ -353,7 +354,7 @@ typedef std::integer_sequence<int, 0, -1, 1>	swizzle_three_params;
 
 enum ZDistName
 {
-	None,
+	None, Undeletable,
 	RequiredLayers,				AvailableLayers,
 	RequiredLayerExtensions,	AvailableLayerExtensions,
 	RequiredDeviceExtensions,	AvailableDeviceExtensions,
@@ -386,11 +387,13 @@ private:
 
 typedef add_ptr<VkAllocationCallbacks> VkAllocationCallbacksPtr;
 
-void vtfDestroyInstance (VkInstance, VkAllocationCallbacksPtr);
+void vtfDestroyInstance (VkInstance, VkAllocationCallbacksPtr, uint32_t);
 typedef ZDeletable<VkInstance,
 	decltype(&vtfDestroyInstance), &vtfDestroyInstance,
-	swizzle_two_param, vtf::ZInstanceSingleton,
-	VkAllocationCallbacksPtr, std::string, /*apiVersion*/ uint32_t,
+	std::integer_sequence<int, -1, 0, 1>, vtf::ZInstanceSingleton,
+	VkAllocationCallbacksPtr,
+	ZDistType<Undeletable, uint32_t>,
+	/*appName*/ std::string, /*apiVersion*/ uint32_t,
 	ZDistType<AvailableLayers, std::vector<std::string>>,
 	ZDistType<RequiredLayers, std::vector<std::string>>,
 	ZDistType<AvailableLayerExtensions, std::vector<std::string>>,
@@ -433,13 +436,14 @@ struct ZDeviceQueueCreateInfo : VkDeviceQueueCreateInfo
 	bool			surfaceSupport;
 	ZDeviceQueueCreateInfo () = default;
 };
-void vtfDestroyDevice (VkDevice, VkAllocationCallbacksPtr, add_cref<ZPhysicalDevice>);
+void vtfDestroyDevice (VkDevice, VkAllocationCallbacksPtr, add_cref<ZPhysicalDevice>, uint32_t);
 typedef ZDeletable<VkDevice,
 	decltype(&vtfDestroyDevice), &vtfDestroyDevice,
-	std::integer_sequence<int, -1, 0, (DontDereferenceParamOffset + 1)>,
+	std::integer_sequence<int, -1, 0, (DontDereferenceParamOffset + 1), 2>,
 	vtf::ZDeviceSingleton,
 	VkAllocationCallbacksPtr,
 	ZPhysicalDevice,
+	ZDistType<Undeletable, uint32_t>,
 	std::vector<ZDeviceQueueCreateInfo>
 > ZDevice;
 
@@ -609,7 +613,8 @@ typedef ZDeletable<VkPipeline,
 	decltype(&vkDestroyPipeline), &vkDestroyPipeline,
 	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
 	ZPipelineLayout, ZRenderPass, VkPipelineBindPoint, VkPipelineCreateFlags,
-	std::vector<ZShaderModule> // ray-tracing shaders
+	std::vector<ZShaderModule>, // ray-tracing shaders
+	ZDistType<LayoutIdentifier, uint32_t> // ray-tracing pipeline shader group order
 >
 ZPipeline;
 

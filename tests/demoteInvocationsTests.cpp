@@ -1,4 +1,4 @@
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "triangleTests.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZRenderPass.hpp"
@@ -51,13 +51,13 @@ struct Params
 	constexpr bool	colorGroup		    () const { return (flags.mColorGroup		!= 0); }
 	Params ();
 	std::tuple<Status, Params, std::string>
-	static parseCommandLine (add_cref<strings> cmdLineParams);
+	static parseCommandLine (add_ref<CommandLine> cmdLine);
 	void print (add_ref<std::ostream> log) const;
 	void usage (add_ref<std::ostream> log) const;
 };
 
 TriLogicInt runDemoteInvocationsSingleThread (Canvas& canvas, const std::string& assets, add_cref<Params> params);
-TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests (const TestRecord& record, add_ref<CommandLine> cmdLine)
 {
 	const Version reqSpirv(1,3);
 	if (getGlobalAppFlags().spirvVer < reqSpirv)
@@ -80,7 +80,7 @@ TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams
 		caps.addUpdateFeatureIf(&DemoteFeatures::shaderDemoteToHelperInvocation)
 			.checkSupported("shaderDemoteToHelperInvocation");
 	};
-	auto [status, params, err] = Params::parseCommandLine(cmdLineParams);
+	auto [status, params, err] = Params::parseCommandLine(cmdLine);
 	switch (status)
 	{
 		case Params::Help:
@@ -112,11 +112,10 @@ Params::Params ()
 {
 }
 std::tuple<Params::Status, Params, std::string>
-Params::parseCommandLine (add_cref<strings> cmdLineParams)
+Params::parseCommandLine (add_ref<CommandLine> cmdLine)
 {
 	bool status;
 	strings sink;
-	strings args(cmdLineParams);
 	std::stringstream errorMessage;
 
 	Option	optHelp1	{ "-help", 0 };
@@ -135,17 +134,17 @@ Params::parseCommandLine (add_cref<strings> cmdLineParams)
 	Params result;
 	Params::Status parseStatus = Ok;
 
-	if ((consumeOptions(optHelp1, options, args, sink) > 0)
-		|| (consumeOptions(optHelp2, options, args, sink) > 0))
+	if ((cmdLine.consumeOptions(optHelp1, options, sink) > 0)
+		|| (cmdLine.consumeOptions(optHelp2, options, sink) > 0))
 	{
 		return { Params::Status::Help, result, std::string() };
 	}
 
-	result.flags.mBuildAlways		= (consumeOptions(optBuildAlways, options, args, sink) > 0) ? 1 : 0;
-	result.flags.mDemoteWholeQuad	= (consumeOptions(optDemoteQuad, options, args, sink) > 0) ? 1 : 0;
-	result.flags.mSingleTriangle	= (consumeOptions(optSingleTriangle, options, args, sink) > 0) ? 1 : 0;
-	result.flags.mColorGroup		= (consumeOptions(optColorQroup, options, args, sink) > 0) ? 1 : 0;
-	result.flags.mUseSimulateHelper	= (consumeOptions(optUseSimulateHelper, options, args, sink) > 0) ? 1 : 0;
+	result.flags.mBuildAlways		= (cmdLine.consumeOptions(optBuildAlways, options, sink) > 0) ? 1 : 0;
+	result.flags.mDemoteWholeQuad	= (cmdLine.consumeOptions(optDemoteQuad, options, sink) > 0) ? 1 : 0;
+	result.flags.mSingleTriangle	= (cmdLine.consumeOptions(optSingleTriangle, options, sink) > 0) ? 1 : 0;
+	result.flags.mColorGroup		= (cmdLine.consumeOptions(optColorQroup, options, sink) > 0) ? 1 : 0;
+	result.flags.mUseSimulateHelper	= (cmdLine.consumeOptions(optUseSimulateHelper, options, sink) > 0) ? 1 : 0;
 
 	auto consumeOption = [&](auto field, const Option& opt) -> void
 	{

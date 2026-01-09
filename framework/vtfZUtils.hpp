@@ -30,6 +30,26 @@ class VertexInput;
 
 Version			getVulkanImplVersion (std::optional<ZInstance> instance = {});
 
+#if VTF_AS_DLL
+struct VtfAppSharedObject
+{
+	VkPhysicalDevice phys;
+	VkInstance instance;
+	VkDevice device;
+	uint32_t instanceID;
+	uint32_t deviceID; // physical device index
+	uint32_t graphicsQueueFamilyIndex;
+	uint32_t computeQueueFamilyIndex;
+	strings requiredInstanceExtensions;
+	ZPhysicalDevice zPhys;
+	ZInstance zInstance;
+	ZDevice zDevice;
+	using Key = std::pair<uint32_t, uint32_t>;
+	using Map = std::map<Key, std::shared_ptr<VtfAppSharedObject>>;
+	static add_ref<Map> get();
+};
+#endif // VTF_AS_DLL
+
 ZDevice			getSharedDevice ();
 ZInstance		getSharedInstance ();
 ZPhysicalDevice	getSharedPhysicalDevice ();
@@ -87,6 +107,7 @@ add_cref<VkPhysicalDeviceLimits>
 VkPhysicalDeviceFeatures2
 				deviceGetPhysicalFeatures2 (ZPhysicalDevice device, void* pNext = nullptr);
 ZPhysicalDevice	deviceGetPhysicalDevice (ZDevice device);
+VkResult		deviceWaitIdle (ZDevice device, bool raiseException = true);
 ZInstance		deviceGetInstance (ZPhysicalDevice device);
 ZInstance		deviceGetInstance (ZDevice device);
 ZQueue			deviceGetNextQueue			(ZDevice device, VkQueueFlags queueFlags, bool mustSupportSurface);
@@ -94,6 +115,18 @@ uint32_t		queueGetFamilyIndex			(ZQueue queue);
 uint32_t		queueGetIndex				(ZQueue queue);
 VkQueueFlags	queueGetFlags				(ZQueue queue);
 bool			queueSupportSwapchain		(ZQueue queue);
+
+struct ZException
+{
+};
+struct ZVulkanResultException : public ZException, public std::runtime_error
+{
+	ZVulkanResultException (VkResult res, add_cref<std::string> msg)
+		: ZException(), std::runtime_error(msg), m_result(res) {}
+	VkResult getResult () const { return m_result; }
+private:
+	const VkResult m_result;
+};
 
 ZFence			createFence		(ZDevice device, bool signaled = false);
 VkResult		waitForFence	(ZFence fence, uint64_t timeout = UINT64_MAX, bool assertOnFail = true);

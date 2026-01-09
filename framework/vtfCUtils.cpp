@@ -210,7 +210,7 @@ bool containsString (const std::string& s, const vtf::strings& list)
 	return p != list.end();
 }
 
-bool containsString(const vtf::strings& list, const std::string& s)
+bool containsString (const vtf::strings& list, const std::string& s)
 {
 	return containsString(s, list);
 }
@@ -297,6 +297,38 @@ strings splitString (const std::string& delimitedString, char delimiter)
 		std::getline(ss, result.back(), delimiter);
 	}
 	return result;
+}
+
+strings parseMultiString (add_cref<std::string> multiString)
+{
+	strings result;
+
+	add_cptr<char> p = multiString.c_str();
+	add_cptr<char> end = p + multiString.size();
+
+	while (p < end && *p != '\0') {
+		std::string s(p);
+		result.emplace_back(s);
+		p += s.size() + 1u;
+	}
+
+	return result;
+}
+
+std::optional<size_t> multiStringLength (add_cptr<char> p, size_t maxBytes)
+{
+	if (nullptr == p || maxBytes < 2)
+		return std::nullopt;
+
+	for (size_t i = 0u; i + 1 < maxBytes; ++i) {
+		if (p[i] == '\0' && p[i + 1] == '\0') {
+			// found end of multi-stringa
+			return i + 2u; // length including \0\0
+		}
+	}
+
+	// didn't find trailing \0\0 in acceptable range
+	return std::nullopt;
 }
 
 inline static char toLowerChar (add_cref<char> c) { return (char)std::tolower(c); }

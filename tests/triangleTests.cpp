@@ -1,5 +1,5 @@
 #include "triangleTests.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZImage.hpp"
 #include "vtfDSBMgr.hpp"
@@ -71,9 +71,9 @@ bool verifyQueues (add_cref<std::vector<ZQueue>> queues)
 
 TriLogicInt runTriangeSingleThread (Canvas& canvas, const std::string& assets, bool infinityRepeat, bool vulkan12);
 TriLogicInt runTriangleMultipleThreads (Canvas& canvas, const std::string& assets, uint32_t threadCount);
-TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests (const TestRecord& record, add_ref<CommandLine> cmdLine)
 {
-	UNREF(cmdLineParams);
+	const auto cmdLineParams = cmdLine.getUnconsumedTokens();
 	std::cout << "Parameters"									<< std::endl;
 	std::cout << "  [-t <num>]  run on threads, default is 2"	<< std::endl;
 	std::cout << "  [-i]        infinity repeat"				<< std::endl;

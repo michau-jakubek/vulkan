@@ -1,0 +1,18 @@
+#version 450
+
+#extension GL_EXT_abort : require
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(push_constant) uniform PC {
+	uint dataValue1, dataValue2;
+	uint dataIndex1, dataIndex2;
+};
+layout(std430, set = 0, binding = 0) writeonly buffer Data { uint outp[]; } data;
+
+void main()
+{
+  data.outp[dataIndex1] = dataValue1;
+  abortEXT("Manually producing device faults!");
+  data.outp[dataIndex2] = dataValue2;
+}
+

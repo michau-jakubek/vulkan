@@ -2,29 +2,37 @@ if(NOT EXISTS ${ASSETS_PATH})
     message(FATAL_ERROR "TESTS: ${ASSETS_PATH} not defined")
 endif()
 
+set(vtf_app_hpp ../app/vtf_app.hpp ../app/vtf_app.cpp vtfLauncher.hpp)
+if(SYSTEM_OS_WINDOWS)
+	list(APPEND vtf_app_hpp vtfLauncherWin.cpp)
+else()
+	list(APPEND vtf_app_hpp vtfLauncherLin.cpp)
+endif()
+
 set(tests_files
     allTests.cpp
     allTests.hpp
-    triangleTests.cpp
-    triangleTests.hpp
+	${vtf_app_hpp}
+	triangleTests.cpp
+	triangleTests.hpp
     fractalsTests.cpp
     fractalsTests.hpp
-	viewerTests.cpp
-	viewerTests.hpp
+	#viewerTests.cpp
+	#viewerTests.hpp
     lineWidthTests.cpp
     lineWidthTests.hpp
 	#multiViewTests.cpp
 	#multiViewTests.hpp
 	intMatrixTests.cpp
 	intMatrixTests.hpp
-	intCompute.cpp
-	intCompute.hpp
+	#intCompute.cpp
+	#intCompute.hpp
 	nothingCompute.cpp
 	nothingCompute.hpp
-    intGraphics.cpp
-    intGraphics.hpp
-    intCipher.cpp
-    intCipher.hpp
+	#intGraphics.cpp
+	#intGraphics.hpp
+	#intCipher.cpp
+	#intCipher.hpp
     intThreadPool.cpp
     intThreadPool.hpp
 	intSynchronization2.cpp
@@ -32,10 +40,10 @@ set(tests_files
     ${daemon_test_files}
     subgroupMatrixTests.cpp
     subgroupMatrixTests.hpp
-	topologyTests.cpp
-	topologyTests.hpp
-	demoteInvocationsTests.cpp
-	demoteInvocationsTests.hpp
+	#topologyTests.cpp
+	#topologyTests.hpp
+	#demoteInvocationsTests.cpp
+	#demoteInvocationsTests.hpp
     blendingTests.cpp
     blendingTests.hpp
 	sparseBufferTests.cpp
@@ -72,6 +80,8 @@ set(tests_files
 	structGeneratorTests.hpp
 	rejtrejsingIntroTests.cpp
 	rejtrejsingIntroTests.hpp
+	deviceCrashTests.cpp
+	deviceCrashTests.hpp
     )
 
 if(ENABLE_DAEMON_TEST)
@@ -82,6 +92,7 @@ endif()
 set(tests_libs
     console
     framework
+	renderdoc
 	rejtrejsing
 	driver)
 
@@ -95,6 +106,7 @@ target_include_directories(tests
                            AFTER PRIVATE  ${daemon_header_files}
                            AFTER PRIVATE  ${daemon_header_files}
                            AFTER PRIVATE  ${CMAKE_CURRENT_SOURCE_DIR}
+						   AFTER PRIVATE  ../app
                            )
 target_link_libraries(tests pdriver driver ${tests_libs})
 

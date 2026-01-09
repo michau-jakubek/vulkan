@@ -5,6 +5,15 @@ layout(location = 0) rayPayloadInEXT vec3 payload;
 
 void main()
 {
-    payload = vec3(1.0, 1.0, 1.0); // white
+    // gl_FrontFacingEXT powie nam, czy trafiliśmy w przód czy w tył
+	// if (gl_HitKindEXT == gl_HitKindFrontFacingEXT)
+	if (gl_HitKindEXT == 0xFE)
+     {
+        payload = vec3(12, 0.0, 0.0); // Zielony = Przód
+    } else {
+        payload = vec3(18, 0.0, 0.0); // Czerwony = Tył
+    }
+
+    //// payload = vec3(1.0, 0, 0); // white
 }
 

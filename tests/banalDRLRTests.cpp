@@ -11,7 +11,7 @@
 #include "vtfStructUtils.hpp"
 #include "vtfCopyUtils.hpp"
 #include "vtfStructUtils.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "vtfPrettyPrinter.hpp"
 
 #include <numeric>
@@ -90,7 +90,7 @@ OptionParser<Params> Params::getParser()
 			return os.str();
 		};
 
-	OptionFlags				flags(OptionFlag::None);
+	//OptionFlags				flags(OptionFlag::None);
 	OptionFlags				flagsDef(OptionFlag::PrintValueAsDefault);
 	add_ref<Params>			params = *this;
 	OptionParser<Params>	parser(params);
@@ -281,13 +281,13 @@ std::tuple<ZShaderObject, ZShaderObject, ZShaderObject, ZShaderObject,
 	buildShaderObjects (ZDevice, ZDescriptorSetLayout, add_cref<ZPushRange<uint32_t>>, add_cref<Params>);
 void genVertices (VertexInput& vi);
 
-TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
+TriLogicInt prepareTests (add_cref<TestRecord> record, add_ref<CommandLine> cmdLine)
 {
 	add_cref<GlobalAppFlags> gf(getGlobalAppFlags());
 
 	Params params(record.name, record.assets);
 	OptionParser<Params> parser = params.getParser();
-	parser.parse(cmdLineParams);
+	parser.parse(cmdLine);
 	OptionParserState state = parser.getState();
 
 	if (state.hasHelp)

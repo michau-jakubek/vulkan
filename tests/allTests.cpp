@@ -1,11 +1,12 @@
-#include <cstring>
 #include "vtfZUtils.hpp"
 #include "vtfVkUtils.hpp"
 #include "vtfCUtils.hpp"
 #include "allTests.hpp"
 #include "shell.hpp"
+#include "vtfCommandLine.hpp"
 
-std::vector<TestRecord> AllTestRecords;
+#include <cstring>
+#include <string_view>
 
 TestRecord::TestRecord ()
 	: name		()
@@ -83,12 +84,27 @@ void recordAllTests (std::vector<TestRecord>& records)
 	assertUiqueTest(records);
 }
 
+vtf::TriLogicInt launchTest (int argc, char** argv, add_cref<std::string> testName)
+{
+	TestRecord testRecord;
+	TestRecorder<VTF_LAUNCHER>::record(testRecord);
+
+	ASSERTMSG(std::string_view(testName) != std::string_view(testRecord.name),
+				"ERROR: ", testName, " cannot run itself");
+
+	vtf::CommandLine cmdLine(argc, argv);
+	return (*testRecord.call)(testRecord, cmdLine);
+}
+
 std::vector<const char*> getTestNames (const std::vector<TestRecord>& records)
 {
 	std::vector<const char*> names;
 	names.reserve(records.size());
 	for (const auto& rec : records)
 	{
+		if (false == rec.visible)
+			continue;
+
 		ASSERTION(rec.name);
 		names.push_back(rec.name);
 	}
@@ -100,6 +116,7 @@ std::ostream& printAvailableTests (std::ostream& str, const std::vector<TestReco
 	for (std::size_t i = 0; i < records.size(); ++i)
 	{
 		ASSERTION(records[i].name);
+		if (records[i].visible == false) continue;
 		if (i) str << std::endl;
 		str << indent << records[i].name;
 	}

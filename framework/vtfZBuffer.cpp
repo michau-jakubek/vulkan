@@ -567,7 +567,8 @@ BufferTexelAccess_::BufferTexelAccess_ (ZBuffer buffer, uint32_t elementSize,
 	, m_offset			(off)
 	, m_data			(nullptr)
 {
-	ASSERTMSG(width != 0 && height != 0 && depth != 0 && (VkDeviceSize(elementSize) * width * height * depth) <= m_bufferSize,
+	ASSERTMSG(width != 0 && height != 0 && depth != 0
+		&& (VkDeviceSize(elementSize) * width * height * depth) <= m_bufferSize,
 		"width: ", width, ", height: ", height, ", depth: ", depth, ", elementSize: ", elementSize,
 		", ", (VkDeviceSize(elementSize) * width * height * depth), " <= ", m_bufferSize);
 	const VkBufferUsageFlags	usage = buffer.getParamRef<VkBufferCreateInfo>().usage;

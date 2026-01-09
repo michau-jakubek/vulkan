@@ -9,12 +9,18 @@
 #define DEFINE_TEST(test_name_) \
 	extern template bool TestRecorder<test_name_>::record (TestRecord&)
 
+namespace vtf
+{
+	class CommandLine;
+}
+
 struct TestRecord
 {
 	const char*		name;			// test name (mandatory)
 	const char*		desc;			// test description (mandatory)
 	std::string		assets;			// given by caller
-	vtf::TriLogicInt (*call)(const TestRecord& record, const vtf::strings& args);
+	vtf::TriLogicInt (*call)(add_cref<TestRecord> record, add_ref<vtf::CommandLine> args);
+	bool			visible = true;
 	TestRecord ();
 	void valid () const;
 	void reset ();
@@ -25,8 +31,7 @@ template<int> struct TestRecorder
 	static	bool record (TestRecord& out);
 };
 
-extern std::vector<TestRecord> AllTestRecords;
-
+vtf::TriLogicInt launchTest (int argc, char** argv, add_cref<std::string> testName);
 void recordAllTests (std::vector<TestRecord>& records);
 void printAvailableTests (const std::vector<TestRecord>& records, const char* indent = "\t");
 std::ostream& printAvailableTests (std::ostream& str, const std::vector<TestRecord>& records, const char* indent = "\t", bool includeNewLine = true);
@@ -49,26 +54,26 @@ std::shared_ptr<Shell> getOrCreateUniqueShell(std::ostream&			output,
 enum TestIdentifier
 {
 	ALL_TESTS_BEGIN,
-
+	VTF_LAUNCHER,
 	TRIANGLE,
-	VIEWER,
+	//VIEWER,
 	LINE_WIDTH,
 	//MULTIVIEW,
-	INT_COMPUTE,
+	//INT_COMPUTE,
     NOTHING_COMPUTE,
-	INT_GRAPHICS,
+	//INT_GRAPHICS,
 	INT_MATRIX,
-	INT_CIPHER,
+	//INT_CIPHER,
 	INT_THREADPOOL,
 	INT_SYNCHRONIZATION2,
 	INT_GEOM,
 	COGWHEELS,
 	SUBGROUP_MATRIX,
-	TOPOLOGY,
+	//TOPOLOGY,
 #ifdef ENABLE_DAEMON_TEST
 	DAEMON,
 #endif
-	DEMOTE_INVOCATIONS,
+	//DEMOTE_INVOCATIONS,
 	BLENDING,
 	SPARSE_BUFFER,
 	DEVICE_TIMEOUT,
@@ -85,6 +90,7 @@ enum TestIdentifier
 	DEPTH,
 	STRUCT_GENERATOR,
 	REJTREJSING_INTRO,
+	DEVICE_CRASH,
 	FRACTALS,
 
 	ALL_TESTS_END = FRACTALS

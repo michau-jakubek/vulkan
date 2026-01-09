@@ -1,5 +1,5 @@
 #include "lineWidthTests.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZRenderPass.hpp"
 #include "vtfBacktrace.hpp"
@@ -55,11 +55,10 @@ struct TestParams
 	bool	submitWithinLoop;
 };
 
-TestParams userReadParams (const strings& params, add_ref<std::ostream> log, add_ref<int> ok)
+TestParams userReadParams (add_ref<CommandLine> cmdLine, add_ref<std::ostream> log, add_ref<int> ok)
 {
 	TestParams			p{};
 	strings				sink;
-	strings				args(params);
 	Option				optVerticalWidth	{ "-vert", 1 };
 	Option				optHorizontalWidth	{ "-horz", 1 };
 	Option				optHelpShort		{ "-h", 0 };
@@ -68,15 +67,15 @@ TestParams userReadParams (const strings& params, add_ref<std::ostream> log, add
 	std::vector<Option>	options { optVerticalWidth, optHorizontalWidth, optSubmitWithinLoop,
 									optHelpShort, optHelpLong };
 
-	if (consumeOptions(optHelpShort, options, args, sink) > 0
-		|| consumeOptions(optHelpLong, options, args, sink) > 0)
+	if (cmdLine.consumeOptions(optHelpShort, options, sink) > 0
+		|| cmdLine.consumeOptions(optHelpLong, options, sink) > 0)
 	{
 		ok = 2 - 3;
 		return p;
 	}
 
 	float verticalWidth = 15;
-	if (consumeOptions(optVerticalWidth, options, args, sink) > 0)
+	if (cmdLine.consumeOptions(optVerticalWidth, options, sink) > 0)
 	{
 		bool status = false;
 		verticalWidth = fromText(sink.back(), verticalWidth, status);
@@ -86,7 +85,7 @@ TestParams userReadParams (const strings& params, add_ref<std::ostream> log, add
 	}
 
 	float horizontalWidth = 5;
-	if (consumeOptions(optHorizontalWidth, options, args, sink) > 0)
+	if (cmdLine.consumeOptions(optHorizontalWidth, options, sink) > 0)
 	{
 		bool status = false;
 		horizontalWidth = fromText(sink.back(), horizontalWidth, status);
@@ -95,15 +94,16 @@ TestParams userReadParams (const strings& params, add_ref<std::ostream> log, add
 		}
 	}
 
-	bool submitWithinLoop = (consumeOptions(optSubmitWithinLoop, options, args, sink) > 0);
+	bool submitWithinLoop = (cmdLine.consumeOptions(optSubmitWithinLoop, options, sink) > 0);
 
 	p.verticalWidth		= verticalWidth;
 	p.horizontalWidth	= horizontalWidth;
 	p.submitWithinLoop	= submitWithinLoop;
 
-	if (ok = args.empty() ? 1 : 0; ok == 0)
+	const auto unconsumed = cmdLine.getUnconsumedTokens();
+	if (ok = unconsumed.empty(); false == ok)
 	{
-		log << "[ERROR] Unrecognized parameter " << std::quoted(args.at(0)) << std::endl;
+		log << "[ERROR] Unrecognized parameter " << std::quoted(unconsumed[0]) << std::endl;
 	}
 
 	return p;
@@ -111,10 +111,10 @@ TestParams userReadParams (const strings& params, add_ref<std::ostream> log, add
 
 TriLogicInt runTestSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets, add_cref<TestParams> params);
 
-TriLogicInt prepareTests (const TestRecord& record, const strings& cmdLineParams)
+TriLogicInt prepareTests (const TestRecord& record, add_ref<CommandLine> cmdLine)
 {
 	int ok = 0;
-	const TestParams params = userReadParams(cmdLineParams, std::cout, ok);
+	const TestParams params = userReadParams(cmdLine, std::cout, ok);
 	if (ok == 0)
 	{
 		return 1;

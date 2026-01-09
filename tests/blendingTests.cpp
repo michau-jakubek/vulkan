@@ -1,6 +1,6 @@
 #include "blendingTests.hpp"
 #include "vtfBacktrace.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "vtfTermColor.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZRenderPass.hpp"
@@ -794,7 +794,7 @@ uint32_t processFile (
 	}
 	return itemCount;
 }
-TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
+TriLogicInt prepareTests (add_cref<TestRecord> record, add_ref<CommandLine> cmdLine)
 {
 	const strings instanceExtensions = [] {
 		GlfwInitializerFinalizer gif(ZInstance(), true);
@@ -814,8 +814,8 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLine
 		add_ref<TestParams>			params	(std::get<0>(set.at(0)));
 		add_ref<OptionParserStateX>	state	(std::get<1>(set.at(0)));
 		auto						parser	= params.getParser(true, true, true);
-		parser.parse(cmdLineParams, true, std::bind(&TestParams::parsing, &params,
-													std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+		parser.parse(cmdLine, true, std::bind(&TestParams::parsing, &params,
+											  std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 		state = parser.getState();
 
 		if (state.hasHelp)

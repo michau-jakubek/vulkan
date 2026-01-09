@@ -3,6 +3,7 @@
 #include "vtfBacktrace.hpp"
 #include "vtfVulkanDriver.hpp"
 #include "vtfVkUtils.hpp"
+#include "vtfZUtils.hpp"
 
 #include <iterator>
 #include <sstream>
@@ -42,6 +43,14 @@ void writeBackTrace (add_ref<std::ostringstream> ss)
 #endif
 }
 
+void throwCorrectException (VkResult res, add_cref<std::string> msg)
+{
+	if (VK_SUCCESS == res)
+		throw std::runtime_error(msg);
+	else
+		throw vtf::ZVulkanResultException(res, msg);
+}
+
 void deletable_selfTest() {}
 
 void freeWindow (add_ptr<GLFWwindow> window)
@@ -53,8 +62,9 @@ void freeWindow (add_ptr<GLFWwindow> window)
 	}
 }
 
-void vtfDestroyInstance (VkInstance instance, VkAllocationCallbacksPtr callbacks)
+void vtfDestroyInstance (VkInstance instance, VkAllocationCallbacksPtr callbacks, uint32_t undeletable)
 {
+	if (undeletable) return;
 	PFN_vkDestroyInstance proc = getDriverDestroyInstanceProc();
 	if (proc)
 	{
@@ -62,9 +72,10 @@ void vtfDestroyInstance (VkInstance instance, VkAllocationCallbacksPtr callbacks
 	}
 }
 
-void vtfDestroyDevice (VkDevice dev, VkAllocationCallbacksPtr cb, add_cref<ZPhysicalDevice> phd)
+void vtfDestroyDevice (VkDevice dev, VkAllocationCallbacksPtr cb, add_cref<ZPhysicalDevice> phd, uint32_t undeletable)
 {
 	UNREF(phd);
+	if (undeletable) return;
 	PFN_vkDestroyDevice proc = getDriverDestroyDeviceProc();
 	if (proc)
 	{

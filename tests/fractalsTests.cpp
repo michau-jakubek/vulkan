@@ -1,5 +1,5 @@
 #include "allTests.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZRenderPass.hpp"
 #include "vtfGlfwEvents.hpp"
@@ -30,7 +30,7 @@ struct TestConfig
 	int32_t		iters;
 	bool		method;
 	bool		float32;
-			TestConfig	(add_cref<strings>		commandLineParams);
+			TestConfig	(add_ref<CommandLine> cmdLine);
 	void	print		(add_ref<std::ostream>	str) const;
 };
 void TestConfig::print (add_ref<std::ostream> str) const
@@ -46,7 +46,7 @@ void TestConfig::print (add_ref<std::ostream> str) const
 	str << "Calculation method:       " << (method ? METH1 : METH0) << std::endl;
 	str << "Iteration count:          " << iters << std::endl;
 }
-TestConfig::TestConfig (add_cref<strings> commandLineParams)
+TestConfig::TestConfig (add_ref<CommandLine> cmdLine)
 	: seed		()
 	, ticks		()
 	, iters		(minIters)
@@ -55,38 +55,37 @@ TestConfig::TestConfig (add_cref<strings> commandLineParams)
 {
 	strings				sink;
 	bool				status				(false);
-	strings				args				(commandLineParams);
 	Option				optMethod			{ "-m", 1 };
 	Option				optStartingPoint	{ "-s", 1 };
 	Option				optAnimationTicks	{ "-a", 1 };
 	Option				optIterationCount	{ "-i", 1 };
 	Option				optEnforceFloat32	{ "-float32", 0 };
 	std::vector<Option>	options{ optMethod, optStartingPoint, optAnimationTicks, optIterationCount, optEnforceFloat32 };
-	if (consumeOptions(optMethod, options, args, sink) > 0)
+	if (cmdLine.consumeOptions(optMethod, options, sink) > 0)
 	{
 		method = fromText(sink.back(), 0u, status) != 0u;
 	}
-	if (consumeOptions(optStartingPoint, options, args, sink) > 0)
+	if (cmdLine.consumeOptions(optStartingPoint, options, sink) > 0)
 	{
 		std::array<bool, 2> statuses;
 		seed = Vec2::fromText(sink.back(), seed, statuses);
 	}
-	if (consumeOptions(optAnimationTicks, options, args, sink) > 0)
+	if (cmdLine.consumeOptions(optAnimationTicks, options, sink) > 0)
 	{
 		ticks = fromText(sink.back(), 0u, status);
 	}
-	if (consumeOptions(optIterationCount, options, args, sink) > 0)
+	if (cmdLine.consumeOptions(optIterationCount, options, sink) > 0)
 	{
 		const int32_t i = fromText(sink.back(), 0, status);
 		iters = std::abs(i) + minIters;
 	}
-	float32 = (consumeOptions(optEnforceFloat32, options, args, sink) > 0);
+	float32 = (cmdLine.consumeOptions(optEnforceFloat32, options, sink) > 0);
 }
 
 TriLogicInt performTest (add_ref<Canvas> canvas, add_cref<std::string> assets,
 						 add_cref<TestConfig> config, add_cref<GlobalAppFlags> flags);
 
-TriLogicInt prepareTest (add_cref<TestRecord> record, add_cref<strings> commandLineParams)
+TriLogicInt prepareTest (add_cref<TestRecord> record, add_ref<CommandLine> cmdLine)
 {
 	std::cout <<
 		"Parameters:\n"
@@ -114,7 +113,7 @@ TriLogicInt prepareTest (add_cref<TestRecord> record, add_cref<strings> commandL
 		"  Gray(-)                    Decrement iteration count\n"
 		"  Esc:                       Quit Fractals\n\n";
 
-	TestConfig	config(commandLineParams);
+	TestConfig	config(cmdLine);
 
 	bool		enableFloat64 = false;
 	auto onGetEnabledFeatures = [&](add_ref<DeviceCaps> caps)

@@ -5,6 +5,6 @@ layout(location = 0) rayPayloadEXT vec3 payload;
 
 void main()
 {
-    payload = vec3(0.0, 0.0, 0.0); 
+    payload = vec3(4,0,0); 
 }
 

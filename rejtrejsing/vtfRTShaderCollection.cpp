@@ -62,6 +62,7 @@ RTShaderCollection::SBTShaderGroup combineGroups(
 		(logicalGroup.groupIndex() & 0xFFFF) | ((hitGroup.groupIndex() & 0xFFFF) << 16));
 }
 
+// { logicalGroup, hitGroup }
 std::pair<RTShaderCollection::SBTShaderGroup, RTShaderCollection::SBTShaderGroup>
 decombineGroup(add_cref<RTShaderCollection::SBTShaderGroup> combinedGroup)
 {
@@ -73,6 +74,36 @@ decombineGroup(add_cref<RTShaderCollection::SBTShaderGroup> combinedGroup)
 	};
 }
 
+RTShaderCollection::SBTShaderGroup::SBTShaderGroup (uint32_t groupIndex)
+	: _GlSpvProgramCollection::RTShaderGroup(groupIndex)
+{
+}
+RTShaderCollection::SBTShaderGroup::SBTShaderGroup (add_cref<SBTShaderGroup> other)
+	: _GlSpvProgramCollection::RTShaderGroup(other.groupIndex())
+{
+}
+
+RTShaderCollection::SBTShaderGroup RTShaderCollection::SBTShaderGroup::SBTShaderGroup::next () const
+{
+	return SBTShaderGroup(m_groupIndex + 1u);
+}
+
+bool RTShaderCollection::SBTShaderGroup::Less::operator ()(
+	add_cref<SBTShaderGroup> lhs, add_cref<SBTShaderGroup> rhs) const
+{
+	return decombineGroup(lhs).first.groupIndex() < decombineGroup(rhs).first.groupIndex();
+}
+
+bool RTShaderCollection::SBTShaderGroup::operator== (add_cref<SBTShaderGroup> other) const
+{
+	return decombineGroup(*this).first.groupIndex() == decombineGroup(other).first.groupIndex();
+}
+
+bool RTShaderCollection::SBTShaderGroup::operator!= (add_cref<SBTShaderGroup> other) const
+{
+	return !(*this == other);
+}
+
 bool RTShaderCollection::findShaderKey (
 	add_cref<SBTShaderGroup>	logicalGroup,
 	add_cref<SBTShaderGroup>	hitGroup,
@@ -80,24 +111,18 @@ bool RTShaderCollection::findShaderKey (
 	add_ref<StageAndIndex>	key) const
 {
 	key = { VK_SHADER_STAGE_ALL, INVALID_UINT32 };
-	auto range = m_shaders.equal_range(combineGroups(logicalGroup, hitGroup));
+	auto range = m_shaders.equal_range(logicalGroup);
 	for (auto iShader = range.first; iShader != range.second; ++iShader)
 	{
-		if (stage == iShader->second.key().first)
+		if (stage == iShader->second.key().first
+			&& hitGroup.groupIndex() == decombineGroup(iShader->first).second.groupIndex())
 		{
 			key = iShader->second.key();
 			break;
 		}
 	}
-	return VK_SHADER_STAGE_ALL != key.first;
-}
 
-RTShaderCollection::RTShaderCollection(
-	ZDevice device,
-	HitGroupsOrder hitGroupsOrder,
-	add_cref<std::string> basePath)
-	: _GlSpvProgramCollection(device, basePath), m_hitGroupsOrder(hitGroupsOrder)
-{
+	return VK_SHADER_STAGE_ALL != key.first;
 }
 
 void RTShaderCollection::addFromText(
@@ -164,8 +189,10 @@ bool RTShaderCollection::addFromFile(
 	if (VK_SHADER_STAGE_RAYGEN_BIT_KHR == stage
 		&& findShaderKey(logicalGroup, SBTShaderGroup(0), stage, key))
 	{
+		const auto oldKey = key;
 		m_stageToCode[key].clear();
 		_addFromFile(stage, fileName, includePaths, entryName, verbose, &key);
+		ASSERTION(oldKey == key);
 	}
 	else
 	{
@@ -192,8 +219,10 @@ bool RTShaderCollection::addFromFile(
 
 	if (findShaderKey(logicalGroup, maskedHitGroup, stage, key))
 	{
+		const auto oldKey = key;
 		m_stageToCode[key].clear();
 		_addFromFile(stage, fileName, includePaths, entryName, verbose, &key);
+		ASSERTION(oldKey == key);
 	}
 	else
 	{
@@ -206,15 +235,15 @@ bool RTShaderCollection::addFromFile(
 
 void RTShaderCollection::buildAndVerify (add_cref<Version> vulkanVer, add_cref<Version> spirvVer,
 										  bool enableValidation, bool genDisassembly, bool buildAlways,
-										  add_cref<std::string> spirvValArgs)
+										  add_cref<std::string> spirvValArgs, uint32_t threads)
 {
-	_buildAndVerify(vulkanVer, spirvVer, enableValidation, genDisassembly, buildAlways, spirvValArgs);
+	_buildAndVerify(vulkanVer, spirvVer, enableValidation, genDisassembly, buildAlways, spirvValArgs, threads);
 }
 
-void RTShaderCollection::buildAndVerify (bool buildAlways)
+void RTShaderCollection::buildAndVerify (bool buildAlways, uint32_t threads)
 {
 	add_cref<GlobalAppFlags>	gf = getGlobalAppFlags();
-	_buildAndVerify(gf.vulkanVer, gf.spirvVer, gf.spirvValidate, gf.genSpirvDisassembly, buildAlways);
+	_buildAndVerify(gf.vulkanVer, gf.spirvVer, gf.spirvValidate, gf.genSpirvDisassembly, buildAlways, {}, threads);
 }
 
 ZShaderModule RTShaderCollection::makeShader (add_cref<StageAndIndex> key) const
@@ -239,47 +268,58 @@ RTShaderCollection::ShaderLink RTShaderCollection::makeLink(add_cref<StageAndInd
 	return link;
 }
 
-std::vector<ZShaderModule> RTShaderCollection::getAllShaders (add_cref<SBTShaderGroup> group) const
+std::vector<ZShaderModule> RTShaderCollection::getAllShaders (std::initializer_list<SBTShaderGroup> groups) const
 {
-	const uint32_t collectionInfo = combineGroups(SBTShaderGroup(collectionID()),
-													SBTShaderGroup(uint32_t(m_hitGroupsOrder))).groupIndex();
-	auto groupMatches = [&](uint32_t count,
-		add_cref<std::remove_reference_t<decltype(m_shaders)>::value_type> module) {
-			return group == decombineGroup(module.first).first ? (count + 1u) : count;
-		};
+	using ShadersItem = std::remove_reference_t<decltype(m_shaders)>::value_type;
 
-	const uint32_t shaderCount = std::accumulate(m_shaders.begin(), m_shaders.end(), 0u, groupMatches);
+	std::set<uint32_t> myUniqueLogicalGroups;
+	for (add_cref<ShadersItem> cg : m_shaders)
+		myUniqueLogicalGroups.insert(decombineGroup(cg.first).first.groupIndex());
 
-	ASSERTMSG(shaderCount, "Unknown or empty group (", group.groupIndex(), ")");
+	std::set<uint32_t> tmpUniqueLogicalGroups, *pUniqueLogicalGroups = &tmpUniqueLogicalGroups;
+	if (groups.size())
+	{
+		for (auto cg = groups.begin(); cg != groups.end(); ++cg)
+			tmpUniqueLogicalGroups.insert(decombineGroup(*cg).first.groupIndex());
+	}
+	else
+	{
+		pUniqueLogicalGroups = &myUniqueLogicalGroups;
+	}
+	add_cref<std::set<uint32_t>> inUniqueLogicalGroups = *pUniqueLogicalGroups;
+
+	uint32_t shaderCount = 0u;
+	for (auto in = inUniqueLogicalGroups.begin(); in != inUniqueLogicalGroups.end(); ++in)
+	{
+		uint32_t lastShaderCount = shaderCount;
+		shaderCount = std::accumulate(m_shaders.begin(), m_shaders.end(), shaderCount,
+			[&](const uint32_t count, add_cref<ShadersItem> module) {
+				return module.first == SBTShaderGroup(*in) ? (count + 1u) : count;
+			});
+		ASSERTMSG(lastShaderCount != shaderCount, "Unknown or empty group (", *in, ")");
+		lastShaderCount = shaderCount;
+	}
 
 	uint32_t shaderIndex = 0u;
 	std::vector<ZShaderModule> shaders(shaderCount);
 
-	for (auto i = m_shaders.begin(); i != m_shaders.end(); ++i)
+	for (auto in = inUniqueLogicalGroups.begin(); in != inUniqueLogicalGroups.end(); ++in)
 	{
-		if (groupMatches(0u, *i) != 0u) continue;
+		auto it = myUniqueLogicalGroups.find(*in);
+		const auto normalizedGroupIndex = make_unsigned(std::distance(myUniqueLogicalGroups.begin(), it));
 
-		ZShaderModule shaderModule = makeShader(i->second.key());
-		shaderModule.setParam<tuple4>({ collectionInfo, i->first.groupIndex(), INVALID_UINT32, INVALID_UINT32 });
-		shaders[shaderIndex++] = shaderModule;
-	}
+		auto shaderRange = m_shaders.equal_range(SBTShaderGroup(*in));
+		for (auto sh = shaderRange.first; sh != shaderRange.second; ++sh)
+		{
+			const auto collAndNormalizedGroupIndex =
+				combineGroups(SBTShaderGroup(collectionID()), SBTShaderGroup(uint32_t(normalizedGroupIndex)));
 
-	return shaders;
-}
-
-std::vector<ZShaderModule> RTShaderCollection::getAllShaders () const
-{
-	uint32_t shaderIndex = 0u;
-	std::vector<ZShaderModule> shaders(m_shaders.size());
-
-	const uint32_t collectionInfo = combineGroups(SBTShaderGroup(collectionID()),
-												SBTShaderGroup(uint32_t(m_hitGroupsOrder))).groupIndex();
-
-	for (auto i = m_shaders.begin(); i != m_shaders.end(); ++i)
-	{
-		ZShaderModule shaderModule = makeShader(i->second.key());
-		shaderModule.setParam<tuple4>({ collectionInfo, i->first.groupIndex(), INVALID_UINT32, INVALID_UINT32 });
-		shaders[shaderIndex++] = shaderModule;
+			ZShaderModule shaderModule = makeShader(sh->second.key());
+			shaderModule.setParam<tuple4>({
+				collAndNormalizedGroupIndex.groupIndex(),
+				sh->first.groupIndex(), INVALID_UINT32, INVALID_UINT32 });
+			shaders[shaderIndex++] = shaderModule;
+		}
 	}
 
 	return shaders;

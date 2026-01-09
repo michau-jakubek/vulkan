@@ -17,6 +17,7 @@
 
 #define ARRAY_LENGTH(a__) (std::extent<decltype(a__)>::value)
 #define ARRAY_LENGTH_CAST(a__, cast__) (static_cast<cast__>(ARRAY_LENGTH(a__)))
+#define ARRAY_TYPE(a__) std::remove_all_extents_t<std::remove_const_t<std::remove_reference_t<decltype(a__)>>>
 
 #ifndef UNREF
 #define UNREF(x__) static_cast<void>(x__)
@@ -71,7 +72,8 @@ strings		mergeStrings (add_cref<strings> target, add_cref<strings> source);
 void		mergeStringsDistinct(add_ref<strings> target, add_cref<strings> source);
 strings		mergeStringsDistinct (add_cref<strings> target, add_cref<strings> source);
 strings		splitString (const std::string& delimitedString, char delimiter = ',');
-
+strings		parseMultiString (add_cref<std::string> multiString);
+auto		multiStringLength (add_cptr<char> p, size_t maxBytes) -> std::optional<size_t>;
 std::string	toLower (add_cref<std::string> s);
 std::string	toUpper (add_cref<std::string> s);
 void		toLower (add_ref<std::string> inplace);

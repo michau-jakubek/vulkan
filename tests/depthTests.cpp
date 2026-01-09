@@ -1,5 +1,5 @@
 #include "depthTests.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfCUtils.hpp"
 #include "vtfCanvas.hpp"
@@ -46,13 +46,13 @@ OptionParser<Params> Params::getParser()
 TriLogicInt runTests(add_ref<Canvas> cs, add_cref<Params> params);
 TriLogicInt prepareTests(add_cref<TestRecord> record, add_cref<strings> cmdLineParams);
 
-TriLogicInt prepareTests(add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
+TriLogicInt prepareTests(add_cref<TestRecord> record, add_ref<CommandLine> cmdLine)
 {
 	add_cref<GlobalAppFlags> gf(getGlobalAppFlags());
 
 	Params params(record.assets);
 	OptionParser<Params> parser = params.getParser();
-	parser.parse(cmdLineParams);
+	parser.parse(cmdLine);
 	OptionParserState state = parser.getState();
 
 	if (state.hasHelp)

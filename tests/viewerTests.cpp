@@ -1,5 +1,5 @@
 #include "viewerTests.hpp"
-#include "vtfOptionParser.hpp"
+#include "vtfCommandLine.hpp"
 #include "vtfVertexInput.hpp"
 #include "vtfCanvas.hpp"
 #include "vtfZRenderPass.hpp"
@@ -105,7 +105,7 @@ TriLogicInt runViewerSingleThread (add_ref<Canvas> cs, add_cref<std::string> ass
 								   add_cref<std::vector<ImageFileInfo>> files,
 								   const int32_t regularCount, const int32_t panoramaCount);
 
-TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams)
+TriLogicInt prepareTests (add_cref<TestRecord> record, add_ref<CommandLine> cmdLine)
 {
 	UNREF(cmdLineParams);
 	printUsage(std::cout);
