@@ -4,17 +4,24 @@
 #include <stdlib.h>
 #include <string_view>
 
+#if defined(_WIN32) || defined(_WIN64)
+#include <conio.h>
+#else
+#include <termios.h>
+#include <unistd.h>
+#endif
+
 #include "vtfZUtils.hpp"
 #include "vtfCUtils.hpp"
 #include "vtfVkUtils.hpp"
 #include "vtfZDeletable.hpp"
 
-#ifndef _MSC_VER
-  #define cross_platform_pclose(p0) pclose(p0)
-  #define cross_platform_popen(p0,p1) popen((p0),(p1))
-#else
+#if defined(_WIN32) || defined(_WIN64)
   #define cross_platform_pclose(p0) _pclose(p0)
   #define cross_platform_popen(p0,p1) _popen((p0),(p1))
+#else
+  #define cross_platform_pclose(p0) pclose(p0)
+  #define cross_platform_popen(p0,p1) popen((p0),(p1))
 #endif
 
 namespace vtf
@@ -386,6 +393,21 @@ bool compareNoCase (add_cref<std::string> a, add_cref<std::string> b)
 	const std::string A = toUpper(a);
 	const std::string B = toUpper(b);
 	return A == B;
+}
+
+void waitForAnyKey()
+{
+#if defined(_WIN32) || defined(_WIN64)
+	_getch();
+#else
+	struct termios oldt, newt;
+	tcgetattr(STDIN_FILENO, &oldt);
+	newt = oldt;
+	newt.c_lflag &= ~(ICANON | ECHO);
+	tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+	getchar();
+	tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+#endif
 }
 
 std::string captureSystemCommandResult (const char* cmd, bool& status, const char LF)

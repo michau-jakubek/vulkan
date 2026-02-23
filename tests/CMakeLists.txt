@@ -2,11 +2,15 @@ if(NOT EXISTS ${ASSETS_PATH})
     message(FATAL_ERROR "TESTS: ${ASSETS_PATH} not defined")
 endif()
 
+if(VTF_AS_DLL)
 set(vtf_app_hpp ../app/vtf_app.hpp ../app/vtf_app.cpp vtfLauncher.hpp)
 if(SYSTEM_OS_WINDOWS)
 	list(APPEND vtf_app_hpp vtfLauncherWin.cpp)
 else()
 	list(APPEND vtf_app_hpp vtfLauncherLin.cpp)
+endif()
+else()
+set(vtf_app_hpp ../app/vtf_app.hpp)
 endif()
 
 set(tests_files

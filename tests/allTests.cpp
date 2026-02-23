@@ -86,6 +86,7 @@ void recordAllTests (std::vector<TestRecord>& records)
 
 vtf::TriLogicInt launchTest (int argc, char** argv, add_cref<std::string> testName)
 {
+#if VTF_AS_DLL
 	TestRecord testRecord;
 	TestRecorder<VTF_LAUNCHER>::record(testRecord);
 
@@ -94,6 +95,11 @@ vtf::TriLogicInt launchTest (int argc, char** argv, add_cref<std::string> testNa
 
 	vtf::CommandLine cmdLine(argc, argv);
 	return (*testRecord.call)(testRecord, cmdLine);
+#else
+	MULTI_UNREF(argc, argv, testName);
+	ASSERTFALSE("Function disabled for non-VTF_AS_DLL compilant");
+	return {};
+#endif
 }
 
 std::vector<const char*> getTestNames (const std::vector<TestRecord>& records)

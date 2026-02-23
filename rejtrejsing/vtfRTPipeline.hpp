@@ -117,7 +117,7 @@ template<class X> constexpr size_t RegionDataSize =
 std::is_void_v<X> ? std::min<size_t>(0, RegionDataSizeImpl<X>) : std::max<size_t>(RegionDataSizeImpl<X>, 0);
 
 struct RTPipelineSettings;
-std::shared_ptr<RTPipelineSettings> makeRTPipelineSettings();
+std::shared_ptr<RTPipelineSettings> makeRTPipelineSettings ();
 
 void updateKnownSettings (add_ref<RTPipelineSettings> settings, add_cref<PipelineShaderGroupOrder> order);
 
@@ -151,6 +151,8 @@ ZPipeline createRayTracingPipeline(
 	rtdetails::updateSettings(*settings, std::forward<X>(params)...);
 	return rtdetails::createRayTracingPipeline(layout, rtShaders, settings.get());
 }
+
+VkPhysicalDeviceRayTracingPipelinePropertiesKHR getRTpipelineProperties(ZDevice device);
 
 rtdetails::PipelineShaderGroupOrder pipelineGetOrder (ZPipeline rtPipeline);
 std::pair<uint32_t, rtdetails::ShaderCounts> pipelineGetGroupsInfo (

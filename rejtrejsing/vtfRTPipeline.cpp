@@ -2,6 +2,7 @@
 #include "vtfRTShaderCollection.hpp"
 #include "vtfTemplateUtils.hpp"
 #include "vtfBacktrace.hpp"
+#include "vtfZUtils.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -411,6 +412,14 @@ pipelineGetGroupsInfo (
 	return { pipelineFirstGroupIndex, counts };
 }
 
+VkPhysicalDeviceRayTracingPipelinePropertiesKHR getRTpipelineProperties (ZDevice device)
+{
+	VkPhysicalDeviceRayTracingPipelinePropertiesKHR p{};
+	p.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+	deviceGetPhysicalProperties2(device.getParam<ZPhysicalDevice>(), &p);
+	return p;
+}
+
 } // namespace vtf
 
 void printGroupCreateInfoTable (
@@ -420,7 +429,9 @@ void printGroupCreateInfoTable (
 	const uint32_t groupCount,
 	add_cptr<VkPipelineShaderStageCreateInfo> pStages,
 	const uint32_t stageCount,
-	add_cref<std::vector<ZShaderModule>> shaders)
+	add_cref<std::vector<ZShaderModule>> shaders,
+	const uint32_t shaderGroupHandleSize,
+	add_cref<std::vector<uint8_t>> rawHandles)
 {
 	add_cptr<char> nl = "\n";
 
@@ -495,6 +506,7 @@ void printGroupCreateInfoTable (
 				os << "logical group: " << vtf::shaderGetLogicalGroup(module);
 				if (vtf::isHitStage(vtf::shaderGetStage(module)))
 					os << ", subgroup: " << vtf::shaderGetHitGroup(module);
+				os << ", shader: " << shader;
 			}
 		}
 		os.flush();
@@ -503,9 +515,9 @@ void printGroupCreateInfoTable (
 	str << "[INFO] Used pipeline shader group order rule "
 		<< pipelineGetOrder(pipeline).toString() << nl;
 	str << "[INFO] const VkRayTracingShaderGroupCreateInfoKHR[" << groupCount << "] {" << nl;
-	for (uint32_t i = 0u; i < groupCount; ++i)
+	for (uint32_t gri = 0u; gri < groupCount; ++gri)
 	{
-		add_cref<VkRayTracingShaderGroupCreateInfoKHR> c = pGroups[i];
+		add_cref<VkRayTracingShaderGroupCreateInfoKHR> c = pGroups[gri];
 
 		const VkShaderStageFlagBits genStage =
 			c.generalShader == VK_SHADER_UNUSED_KHR || c.generalShader >= stageCount
@@ -535,32 +547,52 @@ void printGroupCreateInfoTable (
 			c.intersectionShader == VK_SHADER_UNUSED_KHR || c.intersectionShader >= shaders.size()
 			? VK_SHADER_STAGE_ALL : shaderGetStage(shaders[c.intersectionShader]);
 
-		str << "  " << i << ": {" << nl;
+		str << "  " << gri << ": {" << nl;
 		str << ind4 << "type: " << vk::to_string(static_cast<vk::RayTracingShaderGroupTypeKHR>(c.type)) << nl;
 
 		str << ind4 << "generalShader:      " << (genStage == VK_SHADER_STAGE_ALL
 			? unusedShader : vtf::shaderStageToString(genStage))
-			<< ' ' << testShaderInGroup(i, c.type, 0, c.generalShader, genStage, true)
-			<< ' ' << testShaderInGroup(i, c.type, 0, c.generalShader, zgenStage, false)
-			<< ' ' << testPipelineGroupIndex(i, c.generalShader) << nl;
+			<< ' ' << testShaderInGroup(gri, c.type, 0, c.generalShader, genStage, true)
+			<< ' ' << testShaderInGroup(gri, c.type, 0, c.generalShader, zgenStage, false)
+			<< ' ' << testPipelineGroupIndex(gri, c.generalShader) << nl;
 
 		str << ind4 << "closestHitShader:   " << (chitStage == VK_SHADER_STAGE_ALL
 			? unusedShader : vtf::shaderStageToString(chitStage))
-			<< ' ' << testShaderInGroup(i, c.type, 1, c.closestHitShader, chitStage, true)
-			<< ' ' << testShaderInGroup(i, c.type, 1, c.closestHitShader, zchitStage, false)
-			<< ' ' << testPipelineGroupIndex(i, c.closestHitShader) << nl;
+			<< ' ' << testShaderInGroup(gri, c.type, 1, c.closestHitShader, chitStage, true)
+			<< ' ' << testShaderInGroup(gri, c.type, 1, c.closestHitShader, zchitStage, false)
+			<< ' ' << testPipelineGroupIndex(gri, c.closestHitShader) << nl;
 
 		str << ind4 << "anyHitShader:       " << (ahitStage == VK_SHADER_STAGE_ALL
 			? unusedShader : vtf::shaderStageToString(ahitStage))
-			<< ' ' << testShaderInGroup(i, c.type, 2, c.anyHitShader, ahitStage, true)
-			<< ' ' << testShaderInGroup(i, c.type, 2, c.anyHitShader, zahitStage, false)
-			<< ' ' << testPipelineGroupIndex(i, c.anyHitShader) << nl;
+			<< ' ' << testShaderInGroup(gri, c.type, 2, c.anyHitShader, ahitStage, true)
+			<< ' ' << testShaderInGroup(gri, c.type, 2, c.anyHitShader, zahitStage, false)
+			<< ' ' << testPipelineGroupIndex(gri, c.anyHitShader) << nl;
 
 		str << ind4 << "intersectionShader: " << (intStage == VK_SHADER_STAGE_ALL
 			? unusedShader : vtf::shaderStageToString(intStage))
-			<< ' ' << testShaderInGroup(i, c.type, 3, c.intersectionShader, intStage, true)
-			<< ' ' << testShaderInGroup(i, c.type, 3, c.intersectionShader, zintStage, false)
-			<< ' ' << testPipelineGroupIndex(i, c.intersectionShader) << nl;
+			<< ' ' << testShaderInGroup(gri, c.type, 3, c.intersectionShader, intStage, true)
+			<< ' ' << testShaderInGroup(gri, c.type, 3, c.intersectionShader, zintStage, false)
+			<< ' ' << testPipelineGroupIndex(gri, c.intersectionShader) << nl << nl;
+
+		str << ind4 << "shaderGroupHandle:  "
+			<< std::hex << std::uppercase << std::setw(2) << std::right << std::setfill('0');
+		for (uint32_t byteIndex = 0u; byteIndex < shaderGroupHandleSize; ++byteIndex)
+		{
+			const uint32_t i = gri * shaderGroupHandleSize + byteIndex;
+			if (std::all_of(std::next(rawHandles.begin(), i),
+							std::next(rawHandles.begin(), ((gri + 1) * shaderGroupHandleSize)),
+				[](uint8_t byte) { return byte == 0; }))
+			{
+				str << std::dec << std::nouppercase << std::setw(0) << std::left << std::setfill(' ')
+					<< " +" << (((gri + 1) * shaderGroupHandleSize) - i) << " trailing zeros";
+				break;
+			}
+			else
+			{
+				str << uint32_t(rawHandles[i]) << ' ';
+			}
+		}
+		str << std::dec << std::nouppercase << std::setw(0) << std::left << std::setfill(' ') << nl;
 
 		str << "  }" << nl;
 	}
@@ -853,7 +885,7 @@ ZPipeline createRayTracingPipeline (
 
 	ZPipeline pipeline(VK_NULL_HANDLE, device, callbacks, layout,
 		{/*renderpass*/ }, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, VkPipelineCreateFlags(0),
-		rtShaders, pipelineShaderGroupOrder.toInt());
+		rtShaders, pipelineShaderGroupOrder.toInt(), {/*shader group count*/});
 	add_ref<std::vector<ZShaderModule>> pipelineShaders = pipeline.getParamRef<std::vector<ZShaderModule>>();
 	std::vector<VkPipelineShaderStageCreateInfo> pipelineStages(pipelineShaders.size());
 
@@ -936,6 +968,7 @@ ZPipeline createRayTracingPipeline (
 	}
 	ASSERTION(pipelineShaders.size() == pipelineShaderIndex);
 	ASSERTION(allPipelineGroupCount == pipelineGroupIndex);
+	pipeline.setParam<ZDistType<Count, uint32_t>>(allPipelineGroupCount);
 
 	std::transform(pipelineShaders.begin(), pipelineShaders.end(), pipelineStages.begin(),
 		[&](add_cref<ZShaderModule> module) -> VkPipelineShaderStageCreateInfo {
@@ -966,7 +999,7 @@ ZPipeline createRayTracingPipeline (
 	info.basePipelineIndex	= pSettings->basePipelineIndex;
 	info.maxPipelineRayRecursionDepth	= pSettings->maxPipelineRayRecursionDepth;
 
-	VKASSERTMSG(di.vkCreateRayTracingPipelinesKHR(*device,
+	VKASSERTMSG(VTF_CALL_CHECK(di.vkCreateRayTracingPipelinesKHR, *device,
 						VK_NULL_HANDLE, VK_NULL_HANDLE, 1u,
 						&info, callbacks, pipeline.setter("vkCreateRayTracingPipelinesKHR")),
 						"Fail to cretae ray tracing pipeline");
@@ -974,9 +1007,20 @@ ZPipeline createRayTracingPipeline (
 	progressRecorder.stamp("After create ray-tracing pipeline");
 	if (getGlobalAppFlags().verbose)
 	{
+		const uint32_t shaderGroupHandleSize = vtf::getRTpipelineProperties(device).shaderGroupHandleSize;
+		std::vector<uint8_t> handles(info.groupCount* shaderGroupHandleSize);
+		VKASSERT(VTF_CALL_CHECK(di.vkGetRayTracingShaderGroupHandlesKHR,
+			*device,
+			*pipeline,
+			0u,
+			info.groupCount,
+			handles.size(),
+			handles.data()
+		));
+
 		printGroupCreateInfoTable(std::cout, pipeline,
 			info.pGroups, info.groupCount, info.pStages, info.stageCount,
-			pipelineShaders);
+			pipelineShaders, shaderGroupHandleSize, handles);
 	}
 
 	return pipeline;

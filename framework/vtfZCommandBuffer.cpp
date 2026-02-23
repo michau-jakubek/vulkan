@@ -23,7 +23,7 @@ ZCommandPool createCommandPool (ZDevice device, ZQueue queue, VkCommandPoolCreat
 	VkAllocationCallbacksPtr	callbacks = device.getParam<VkAllocationCallbacksPtr>();
 	ZCommandPool				commandPool(VK_NULL_HANDLE, device, callbacks, queue);
 	add_cref<ZDeviceInterface>	di = device.getInterface();
-	VKASSERT(di.vkCreateCommandPool(*device, &poolInfo, callbacks, commandPool.setter()));
+	VKASSERT(VTF_CALL_CHECK(di.vkCreateCommandPool, *device, &poolInfo, callbacks, commandPool.setter()));
 
 	return commandPool;
 }
@@ -46,7 +46,7 @@ ZCommandBuffer createCommandBuffer (ZCommandPool commandPool, bool primary, cons
 	allocInfo.level					= primary ? VK_COMMAND_BUFFER_LEVEL_PRIMARY : VK_COMMAND_BUFFER_LEVEL_SECONDARY;
 	allocInfo.commandBufferCount	= 1;
 
-	VKASSERT(di.vkAllocateCommandBuffers(*device, &allocInfo, &commandBuffer));
+	VKASSERT(VTF_CALL_CHECK(di.vkAllocateCommandBuffers, *device, &allocInfo, &commandBuffer));
 
 	return ZCommandBuffer::create(commandBuffer, device, commandPool, primary);
 }
@@ -64,7 +64,7 @@ void commandBufferReset (ZCommandBuffer commandBuffer)
 void commandBufferEnd (ZCommandBuffer commandBuffer)
 {
 	add_cref<ZDeviceInterface> di = commandBuffer.getParam<ZDevice>().getInterface();
-	VKASSERT(di.vkEndCommandBuffer(*commandBuffer));
+	VKASSERT(VTF_CALL_CHECK(di.vkEndCommandBuffer, *commandBuffer));
 }
 
 void commandBufferBegin (ZCommandBuffer commandBuffer, VkCommandBufferUsageFlags usage, add_ptr<void> pNext)
@@ -98,7 +98,7 @@ void commandBufferBegin (ZCommandBuffer commandBuffer, ZFramebuffer fb, ZRenderP
 	beginInfo.pInheritanceInfo	= commandBuffer.getParam<bool>() ? nullptr : &inheritInfo;
 
 	add_cref<ZDeviceInterface> di = commandBuffer.getParam<ZDevice>().getInterface();
-	VKASSERT(di.vkBeginCommandBuffer(*commandBuffer, &beginInfo));
+	VKASSERT(VTF_CALL_CHECK(di.vkBeginCommandBuffer, *commandBuffer, &beginInfo));
 }
 
 void commandBufferExecuteCommands (ZCommandBuffer primary, std::initializer_list<ZCommandBuffer> secondaryCommands)
@@ -128,8 +128,8 @@ VkResult commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFe
 	submitInfo.pCommandBuffers		= commandBuffer.ptr();
 
 	add_cref<ZDeviceInterface> di = commandBuffer.getParam<ZDevice>().getInterface();
-	VKASSERT(di.vkQueueSubmit(*queue, 1u, &submitInfo, *fence));
-	const VkResult waitResult = di.vkWaitForFences(*device, 1u, fence.ptr(), VK_TRUE, timeout);
+	VKASSERT(VTF_CALL_CHECK(di.vkQueueSubmit, *queue, 1u, &submitInfo, *fence));
+	const VkResult waitResult = VTF_CALL_CHECK(di.vkWaitForFences, *device, 1u, fence.ptr(), VK_TRUE, timeout);
 	if (assertWaitResult) VKASSERT(waitResult);
 	if (hintFence.has_handle() == false)
 	{
@@ -151,7 +151,8 @@ void commandBufferBindDescriptorSets (ZCommandBuffer cmd, ZPipelineLayout layout
 			[](const ZDescriptorSetLayout& dsl) { return *dsl.getParam<ZDescriptorSet>(); });
 
 		add_cref<ZDeviceInterface> di = cmd.getParamRef<ZDevice>().getInterface();
-		di.vkCmdBindDescriptorSets(*cmd,
+		VTF_CALL_CHECK(di.vkCmdBindDescriptorSets,
+			*cmd,
 			bindingPoint,
 			*layout,
 			0,			//firstSet
@@ -240,10 +241,10 @@ void commandBufferBindDescriptorBuffers (
 		infos[idx].usage = b->getParamRef<VkBufferCreateInfo>().usage;
 		indices[idx] = idx;
 	}
-	di.vkCmdBindPipeline(*cmd, bindPoint, *pipeline);
-	di.vkCmdBindDescriptorBuffersEXT(*cmd, uint32_t(buffers.size()), infos.data());
-	di.vkCmdSetDescriptorBufferOffsetsEXT(*cmd, bindPoint, *layout, 0u, uint32_t(buffers.size()), 
-											indices.data(), offsets.data());
+	VTF_CALL_CHECK(di.vkCmdBindPipeline, *cmd, bindPoint, *pipeline);
+	VTF_CALL_CHECK(di.vkCmdBindDescriptorBuffersEXT, *cmd, uint32_t(buffers.size()), infos.data());
+	VTF_CALL_CHECK(di.vkCmdSetDescriptorBufferOffsetsEXT, *cmd, bindPoint, *layout, 0u, uint32_t(buffers.size()),
+															indices.data(), offsets.data());
 }
 
 static bool verifyPushConstants (
@@ -423,12 +424,12 @@ ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZRenderPa
 	VkRenderPassBeginInfo	info = renderPassBegin();
 	if (version == 1)
 	{
-		di.vkCmdBeginRenderPass(*cmd, &info, contents);
+		VTF_CALL_CHECK(di.vkCmdBeginRenderPass, *cmd, &info, contents);
 	}
 	else
 	{
 		const VkSubpassBeginInfo beginInfo { VK_STRUCTURE_TYPE_SUBPASS_BEGIN_INFO, nullptr, contents };
-		di.vkCmdBeginRenderPass2(*cmd, &info, &beginInfo);
+		VTF_CALL_CHECK(di.vkCmdBeginRenderPass2, *cmd, &info, &beginInfo);
 	}
 
 	frameBufferTransitAttachments(renderPass, framebuffer, INVALID_UINT32, true);
@@ -452,12 +453,12 @@ bool commandBufferNextSubpass (add_ref<ZRenderPassBeginInfo> beginInfo)
 	if (uint32_t subpass = beginInfo.getSubpass(); subpass < subpassCount)
 	{
 		if (version == 1)
-			di.vkCmdNextSubpass(*cmd, beginInfo.getContents());
+			VTF_CALL_CHECK(di.vkCmdNextSubpass, *cmd, beginInfo.getContents());
 		else
 		{
 			const VkSubpassBeginInfo startInfo{ VK_STRUCTURE_TYPE_SUBPASS_BEGIN_INFO, nullptr, beginInfo.getContents() };
 			const VkSubpassEndInfo endInfo{ VK_STRUCTURE_TYPE_SUBPASS_END_INFO, nullptr };
-			di.vkCmdNextSubpass2(*cmd, &startInfo, &endInfo);
+			VTF_CALL_CHECK(di.vkCmdNextSubpass2, *cmd, &startInfo, &endInfo);
 		}
 		frameBufferTransitAttachments(rp, beginInfo.getFramebuffer(), subpass);
 		beginInfo.consumeSubpass();
@@ -480,12 +481,12 @@ void commandBufferEndRenderPass (add_cref<ZRenderPassBeginInfo> beginInfo)
 	for (uint32_t i = (beginInfo.getSubpass() + 1u); i < subpassCount; ++i)
 	{
 		if (version == 1)
-			di.vkCmdNextSubpass(*cmdBuffer, beginInfo.getContents());
-		else di.vkCmdNextSubpass2(*cmdBuffer, &startInfo, &endInfo);
+			VTF_CALL_CHECK(di.vkCmdNextSubpass, *cmdBuffer, beginInfo.getContents());
+		else VTF_CALL_CHECK(di.vkCmdNextSubpass2, *cmdBuffer, &startInfo, &endInfo);
 	}
 	if (version == 1)
-		di.vkCmdEndRenderPass(*cmdBuffer);
-	else di.vkCmdEndRenderPass2(*cmdBuffer, &endInfo);
+		VTF_CALL_CHECK(di.vkCmdEndRenderPass, *cmdBuffer);
+	else VTF_CALL_CHECK(di.vkCmdEndRenderPass2, *cmdBuffer, &endInfo);
 	frameBufferTransitAttachments(rp, beginInfo.getFramebuffer(), INVALID_UINT32, false);
 }
 
@@ -562,7 +563,7 @@ void commandBufferBeginRendering (
 	rInfo.pStencilAttachment	= nullptr;
 
 	add_cref<ZDeviceInterface> di = cmd.getParamRef<ZDevice>().getInterface();
-	di.vkCmdBeginRendering(*cmd, &rInfo);
+	VTF_CALL_CHECK(di.vkCmdBeginRendering, *cmd, &rInfo);
 }
 
 void commandBufferEndRendering (ZCommandBuffer cmd)

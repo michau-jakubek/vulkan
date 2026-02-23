@@ -276,6 +276,23 @@ std::ostream& printPhysicalDevice (
     const uint32_t driverMajorVersion = (props.driverVersion >> 22) & 0x7F;
     const uint32_t driverMinorVersion = (props.driverVersion >> 12) & 0x3FF;
     const uint32_t driverPatchVersion = props.driverVersion & 0xFFF;
+	
+	const auto gpuType = [&] {
+		switch (props.deviceType)
+		{
+		case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+			return "(Intergated GPU)";
+		case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+			return "(Discrete GPU)";
+		case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+			return "(Virtual GPU)";
+		case VK_PHYSICAL_DEVICE_TYPE_CPU:
+			return "(GPU CPU)";
+		default:
+			break;
+		}
+		return "(Unknow GPU type)";
+	}();
 
     if (deviceIndex != INVALID_UINT32)
     {
@@ -283,7 +300,7 @@ std::ostream& printPhysicalDevice (
     }
     str << "Name: \"" << props.deviceName
         << "\"  Vendor: " << std::hex << props.vendorID
-        << "  Device: " << std::hex << props.deviceID << std::endl;
+        << "  Device: " << std::hex << props.deviceID << ' ' << gpuType << std::endl;
     str << std::dec << "  " << " API: " << apiVersion;
     str << ", Driver version: (" << driverMajorVersion << ", "
         << driverMinorVersion << ", " << driverPatchVersion << ')' << std::endl;

@@ -360,7 +360,7 @@ enum ZDistName
 	RequiredDeviceExtensions,	AvailableDeviceExtensions,
 	Width, Height, Depth, ViewMask, PatchControlPoints, SubpassIndex,
 	LayoutIdentifier, PrimitiveRestart,
-	SizeFirst, SizeSecond, SizeThird,
+	Count, SizeFirst, SizeSecond, SizeThird,
 	SomeZero, SomeOne, SomeTwo, SomeThree,
 	VtfVer, ApiVer, VulkanVer, SpirvVer,
 	QueueFamilyIndex, QueueIndex, QueueFlags,
@@ -614,7 +614,8 @@ typedef ZDeletable<VkPipeline,
 	swizzle_three_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
 	ZPipelineLayout, ZRenderPass, VkPipelineBindPoint, VkPipelineCreateFlags,
 	std::vector<ZShaderModule>, // ray-tracing shaders
-	ZDistType<LayoutIdentifier, uint32_t> // ray-tracing pipeline shader group order
+	ZDistType<LayoutIdentifier, uint32_t>, // ray-tracing pipeline shader group order
+	ZDistType<Count, uint32_t> // ray-tracing pipeline shader group count
 >
 ZPipeline;
 

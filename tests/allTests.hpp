@@ -54,7 +54,9 @@ std::shared_ptr<Shell> getOrCreateUniqueShell(std::ostream&			output,
 enum TestIdentifier
 {
 	ALL_TESTS_BEGIN,
+#if VTF_AS_DLL
 	VTF_LAUNCHER,
+#endif
 	TRIANGLE,
 	//VIEWER,
 	LINE_WIDTH,

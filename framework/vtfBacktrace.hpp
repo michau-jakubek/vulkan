@@ -56,6 +56,7 @@ struct GlobalAppFlags
 	bool			nowerror;
 	bool			debugPrintfEnabled;
 	bool			noWarning_VUID_Undefined;
+	bool			assertWait;
 
 	GlobalAppFlags ();
 };

@@ -83,6 +83,7 @@ void		toUpper (add_ref<std::string> out, add_cref<std::string> src);
 bool		startswith (add_cptr<char> s, char c);
 template<class CharType> bool startswith (std::basic_string<CharType> s, CharType c);
 bool		compareNoCase (add_cref<std::string> a, add_cref<std::string> b);
+void		waitForAnyKey ();
 
 // Be careful, source strings must be alive after to_strings() is invoked.
 template<template<class T, class... U> class C, class T, class... U>
@@ -382,6 +383,19 @@ using routine_arg_t = std::tuple_element_t<at__, typename routine_signature<rout
 template<class routine_type__>
 using routine_res_t = typename routine_signature<routine_type__>::Result;
 // Example: typedef routine_res_t<decltype(std::setw)> sted_setw_result_t;
+
+template<typename Func, typename... Args>
+inline auto vtf_call_check_with_name(Func f, const char* name, Args&&... args) {
+	// Sprawdzenie na etapie kompilacji (zero overhead w runtime)
+	using Sig = routine_signature<Func>;
+	static_assert(std::is_pointer_v<typename Sig::Pointer>, "VTF_CALL_CHECK: Argument must be a routine pointer!");
+
+	if (f == nullptr) {
+		ASSERTFALSE(name, " must not be nullptr");
+	}
+	return f(std::forward<Args>(args)...);
+}
+#define VTF_CALL_CHECK(func__, ...) vtf_call_check_with_name(func__, #func__, __VA_ARGS__)
 
 template<class T, class E> struct expander
 {

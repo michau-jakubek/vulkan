@@ -1,10 +1,10 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 
-layout(location = 0)  rayPayloadEXT vec3 payload;
+layout(location = 0)  rayPayloadInEXT vec3 pl;
 
 void main()
 {
-    payload = vec3(3,0,0); 
+    pl = vec3(pl.x, 13, pl.y); 
 }
 

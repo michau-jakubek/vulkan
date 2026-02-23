@@ -110,6 +110,7 @@ int parseParams (
 	Option optVtfVersion1{ "-vv", 0 };			options.push_back(optVtfVersion1);
 	Option optVtfVersion0{ "-vvv", 0 };			options.push_back(optVtfVersion0);
 	Option optVtfVersion22{ "--version", 0 };	options.push_back(optVtfVersion22);
+	Option optAssertWait{ "-assert-wait", 0 };	options.push_back(optAssertWait);
 
 	if (cmd.consumeOptions(verbose, options, sink, allTestNames) > 0)
 	{
@@ -440,6 +441,7 @@ int parseParams (
 	globalAppFlags.genSpirvDisassembly = cmd.consumeOptions(spvDisassm, options, sink, allTestNames) > 0;
 	globalAppFlags.nowerror = (cmd.consumeOptions(nowerror, options, sink, allTestNames) > 0);
 	globalAppFlags.noWarning_VUID_Undefined = (cmd.consumeOptions(optLayNoVuid, options, sink, allTestNames) > 0);
+	globalAppFlags.assertWait = cmd.consumeOptions(optAssertWait, options, sink, allTestNames) > 0;
 	cmd.consumeOptions(excludeDevExt, options, globalAppFlags.excludedDevExtensions, allTestNames);
 	cmd.consumeOptions(optSuppressVUID, options, globalAppFlags.suppressedVUIDs, allTestNames);
 
@@ -519,6 +521,7 @@ int main (int argc, char* argv[])
 	bool		performTest	(false);
 	TriLogicInt result		(0);
 
+	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
 	CommandLine cmdLine(argc, argv);
 
 	try
@@ -535,7 +538,7 @@ int main (int argc, char* argv[])
 #endif
 		}
 	}
-	catch (std::runtime_error& e)
+	catch (add_cref<std::runtime_error> e)
 	{
 		result = {};
 		performTest = false;
@@ -545,6 +548,12 @@ int main (int argc, char* argv[])
 		else
 			std::cout << "Application ";
 		std::cout << "thrown an exception so no result to show." << std::endl;
+		if (gf.assertWait)
+		{
+			std::cout << "Pres any key to finish application";
+			waitForAnyKey();
+			std::cout << std::endl;
+		}
 	}
 	if (performTest)
 	{
@@ -638,6 +647,7 @@ void printUsage (std::ostream& str)
 	str << "  -assets <assets_dir>      change assets directory, default is ${REPO}/assets/<test_name>" << std::endl;
 	str << "  -tmp <temp_dir>           change temp directory, default is system's temp directory" << std::endl;
 	str << "  -verbose <level>          enable application diagnostic messages, default is 0 that means disabled" << std::endl;
+	str << "  -assert-wait              wait for any key after exception occurence" << std::endl;
 	str << "  -dprintf:                 enable Debug Printf feature" << std::endl;
 	str << "                            #extension GL_EXT_debug_printf : enable and debugPrintfEXT(...)" << std::endl;
 	str << "  -bt:                      enable backtrace" << std::endl;

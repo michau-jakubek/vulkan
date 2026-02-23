@@ -17,6 +17,7 @@ namespace sg
 struct INode;
 typedef std::shared_ptr<INode> INodePtr;
 template<class> struct Node;
+enum class TypeKind : uint32_t { Unknown, Field, Array, Struct };
 
 #define ASSERT(x, msg) if (!(x)) throw std::runtime_error(msg)
 
@@ -25,6 +26,9 @@ struct INode
 	friend struct Node<INodePtr>;
 	const std::string typeName;
 	INodePtr next;
+  //  virtual TypeKind getKind() const {
+		//return TypeKind::Unknown;
+  //  }
     virtual INodePtr getChildren(bool raise = true) const {
         if (raise) {
             const std::string msg = "No overriden " + typeName + "::getChildren() found";
@@ -911,12 +915,12 @@ struct StructGenerator
         return std::make_shared<Node<FieldType>>(std::string(), nullptr);
     }
 
-    INodePtr makeArrayField(INodePtr elemType, std::size_t elemCount, bool isRuntime = false)
+    INodePtr makeArrayField(INodePtr elemType, std::size_t elemCount, bool isRuntime = false) const
     {
         return std::make_shared<Node<sg::Array<INodePtr, 1, false>>>(elemType, elemCount, isRuntime);
     }
 
-    bool structureAppendField(INodePtr rootStruct, INodePtr field)
+    bool structureAppendField(INodePtr rootStruct, INodePtr field) const
     {
         INodePtr lastField = rootStruct->getLastChild(false);
         if (lastField)
@@ -927,7 +931,7 @@ struct StructGenerator
         return false;
     }
 
-    void printStruct(INodePtr structNode, std::ostream& str, bool declaration = true)
+    void printStruct(INodePtr structNode, std::ostream& str, bool declaration = true) const
     {
         uint32_t fieldNum = 0u;
         INodePtr ch = structNode->getChildren();
@@ -956,7 +960,7 @@ struct StructGenerator
         }
     }
 
-    std::vector<INodePtr> getStructList(INodePtr rootStruct)
+    std::vector<INodePtr> getStructList(INodePtr rootStruct) const
     {
         std::vector<INodePtr> list{ rootStruct };
         _getStructList(rootStruct, list);
@@ -977,36 +981,36 @@ struct StructGenerator
         return list;
     }
 
-    void generateLoops(INodePtr rootStruct, const std::string& rootStructName, std::ostream& str, uint32_t indent, const std::string& rhsCode)
+    void generateLoops(INodePtr rootStruct, const std::string& rootStructName, std::ostream& str, uint32_t indent, const std::string& rhsCode) const
     {
         uint32_t iteratorSeed = 0;
         rootStruct->genLoops(str, rootStructName, rhsCode, 0, indent, iteratorSeed);
     }
 
-    void printValues(INodePtr node, std::ostream& str, uint32_t level = 0)
+    void printValues(INodePtr node, std::ostream& str, uint32_t level = 0) const
     {
         node->printValue(str, level);
     }
-    std::string getValuesString(INodePtr str)
+    std::string getValuesString(INodePtr str) const
     {
         std::ostringstream os;
         printValues(str, os, 0);
         return os.str();
     }
 
-    void deserializeStruct(const void* src, INodePtr structNode, int nesting = -1, INode::SDCallback sdCallback = {})
+    void deserializeStruct(const void* src, INodePtr structNode, int nesting = -1, INode::SDCallback sdCallback = {}) const
     {
         std::size_t currentOffset = 0;
         structNode->serializeOrDeserialize(src, nullptr, currentOffset, false, false, nesting, sdCallback);
     }
-    void serializeStruct(INodePtr structNode, void* dst, int nesting = -1, INode::SDCallback sdCallback = {})
+    void serializeStruct(INodePtr structNode, void* dst, int nesting = -1, INode::SDCallback sdCallback = {}) const
     {
         std::size_t currentOffset = 0;
         structNode->serializeOrDeserialize(nullptr, dst, currentOffset, true, false, nesting, sdCallback);
     }
 
 private:
-    void _getStructList(INodePtr rootStruct, std::vector<INodePtr>& list)
+    void _getStructList(INodePtr rootStruct, std::vector<INodePtr>& list) const
     {
         INodePtr ch = rootStruct->getChildren(false);
         for (INodePtr p = ch->next; p; p = p->next)

@@ -6,6 +6,8 @@
 #include "vtfRTShaderCollection.hpp"
 #include "vtfRTPipeline.hpp"
 #include "vtfZPipeline.hpp"
+#include "vtfZRenderPass2.hpp"
+#include "vtfGlfwEvents.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfFloat16.hpp"
 #include "vtfZUtils.hpp"
@@ -29,7 +31,7 @@ extern bool rejtrejsingSelfTestSBT(
     rtdetails::PipelineShaderGroupOrder,
     add_ref<std::string>);
 }
-extern void zzz();
+
 namespace
 {
 using namespace vtf;
@@ -42,8 +44,11 @@ constexpr Option optionPipelineShaderGroupOrder{ "-pipeline-group-order", 1 };
 constexpr Option optionSelfTest{ "-self-test", 1 };
 constexpr Option optionMiss0Index{ "-miss0", 1 };
 constexpr Option optionMiss1Index{ "-miss1", 1 };
+constexpr Option optionImage0Index{ "--image0", 0 };
+constexpr Option optionImage1Index{ "--image1", 0 };
 constexpr Option optionTriangleZet{ "-triangle-z", 1 };
 constexpr Option optionRenderDoc{ "--renderdoc", 0 };
+constexpr Option optionWaitContonue{ "--wait-continue", 0 };
 struct Params
 {
     add_cref<std::string> assets;
@@ -58,13 +63,18 @@ struct Params
     uint32_t shaderBuildThreadCount = 1u;
     uint32_t miss0index = 0u;
     uint32_t miss1index = 0u;
-    float triangleZet = 0.5f;
+    float triangleZet = 5.0f;
     bool buildAlways = false;
     bool printStamp = false;
     bool renderdoc = false;
+    bool waitContinue = false;
+	bool image0index = false;
+	bool image1index = false;
     std::string formatShaderGroupOrder (add_cref<OptionT<uint32_t>> sender) const;
     uint32_t parseShaderGroupOrder (
         add_cref<std::string>		text,
+        const uint32_t              parsed,
+        add_cref<strings>           revList,
         add_cref<OptionT<uint32_t>>	sender,
         add_ref<bool>				status,
         add_ref<OptionParserState>	state) const;
@@ -76,10 +86,13 @@ std::string Params::formatShaderGroupOrder (add_cref<OptionT<uint32_t>> sender) 
 }
 uint32_t Params::parseShaderGroupOrder (
     add_cref<std::string>		text,
+    const uint32_t              parsed,
+    add_cref<strings>           revList,
     add_cref<OptionT<uint32_t>>	sender,
     add_ref<bool>				status,
     add_ref<OptionParserState>	state) const
 {
+    UNREF(parsed); UNREF(revList);
     if (state.hasHelp) {
         return 0;
     }
@@ -101,6 +114,8 @@ OptionParser<Params> Params::getParser ()
 
     p.addOption(&Params::buildAlways, optionBuildAlways,
         "Force to (re)build shaders every time the application is run", { buildAlways }, flagsNone);
+    p.addOption(&Params::waitContinue, optionWaitContonue,
+        "Allow to pause program after instance & device creation", { waitContinue }, flagsNone);
 
     p.addOption(&Params::shaderBuildThreadCount, optionShaderBuildThreadCount,
         "Set number of threads to build shaders. "
@@ -115,7 +130,7 @@ OptionParser<Params> Params::getParser ()
 
     typename OptionT<uint32_t>::parse_cb cbParseShaderGroupOrder =
         std::bind(&Params::parseShaderGroupOrder, this, std::placeholders::_1, std::placeholders::_2,
-            std::placeholders::_3, std::placeholders::_4);
+            std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, std::placeholders::_6);
     typename OptionT<uint32_t>::format_cb cbFormatShaderGroupOrder =
         std::bind(&Params::formatShaderGroupOrder, this, std::placeholders::_1);
     p.addOption(&Params::pipelineShaderGroupOrder, optionPipelineShaderGroupOrder,
@@ -136,12 +151,15 @@ OptionParser<Params> Params::getParser ()
     p.addOption(&Params::miss0index, optionMiss0Index, "Miss 0 index", { miss0index }, flagsDefault);
     p.addOption(&Params::miss1index, optionMiss1Index, "Miss 1 index", { miss1index }, flagsDefault);
 
+    p.addOption(&Params::image0index, optionImage0Index, "Show image at index 0", { image0index }, flagsNone);
+    p.addOption(&Params::image1index, optionImage1Index, "Show image at index 1", { image1index }, flagsNone);
+
     p.addOption(&Params::triangleZet, optionTriangleZet, "Triangle Z coordinate", { triangleZet }, flagsDefault);
 
     return p;
 }
 
-TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params);
+TriLogicInt runTest (add_ref<Canvas> ctx, add_cref<Params> params);
 
 void onEnablingFeatures (add_ref<DeviceCaps> caps)
 {
@@ -168,7 +186,11 @@ TriLogicInt prepareTest (add_cref<TestRecord> record, add_ref<CommandLine> cmdLi
         return {};
     }
 
-    VulkanContext ctx(record.name, gf.layers, {}, {}, onEnablingFeatures, Version(1, 2), gf.debugPrintfEnabled);
+    CanvasStyle canvasStyle = Canvas::DefaultStyle;
+    canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
+    Canvas ctx(record.name, gf.layers, strings(), strings(), canvasStyle,
+                onEnablingFeatures, Version(1, 4), gf.debugPrintfEnabled);
+
     return runTest(ctx, params);
 }
 
@@ -183,16 +205,18 @@ TriLogicInt prepareTest (add_cref<TestRecord> record, add_ref<CommandLine> cmdLi
 //}
 
 using SBTShaderGroup = RTShaderCollection::SBTShaderGroup;
-std::vector<ZShaderModule> genRayTracingShaders(ZDevice device, add_cref<SBTShaderGroup> group, add_cref<Params> params)
+std::vector<ZShaderModule> genRayTracingShaders(
+    ZDevice device,
+    add_cref<SBTShaderGroup> group0,
+    add_cref<SBTShaderGroup> group1,
+    add_cref<Params> params)
 {
     add_ref<ProgressRecorder> progressRecorder =
         device.getParam<ZPhysicalDevice>().getParam<ZInstance>().getParamRef<ProgressRecorder>();
 
     RTShaderCollection coll(device, params.assets);
-    SBTShaderGroup group0(group.next());
-    SBTShaderGroup hitGroup0(group.next());
-    SBTShaderGroup group1(group);
-    SBTShaderGroup hitGroup1(group);
+    SBTShaderGroup hitGroup0(group0.next());
+    SBTShaderGroup hitGroup1(group0);
     SBTShaderGroup hitGroup2(hitGroup0.next());
 
     const std::string rgen0("shader0.rgen");
@@ -249,8 +273,21 @@ std::vector<ZShaderModule> genRayTracingShaders(ZDevice device, add_cref<SBTShad
     return coll.getAllShaders();
 }
 
-TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
+TriLogicInt runTest (add_ref<Canvas> ctx, add_cref<Params> params)
 {
+    // Print current running device information
+    {
+        const auto p = deviceGetPhysicalProperties(ctx.device);
+        printPhysicalDevice(p, std::cout);
+    }
+
+    if (params.waitContinue)
+    {
+        std::cout << "Press any key to continue ...";
+        waitForAnyKey();
+        std::cout << std::endl;
+    }
+
     RenderDoc rd;
     if (params.renderdoc)
     {
@@ -270,7 +307,7 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
     ZTopAccelerationStructure top = createTopAccelerationStructure(ctx.device, 10);
     SBTShaderGroup          shaderGroup0    (12);
     SBTShaderGroup          shaderGroup1    (shaderGroup0.next());
-    const std::vector<ZShaderModule> rtShaders = genRayTracingShaders(ctx.device, shaderGroup0, params);
+    const std::vector<ZShaderModule> rtShaders = genRayTracingShaders(ctx.device, shaderGroup0, shaderGroup1, params);
 
     const uint32_t          frameWidth      = 8;
     const uint32_t          frameHeight     = 8;
@@ -299,6 +336,14 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
     const auto              order           = rtdetails::PipelineShaderGroupOrder::fromInt(params.pipelineShaderGroupOrder);
     ZPipeline               rtPipeline      = createRayTracingPipeline(pipelineLayout, rtShaders, order);
 
+    const VkFormat				format      = ctx.surfaceFormat;
+    const VkClearValue			clearColor  { { { 0.5f, 0.5f, 0.5f, 0.5f } } };
+    const std::vector<RPA>		colors      { RPA(AttachmentDesc::Presentation, format, clearColor,
+                                                            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) };
+    const ZAttachmentPool		attachmentPool(colors);
+    const ZSubpassDescription2	subpass     ({ RPAR(0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) });
+    ZRenderPass					renderPass  = createRenderPass2(ctx.device, attachmentPool, subpass);
+
     SBTHandles handles0(rtPipeline, shaderGroup0);
     SBT<Vec3, Vec4, uint32_t, uint32_t> sbt0(handles0);
     if (params.selfTest != INVALID_UINT32)
@@ -322,19 +367,32 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
     }
 
     progressRecorder.stamp("Before command buffer recording");
-    //for (uint32_t i = 0; i < 2u; ++i)
+
+    int drawTrigger = 1;
+    ctx.events().setDefault(drawTrigger);
+
+    auto onCommandRecording = [&](add_ref<Canvas>, add_cref<Canvas::Swapchain>,
+                                    ZCommandBuffer cmd, ZFramebuffer framebuffer)
     {
-        OneShotCommandBuffer cmd(cmdPool);
+        ZImage swapImage = framebufferGetImage(framebuffer, 0);
+		commandBufferBegin(cmd);
         commandBufferPipelineBarriers(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
             VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, generalize0, generalize1);
         commandBufferBindPipeline(cmd, rtPipeline);
-        commandBufferBuildAccelerationStructure(*cmd, top, BLAS(btm), { std::vector<BLAS>({BLAS(btm) }) });
-        commandBufferPushConstants(cmd, pipelineLayout, PC{ 0u, 0u, params.miss0index });
-        sbt1.traceRays(cmd, frameWidth, frameHeight);
+        commandBufferBuildAccelerationStructure(cmd, top, BLAS(btm), { std::vector<BLAS>({BLAS(btm) }) }, true);
+        //commandBufferBuildAccelerationStructure(cmd, top, BLAS(btm), {}, true);
         commandBufferPushConstants(cmd, pipelineLayout, PC{ 0u, 0u, params.miss1index });
+        sbt1.traceRays(cmd, frameWidth, frameHeight);
+        commandBufferPushConstants(cmd, pipelineLayout, PC{ 0u, 0u, params.miss0index });
         commandBufferTraceRays(cmd, sbt0, frameWidth, frameHeight);
-        cmd.endRecordingAndSubmit(false, {}, 5'000'000'000ULL);
-    }
+        commandBufferBlitImageWithBarriers(cmd, (params.image1index ? image1 : image0), swapImage,
+            VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_FILTER_NEAREST);
+        commandBufferEnd(cmd);
+    };
+
+    const int res = ctx.run(onCommandRecording, renderPass, std::ref(drawTrigger));
     progressRecorder.stamp("After command buffer recording");
     
     auto printImage = [&](uint32_t binding) {
@@ -368,7 +426,7 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
         std::cin.get();
     }
 
-    return {};
+    return res;
 }
 
 } // unnamed namespace

@@ -105,11 +105,11 @@ TriLogicInt runTest (add_ref<Canvas> ctx, add_cref<Params> params)
     const Version version(major, minor, patch, revision);
     std::cout << "Current VTF API version is " << VtfVersion(version) << std::endl;
 
-    pVTF_API->RunTest(cmd.getMultiString().c_str());
+    const int res = pVTF_API->RunTest(cmd.getMultiString().c_str());
 
     FreeLibrary(vtf);
 
-    return 0;
+    return res < 0 ? TriLogicInt() : TriLogicInt(res);
 }
 
 } // unnamed namespace

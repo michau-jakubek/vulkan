@@ -148,11 +148,11 @@ strings _OptionParserImpl::parse (add_cref<strings> cmdLineParams, bool allMustB
 					[](add_cref<std::shared_ptr<Option>> ptr) { return ptr.get(); });
 	for (add_ref<_OptIPtr> opt : m_options)
 	{
-		if (consumeOptions(*opt, opts, args, sink) > 0)
+		if (const int parsed = consumeOptions(*opt, opts, args, sink); parsed > 0)
 		{
 			if (false == (onParsing && onParsing(opt, (opt->follows == 0) ? truestring : sink.back(), m_state.get())))
 			{
-				opt->parse((opt->follows == 0) ? truestring : sink.back(), *m_state);
+				opt->parse((opt->follows == 0) ? truestring : sink.back(), parsed, sink, *m_state);
 			}
 		}
 	}
@@ -175,15 +175,15 @@ strings _OptionParserImpl::parse (add_ref<CommandLine> commandLine, bool allMust
 					[](add_cref<std::shared_ptr<Option>> ptr) { return *ptr; });
 	for (add_ref<_OptIPtr> opt : m_options)
 	{
-		const int c = commandLine.consumeOptions(*opt, opts, sink);
-		if (c > 0)
+		const int parsed = commandLine.consumeOptions(*opt, opts, sink);
+		if (parsed > 0)
 		{
 			if (false == (onParsing && onParsing(opt, (opt->follows == 0) ? truestring : sink.back(), m_state.get())))
 			{
-				opt->parse((opt->follows == 0) ? truestring : sink.back(), *m_state);
+				opt->parse((opt->follows == 0) ? truestring : sink.back(), parsed, sink, *m_state);
 			}
 		}
-		else if (c < 0)
+		else if (parsed < 0)
 		{
 			m_state->messages << "ERROR: \"" << opt->getName() << "\" must have a value";
 			m_state->hasErrors = true;

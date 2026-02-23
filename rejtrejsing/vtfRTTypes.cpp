@@ -17,20 +17,26 @@ namespace vtf
 void freeAccelerationStructure(ZDevice dev, VkAccelerationStructureKHR str, VkAllocationCallbacksPtr cbs)
 {
 	add_cref<ZDeviceInterface> di = dev.getInterface();
-	di.vkDestroyAccelerationStructureKHR(*dev, str, cbs);
+	VTF_CALL_CHECK(di.vkDestroyAccelerationStructureKHR, *dev, str, cbs);
 }
 
 void onEnablingRayTracingFeatures(add_ref<DeviceCaps> caps)
 {
-	caps.addUpdateFeatureIf(&VkPhysicalDeviceRayTracingPipelineFeaturesKHR::rayTracingPipeline)
-		.checkSupported("rayTracingPipeline");
-	caps.addExtension(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME).checkSupported();
+	//caps.addUpdateFeatureIf(&VkPhysicalDeviceRayTracingPipelineFeaturesKHR::rayTracingPipeline)
+	//	.checkSupported("rayTracingPipeline");
+	VkPhysicalDeviceRayTracingPipelineFeaturesKHR a = makeVkStruct();
+	a.rayTracingPipeline = VK_TRUE;
+	caps.addUpdateFeature(a);
+	caps.addExtension(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);// .checkSupported();
 
-	caps.addUpdateFeatureIf(&VkPhysicalDeviceAccelerationStructureFeaturesKHR::accelerationStructure)
-		.checkSupported("accelerationStructure");
-	caps.addExtension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME).checkSupported();
+	VkPhysicalDeviceAccelerationStructureFeaturesKHR b = makeVkStruct();
+	b.accelerationStructure = VK_TRUE;
+	caps.addUpdateFeature(b);
+	//caps.addUpdateFeatureIf(&VkPhysicalDeviceAccelerationStructureFeaturesKHR::accelerationStructure)
+	//	.checkSupported("accelerationStructure");
+	caps.addExtension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);// .checkSupported();
 
-	caps.addExtension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME).checkSupported();
+	caps.addExtension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);// .checkSupported();
 	caps.addExtension(VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME).checkSupported();
 	caps.addExtension(VK_KHR_SPIRV_1_4_EXTENSION_NAME).checkSupported();
 	caps.addExtension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME).checkSupported();
@@ -162,7 +168,7 @@ VkDeviceAddress accelerationStructureGetDeviceAddress(AccStruct str)
 	addressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
 	addressInfo.accelerationStructure = *str;
 
-	return di.vkGetAccelerationStructureDeviceAddressKHR(*device, &addressInfo);
+	return VTF_CALL_CHECK(di.vkGetAccelerationStructureDeviceAddressKHR, *device, &addressInfo);
 }
 template VkDeviceAddress accelerationStructureGetDeviceAddress<ZBtmAccelerationStructure>(ZBtmAccelerationStructure);
 template VkDeviceAddress accelerationStructureGetDeviceAddress<ZTopAccelerationStructure>(ZTopAccelerationStructure);
@@ -198,7 +204,7 @@ createBtmAccelerationStructure(ZAccelerationStructureGeometry::Geoms geoms)
 	VkAccelerationStructureBuildSizesInfoKHR sizeInfo{};
 	sizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
 
-	di.vkGetAccelerationStructureBuildSizesKHR(
+	VTF_CALL_CHECK(di.vkGetAccelerationStructureBuildSizesKHR,
 		*device,
 		VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
 		&buildInfo,
@@ -221,7 +227,7 @@ createBtmAccelerationStructure(ZAccelerationStructureGeometry::Geoms geoms)
 	createInfo.size = sizeInfo.accelerationStructureSize;
 	createInfo.buffer = *blasBuffer;
 
-	VKASSERT(di.vkCreateAccelerationStructureKHR(*device, &createInfo, callbacks, blas.setter()));
+	VKASSERT(VTF_CALL_CHECK(di.vkCreateAccelerationStructureKHR, *device, &createInfo, callbacks, blas.setter()));
 
 	return blas;
 }
@@ -300,7 +306,7 @@ createTopAccelerationStructure(ZDevice device, uint32_t maxInstances)
 	VkAccelerationStructureBuildSizesInfoKHR sizeInfo{};
 	sizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
 
-	di.vkGetAccelerationStructureBuildSizesKHR(
+	VTF_CALL_CHECK(di.vkGetAccelerationStructureBuildSizesKHR,
 		*device,
 		VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
 		&buildInfo,
@@ -328,15 +334,15 @@ createTopAccelerationStructure(ZDevice device, uint32_t maxInstances)
 		{}, sizeInfo.accelerationStructureSize, sizeInfo.updateScratchSize, sizeInfo.buildScratchSize, maxInstances);
 
 
-	VKASSERT(di.vkCreateAccelerationStructureKHR(*device, &createInfo, callbacks, tlas.setter()));
+	VKASSERT(VTF_CALL_CHECK(di.vkCreateAccelerationStructureKHR, *device, &createInfo, callbacks, tlas.setter()));
 
 	return tlas;
 }
 
 void commandBufferBuildAccelerationStructure(
-	ZCommandBuffer cmd, ZBtmAccelerationStructure blas)
+	ZCommandBuffer cmd, ZBtmAccelerationStructure blas, bool forceBuild)
 {
-	if (blas.getParam<VkBool32>())
+	if (false == forceBuild && blas.getParam<VkBool32>())
 	{
 		return;
 	}
@@ -377,7 +383,7 @@ void commandBufferBuildAccelerationStructure(
 	buildInfo.dstAccelerationStructure = *blas;
 	buildInfo.scratchData.deviceAddress = bufferGetAddress(scratchBuffer);
 
-	di.vkCmdBuildAccelerationStructuresKHR(*cmd, 1u, &buildInfo, rangeInfosPtrs.data());
+	VTF_CALL_CHECK(di.vkCmdBuildAccelerationStructuresKHR, *cmd, 1u, &buildInfo, rangeInfosPtrs.data());
 
 	using A = ZBarrierConstants::Access;
 	using S = ZBarrierConstants::Stage;
@@ -393,7 +399,7 @@ void commandBufferBuildAccelerationStructure(
 
 void commandBufferBuildAccelerationStructure(
 	ZCommandBuffer cmd,	ZTopAccelerationStructure tlas,
-	BLAS firstInstance,	std::optional<std::vector<BLAS>> otherInstances)
+	BLAS firstInstance,	std::optional<std::vector<BLAS>> otherInstances, bool rebuildBlases)
 {
 	const uint32_t declaredInstanceCount = tlas.getParam<uint32_t>();
 	const uint32_t instanceCount = 1u + (otherInstances.has_value() ? data_count(*otherInstances) : 0u);
@@ -405,10 +411,25 @@ void commandBufferBuildAccelerationStructure(
 	ZBuffer instancesBuffer = tlas.getParam<ZDistType<SomeOne, ZBuffer>>();
 	ZBuffer scratchBuffer = tlas.getParam<ZDistType<SomeTwo, ZBuffer>>();
 
+	std::vector<ZBtmAccelerationStructure> builtBlases;
 	for (uint32_t b = 0u; b < instanceCount; ++b)
 	{
+		bool alreadyBuilt = false;
 		add_ref<BLAS> blas = (0u == b) ? firstInstance : (*otherInstances)[b - 1u];
-		commandBufferBuildAccelerationStructure(cmd, blas.structure);
+		for (add_cref<ZBtmAccelerationStructure> builtBlas : builtBlases)
+		{
+			if (builtBlas == blas.structure)
+			{
+				alreadyBuilt = true;
+				break;
+			}
+		}
+		if (alreadyBuilt)
+		{
+			continue;
+		}
+		commandBufferBuildAccelerationStructure(cmd, blas.structure, rebuildBlases);
+		builtBlases.push_back(blas.structure);
 	}
 
 	for (uint32_t b = 0u; b < instanceCount; ++b)
@@ -458,7 +479,7 @@ void commandBufferBuildAccelerationStructure(
 	commandBufferPipelineBarriers2(cmd, bufferBarrier);
 
 	const VkAccelerationStructureBuildRangeInfoKHR* pRanges[] = { &range };
-	di.vkCmdBuildAccelerationStructuresKHR(*cmd, 1u, &buildInfo, pRanges);
+	VTF_CALL_CHECK(di.vkCmdBuildAccelerationStructuresKHR, *cmd, 1u, &buildInfo, pRanges);
 
 	ZMemoryBarrier2 buildBarrier(
 		A::ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
@@ -501,13 +522,7 @@ SBTHandles::SBTHandles (ZPipeline pipeline, add_cref<RTShaderCollection::SBTShad
 {
 	ZDevice device = pipeline.getParam<ZDevice>();
 	add_cref<ZDeviceInterface> di = device.getInterface();
-
-	const VkPhysicalDeviceRayTracingPipelinePropertiesKHR props = [&]() {
-		VkPhysicalDeviceRayTracingPipelinePropertiesKHR p{};
-		p.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
-		deviceGetPhysicalProperties2(device.getParam<ZPhysicalDevice>(), &p);
-		return p;
-		}();
+	const VkPhysicalDeviceRayTracingPipelinePropertiesKHR props = getRTpipelineProperties(device);
 
 	uint32_t firstGroup = INVALID_UINT32;
 	std::tie(firstGroup, m_counts) = pipelineGetGroupsInfo(pipeline, group);
@@ -522,7 +537,7 @@ SBTHandles::SBTHandles (ZPipeline pipeline, add_cref<RTShaderCollection::SBTShad
 	}
 	else
 	{
-		VKASSERT(di.vkGetRayTracingShaderGroupHandlesKHR(
+		VKASSERT(VTF_CALL_CHECK(di.vkGetRayTracingShaderGroupHandlesKHR,
 			*device,
 			*pipeline,
 			firstGroup,
@@ -531,6 +546,27 @@ SBTHandles::SBTHandles (ZPipeline pipeline, add_cref<RTShaderCollection::SBTShad
 			m_handles.data()
 		));
 	}
+}
+
+std::vector<int> SBTHandles::findHandle(
+	add_cref<SBTAny::Handles> multipleHandles, add_cref<SBTAny::Handles> handle)
+{
+	ASSERTION(handle.size());
+	if (multipleHandles.size() % handle.size() != 0) {
+		return { -2 };
+	}
+	std::vector<int> occurences;
+	for (uint32_t i = 0u; i < multipleHandles.size(); i += data_count(handle)) {
+		if (std::equal(handle.begin(), handle.end(), multipleHandles.begin() + i)) {
+			occurences.push_back(int(i / handle.size()));
+		}
+	}
+	return occurences;
+}
+
+std::vector<int> SBTHandles::findHandle(add_cref<SBTAny::Handles> handle) const
+{
+	return findHandle(m_handles, handle);
 }
 
 void SBTAny::setRegionData (uint32_t region, void_cptr data)
@@ -545,10 +581,10 @@ void SBTAny::setRegionData (uint32_t region, void_cptr data)
 		std::next(m_data.begin(), std::vector<std::byte>::difference_type(dataOffsetsAndSizes[region].first)));
 }
 
-bool SBTAny::buildOnce (ZCommandBuffer cmd, int method)
+bool SBTAny::buildOnce (ZCommandBuffer cmd, BuildMethod buildMethod)
 {
-	ASSERTION(method == 0 || method == 1);
-	const bool res = method ? buildOnce1() : buildOnce();
+	ASSERTION(NotBuiltYet != buildMethod);
+	const bool res = ManySBTinBuffer == buildMethod ? buildOnce1() : buildOnce();
 	ZBufferMemoryBarrier barrier(m_sbtBuffer, VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
 	commandBufferPipelineBarriers(cmd, VK_PIPELINE_STAGE_HOST_BIT,
 										VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, barrier);
@@ -562,13 +598,7 @@ bool SBTAny::buildOnce ()
 	}
 
 	ZDevice device = m_handles.getPipeline().getParam<ZDevice>();
-
-	const VkPhysicalDeviceRayTracingPipelinePropertiesKHR props = [&]() {
-		VkPhysicalDeviceRayTracingPipelinePropertiesKHR p{};
-		p.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
-		deviceGetPhysicalProperties2(device.getParam<ZPhysicalDevice>(), &p);
-		return p;
-		}();
+	const VkPhysicalDeviceRayTracingPipelinePropertiesKHR props = getRTpipelineProperties(device);
 
 	const uint32_t		handleSize		= props.shaderGroupHandleSize;
 	const uint32_t		alignHandleSize	= ROUNDUP(props.shaderGroupHandleSize, props.shaderGroupHandleAlignment);
@@ -596,8 +626,8 @@ bool SBTAny::buildOnce ()
 	const VkDeviceAddress sbtAddr = bufferGetAddress(m_sbtBuffer);
 
 	const auto order = pipelineGetOrder(m_handles.getPipeline());
-	std::vector<std::byte> testHandle(alignHandleSize);
-	add_cref<Data> handles(m_handles.getHandles());
+	SBTAny::Handles testHandle(alignHandleSize);
+	add_cref<SBTAny::Handles> handles(m_handles.getHandles());
 
 	const auto indexToStage = [](const uint32_t index, const uint32_t = 0u) {
 		switch (index)
@@ -699,13 +729,7 @@ bool SBTAny::buildOnce1 ()
 	}
 
 	ZDevice device = m_handles.getPipeline().getParam<ZDevice>();
-
-	const VkPhysicalDeviceRayTracingPipelinePropertiesKHR props = [&]() {
-		VkPhysicalDeviceRayTracingPipelinePropertiesKHR p{};
-		p.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
-		deviceGetPhysicalProperties2(device.getParam<ZPhysicalDevice>(), &p);
-		return p;
-		}();
+	const VkPhysicalDeviceRayTracingPipelinePropertiesKHR props = getRTpipelineProperties(device);
 
 	const uint32_t		rgenDataSize = uint32_t(m_rgenDataSize);
 	const uint32_t		missDataSize = uint32_t(m_missDataSize);
@@ -749,8 +773,8 @@ bool SBTAny::buildOnce1 ()
 	}
 
 	const auto order = pipelineGetOrder(m_handles.getPipeline());
-	std::vector<std::byte> testHandle(handleSize);
-	add_cref<Data> handles(m_handles.getHandles());
+	SBTAny::Handles testHandle(handleSize);
+	add_cref<SBTAny::Handles> handles(m_handles.getHandles());
 
 	const auto indexToStage = [](const uint32_t index, const uint32_t = 0u) {
 		switch (index)
@@ -869,45 +893,121 @@ void SBTAny::traceRays(
 	buildOnce(cmd);
 
 	if (getGlobalAppFlags().verbose) {
-		auto writeAddress = [](VkDeviceAddress a, VkDeviceAddress b = 0) -> std::string {
-			if (a == 0 && b != 0)
+		const auto		counts = m_handles.getCounts();
+		const auto		props = getRTpipelineProperties(device);
+		const uint32_t	handleSize = props.shaderGroupHandleSize;
+		const uint32_t	alignHandleSize = ROUNDUP(props.shaderGroupHandleSize, props.shaderGroupHandleAlignment);
+		const uint32_t	baseAlignment = props.shaderGroupBaseAlignment;
+		const uint32_t	rgenDataSize = uint32_t(m_rgenDataSize);
+		const uint32_t	missDataSize = uint32_t(m_missDataSize);
+		const uint32_t	hitDataSize = uint32_t(m_hitDataSize);
+		const uint32_t	callDataSize = uint32_t(m_callDataSize);
+		const uint32_t	userDataSize = std::max({ rgenDataSize, missDataSize,
+													hitDataSize, callDataSize }) * 0;
+		const uint32_t	recordSize = ROUNDUP(alignHandleSize + userDataSize, baseAlignment);
+
+		const VkDeviceSize	sbtSize = counts.batchCount() * recordSize;
+		SBTAny::Handles	sbtData(sbtSize);
+		bufferRead(m_sbtBuffer, sbtData);
+
+		ZPipeline pipeline = m_handles.getPipeline();
+		const auto pipelineGroupCount = pipeline.getParam<ZDistType<Count, uint32_t>>().get();
+		SBTAny::Handles pipelineGroupHandles(pipelineGroupCount * handleSize);
+		VKASSERT(VTF_CALL_CHECK(di.vkGetRayTracingShaderGroupHandlesKHR,
+			*device,
+			*pipeline,
+			0u,
+			pipelineGroupCount,
+			pipelineGroupHandles.size(),
+			pipelineGroupHandles.data()
+		));
+
+		auto writePipelineGroups = [&](
+			add_ref<std::ostream> str, uint32_t indent, VkShaderStageFlagBits stage,
+			VkDeviceAddress a, VkDeviceAddress baseAddr = 0) -> void
+		{
+			uint32_t groupCount = 0u;
+			switch (stage)
+			{
+			case VK_SHADER_STAGE_RAYGEN_BIT_KHR:
+				groupCount = counts.rgCount;
+				break;
+			case VK_SHADER_STAGE_MISS_BIT_KHR:
+				groupCount = counts.missCount;
+				break;
+			case VK_SHADER_STAGE_CALLABLE_BIT_KHR:
+				groupCount = counts.callCount;
+				break;
+			case VK_SHADER_STAGE_ANY_HIT_BIT_KHR:
+				groupCount = counts.hitCount();
+				break;
+			default: break;
+			};
+			if (groupCount)
+			{
+				str << std::string(indent, ' ') << "groups         = ";
+				for (uint32_t gr = 0u; gr < groupCount; ++gr)
+				{
+					if (gr) str << ", ";
+					str << '{';
+					const SBTAny::Handles handle(std::next(sbtData.begin(), (a - baseAddr)),
+													std::next(sbtData.begin(), (a - baseAddr) + handleSize));
+					const auto occurences = SBTHandles::findHandle(pipelineGroupHandles, handle);
+					for (uint32_t oi = 0u; oi < occurences.size(); ++oi)
+					{
+						if (oi) str << ", ";
+						str << occurences[oi];
+					}
+					str << '}';
+				}
+				str << std::endl;
+			}
+		};
+
+		auto writeAddress = [](VkDeviceAddress a, VkDeviceAddress baseAddr = 0) -> std::string {
+			if (a == 0 && baseAddr != 0)
 				std::cout << "<unavailable>";
 			else
 				std::cout << "0x" << std::hex << a << std::dec << " (" << a << ")";
 			return std::string();
 		};
-		const VkDeviceAddress addr = bufferGetAddress(m_sbtBuffer);
-		std::cout << "[APP] call " << __func__ << "(\n"
+		add_ref<std::ostream> str = std::cout;
+		const VkDeviceAddress baseAddr = bufferGetAddress(m_sbtBuffer);
+		str << "[APP] call " << __func__ << "(\n"
 			<< "    cmd = " << cmd << ",\n"
 			<< "    raygenRegion: {" << std::endl
 			<< "       .deviceAddress = " << writeAddress(m_rgenRegion.deviceAddress) << std::endl
 			<< "       .size          = " << writeAddress(m_rgenRegion.size) << std::endl
 			<< "       .stride        = " << writeAddress(m_rgenRegion.stride) << std::endl
-			<< "       offset         = " << writeAddress(m_rgenRegion.deviceAddress, addr) << std::endl
-			<< "    }," << std::endl
-			<< "    missRegion: {" << std::endl
+			<< "       offset         = " << writeAddress(m_rgenRegion.deviceAddress, baseAddr) << std::endl;
+		writePipelineGroups(str, 7, VK_SHADER_STAGE_RAYGEN_BIT_KHR, m_rgenRegion.deviceAddress, baseAddr);
+		str << "    }," << std::endl;
+		str << "    missRegion: {" << std::endl
 			<< "       .deviceAddress = " << writeAddress(m_missRegion.deviceAddress) << std::endl
 			<< "       .size          = " << writeAddress(m_missRegion.size) << std::endl
 			<< "       .stride        = " << writeAddress(m_missRegion.stride) << std::endl
-			<< "       offset         = " << writeAddress(m_missRegion.deviceAddress, addr) << std::endl
-			<< "    }," << std::endl
-			<< "    hitRegion: {" << std::endl
+			<< "       offset         = " << writeAddress(m_missRegion.deviceAddress, baseAddr) << std::endl;
+		writePipelineGroups(str, 7, VK_SHADER_STAGE_MISS_BIT_KHR, m_missRegion.deviceAddress, baseAddr);
+		str << "    }," << std::endl;
+		str << "    hitRegion: {" << std::endl
 			<< "       .deviceAddress = " << writeAddress(m_hitRegion.deviceAddress) << std::endl
 			<< "       .size          = " << writeAddress(m_hitRegion.size) << std::endl
 			<< "       .stride        = " << writeAddress(m_hitRegion.stride) << std::endl
-			<< "       offset         = " << writeAddress(m_hitRegion.deviceAddress, addr) << std::endl
-			<< "    }," << std::endl
-			<< "    callableRegion: {" << std::endl
+			<< "       offset         = " << writeAddress(m_hitRegion.deviceAddress, baseAddr) << std::endl;
+		writePipelineGroups(str, 7, VK_SHADER_STAGE_ANY_HIT_BIT_KHR, m_hitRegion.deviceAddress, baseAddr);
+		str << "    }," << std::endl;
+		str << "    callableRegion: {" << std::endl
 			<< "       .deviceAddress = " << writeAddress(m_callRegion.deviceAddress) << std::endl
 			<< "       .size          = " << writeAddress(m_callRegion.size) << std::endl
 			<< "       .stride        = " << writeAddress(m_callRegion.stride) << std::endl
-			<< "       offset         = " << writeAddress(m_callRegion.deviceAddress, addr) << std::endl
-			<< "    }," << std::endl
-			<< "    width = " << width << ", height = " << height << ", depth = " << depth << ");\n";
-		std::cout << "  SBT address = " << writeAddress(addr) << std::endl;
+			<< "       offset         = " << writeAddress(m_callRegion.deviceAddress, baseAddr) << std::endl;
+		writePipelineGroups(str, 7, VK_SHADER_STAGE_CALLABLE_BIT_KHR, m_callRegion.deviceAddress, baseAddr);
+		str << "    }," << std::endl;
+		str << "    width = " << width << ", height = " << height << ", depth = " << depth << ");\n";
+		str << "  SBT base address = " << writeAddress(baseAddr) << std::endl;
 	}
 
-	di.vkCmdTraceRaysKHR(*cmd,
+	VTF_CALL_CHECK(di.vkCmdTraceRaysKHR, *cmd,
 		&m_rgenRegion, &m_missRegion, &m_hitRegion, &m_callRegion,
 		width, height, depth);
 }

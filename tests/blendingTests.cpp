@@ -47,6 +47,8 @@ struct TestParams
 	void	printFactors(ostream_ref log) const;
 	void	printFormats(ostream_ref log) const;
 	auto	parseEnum	(add_cref<std::string>			text,
+						const uint32_t					parsed,
+						add_cref<strings>				revList,
 						add_cref<OptionT<uint32_t>>		sender,
 						add_ref<bool>					status,
 						add_ref<OptionParserState>		state,
@@ -364,11 +366,14 @@ std::string TestParams::formatEnum (add_cref<OptionT<uint32_t>> sender,	add_cref
 
 uint32_t TestParams::parseEnum	(
 	add_cref<std::string>		text,
+	const uint32_t				parsed,
+	add_cref<strings>			revList,
 	add_cref<OptionT<uint32_t>>	sender,
 	add_ref<bool>				status,
 	add_ref<OptionParserState>	state,
 	add_cref<Map>				map) const
 {
+	UNREF(parsed); UNREF(revList);
 	uint32_t mc = 0u;
 	uint32_t bm = INVALID_UINT32;
 	const std::string upperText = toUpper(text);
@@ -661,15 +666,17 @@ OptionParser<TestParams, OptionParserStateX> TestParams::getParser (bool include
 		std::bind(&TestParams::formatState, this, std::placeholders::_1, true);
 
 	typename OptionT<uint32_t>::parse_cb parseVkBlendOp =
-		std::bind(&TestParams::parseEnum, this, std::placeholders::_1, std::placeholders::_2,
-					std::placeholders::_3, std::placeholders::_4, mapVkBlendOp);
+		std::bind(&TestParams::parseEnum, this,
+					std::placeholders::_1, std::placeholders::_2, std::placeholders::_3,
+					std::placeholders::_4, std::placeholders::_5, std::placeholders::_6, mapVkBlendOp);
 	typename OptionT<uint32_t>::parse_cb parseVkBlendFactor =
-		std::bind(&TestParams::parseEnum, this, std::placeholders::_1, std::placeholders::_2,
-			std::placeholders::_3, std::placeholders::_4, mapVkBlendFactor);
+		std::bind(&TestParams::parseEnum, this,
+					std::placeholders::_1, std::placeholders::_2, std::placeholders::_3,
+					std::placeholders::_4, std::placeholders::_5, std::placeholders::_6, mapVkBlendFactor);
 	typename OptionT<uint32_t>::parse_cb parseVkFormat =
-		std::bind(&TestParams::parseEnum, this, std::placeholders::_1, std::placeholders::_2,
-			std::placeholders::_3, std::placeholders::_4, Map());
-
+		std::bind(&TestParams::parseEnum, this,
+					std::placeholders::_1, std::placeholders::_2, std::placeholders::_3,
+					std::placeholders::_4, std::placeholders::_5, std::placeholders::_6, Map());
 
 	OptionFlags										flags	(OptionFlag::PrintDefault);
 	add_ref<TestParams>								params	= *this;

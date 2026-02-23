@@ -159,6 +159,7 @@ GlobalAppFlags::GlobalAppFlags()
 	, nowerror					(false)
     , debugPrintfEnabled        (false)
     , noWarning_VUID_Undefined  (false)
+	, assertWait				(false)
 {
 }
 

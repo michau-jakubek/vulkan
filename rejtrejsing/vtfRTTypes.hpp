@@ -97,22 +97,30 @@ VkDeviceAddress accelerationStructureGetDeviceAddress(AccStruct str);
 
 
 void commandBufferBuildAccelerationStructure(
-	ZCommandBuffer cmd, ZBtmAccelerationStructure bottomAS);
+	ZCommandBuffer cmd, ZBtmAccelerationStructure bottomAS, bool forceBuild = false);
 void commandBufferBuildAccelerationStructure(
 	ZCommandBuffer cmd, ZTopAccelerationStructure tlas,
-	BLAS firstInstance, std::optional<std::vector<BLAS>> otherInstances = {});
+	BLAS firstInstance, std::optional<std::vector<BLAS>> otherInstances = {},
+	bool rebuildBlases = false);
 
 struct SBTHandles;
 struct SBTAny
 {
+	enum BuildMethod
+	{
+		NotBuiltYet,
+		OneSBTinBuffer,
+		ManySBTinBuffer
+	};
+	using Handles = std::vector<std::byte>;
 protected:
-	using Data = std::vector<std::byte>;
 	add_cref<SBTHandles>	m_handles;
 	const std::size_t	m_rgenDataSize;
 	const std::size_t	m_missDataSize;
 	const std::size_t	m_callDataSize;
 	const std::size_t	m_hitDataSize;
-	Data				m_data;
+	Handles				m_data;
+	BuildMethod			m_buildMethod;
 	VkStridedDeviceAddressRegionKHR	m_rgenRegion{};
 	VkStridedDeviceAddressRegionKHR m_missRegion{};
 	VkStridedDeviceAddressRegionKHR m_callRegion{};
@@ -130,10 +138,11 @@ protected:
 		, m_callDataSize(clDataSize)
 		, m_hitDataSize(htDataSize)
 		, m_data(rgDataSize + msDataSize + htDataSize + clDataSize)
+		, m_buildMethod(NotBuiltYet)
 	{
 	}
 	void setRegionData (uint32_t region, void_cptr data);
-	bool buildOnce (ZCommandBuffer cmd, int method = 0);
+	bool buildOnce (ZCommandBuffer cmd, BuildMethod buildMethod = OneSBTinBuffer);
 	bool buildOnce1();
 	bool buildOnce ();
 	void traceRays (ZCommandBuffer cmd, uint32_t width, uint32_t height, uint32_t depth = 1u);
@@ -148,9 +157,11 @@ struct SBTHandles
 	auto getHandles	() const { return m_handles; }
 	auto getCounts	() const { return m_counts; }
 	auto getGroup	() const { return m_group; }
+	static auto findHandle(add_cref<SBTAny::Handles> multipleHandles, add_cref<SBTAny::Handles> handle) -> std::vector<int>;
+	auto findHandle(add_cref<SBTAny::Handles> handle) const -> std::vector<int>;
 private:
 	ZPipeline m_pipeline;
-	std::vector<std::byte> m_handles;
+	SBTAny::Handles m_handles;
 	RTShaderCollection::SBTShaderGroup m_group;
 	rtdetails::ShaderCounts m_counts;
 };

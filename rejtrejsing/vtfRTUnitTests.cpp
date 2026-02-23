@@ -99,12 +99,7 @@ bool testSBT (
 	UNREF(errorMessages);
 
 	ZDevice device = pipeline.getParam<ZDevice>();
-	const VkPhysicalDeviceRayTracingPipelinePropertiesKHR props = [&]() {
-		VkPhysicalDeviceRayTracingPipelinePropertiesKHR p{};
-		p.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
-		deviceGetPhysicalProperties2(device.getParam<ZPhysicalDevice>(), &p);
-		return p;
-		}();
+	const VkPhysicalDeviceRayTracingPipelinePropertiesKHR props = getRTpipelineProperties(device);
 	const uint32_t intsPerHandle = uint32_t(props.shaderGroupHandleSize / sizeof(uint32_t));
 	const uint32_t intsPerAlignHandle = uint32_t(ROUNDUP(
 			props.shaderGroupHandleSize, props.shaderGroupHandleAlignment) / sizeof(uint32_t)); UNREF(intsPerAlignHandle);

@@ -75,7 +75,9 @@ struct OptionInterface : public Option
 	auto			valueWriter		() const -> ValueWriter { return ValueWriter{ *this }; }
 	virtual auto	writeDefault	(add_ref<std::ostream> stream) const -> add_ref<std::ostream> = 0;
 	virtual auto	writeValue		(add_ref<std::ostream> stream) const -> add_ref<std::ostream> = 0;
-	virtual	bool	parse			(add_cref<std::string> text, add_ref<OptionParserState> state) = 0;
+	virtual	bool	parse			(add_cref<std::string> text,
+									 const uint32_t parsed, add_cref<strings> revList,
+									 add_ref<OptionParserState> state) = 0;
 private:
 	std::string	m_desc;
 	std::string m_typeName;
@@ -104,6 +106,7 @@ template<class X> struct OptionTypeName
 	std::string get () const { return demangledName<X>(); }
 };
 DEF_OPTION_TYPE_NAME(std::string, "text");
+DEF_OPTION_TYPE_NAME(strings, "text");
 DEF_OPTION_TYPE_NAME(int32_t, "int");
 DEF_OPTION_TYPE_NAME(uint32_t, "uint");
 DEF_OPTION_TYPE_NAME(float, "float");
@@ -119,10 +122,12 @@ typedef std::vector<_OptIPtr> _OptIPtrVec;
 template<class X>
 struct OptionT : public OptionInterface
 {
-	typedef std::function<X(add_cref<std::string>		text,
-							add_cref<OptionT<X>>		sender,
-							add_ref<bool>				status,
-							add_ref<OptionParserState>	state)> parse_cb;
+	typedef std::function<bool (add_cref<std::string>		text,
+								const uint32_t				parsed,
+								add_cref<strings>			revList,
+								add_ref<OptionT<X>>			sender,
+								add_ref<bool>				status,
+								add_ref<OptionParserState>	state)> parse_cb;
 	typedef std::function<std::string(add_cref<OptionT<X>> sender)> format_cb;
 
 	// TODO: add helpers for create default callbacks
@@ -154,7 +159,9 @@ struct OptionT : public OptionInterface
 		setFlags(flags);
 	}
 	virtual      ~OptionT		() = default;
-	virtual bool parse			(add_cref<std::string> text, add_ref<OptionParserState> state) override;
+	virtual bool parse			(add_cref<std::string> text,
+								 const uint32_t parsed, add_cref<strings> revList,
+								 add_ref<OptionParserState> state) override;
 	virtual auto getName		() const -> add_cref<std::string> override { return m_name; }
 	virtual auto getType		() const -> std::type_index override { return std::type_index(typeid(X)); }
 	virtual auto getDTypeName	() const -> std::string override {	return OptionTypeName<X>().get(); }
@@ -260,57 +267,116 @@ add_cref<OPST_> OptionParser<UPT_, OPST_, E_>::getState () const
 	return *reinterpret_cast<add_cptr<OPST_>>(m_state.get());
 }
 
+template<typename T>
+class _has_ostream_operator {
+private:
+	template<typename U>
+	static auto test(int) -> decltype(
+		std::declval<std::ostream&>() << std::declval<const U&>(),
+		std::true_type{}
+		);
+
+	template<typename>
+	static auto test(...) -> std::false_type;
+
+public:
+	static constexpr bool value = decltype(test<T>(0))::value;
+};
+
 template<class X>
 struct FromTextDispatcher
 {
-	inline static X fromText (add_cref<std::string> text, add_cref<X> def, add_ref<bool> status)
+	inline static X fromText (add_cref<std::string> text, const uint32_t parsed, add_cref<strings> revList, add_cref<X> def, add_ref<bool> status)
 	{
+		UNREF(parsed); UNREF(revList);
 		return ::vtf::fromText(text, def, status);
 	}
 };
 template<class T, size_t N>
 struct FromTextDispatcher<VecX<T, N>>
 {
-	inline static VecX<T, N> fromText (add_cref<std::string> text, add_cref<VecX<T, N>> def, add_ref<bool> status)
+	inline static VecX<T, N> fromText (add_cref<std::string> text, const uint32_t parsed, add_cref<strings> revList, add_cref<VecX<T, N>> def, add_ref<bool> status)
 	{
+		UNREF(parsed); UNREF(revList);
 		std::array<bool, N> states;
 		return VecX<T, N>::fromText(text, def, states, &status);
+	}
+};
+
+template<>
+struct FromTextDispatcher<strings>
+{
+	inline static strings fromText(add_cref<std::string> text, const uint32_t parsed, add_cref<strings> revList, add_cref<strings> def, add_ref<bool> status)
+	{
+		UNREF(text);
+		UNREF(def);
+		ASSERTMSG(parsed <= data_count(revList), "Index of bounds");
+		status = true;
+		strings value;
+		uint32_t k = 0u;
+		for (auto i = std::next(revList.begin(), (data_count(revList) - parsed));
+				i != revList.end() && k < parsed; ++i, ++k)
+		{
+			value.push_back(*i);
+		}
+		return value;
 	}
 };
 
 template<class X>
 add_ref<std::ostream> OptionT<X>::writeDefault (add_ref<std::ostream> stream) const
 {
-	if (getDefault().empty())
-		return stream << ((m_default.has_value()) ? *m_default : m_storage);
-	return stream << getDefault();
+	if constexpr (_has_ostream_operator<X>::value)
+	{
+		if (getDefault().empty())
+			return stream << ((m_default.has_value()) ? *m_default : m_storage);
+		return stream << getDefault();
+	}
+	else
+	{
+		return stream;
+	}
 }
 
 template<class X>
 add_ref<std::ostream> OptionT<X>::writeValue (add_ref<std::ostream> stream) const
 {
-	if (m_formatCallback)
-		return stream << m_formatCallback(*this);
-	if constexpr (std::is_same_v<X, bool>)
-		return stream << std::boolalpha << m_storage << std::noboolalpha;
+	if constexpr (_has_ostream_operator<X>::value)
+	{
+		if (m_formatCallback)
+			return stream << m_formatCallback(*this);
+		if constexpr (std::is_same_v<X, bool>)
+			return stream << std::boolalpha << m_storage << std::noboolalpha;
+		else
+			return stream << m_storage;
+	}
 	else
-		return stream << m_storage;
+	{
+		return stream;
+	}
 }
 
 template<class X>
-bool OptionT<X>::parse (add_cref<std::string> text, add_ref<OptionParserState> state)
+bool OptionT<X>::parse (add_cref<std::string> text, const uint32_t parsed, add_cref<strings> revList, add_ref<OptionParserState> state)
 {
 	m_touched = true;
-	const X result = m_parseCallback
-		? m_parseCallback(text, *this, m_parseState, state)
-		: FromTextDispatcher<X>::fromText(text, (m_default.has_value() ? *m_default : m_storage), m_parseState);
-	if (m_parseState)
-		m_storage = result;
-	else if (!m_parseCallback)
+	bool manualParse = bool(m_parseCallback);
+	if (manualParse)
 	{
-		state.hasWarnings = true;
-		state.messages	<< "WARNING: Unable to parse " << std::quoted(m_name) << " from " << std::quoted(text)
-						<< ", default value " << defaultWriter() << " was used" << std::endl;
+		// If custom parse callback is provided,
+		// it is responsible for setting the parse state
+		// and updating the storage if necessary.
+		manualParse = m_parseCallback(text, parsed, revList, *this, m_parseState, state);
+	}
+	if (false == manualParse)
+	{
+		m_storage = FromTextDispatcher<X>::fromText(text, parsed, revList, (m_default.has_value() ? *m_default : m_storage), m_parseState);
+		if (false == m_parseState)
+		{
+			state.hasWarnings = true;
+			state.messages << "WARNING: Unable to parse " << std::quoted(m_name) << " from " << std::quoted(text)
+				<< ", default value " << defaultWriter() << " was used" << std::endl;
+		}
 	}
 	return m_parseState;
 }
