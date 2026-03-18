@@ -37,6 +37,7 @@ enum class OptionFlag : uint32_t
 	PrintDefault		= 0b1,
 	PrintValueAsDefault	= 0b10,
 	DontPrintAsParams	= 0b100,
+	ParseFailAsWarning	= 0b1000,
 };
 typedef Flags<uint32_t, OptionFlag> OptionFlags;
 
@@ -188,6 +189,9 @@ struct OptionParserState
 };
 
 class CommandLine;
+using OnIterateOption =
+	std::function<void(add_cref<CommandLine>, add_cref<Option>,
+		add_cref<std::string_view> val, uint32_t pos, bool mistake)>;
 struct _OptionParserImpl
 {
 	typedef std::function<bool(std::shared_ptr<OptionInterface> option, add_cref<std::string> value, add_ptr<OptionParserState> state)> parse_cb;
@@ -201,6 +205,7 @@ struct _OptionParserImpl
 	auto	getOptions () const -> _OptIPtrVec;
 	auto	getOptionByName (add_cref<Option> option) const ->_OptIPtr;
 	void	printParams (add_cref<std::string> header, add_ref<std::ostream> str, bool twoNewLines = false) const;
+	void	iterateOptions (add_cref<CommandLine> cmdLine, OnIterateOption onIterateOption) const;
 
 protected:
 	void	addHelpOpts ();
@@ -373,9 +378,18 @@ bool OptionT<X>::parse (add_cref<std::string> text, const uint32_t parsed, add_c
 		m_storage = FromTextDispatcher<X>::fromText(text, parsed, revList, (m_default.has_value() ? *m_default : m_storage), m_parseState);
 		if (false == m_parseState)
 		{
-			state.hasWarnings = true;
-			state.messages << "WARNING: Unable to parse " << std::quoted(m_name) << " from " << std::quoted(text)
-				<< ", default value " << defaultWriter() << " was used" << std::endl;
+			if (getFlags().contain(OptionFlag::ParseFailAsWarning))
+			{
+				state.hasWarnings = true;
+				state.messages << "WARNING: Unable to parse " << std::quoted(m_name) << " from " << std::quoted(text)
+					<< ", default value " << defaultWriter() << " was used" << std::endl;
+			}
+			else
+			{
+				state.hasErrors = true;
+				state.messages << "WARNING: Unable to parse " << std::quoted(m_name)
+					<< " from " << std::quoted(text) << std::endl;
+			}
 		}
 	}
 	return m_parseState;
@@ -394,7 +408,7 @@ class CommandLine
 	const std::string m_userData;
 
 	void makeAnchors (int argc, char** argv);
-	int consumeOptions (const int first, const int count,
+	int consumeOptions (const uint32_t first, const uint32_t count,
 		add_cref<Option> opt, add_cref<std::vector<Option>> opts, add_ref<strings> values,
 		add_cref<strings> breakValues, add_ref<int> depth);
 
@@ -402,8 +416,9 @@ public:
 	CommandLine (int argc, char** argv, add_cref<std::string> userData = {});
 	CommandLine (add_cref<strings> input, add_cref<std::string> userData = {});
 	CommandLine (add_cref<std::string> multiString, add_cref<std::string> userData = {});
-	int consumeOptions (add_cref<Option> opt, add_cref<std::vector<Option>> opts,
-						add_ref<strings> values, add_cref<strings> breakValues = {});
+	int  consumeOptions (add_cref<Option> opt, add_cref<std::vector<Option>> opts,
+						 add_ref<strings> values, add_cref<strings> breakValues = {});
+	void iterateOptions (add_cref<std::vector<Option>> opts, OnIterateOption onIterateOption) const;
 	add_cref<std::string> getAppName () const;
 	add_cref<std::string> getUserData () const;
 	std::string getParams () const; // parameters only separated by space
@@ -413,6 +428,7 @@ public:
 	uint32_t    getConsumedTokenCount () const;
 	strings     getUnconsumedTokens () const;
 	uint32_t    truncateConsumed ();
+	void		resetToUnconsumed ();
 };
 
 } // namespace vtf

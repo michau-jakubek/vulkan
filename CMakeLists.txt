@@ -156,6 +156,7 @@ include_directories(
 	external/stb
 	external/stl_reader
 	external/glm
+	external/tinygltf
 	)
 
 add_subdirectory(driver)

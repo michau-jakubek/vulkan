@@ -133,7 +133,7 @@ protected:
 	constexpr Flags(const ResultFlags& flags) : m_flags(flags) {}
 	template<class... OtherBits>
 	constexpr Flags(std::nullptr_t sink, const Bits& bit, const OtherBits&... others)
-		: Flags(sink, others...) { m_flags |= bit; }
+		: Flags(sink, others...) { m_flags |= ResultFlags(bit); }
 	constexpr Flags(std::nullptr_t, const Bits& bit) : m_flags(ResultFlags(bit)) {}
 };
 
@@ -143,6 +143,7 @@ typedef Flags<VkImageUsageFlags, VkImageUsageFlagBits>				ZImageUsageFlags;
 typedef Flags<VkMemoryPropertyFlags, VkMemoryPropertyFlagBits>		ZMemoryPropertyFlags;
 typedef Flags<VkPipelineCreateFlags, VkPipelineCreateFlagBits>		ZPipelineCreateFlags;
 typedef Flags<VkRenderingFlags, VkRenderingFlagBits>				ZRenderingFlags;
+typedef Flags<VkCullModeFlags, VkCullModeFlagBits>					ZCullModeFlags;
 static const ZBufferUsageFlags ZBufferUsageStorageFlags(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 static const ZBufferUsageFlags ZBufferUsageUniformFlags(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 static const ZMemoryPropertyFlags ZMemoryPropertyDeviceFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);

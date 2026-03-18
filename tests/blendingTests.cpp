@@ -257,7 +257,6 @@ void onResize (add_ref<Canvas>, void* userData, int, int)
 	ev->swapTrigger += 1;
 }
 
-TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams);
 TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 						add_cref<std::vector<TestParamsState>> set, bool fromFile,
 						bool availableDualSourceBlend, bool needShaderObject);

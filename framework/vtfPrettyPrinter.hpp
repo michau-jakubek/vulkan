@@ -14,16 +14,20 @@ class PrettyPrinter
 	typedef add_ref<std::ostream> Cursor_;
 	std::vector<std::ostringstream> m_cursors;
 	void printFrames(
-		Cursor_ str,
+		Cursor_ out,
 		add_cref<std::vector<uint32_t>> sequence,
 		add_cref<std::vector<strings>> frames,
-		uint32_t maxlinelength, uint32_t space) const;
+		add_cref<std::vector<uint32_t>> maxLineLengthPerFrames,
+		uint32_t maxlinelength, uint32_t space,
+		bool fitIndividualColumn) const;
 
 public:
 	using Cursor = Cursor_;
-	Cursor getCursor (uint32_t cursor);
+	Cursor getCursor (uint32_t cursor); 
+	// cursor indices or INVALID_UINT32 to break line
 	Cursor merge (add_cref<std::vector<uint32_t>> cursorMask,
-					Cursor str, uint32_t space = 4u) const;
+					Cursor out, uint32_t space = 4u,
+					bool fitIndividualColumn = false) const;
 	Cursor selfTest (Cursor str) const;
 };
 

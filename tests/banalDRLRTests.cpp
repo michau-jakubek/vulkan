@@ -272,7 +272,6 @@ bool Params::verify (add_ref<std::string> msg) const
 }
 
 TriLogicInt runTests (add_ref<VulkanContext> canvas, add_cref<Params> params);
-TriLogicInt prepareTests (add_cref<TestRecord> record, add_cref<strings> cmdLineParams);
 std::tuple<ZShaderModule, ZShaderModule, ZShaderModule,
 			ZDistType<SomeZero, std::string>, ZDistType<SomeOne, std::string>>
 	buildShaderModules (ZDevice device, add_cref<Params> params);

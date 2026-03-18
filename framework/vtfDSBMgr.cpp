@@ -279,6 +279,7 @@ ZDescriptorSetLayout DescriptorSetBindingManager::createDescriptorSetLayout (
 {
 	assertDoubledBindings();
 
+	add_cref<ZDeviceInterface>					di					= device.getInterface();
 	VkAllocationCallbacksPtr					callbacks			= device.getParam<VkAllocationCallbacksPtr>();
 	ZDescriptorPool								descriptorPool		(VK_NULL_HANDLE, device, callbacks);
 	ZDescriptorSetLayout						descriptorSetLayout	(VK_NULL_HANDLE, device, callbacks, layoutCreateFlags, ZDescriptorSet(), getIdentifier());
@@ -324,8 +325,9 @@ ZDescriptorSetLayout DescriptorSetBindingManager::createDescriptorSetLayout (
 		poolCreateInfo.maxSets = 1u;
 		poolCreateInfo.poolSizeCount = data_count(poolSizes);
 		poolCreateInfo.pPoolSizes = data_or_null(poolSizes);
-		VKASSERTMSG(vkCreateDescriptorPool(*device, &poolCreateInfo, callbacks,
-			descriptorPool.setter()), "Unable to create descriptor pool");
+		VKASSERTMSG(VTF_CALL_CHECK(di.vkCreateDescriptorPool,
+						*device, &poolCreateInfo, callbacks, descriptorPool.setter()),
+						"Unable to create descriptor pool");
 	}
 
 	void_ptr descriptorSetLayoutPNext = nullptr;
@@ -355,18 +357,37 @@ ZDescriptorSetLayout DescriptorSetBindingManager::createDescriptorSetLayout (
 	setLayoutCreateInfo.flags			= layoutCreateFlags;
 	setLayoutCreateInfo.bindingCount	= data_count(bindings);
 	setLayoutCreateInfo.pBindings		= data_or_null(bindings);
-	VKASSERTMSG(vkCreateDescriptorSetLayout(*device, &setLayoutCreateInfo, callbacks,
-											descriptorSetLayout.setter()), "Failed to create descriptor set layout");
+	VKASSERTMSG(VTF_CALL_CHECK(di.vkCreateDescriptorSetLayout,
+				*device, &setLayoutCreateInfo, callbacks, descriptorSetLayout.setter()),
+				"Failed to create descriptor set layout");
 
 	if (false == descriptorBuffer)
 	{
+		void_ptr allocNext = nullptr;
+		std::vector<uint32_t> descriptorCounts(data_count(m_extbindings));
+		VkDescriptorSetVariableDescriptorCountAllocateInfo variableInfo{};
+		if (anyNonZeroBindingFlag)
+		{
+			variableInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO;
+			variableInfo.pDescriptorCounts = descriptorCounts.data();
+			variableInfo.descriptorSetCount = 1u;
+			allocNext = &variableInfo;
+			// VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT
+			for (uint32_t ii = 0u; ii < data_count(m_extbindings); ++ii)
+			{
+				add_cref<ExtBinding> b = m_extbindings[ii];
+				descriptorCounts[ii] = b.descriptorCount;
+			}
+		}
+
 		ZDescriptorSet					descriptorSet(VK_NULL_HANDLE, device, descriptorPool);
-		VkDescriptorSetAllocateInfo		allocInfo = makeVkStruct();
+		VkDescriptorSetAllocateInfo		allocInfo = makeVkStruct(allocNext);
 		allocInfo.descriptorPool		= *descriptorPool;
 		allocInfo.descriptorSetCount	= 1u;
 		allocInfo.pSetLayouts			= descriptorSetLayout.ptr();
-		VKASSERTMSG(vkAllocateDescriptorSets(*device, &allocInfo,
-			descriptorSet.setter()), "Failed to allocate descriptor set");
+		VKASSERTMSG(VTF_CALL_CHECK(di.vkAllocateDescriptorSets,
+					*device, &allocInfo, descriptorSet.setter()),
+					"Failed to allocate descriptor set");
 
 		if (performUpdateDescriptorSets)
 		{

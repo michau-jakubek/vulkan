@@ -26,9 +26,6 @@ struct INode
 	friend struct Node<INodePtr>;
 	const std::string typeName;
 	INodePtr next;
-  //  virtual TypeKind getKind() const {
-		//return TypeKind::Unknown;
-  //  }
     virtual INodePtr getChildren(bool raise = true) const {
         if (raise) {
             const std::string msg = "No overriden " + typeName + "::getChildren() found";
@@ -42,23 +39,20 @@ struct INode
     virtual INodePtr getElementType() const {
         return nullptr;
     }
-    virtual INodePtr clone(bool raise = true) const {
-        if (raise) {
-            const std::string msg = "No overriden " + typeName + "::clone() found";
-            throw std::runtime_error(msg);
-        }
-		return nullptr;
-	}
+    virtual INodePtr clone() const {
+        return nullptr;
+    }
     struct Cmp {
-        std::string result;
-        INodePtr comparedNode;
-        uint32_t index = 0u;
+        enum State { Undefined, OK, TypeMismatch, ValueMismatch };
+        INodePtr lhsNode, rhsNode;
+        std::string lhsValue, rhsValue;
+        int index1 = (-1);
+        int index2 = (-1);
+        uint32_t fieldIndex = 0u;
     };
     virtual bool isArray(add_ref<std::size_t> /*elemCount*/) const { return false; }
-    virtual void cmp(INodePtr /*thiz*/, INodePtr /*other*/, uint32_t /*fieldIndex*/,
-                         add_ref<std::stack<Cmp>>, add_ref<int> result) {
-        result = (-1);
-        throw std::runtime_error("No overriden " + typeName + "::cmp() found");
+    virtual Cmp::State cmp(add_ref<std::stack<Cmp>>, bool /*compareValue*/) const {
+        return Cmp::State::Undefined;
     }
     virtual void loop(float& /*seedValue*/) { }
     virtual std::string genFieldName(uint32_t index, bool /*appendRank*/ = false) const {
@@ -126,42 +120,25 @@ template<class X> struct Node : public INode
 	{
 		str << typeName << ' ' << typeName << level << " = " << value << ' ';
 	}
-    virtual INodePtr clone(bool) const override {
-		return std::make_shared<Node<X>>(type_to_string<X>, nullptr);
+    virtual INodePtr clone() const override {
+		auto c = std::make_shared<Node>(type_to_string<X>, nullptr);
+        c->value = value;
+        return c;
 	}
     virtual void loop(float& seed) override {
 		value = X(seed);
         seed += 1.0f;
 	}
-    virtual void cmp(INodePtr thiz, INodePtr other, uint32_t fieldIndex,
-                     add_ref<std::stack<Cmp>> nodeStack, add_ref<int> result) override {
-        int status = 0;
-        Cmp c{ std::string(), thiz, 0u };
-        std::stringstream os;
-        if (typeName != other->typeName) {
-            std::size_t elemCount = 0u;
-            printValue(os, fieldIndex);
-            os << "compared with " << other->typeName;
-            if (other->isArray(elemCount))
-            {
-                os << '[' << elemCount << ']';
-            }
-            status = (-1);
+    virtual Cmp::State cmp(add_ref<std::stack<Cmp>> nodeStack, bool compareValue) const override {
+        auto other = std::dynamic_pointer_cast<Node>(nodeStack.top().rhsNode);
+        if (nullptr == other)
+            return Cmp::State::TypeMismatch;
+        if (compareValue && value != other->value) {
+            nodeStack.top().lhsValue = std::to_string(value);
+            nodeStack.top().rhsValue = std::to_string(other->value);
+            return Cmp::State::ValueMismatch;
         }
-        else
-        {
-            const X otherValue = std::static_pointer_cast<Node>(other)->value;
-            if (otherValue != value)
-            {
-                os << genFieldName(fieldIndex) << " is " << value << ", expected " << otherValue;
-                status = +1;
-            }
-        }
-        if ((result = status))
-        {
-            c.result = os.str();
-            nodeStack.push(c);
-        }
+        return Cmp::State::OK;
     }
 
     virtual std::size_t getBaseAlignment() const override {
@@ -203,158 +180,19 @@ template<class X> struct Node : public INode
     }
 };
 
-template<class X, std::size_t Elems, bool IsRuntime> struct Array
-{
-    INodePtr structure;
-    //template<class Y = X, std::enable_if_t<!std::is_same_v<Y, INodePtr>, int> = 0>
-    Array() : structure() {}
-    //template<class Y, std::enable_if_t<std::is_same_v<Y, INodePtr>, int> = 1>
-    //Array(Y structureNode) : structure(structureNode) {}
-};
-template<std::size_t Elems, bool IsRuntime> struct Array<INodePtr, Elems, IsRuntime>
-{
-    INodePtr structure;
-    //template<class Y = X, std::enable_if_t<!std::is_same_v<Y, INodePtr>, int> = 0>
-    //Array() : structure() {}
-    //template<class Y, std::enable_if_t<std::is_same_v<Y, INodePtr>, int> = 1>
-    Array(INodePtr structureNode) : structure(structureNode) {}
-};
-
-template<class X, std::size_t Elems, bool IsRuntime>
-struct Node<Array<X, Elems, IsRuntime>> : public INode
-{
-    static_assert(false == std::is_same_v<X, INodePtr>,
-        "In Node<Array<X, Elems, IsRuntime>> the X must not be of INodePtr");
-
-    X value[Elems];
-    using ValueType = X[Elems];
-    Node(const std::string& /*typeName*/, INodePtr)
-        : INode(type_to_string<X>, nullptr)
-    {
-    }
-    virtual INodePtr clone(bool) const override {
-        return std::make_shared<Node>(typeName, nullptr);
-    }
-    virtual std::string genFieldName(uint32_t index, bool appendRank) const override {
-        const std::string fieldName = INode::genFieldName(index);
-        if (appendRank)
-            return fieldName + '[' + (IsRuntime ? ("/* " + std::to_string(Elems) + " */") : std::to_string(Elems)) + ']';
-        return fieldName;
-    }
-    virtual INodePtr getElementType() const override {
-        return std::make_shared<Node<X>>(std::string(), nullptr);
-    }
-    virtual void printValue(std::ostream& str, uint32_t level) const override {
-		str << typeName << ' ' << typeName << level << '[' << Elems << "] = ";
-		for (std::size_t i = 0; i < Elems; ++i)
-		{
-            str << '[' << i << "](" << value[i] << ")";
-		}
-        str << ' ';
-	}
-    virtual void loop(float& seed) override {
-        for (std::size_t i = 0; i < Elems; ++i) {
-            value[i] = X(seed);
-            seed += 1;
-        }
-    }
-    virtual void cmp(INodePtr thiz, INodePtr other, uint32_t fieldIndex,
-        add_ref<std::stack<Cmp>> nodeStack, add_ref<int> result) override {
-        int status = 0;
-        Cmp c{ std::string(), thiz, 0u };
-        std::stringstream os;
-        std::size_t otherElemCount = 0u;
-        const bool otherIsArray = other->isArray(otherElemCount);
-        if ((false == (typeName == other->typeName)) || (otherIsArray && (Elems == otherElemCount))) {
-            os << genFieldName(fieldIndex, true) <<  " compared with " << other->typeName;
-            if (otherIsArray)
-            {
-                os << '[' << otherElemCount << ']';
-            }
-            status = (-1);
-        }
-        else
-        {
-            add_cref<ValueType> otherValue = std::static_pointer_cast<Node>(other)->value;
-            for (uint32_t i = 0u; i < Elems; ++i)
-            {
-                if (otherValue[i] != value[i])
-                {
-                    os << typeName << genFieldName(fieldIndex) << '[' << i << ']'
-                        << " is " << value[i] << ", expected " << otherValue[i];
-                    status = (-1);
-                    break;
-                }
-            }
-        }
-        if ((result = status))
-        {
-            c.result = os.str();
-            nodeStack.push(c);
-        }
-    }
-
-    virtual std::size_t getBaseAlignment() const override {
-        return getElementType()->getBaseAlignment();
-    }
-    virtual std::size_t getLogicalSize() const override {
-        return Elems * getBaseAlignment();
-    }
-    virtual void serializeOrDeserialize(const void* src, void* dst, std::size_t& offset,
-                                        bool serialize, bool /*arrayElement*/,
-                                        int& /*nesting*/, SDCallback) override
-    {
-        const std::size_t stride = getBaseAlignment();
-        std::size_t rwOffset = offset;
-        for (std::size_t i = 0; i < Elems; ++i)
-        {
-            if (serialize)
-            {
-                X* p = reinterpret_cast<X*>(reinterpret_cast<std::byte*>(dst) + rwOffset);
-                *p = value[i];
-            }
-            else
-            {
-                const X* p = reinterpret_cast<const X*>(reinterpret_cast<const std::byte*>(src) + rwOffset);
-                value[i] = *p;
-            }
-
-            rwOffset += stride;
-        }
-    }
-    virtual uint32_t getVisitCount() const override {
-        return uint32_t(Elems);
-    }
-    virtual void genLoops(
-        std::ostream& str,
-        const std::string& currentPath,
-        const std::string& rhsCode,
-        uint32_t fieldIndex,
-        uint32_t indent,
-        uint32_t& iteratorSeed) const override
-    {
-        const std::string it = genFieldName(fieldIndex, false) + '_' + std::to_string(iteratorSeed++);
-        const std::string path = currentPath + '[' + it + ']';
-        putIndent(str, indent);
-        str << "for (uint " << it << " = 0; " << it << " < " << Elems << "; ++" << it << ") {\n";
-        putIndent(str, indent + 1u);
-        str << path << " = " << getElementType()->typeName << '(' << rhsCode << ");\n";
-        putIndent(str, indent);
-        str << "}\n";
-    }
-};
-
 template<std::size_t Elems, bool IsRuntime>
 struct Node<Array<INodePtr, Elems, IsRuntime>> : public INode
 {
     std::vector<INodePtr> value;
     const std::size_t dynamicElems;
     const bool dynamicIsRuntime;
+    const std::string privateName;
     Node(const std::string& /*typeName*/, INodePtr structure) 
         : INode(structure->typeName, nullptr)
         , value(Elems)
         , dynamicElems(Elems)
         , dynamicIsRuntime(IsRuntime)
+        , privateName()
     {
         for (uint32_t i = 0u; i < Elems; ++i)
             value[i] = structure->clone();
@@ -364,18 +202,48 @@ struct Node<Array<INodePtr, Elems, IsRuntime>> : public INode
         , value(elemCount)
         , dynamicElems(elemCount)
         , dynamicIsRuntime(isRuntimeArray)
+        , privateName()
     {
         for (uint32_t i = 0u; i < elemCount; ++i)
             value[i] = elemType->clone();
     }
-    virtual INodePtr clone(bool) const override {
-        return std::make_shared<Node<Array<INodePtr, 1, false>>>(value[0], dynamicElems, dynamicIsRuntime);
+    std::string checkElems(add_cref<std::vector<INodePtr>> elems) {
+        ASSERTMSG(elems.size(), "Array must have at least one element");
+        if (elems.size() > 1u) {
+            Cmp c;
+            std::stack<Cmp> st;
+            st.push(c);
+            for (uint32_t i = 1u; i < elems.size(); ++i) {
+                st.top().lhsNode = elems[0];
+                st.top().rhsNode = elems[i];
+                ASSERTMSG(elems[0]->cmp(st, false) == Cmp::State::OK,
+                    "Array elements must be the same type");
+            }
+        }
+        return elems[0]->typeName;
+    }
+    Node(add_cref<std::vector<INodePtr>> elems, bool isRuntimeArray = false,
+            add_cref<std::string> arrayName = std::string())
+        : INode(checkElems(elems), nullptr)
+        , value(elems.size())
+        , dynamicElems(elems.size())
+        , dynamicIsRuntime(isRuntimeArray)
+        , privateName(arrayName)
+    {
+        for (uint32_t i = 0u; i < dynamicElems; ++i)
+            value[i] = elems[i]->clone();
+    }
+    virtual INodePtr clone() const override {
+        auto c = std::make_shared<Node<Array<INodePtr, 1, false>>>(value[0], dynamicElems, dynamicIsRuntime);
+        for (uint32_t i = 0u; i < dynamicElems; ++i)
+            c->value[i] = value[i]->clone();
+        return c;
     }
     virtual INodePtr getElementType() const override {
         return value[0];
     }
     virtual std::string genFieldName(uint32_t index, bool appendRank) const override {
-        const std::string fieldName = INode::genFieldName(index);
+        const std::string fieldName = privateName.empty() ? INode::genFieldName(index) : privateName;
         if (appendRank)
             return fieldName + '[' + (dynamicIsRuntime
                                         ? ("/* " + std::to_string(dynamicElems) + " */")
@@ -396,6 +264,27 @@ struct Node<Array<INodePtr, Elems, IsRuntime>> : public INode
             value[i]->loop(seed);
         }
     }
+    virtual Cmp::State cmp(add_ref<std::stack<Cmp>> nodeStack, bool compareValue) const override {
+        auto otherArray = std::dynamic_pointer_cast<Node>(nodeStack.top().rhsNode);
+        if (nullptr == otherArray)
+            return Cmp::State::TypeMismatch;
+        if (dynamicElems != otherArray->dynamicElems)
+            return Cmp::State::TypeMismatch;
+        if (compareValue)
+            for (uint32_t i = 0; i < dynamicElems; ++i) {
+                Cmp cmp;
+                cmp.fieldIndex = nodeStack.top().fieldIndex;
+                cmp.index1 = int(i);
+                cmp.lhsNode = value[i];
+                cmp.rhsNode = otherArray->value[i];
+                nodeStack.push(cmp);
+                const auto state = value[i]->cmp(nodeStack, compareValue);
+                if (state != Cmp::State::OK)
+                    return state;
+                nodeStack.pop();
+            }
+        return Cmp::State::OK;
+    }
     virtual std::size_t getBaseAlignment() const override {
         return value[0]->getBaseAlignment();
     }
@@ -407,7 +296,7 @@ struct Node<Array<INodePtr, Elems, IsRuntime>> : public INode
     virtual void serializeOrDeserialize(const void* src, void* dst, std::size_t& offset,
                                         bool serialize, bool /*arrayElement*/, int& nesting, SDCallback sdCallback) override
     {
-        const std::size_t stride = value[0]->getLogicalSize();
+        const std::size_t stride = value[0]->getBaseAlignment();
 
         std::size_t rwOffset = offset;
         for (std::size_t i = 0; i < dynamicElems; ++i)
@@ -458,8 +347,12 @@ struct Node<mat<Cols, Rows, T, ColumnMajor>> : public INode
 {
     T value[Cols * Rows]{};
 
-    virtual INodePtr clone(bool) const override {
-        return std::make_shared<Node<mat<Cols, Rows, T, ColumnMajor>>>(genTypeName(), nullptr);
+    virtual INodePtr clone() const override {
+        auto c = std::make_shared<Node>(genTypeName(), nullptr);
+        for (uint32_t R = 0u; R < Rows; ++R)
+            for (uint32_t C = 0u; C < Cols; ++C)
+                c->value[R * Cols + C] = value[R * Cols + C];
+        return c;
     }
 
     std::string genTypeName() const {
@@ -491,12 +384,31 @@ struct Node<mat<Cols, Rows, T, ColumnMajor>> : public INode
     }
 
     virtual void loop(float& seed) override {
-        for (std::size_t C = 0u; C < Cols; ++C) {
+        for (std::size_t C = 0u; C < Cols; ++C)
             for (std::size_t R = 0u; R < Rows; ++R) {
                 value[C * Rows + R] = T(seed);
                 seed += 1.f;
             }
-        }
+    }
+
+    virtual Cmp::State cmp(add_ref<std::stack<Cmp>> nodeStack, bool compareValue) const override {
+        auto otherMat = std::dynamic_pointer_cast<Node>(nodeStack.top().rhsNode);
+        if (nullptr == otherMat)
+            return Cmp::State::TypeMismatch;
+        if (compareValue)
+            for (std::size_t C = 0u; C < Cols; ++C)
+                for (std::size_t R = 0u; R < Rows; ++R) {
+                    const std::size_t I = C * Rows + R;
+                    if (value[I] != otherMat->value[I])
+                    {
+                        nodeStack.top().index1 = int(R);
+                        nodeStack.top().index2 = int(C);
+                        nodeStack.top().lhsValue = std::to_string(value[I]);
+                        nodeStack.top().rhsValue = std::to_string(otherMat->value[I]);
+                        return Cmp::State::ValueMismatch;
+                    }
+                }
+        return Cmp::State::OK;
     }
 
     virtual std::size_t getBaseAlignment() const override {
@@ -577,8 +489,11 @@ struct Node<vec<K, T>> : public INode
     T value[K]{};
     using ValueType = T [K];
 
-    virtual INodePtr clone(bool) const override {
-        return std::make_shared<Node<vec<K, T>>>(genTypeName(), nullptr);
+    virtual INodePtr clone() const override {
+        auto c = std::make_shared<Node>(genTypeName(), nullptr);
+        for (uint32_t i = 0u; i < K; ++i)
+            c->value[i] = value[i];
+        return c;
     }
 
     std::string genTypeName() const {
@@ -610,47 +525,19 @@ struct Node<vec<K, T>> : public INode
         }
     }
 
-    virtual void cmp(INodePtr thiz, INodePtr other, uint32_t fieldIndex,
-        add_ref<std::stack<Cmp>> nodeStack, add_ref<int> result) override {
-        int status = 0;
-        Cmp c{ std::string(), thiz, 0u };
-        std::stringstream os;
-        if (typeName != other->typeName) {
-            std::size_t elemCount = 0u;
-            printValue(os, fieldIndex);
-            os << "compared with " << other->typeName;
-            if (other->isArray(elemCount))
-            {
-                os << '[' << elemCount << ']';
-            }
-            status = (-1);
-        }
-        else
-        {
-            add_cref<ValueType> otherValue = std::static_pointer_cast<Node>(other)->value;
-            for (uint32_t k = 0u; k < K; ++k) {
-                if (otherValue[k] != value[k]) {
-                    std::ostringstream valueStream, otherValueStream;
-                    valueStream << '['; otherValueStream << '[';
-                    for (uint32_t i = 0; i < K; ++i) {
-                        if (i) {
-                            valueStream << ", "; otherValueStream << ", ";
-                        }
-                        valueStream << value[i]; otherValueStream << otherValue[i];
-                    }
-                    valueStream << ']'; otherValueStream << ']';
-                    os << genFieldName(fieldIndex) << " is " << valueStream.str()
-                        << ", expected " << otherValueStream.str();
-                    status = (-1);
-                    break;
+    virtual Cmp::State cmp(add_ref<std::stack<Cmp>> nodeStack, bool compareValue) const override {
+        auto otherVec = std::dynamic_pointer_cast<Node>(nodeStack.top().rhsNode);
+        if (nullptr == otherVec)
+            return Cmp::State::TypeMismatch;
+        if (compareValue)
+            for (uint32_t i = 0u; i < K; ++i)
+                if (value[i] != otherVec->value[i]) {
+                    nodeStack.top().index1 = int(i);
+                    nodeStack.top().lhsValue = std::to_string(value[i]);
+                    nodeStack.top().rhsValue = std::to_string(otherVec->value[i]);
+                    return Cmp::State::ValueMismatch;
                 }
-            }
-        }
-        if ((result = status))
-        {
-            c.result = os.str();
-            nodeStack.push(c);
-        }
+        return Cmp::State::OK;
     }
 
     virtual std::size_t getBaseAlignment() const override {
@@ -659,7 +546,8 @@ struct Node<vec<K, T>> : public INode
     }
 
     virtual std::size_t getLogicalSize() const override {
-        return getBaseAlignment();
+        const std::size_t elemSize = getElementType()->getLogicalSize();
+        return K * elemSize;
     }
 
     virtual void serializeOrDeserialize(const void* src, void* dst, std::size_t& offset, bool serialize,
@@ -742,13 +630,45 @@ template<> struct Node<INodePtr> : public INode
             ch = ch->next;
         return ch;
     }
-    virtual INodePtr clone(bool) const override {
+    virtual INodePtr clone() const override {
 		return std::make_shared<Node>(typeName, children);
 	}
     virtual void loop(float& seed) override {
 		for (INodePtr p = children->next; p; p = p->next)
             p->loop(seed);
 	}
+    virtual Cmp::State cmp(add_ref<std::stack<Cmp>> nodeStack, bool compareValue) const override
+    {
+        uint32_t fieldIndex = 0u;
+        INodePtr myChild = children->next;
+        INodePtr otherChild = nodeStack.top().rhsNode->getChildren(false)
+            ? nodeStack.top().rhsNode->getChildren(false)->next : nullptr;
+        while (myChild && otherChild)
+        {
+            Cmp c;
+            c.lhsNode = myChild;
+            c.rhsNode = otherChild;
+            c.fieldIndex = fieldIndex;
+            nodeStack.push(c);      
+            const Cmp::State cmpResult = myChild->cmp(nodeStack, compareValue);
+            if (cmpResult == Cmp::State::OK)
+            {
+                nodeStack.pop();
+                otherChild = otherChild->next;
+                myChild = myChild->next;
+                fieldIndex = fieldIndex + 1u;
+            }
+            else
+            {
+                return cmpResult;
+            }
+        }
+        if ((nullptr == myChild) ^ (nullptr == otherChild))
+        {
+            return Cmp::State::TypeMismatch;
+        }
+        return Cmp::State::OK;
+    }
     virtual std::size_t getBaseAlignment() const override {
         size_t maxAb = 4u;
         for (INodePtr p = children->next; p; p = p->next) {
@@ -897,7 +817,7 @@ struct StructGenerator
     using INodePtr = sg::INodePtr;
     template<typename X> using Node = sg::Node<X>;
 
-    INodePtr generateStruct(const std::string& typeName, const std::vector<INodePtr> fields)
+    INodePtr generateStruct(const std::string& typeName, const std::vector<INodePtr> fields) const
     {
         INodePtr root = Node<INodePtr>::createEmpty(typeName);
         INodePtr* pNext = &root->getChildren()->next;
@@ -910,7 +830,7 @@ struct StructGenerator
     }
 
     // example: makeField(int()), makeField(vec<2,int>()),
-    template<class FieldType> INodePtr makeField(const FieldType&)
+    template<class FieldType> INodePtr makeField(const FieldType&) const
     {
         return std::make_shared<Node<FieldType>>(std::string(), nullptr);
     }
@@ -918,6 +838,12 @@ struct StructGenerator
     INodePtr makeArrayField(INodePtr elemType, std::size_t elemCount, bool isRuntime = false) const
     {
         return std::make_shared<Node<sg::Array<INodePtr, 1, false>>>(elemType, elemCount, isRuntime);
+    }
+
+    INodePtr makeArrayField(const std::vector<INodePtr>& elems, bool isRuntime = false,
+                            const std::string& arrayName = std::string()) const
+    {
+        return std::make_shared<Node<sg::Array<INodePtr, 1, false>>>(elems, isRuntime, arrayName);
     }
 
     bool structureAppendField(INodePtr rootStruct, INodePtr field) const
@@ -929,6 +855,12 @@ struct StructGenerator
             return true;
         }
         return false;
+    }
+
+    bool compareTypes(INodePtr t1, INodePtr t2, add_ref<std::string> msg,
+                        add_ref<std::string> lhsValue, add_ref<std::string> rhsValue, bool compareValues = true) const
+    {
+        return _compareTypes(t1, t2, msg, lhsValue, rhsValue, compareValues);
     }
 
     void printStruct(INodePtr structNode, std::ostream& str, bool declaration = true) const
@@ -1009,6 +941,8 @@ struct StructGenerator
         structNode->serializeOrDeserialize(nullptr, dst, currentOffset, true, false, nesting, sdCallback);
     }
 
+    bool selfTest() const;
+
 private:
     void _getStructList(INodePtr rootStruct, std::vector<INodePtr>& list) const
     {
@@ -1027,6 +961,9 @@ private:
             }
         }
     }
+    bool _compareTypes(INodePtr t1, INodePtr t2, add_ref<std::string> msg,
+                        add_ref<std::string> lhsValue, add_ref<std::string> rhsValue,
+                        bool compareValues) const;
 };
 
 } // namespace vtf

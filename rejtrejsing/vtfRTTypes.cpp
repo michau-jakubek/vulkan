@@ -514,7 +514,7 @@ extern uint32_t shaderGetHitGroup (add_cref<ZShaderModule> module);
 extern uint32_t shaderGetPipelineFirstGroup (add_cref<ZShaderModule> module);
 extern std::pair<uint32_t, uint32_t> shaderGetPipelineGroup (add_cref<ZShaderModule> module);
 
-SBTHandles::SBTHandles (ZPipeline pipeline, add_cref<RTShaderCollection::SBTShaderGroup> group, int debug)
+SBTHandles::SBTHandles (ZPipeline pipeline, add_cref<RTShaderCollection::SBTShaderGroup> group, uint32_t debug)
 	: m_pipeline(pipeline)
 	, m_handles()
 	, m_group(group)
@@ -893,18 +893,17 @@ void SBTAny::traceRays(
 	buildOnce(cmd);
 
 	if (getGlobalAppFlags().verbose) {
-		const auto		counts = m_handles.getCounts();
-		const auto		props = getRTpipelineProperties(device);
-		const uint32_t	handleSize = props.shaderGroupHandleSize;
-		const uint32_t	alignHandleSize = ROUNDUP(props.shaderGroupHandleSize, props.shaderGroupHandleAlignment);
-		const uint32_t	baseAlignment = props.shaderGroupBaseAlignment;
-		const uint32_t	rgenDataSize = uint32_t(m_rgenDataSize);
-		const uint32_t	missDataSize = uint32_t(m_missDataSize);
-		const uint32_t	hitDataSize = uint32_t(m_hitDataSize);
-		const uint32_t	callDataSize = uint32_t(m_callDataSize);
-		const uint32_t	userDataSize = std::max({ rgenDataSize, missDataSize,
-													hitDataSize, callDataSize }) * 0;
-		const uint32_t	recordSize = ROUNDUP(alignHandleSize + userDataSize, baseAlignment);
+		const auto      counts          = m_handles.getCounts();
+		const auto      props           = getRTpipelineProperties(device);
+		const uint32_t  handleSize      = props.shaderGroupHandleSize;
+		const uint32_t  alignHandleSize = ROUNDUP(props.shaderGroupHandleSize, props.shaderGroupHandleAlignment);
+		const uint32_t  baseAlignment   = props.shaderGroupBaseAlignment;
+		const uint32_t  rgenDataSize    = uint32_t(m_rgenDataSize);
+		const uint32_t  missDataSize    = uint32_t(m_missDataSize);
+		const uint32_t  hitDataSize     = uint32_t(m_hitDataSize);
+		const uint32_t  callDataSize    = uint32_t(m_callDataSize);
+		const uint32_t  userDataSize    = std::max({ rgenDataSize, missDataSize, hitDataSize, callDataSize }) * 0;
+		const uint32_t	recordSize      = ROUNDUP(alignHandleSize + userDataSize, baseAlignment);
 
 		const VkDeviceSize	sbtSize = counts.batchCount() * recordSize;
 		SBTAny::Handles	sbtData(sbtSize);
@@ -945,13 +944,14 @@ void SBTAny::traceRays(
 			};
 			if (groupCount)
 			{
+				using DT = std::iterator_traits<std::decay_t<decltype(sbtData.begin())>>::difference_type;
 				str << std::string(indent, ' ') << "groups         = ";
 				for (uint32_t gr = 0u; gr < groupCount; ++gr)
 				{
 					if (gr) str << ", ";
 					str << '{';
-					const SBTAny::Handles handle(std::next(sbtData.begin(), (a - baseAddr)),
-													std::next(sbtData.begin(), (a - baseAddr) + handleSize));
+					const SBTAny::Handles handle(std::next(sbtData.begin(), DT(a - baseAddr)),
+													std::next(sbtData.begin(), DT((a - baseAddr) + handleSize)));
 					const auto occurences = SBTHandles::findHandle(pipelineGroupHandles, handle);
 					for (uint32_t oi = 0u; oi < occurences.size(); ++oi)
 					{

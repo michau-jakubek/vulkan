@@ -152,7 +152,7 @@ protected:
 };
 struct SBTHandles
 {
-	explicit SBTHandles (ZPipeline, add_cref<RTShaderCollection::SBTShaderGroup>, int debug = 0);
+	explicit SBTHandles (ZPipeline, add_cref<RTShaderCollection::SBTShaderGroup>, uint32_t debug = 0u);
 	auto getPipeline() const { return m_pipeline; }
 	auto getHandles	() const { return m_handles; }
 	auto getCounts	() const { return m_counts; }

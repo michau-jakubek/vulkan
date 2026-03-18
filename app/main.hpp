@@ -3,7 +3,7 @@
 
 #include "vtfVkUtils.hpp"
 
-constexpr vtf::Version CurrentVtfVersion(1, 3, 11, 1);
+constexpr vtf::Version CurrentVtfVersion(1, 3, 11, 2);
 
 // 2024-04-10, 1.1.0.0, "Add versioning"
 // 2024-04-15, 1.1.1.0, "Some fixes in int_compute test."
@@ -52,5 +52,6 @@ constexpr vtf::Version CurrentVtfVersion(1, 3, 11, 1);
 // 2026-01-09, 1.3.10.2, "RayTracing (rejtrejsing) experimental - part III"
 // 2026-02-21, 1.3.11.0, "RayTracing (rejtrejsing) experimental - part IV"
 // 2026-03-17, 1.3.11.1, "RayTracing (rejtrejsing) experimental - part V - a bit closer"
+// 2026-03-25, 1.3.11.2, "Add tinygltf support"
 
 #endif  // __MAIN_HPP_INCLUDED__

@@ -1,4 +1,4 @@
-set(external_repos stb stl_reader glm)
+set(external_repos stb stl_reader glm tinygltf)
 
 #message("SOURCE ${CMAKE_SOURCE_DIR}")
 #message("CURRENT_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}")

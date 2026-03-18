@@ -386,7 +386,6 @@ using routine_res_t = typename routine_signature<routine_type__>::Result;
 
 template<typename Func, typename... Args>
 inline auto vtf_call_check_with_name(Func f, const char* name, Args&&... args) {
-	// Sprawdzenie na etapie kompilacji (zero overhead w runtime)
 	using Sig = routine_signature<Func>;
 	static_assert(std::is_pointer_v<typename Sig::Pointer>, "VTF_CALL_CHECK: Argument must be a routine pointer!");
 

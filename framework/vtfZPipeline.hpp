@@ -92,7 +92,7 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::Viewpo
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::ScissorCount>			scissorCount);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, VkPolygonMode						polygonMode);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::LineWidth>			lineWidth);
-void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::CullModeFlags>		cullModeFlags);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<ZCullModeFlags>			cullModeFlags);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, VkFrontFace							frontFace);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, VkSampleCountFlagBits				sampleCount);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<VkExtent2D>				viewportAndScissor);

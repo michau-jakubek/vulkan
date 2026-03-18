@@ -95,6 +95,7 @@ set(framework_files
     vtfZRenderPass.hpp
     vtfZRenderPass2.cpp
     vtfZRenderPass2.hpp
+    vtfStructGenerator.cpp
     vtfStructGenerator.hpp
 )
 

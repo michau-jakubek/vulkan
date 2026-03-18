@@ -86,6 +86,8 @@ set(tests_files
 	rejtrejsingIntroTests.hpp
 	deviceCrashTests.cpp
 	deviceCrashTests.hpp
+	suzanneGltf.cpp
+	suzanneGltf.hpp
     )
 
 if(ENABLE_DAEMON_TEST)

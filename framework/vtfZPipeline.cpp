@@ -613,9 +613,9 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gp
 	settings.m_rasterizationState.lineWidth = lineWidth;
 }
 
-void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gpp::CullModeFlags> cullModeFlags)
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<ZCullModeFlags> cullModeFlags)
 {
-	settings.m_rasterizationState.cullMode = cullModeFlags;
+	settings.m_rasterizationState.cullMode = cullModeFlags();
 }
 
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, VkFrontFace frontFace)

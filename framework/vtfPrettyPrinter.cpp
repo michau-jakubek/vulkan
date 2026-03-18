@@ -6,10 +6,12 @@ namespace vtf
 {
 
 void PrettyPrinter::printFrames (
-	Cursor str,
+	Cursor out,
 	add_cref<std::vector<uint32_t>> sequence,
 	add_cref<std::vector<strings>> frames,
-	uint32_t maxLineLength, uint32_t space) const
+	add_cref<std::vector<uint32_t>> maxLineLengthPerFrames,
+	uint32_t maxLineLength, uint32_t space,
+	bool fitIndividualColumn) const
 {
 	uint32_t maxFrameRowCount = 0u;
 	for (add_cref<strings> frame : frames)
@@ -22,20 +24,27 @@ void PrettyPrinter::printFrames (
 		for (uint32_t frameIdx = 0u; frameIdx < data_count(sequence); ++frameIdx)
 		{
 			add_cref<strings> frame = frames[sequence[frameIdx]];
+			add_cref<std::string> text = frame[row];
+			const auto rowLen = frameIdx
+				? fitIndividualColumn
+					? maxLineLengthPerFrames[sequence[frameIdx - 1u]]
+					: maxLineLength
+				: maxLineLength;
 
-			if (frameIdx) str << std::string(maxLineLength - lastFrameLinesLength[row] + space, ' ');
+			const auto padLen = (rowLen > lastFrameLinesLength[row]) ? (rowLen - lastFrameLinesLength[row]) : 0u;
+			if (frameIdx) out << std::string(padLen + space, ' ');
 
 			if (row < data_count(frame))
 			{
-				str << frame[row];
-				lastFrameLinesLength[row] = uint32_t(frame[row].length());
+				out << text;
+				lastFrameLinesLength[row] = uint32_t(text.length());
 			}
 			else
 			{
-				lastFrameLinesLength[row] = maxLineLength;
+				lastFrameLinesLength[row] = rowLen;
 			}
 		}
-		str << std::endl;
+		out << std::endl;
 	}
 }
 
@@ -52,7 +61,7 @@ PrettyPrinter::Cursor PrettyPrinter::getCursor (uint32_t cursor)
 
 PrettyPrinter::Cursor PrettyPrinter::merge (
 	add_cref<std::vector<uint32_t>> cursorMask,
-	Cursor str, uint32_t space) const
+	Cursor out, uint32_t space, bool fitIndividualColumn) const
 {
 	for (const uint32_t mask : cursorMask)
 	{
@@ -61,8 +70,9 @@ PrettyPrinter::Cursor PrettyPrinter::merge (
 				" mask = ", mask, ", m_cursors.size() = ", data_count(m_cursors));
 	}
 
-	std::vector<strings> frames(m_cursors.size());
-	for (uint32_t i = 0u; i < data_count(m_cursors); ++i)
+	const auto frameCount = data_count(m_cursors);
+	std::vector<strings> frames(frameCount);
+	for (uint32_t i = 0u; i < frameCount; ++i)
 	{
 		std::string line;
 		std::istringstream cursor(m_cursors[i].str());
@@ -77,7 +87,7 @@ PrettyPrinter::Cursor PrettyPrinter::merge (
 	segment.reserve(cursorMask.size());
 
 	for (const uint32_t mask : cursorMask) {
-		if (mask == UINT32_MAX) {
+		if (mask == INVALID_UINT32) {
 			if (false == segment.empty()) {
 				segments.push_back(segment);
 				segment.clear();
@@ -89,14 +99,20 @@ PrettyPrinter::Cursor PrettyPrinter::merge (
 		segments.push_back(segment);
 
 	uint32_t maxLineLength = 0u;
-	for (add_cref<strings> frame : frames)
-		for (add_cref<std::string> line : frame)
-			maxLineLength = std::max(uint32_t(line.length()), maxLineLength);
-
+	uint32_t maxLineLengthPerFrame = 0u;
+	std::vector<uint32_t> maxLineLengthPerFrames(frameCount);
+	for (uint32_t i = 0u; i < frameCount; ++i)
+	{
+		maxLineLengthPerFrame = 0u;
+		for (add_cref<std::string> line : frames[i])
+			maxLineLengthPerFrame = std::max(uint32_t(line.length()), maxLineLengthPerFrame);
+		maxLineLengthPerFrames[i] = maxLineLengthPerFrame;
+		maxLineLength = std::max(maxLineLength, maxLineLengthPerFrame);
+	}
 	for (add_cref<std::vector<uint32_t>> sequence : segments)
-		printFrames(str, sequence, frames, maxLineLength, space);
+		printFrames(out, sequence, frames, maxLineLengthPerFrames, maxLineLength, space, fitIndividualColumn);
 
-	return str;
+	return out;
 }
 
 PrettyPrinter::Cursor PrettyPrinter::selfTest (Cursor str) const
@@ -150,7 +166,7 @@ PrettyPrinter::Cursor PrettyPrinter::selfTest (Cursor str) const
 				}
 			}
 		}
-		mask.push_back(((b % 5) == 0u) ? UINT32_MAX : b);
+		mask.push_back(((b % 5) == 0u) ? INVALID_UINT32 : b);
 	}
 	return p.merge(mask, str);
 }

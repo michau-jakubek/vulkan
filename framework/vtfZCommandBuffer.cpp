@@ -155,10 +155,10 @@ void commandBufferBindDescriptorSets (ZCommandBuffer cmd, ZPipelineLayout layout
 			*cmd,
 			bindingPoint,
 			*layout,
-			0,			//firstSet
+			0u,			//firstSet
 			setCount,
 			sets.data(),
-			0,			//dynamicOffsetCount
+			0u,			//dynamicOffsetCount
 			nullptr);	//pDynamicOffsets
 	}
 }

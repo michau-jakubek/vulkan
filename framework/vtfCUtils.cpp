@@ -403,7 +403,7 @@ void waitForAnyKey()
 	struct termios oldt, newt;
 	tcgetattr(STDIN_FILENO, &oldt);
 	newt = oldt;
-	newt.c_lflag &= ~(ICANON | ECHO);
+	newt.c_lflag &= tcflag_t(~(ICANON | ECHO));
 	tcsetattr(STDIN_FILENO, TCSANOW, &newt);
 	getchar();
 	tcsetattr(STDIN_FILENO, TCSANOW, &oldt);

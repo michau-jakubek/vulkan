@@ -109,7 +109,7 @@ bool testSBT (
 
 	const uint32_t debugBegin = (pipelineGetOrder(pipeline).toInt() + 1u) * (group.groupIndex() + 1) * 13u;
 	const auto pipelineOrder = pipelineGetOrder(pipeline);
-	const SBTHandles handles(pipeline, group, debugBegin); // TODO signedness debugBegin
+	const SBTHandles handles(pipeline, group, debugBegin);
 	const auto counts = handles.getCounts();
 	SBT<> sbt(handles);
 
