@@ -1,0 +1,1 @@
+--float --vec2 --mat2x3 --vec3 --mat3x2 -a 0:2 -a 1:2 -a 2:3 -s 1,2,101 -s 0,1,2,101 -a 200:2 -a 201:1 -a 200:3 -nested-array-type 200:9 -a 200:9 -a 3:5 -a 4:3 -open-array-struct 102,200,100,107,108,0,104,101,2,105,201,103,1 -dump-memory -1,48 --print-structs

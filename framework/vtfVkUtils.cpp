@@ -302,8 +302,8 @@ std::ostream& printPhysicalDevice (
         << "\"  Vendor: " << std::hex << props.vendorID
         << "  Device: " << std::hex << props.deviceID << ' ' << gpuType << std::endl;
     str << std::dec << "  " << " API: " << apiVersion;
-    str << ", Driver version: (" << driverMajorVersion << ", "
-        << driverMinorVersion << ", " << driverPatchVersion << ')' << std::endl;
+	str << ", Driver version: (" << driverMajorVersion << ", "
+		<< driverMinorVersion << ", " << driverPatchVersion << ")\n\n";
     return str;
 }
 

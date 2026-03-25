@@ -46,28 +46,34 @@ struct Params
     int mat4x3Field = 0;
     int mat4x4Field = 0;
     int fieldByField = -1;
-    UVec4 dumpMemory{0, 0, 8, 0};
+    IVec4 dumpMemory{0, 0, 8, 0};
     strings arrays;
     strings structs;
-    std::string openArrayType;
+    std::string nestedArrayType;
     std::string openArrayStruct;
+    std::string printComposite;
+    std::string monitor;
+    std::string paramsInFile;
+    std::string paramsOutFile;
     std::vector<std::pair<int, int>> arrORstrOccurences;
+    int32_t fillValue = 1;
     bool allBuiltinFields = false;
     bool verbose = false;
     bool printStructs = false;
-    bool monitor = false;
     bool buildAlways = false;
     bool sized = false;
     bool disableNonUniform = false;
+    bool checkAddress = false;
     Params (add_cref<std::string> assets_) : assets(assets_) {}
     bool parse (add_ref<CommandLine> cmd, add_ref<std::ostream> str);
     void enableAllBuiltinFields ();
 };
 
-constexpr uint32_t OTT = 0;
-constexpr uint32_t OTA = 100;
-constexpr uint32_t OTS = 200;
-constexpr uint32_t OTZ = 300;
+constexpr uint32_t OT0 = 100;
+constexpr uint32_t OTT = OT0;
+constexpr uint32_t OTA = OTT + 100;
+constexpr uint32_t OTS = OTA + 100;
+constexpr uint32_t OTZ = OTS + 100;
 constexpr Option optSeed{ "-seed", 1 };
 constexpr Option optThreads{ "-threads", 1 };
 constexpr Option optIntField   { "--int",    0, OTT };
@@ -88,18 +94,23 @@ constexpr Option optAllBuiltinFields{ "--all-types", 0 };
 constexpr Option optVerbose    { "--verbose", 0 };
 constexpr Option optArray      { "-a", 99, OTA };
 constexpr Option optStruct     { "-s", 99, OTS };
-constexpr Option optOpenArrayType{ "-open-array-type", 1 };
+constexpr Option optNestedArrayType{ "-nested-array-type", 1 };
 constexpr Option optOpenArrayStruct{ "-open-array-struct", 1 };
 constexpr Option optSized{ "--sized", 0 };
 constexpr Option optDisableNonUniform{ "--disable-nonuniform", 0 };
 constexpr Option optPrintStructs{ "--print-structs", 0 };
+constexpr Option optPrintComposite{ "-print-composite", 1 };
 constexpr Option optDumpMemory{ "-dump-memory", 1 };
-constexpr Option optMonitor    { "--monitor", 0 };
+constexpr Option optMonitor    { "-monitor", 1 };
+constexpr Option optCheckAddress{ "--check-address", 0 };
 constexpr Option optFieldByField{ "-field-by-field", 1 };
 constexpr Option optBuildAlways{ "--build-always", 0 };
+constexpr Option optParamsInFile{ "-params-file-in", 1 };
+constexpr Option optParamsOutFile{ "-params-file-out", 1 };
 bool Params::parse (add_ref<CommandLine> cmd, add_ref<std::ostream> str)
 {
-    int builtinIndex = 1;
+    OptionParser<Params> p(*this);
+
     auto cbui = [&](
         add_cref<std::string>		text,
         const uint32_t              parsed,
@@ -108,22 +119,25 @@ bool Params::parse (add_ref<CommandLine> cmd, add_ref<std::ostream> str)
         add_ref<bool>				status,
         add_ref<OptionParserState>	state) -> bool
     {
-        MULTI_UNREF(text, parsed, revList, state);
-        sender.m_storage = builtinIndex++;
-        status = true;
-        return true;
+        MULTI_UNREF(text, parsed, revList, sender, state);
+        return (status = true);
     };
-    int arrORstrIndex = 0;
+    int occurenceIndex = 1;
     auto onIterateOption = [&](add_cref<Option> opt) -> void
     {
         if (opt == optArray || opt == optStruct)
         {
-            arrORstrOccurences.emplace_back(int(opt.id), arrORstrIndex++);
+            arrORstrOccurences.emplace_back(int(opt.id), occurenceIndex++);
+        }
+        else if (opt.id == OTT)
+        {
+            auto optField = p.getOptionByNameT<int>(opt);
+            ASSERTMSG(optField, opt.name, " is not int");
+            optField->m_storage = occurenceIndex++;
         }
     };
     const uint32_t threadsDefault = threads;
 
-    OptionParser<Params> p(*this);
     OptionFlags flagsNone(OptionFlag::None);
     OptionFlags flagsDefault(OptionFlag::PrintDefault);
 
@@ -155,7 +169,7 @@ bool Params::parse (add_ref<CommandLine> cmd, add_ref<std::ostream> str)
         "It may be present multiple times. "
         "built-in types start from 0, arrays from 100 and structs from 200", { structs }, flagsNone)
         ->setTypeName("comma text");
-    p.addOption(&Params::openArrayType, optOpenArrayType, "define an unsized array type", { openArrayType }, flagsNone);
+    p.addOption(&Params::nestedArrayType, optNestedArrayType, "define nested unsized array type", { nestedArrayType }, flagsNone);
     p.addOption(&Params::openArrayStruct, optOpenArrayStruct,
         "define a structure that will contain an unsized array", { openArrayStruct }, flagsNone);
     p.addOption(&Params::sized, optSized, "force to use sized array instead of unsized", { sized }, flagsNone);
@@ -164,17 +178,82 @@ bool Params::parse (add_ref<CommandLine> cmd, add_ref<std::ostream> str)
     p.addOption(&Params::threads, optThreads, "Define thread number. "
         "It also determines descriptor buffer array length", { threadsDefault }, flagsDefault);
     p.addOption(&Params::seed, optSeed, "set initial value for filing structures", { seed }, flagsDefault);
-    p.addOption(&Params::dumpMemory, optDumpMemory, "dump result memory", { dumpMemory }, flagsDefault)
-        ->setTypeName("[off[,len[,chunk[,dec]]]]");
+    p.addOption(&Params::dumpMemory, optDumpMemory,
+        "dump expected and result buffer in dwords, len must be positive value to process at all,"
+        " if off_in_dw is negative then starts from the begining of data", { dumpMemory }, flagsDefault)
+        ->setTypeName("[off_in_dw[,len[,chunk[,dec]]]]");
     p.addOption(&Params::printStructs, optPrintStructs, "print generated structures", { printStructs }, flagsNone);
-    p.addOption(&Params::monitor, optMonitor, "print struct creation", { monitor }, flagsNone);
+    p.addOption(&Params::printComposite, optPrintComposite,
+        "print desired field accessed by composite", { printComposite }, flagsNone);
+    p.addOption(&Params::monitor, optMonitor, "print array serialization", { monitor }, flagsNone)
+        ->setTypeName("[index[,index[,...]]]");
+    p.addOption(&Params::checkAddress, optCheckAddress, "enable address checking", { checkAddress }, flagsNone);
     p.addOption(&Params::fieldByField, optFieldByField,
         "change checking mode to field by field using start array index, "
         "otherwise all memory is checked", { fieldByField }, flagsNone);
     p.addOption(&Params::buildAlways, optBuildAlways, "always build shader(s)", { buildAlways }, flagsNone);
+    p.addOption(&Params::paramsInFile, optParamsInFile,
+        "file to read command line params, these params have higher priority than others", { paramsInFile }, flagsNone);
+    p.addOption(&Params::paramsOutFile, optParamsOutFile, "file to write command line params", { paramsInFile }, flagsNone);
 
-    p.iterateOptions(cmd, std::bind(onIterateOption, std::placeholders::_2));
-    p.parse(cmd, true, {/*onParsing*/});
+    bool paramsFromFile = false;
+    {
+        strings sink, paramsInOutFiles;
+        int consumeFileOptionRes = (-1);
+        std::vector<Option> fileOptions{ optParamsInFile, optParamsOutFile };
+
+        consumeFileOptionRes = cmd.consumeOptions(optParamsOutFile, fileOptions, paramsInOutFiles);
+        if (consumeFileOptionRes > 0) {
+            std::ofstream f(paramsInOutFiles.back());
+            if (f.is_open()) {
+                CommandLine cmdToFile("struct_generator", cmd.getUnconsumedTokens());
+                cmdToFile.consumeOptions(optParamsInFile, fileOptions, sink);
+                int iToken = 0;
+                for (add_cref<std::string> token : cmdToFile.getUnconsumedTokens()) {
+                    if (iToken++) f << ' ';
+                    f << token;
+                }
+                f.close();
+            }
+            else {
+                std::cout << "WARNING: Unable to write command line params to \""
+                    << paramsInOutFiles.back() << "\"\n";
+            }
+        }
+        else if (consumeFileOptionRes < 0) {
+            std::cout << "Option \"" << optParamsOutFile.name << "\" must have a value" << std::endl;
+            return false;
+        }
+
+        consumeFileOptionRes = cmd.consumeOptions(optParamsInFile, fileOptions, paramsInOutFiles);
+        if (consumeFileOptionRes > 0) {
+            std::ifstream f(paramsInOutFiles.back());
+            if (f.is_open()) {
+                std::string commandLineText((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+                f.close();
+                const strings input = splitString(commandLineText, ' ');
+                CommandLine cmdFromFile("struct_generator", input);
+                p.iterateOptions(cmdFromFile, std::bind(onIterateOption, std::placeholders::_2));
+                p.parse(cmdFromFile, true, {/*onParsing*/ });
+                paramsFromFile = true;
+            }
+            else {
+                std::cout << "ERROR: Unable to read command line params from \""
+                    << paramsInOutFiles.back() << "\"\n";
+                return false;
+            }
+        }
+        else if (consumeFileOptionRes < 0) {
+            std::cout << "Option \"" << optParamsInFile.name << "\" must have a value" << std::endl;
+            return false;
+        }
+    }
+
+    if (false == paramsFromFile)
+    {
+        p.iterateOptions(cmd, std::bind(onIterateOption, std::placeholders::_2));
+        p.parse(cmd, true, {/*onParsing*/ });
+    }
 
     add_cref<OptionParserState> state = p.getState();
     if (state.hasHelp)
@@ -295,24 +374,28 @@ ZShaderModule genShader(
     }
     code << ";\n";
     code << "void main() {\n";
-    INode::putIndent(code, 1);
-    code << "float seed = pc.seed + gl_LocalInvocationID.x * pc.visits;\n";
     if (params.disableNonUniform)
     {
+        INode::putIndent(code, 1);
+        code << "float seed = pc.seed + gl_LocalInvocationID.x * pc.visits;\n";
+        INode::putIndent(code, 1);
         code << "const uint idx = gl_LocalInvocationID.x + " << arrayPadCount << ";\n";
     }
     else
     {
+        INode::putIndent(code, 1);
+        code << "float seed = nonuniformEXT(pc.seed + gl_LocalInvocationID.x * pc.visits);\n";
+        INode::putIndent(code, 1);
         code << "const uint idx = nonuniformEXT(gl_LocalInvocationID.x + " << arrayPadCount << ");\n";
     }
     if (openArrayLength > 1u)
     {
         std::ostringstream root;
-        if (params.disableNonUniform)
-            root << "root[gl_LocalInvocationID.x + " << arrayPadCount << "]";
-        else
-            root << "root[nonuniformEXT(gl_LocalInvocationID.x + " << arrayPadCount << ")]";
-        sg.generateLoops(list.back(), root.str(), code, 1, "seed++");
+        //if (params.disableNonUniform)
+        //    root << "root[gl_LocalInvocationID.x + " << arrayPadCount << "]";
+        //else
+        //    root << "root[nonuniformEXT(gl_LocalInvocationID.x + " << arrayPadCount << ")]";
+        sg.generateLoops(list.back(), "root[idx]", code, 1, "seed++");
     }
     else
     {
@@ -331,6 +414,9 @@ ZShaderModule genShader(
         for (uint32_t s = 0; s < list.size() - 1; ++s)
         {
             sg.printStruct(list[s], std::cout, true);
+            std::cout << "Visit count: " << list[s]->getVisitCount()
+                << ", logical size: " << list[s]->getLogicalSize()
+                << std::endl << std::endl;
         }
         std::cout << "layout(std430, binding = 0) buffer " << list.back()->typeName << ' ';
         sg.printStruct(list.back(), std::cout, false);
@@ -338,13 +424,57 @@ ZShaderModule genShader(
             std::cout << " root[/* " << openArrayLength << " */];\n";
         else
             std::cout << "root;\n";
+        std::cout << "Visit count: " << list.back()->getVisitCount()
+            << ", logical size: " << list.back()->getLogicalSize() << std::endl;
+        std::cout << "Shader line count: " << calcNewLineCount(code.str()) << std::endl << std::endl;
     }
-    std::cout << "Shader line count: " << calcNewLineCount(code.str()) << std::endl;
 
     ProgramCollection		programs	(device, params.assets);
     programs.addFromText(VK_SHADER_STAGE_COMPUTE_BIT, code.str());
     programs.buildAndVerify(params.buildAlways);
     return programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT);
+}
+
+bool printField(
+    add_cref<Params> p,
+    add_ref<std::ostream> messageLog,
+    INodePtr expected,
+    add_ref<std::ostream> expectedPathLog,
+    add_ref<std::ostream> expectedValueLog,
+    INodePtr result,
+    add_ref<std::ostream> resultPathLog,
+    add_ref<std::ostream> resultValueLog)
+{
+    const strings ssPath = splitString(p.printComposite, ',');
+    std::vector<uint8_t> uPath(ssPath.size());
+    for (uint32_t i = 0u; i < ssPath.size(); ++i) {
+        bool status = false;
+        const int val = fromText(ssPath[i], -1, status);
+        if (false == status) {
+            messageLog << "WARNING: Unable to parse composite index " << i << " (\"" << ssPath[i]
+                << "\") from \"" << p.printComposite << "\", no field will be printed\n";
+            return false;
+        }
+        else if (val < 0 || val > 255) {
+            messageLog << "WARNING: Composite index " << i << " (\"" << ssPath[i]
+                << "\") from \"" << p.printComposite << "\" should be from <0,255>, no field will br printed\n";
+            return false;
+        }
+        else {
+            uPath[i] = uint8_t(val);
+        }
+    }
+    bool rr = false;
+    const bool er = StructGenerator::composite(expected, uPath, data_count(uPath), expectedPathLog, expectedValueLog);
+    if (er) rr = StructGenerator::composite(result, uPath, data_count(uPath), resultPathLog, resultValueLog);
+
+    if (false == (er && rr))
+    {
+        messageLog << "WARNING: Unsized array index " << uint32_t(uPath[0])
+            << " from composie \"" << p.printComposite << "\" of bounds " << p.threads << ", no data will be displayed\n";
+        return false;
+    }
+    return true;
 }
 
 uint32_t generateArrays(
@@ -362,7 +492,7 @@ uint32_t generateArrays(
     {
         ASSERTMSG(arrayIndex < p.arrays.size(), "Array index (", arrayIndex, ") of bounds (", p.arrays.size(), ')');
     }
-    const strings sTypeAndLength = unsized ? splitString(p.openArrayType, ':') : splitString(p.arrays[arrayIndex], ':');
+    const strings sTypeAndLength = unsized ? splitString(p.nestedArrayType, ':') : splitString(p.arrays[arrayIndex], ':');
     if (sTypeAndLength.empty() || sTypeAndLength[0].empty())
     {
         return 0;
@@ -373,7 +503,7 @@ uint32_t generateArrays(
     if (status)
     {
         INodePtr arrayType;
-        if (typeIndex >= OTT && typeIndex < OTA)
+        if (typeIndex >= (OTT - OT0) && typeIndex < (OTA - OT0))
         {
             if (typeIndex < typesSize)
                 arrayType = types[typeIndex]->clone();
@@ -384,16 +514,16 @@ uint32_t generateArrays(
                 return 0;
             }
         }
-        else if (typeIndex >= OTA && typeIndex < OTS)
+        else if (typeIndex >= (OTA - OT0) && typeIndex < (OTS - OT0))
         {
             log << "WARNING: Not supported array type " << typeIndex << " for array " << arrayIndex
                 << ", no array will be added\n";
             return 0;
         }
-        else if (typeIndex >= OTS && typeIndex < OTZ)
+        else if (typeIndex >= (OTS - OT0) && typeIndex < (OTZ - OT0))
         {
-            if ((typeIndex - OTS) < structsSize)
-                arrayType = structs[typeIndex - OTS]->clone();
+            if ((typeIndex - (OTS - OT0)) < structsSize)
+                arrayType = structs[typeIndex - (OTS - OT0)]->clone();
             else
             {
                 log << "WARNING: Undefined struct type " << typeIndex << " for array " << arrayIndex
@@ -489,7 +619,7 @@ uint32_t generateStructures(
         const auto typeIndex = uint32_t(fromText(sType, -1, status));
         if (status)
         {
-            if (typeIndex >= OTT && typeIndex < OTA)
+            if (typeIndex >= (OTT - OT0) && typeIndex < (OTA - OT0))
             {
                 if (typeIndex < typesSize)
                 {
@@ -503,12 +633,13 @@ uint32_t generateStructures(
                     continue;
                 }
             }
-            else if (typeIndex >= OTA && typeIndex < OTS)
+            else if (typeIndex >= (OTA - OT0) && typeIndex < (OTS - OT0))
             {
-                if ((typeIndex - OTA) < arrays.size())
+                const uint32_t arrayTypeIndex = typeIndex % (OTA - OT0);
+                if (arrayTypeIndex < arrays.size())
                 {
-                    structFields.push_back(arrays[typeIndex - OTA]->clone());
-                    verboseSuccess(typeIndex - OTA);
+                    structFields.push_back(arrays[arrayTypeIndex]->clone());
+                    verboseSuccess(arrayTypeIndex);
                 }
                 else
                 {
@@ -517,12 +648,13 @@ uint32_t generateStructures(
                     continue;
                 }
             }
-            else if (typeIndex >= OTS && typeIndex < OTZ)
+            else if (typeIndex >= (OTS - OT0) && typeIndex < (OTZ - OT0))
             {
-                if ((typeIndex - OTS) < structs.size())
+                const uint32_t structTypeIndex = typeIndex % (OTS - OT0);
+                if (structTypeIndex < structs.size())
                 {
-                    structFields.push_back(structs[typeIndex - OTS]->clone());
-                    verboseSuccess(typeIndex - OTS);
+                    structFields.push_back(structs[structTypeIndex]->clone());
+                    verboseSuccess(structTypeIndex);
                 }
                 else
                 {
@@ -563,20 +695,20 @@ std::vector<INodePtr> generateBuiltinTypes(add_cref<Params> p, add_ref<std::ostr
     StructGenerator sg;
     std::vector<int> w;
     std::vector<INodePtr> types;
-    if (p.allBuiltinFields || p.floatField ) types.push_back(sg.makeField(float()));     w.push_back(p.floatField);
-    if (p.allBuiltinFields || p.intField   ) types.push_back(sg.makeField(int()));       w.push_back(p.intField);
-    if (p.allBuiltinFields || p.vec2Field  ) types.push_back(sg.makeField(vec<2>()));    w.push_back(p.vec2Field);
-    if (p.allBuiltinFields || p.vec3Field  ) types.push_back(sg.makeField(vec<3>()));    w.push_back(p.vec3Field);
-    if (p.allBuiltinFields || p.vec4Field  ) types.push_back(sg.makeField(vec<4>()));    w.push_back(p.vec4Field);
-    if (p.allBuiltinFields || p.mat2x2Field) types.push_back(sg.makeField(mat<2, 2>())); w.push_back(p.mat2x2Field);
-    if (p.allBuiltinFields || p.mat2x3Field) types.push_back(sg.makeField(mat<2, 3>())); w.push_back(p.mat2x3Field);
-    if (p.allBuiltinFields || p.mat2x4Field) types.push_back(sg.makeField(mat<2, 4>())); w.push_back(p.mat2x4Field);
-    if (p.allBuiltinFields || p.mat3x2Field) types.push_back(sg.makeField(mat<3, 2>())); w.push_back(p.mat3x2Field);
-    if (p.allBuiltinFields || p.mat3x3Field) types.push_back(sg.makeField(mat<3, 3>())); w.push_back(p.mat3x3Field);
-    if (p.allBuiltinFields || p.mat3x4Field) types.push_back(sg.makeField(mat<3, 4>())); w.push_back(p.mat3x4Field);
-    if (p.allBuiltinFields || p.mat4x2Field) types.push_back(sg.makeField(mat<4, 2>())); w.push_back(p.mat4x2Field);
-    if (p.allBuiltinFields || p.mat4x3Field) types.push_back(sg.makeField(mat<4, 3>())); w.push_back(p.mat4x3Field);
-    if (p.allBuiltinFields || p.mat4x4Field) types.push_back(sg.makeField(mat<4, 4>())); w.push_back(p.mat4x4Field);
+    if (p.allBuiltinFields || p.floatField ) { types.push_back(sg.makeField(float()));     w.push_back(p.floatField);  }
+    if (p.allBuiltinFields || p.intField   ) { types.push_back(sg.makeField(int()));       w.push_back(p.intField);    }
+    if (p.allBuiltinFields || p.vec2Field  ) { types.push_back(sg.makeField(vec<2>()));    w.push_back(p.vec2Field);   }
+    if (p.allBuiltinFields || p.vec3Field  ) { types.push_back(sg.makeField(vec<3>()));    w.push_back(p.vec3Field);   }
+    if (p.allBuiltinFields || p.vec4Field  ) { types.push_back(sg.makeField(vec<4>()));    w.push_back(p.vec4Field);   }
+    if (p.allBuiltinFields || p.mat2x2Field) { types.push_back(sg.makeField(mat<2, 2>())); w.push_back(p.mat2x2Field); }
+    if (p.allBuiltinFields || p.mat2x3Field) { types.push_back(sg.makeField(mat<2, 3>())); w.push_back(p.mat2x3Field); }
+    if (p.allBuiltinFields || p.mat2x4Field) { types.push_back(sg.makeField(mat<2, 4>())); w.push_back(p.mat2x4Field); }
+    if (p.allBuiltinFields || p.mat3x2Field) { types.push_back(sg.makeField(mat<3, 2>())); w.push_back(p.mat3x2Field); }
+    if (p.allBuiltinFields || p.mat3x3Field) { types.push_back(sg.makeField(mat<3, 3>())); w.push_back(p.mat3x3Field); }
+    if (p.allBuiltinFields || p.mat3x4Field) { types.push_back(sg.makeField(mat<3, 4>())); w.push_back(p.mat3x4Field); }
+    if (p.allBuiltinFields || p.mat4x2Field) { types.push_back(sg.makeField(mat<4, 2>())); w.push_back(p.mat4x2Field); }
+    if (p.allBuiltinFields || p.mat4x3Field) { types.push_back(sg.makeField(mat<4, 3>())); w.push_back(p.mat4x3Field); }
+    if (p.allBuiltinFields || p.mat4x4Field) { types.push_back(sg.makeField(mat<4, 4>())); w.push_back(p.mat4x4Field); }
 
     if (types.empty())
     {
@@ -661,13 +793,13 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
     StructGenerator         sg;
     const float             testSeed        = params.seed;
     const uint32_t          openArrayLength = params.threads;
-    const uint32_t          arrayPadCount   = 4u;
+    const uint32_t          arrayPadCount   = ROUNDUP(openArrayLength, 10);
     INodePtr                gen_z           = generateStructure(testSeed, params, std::cout);
-    const uint32_t          visits          = gen_z->getVisitCount();
+    const uint32_t          visitCount      = gen_z->getVisitCount();
     const std::vector<INodePtr> list        = sg.getStructList(gen_z);
     const VkShaderStageFlags stage          = VK_SHADER_STAGE_COMPUTE_BIT;
     ZShaderModule			shader          = genShader(ctx.device, params, list,
-                                                        openArrayLength, arrayPadCount, testSeed, visits);
+                                                        openArrayLength, arrayPadCount, testSeed, visitCount);
 
     LayoutManager           lm              (ctx.device);
     const uint32_t          arrayElemCount  = arrayPadCount + openArrayLength + arrayPadCount;
@@ -684,7 +816,7 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
     struct PC {
         float   seed;
         int32_t visits;
-    } const                 pc              { testSeed, int32_t(visits) };
+    } const                 pc              { testSeed, int32_t(visitCount) };
     ZPipelineLayout			pipelineLayout  = lm.createPipelineLayout({ dsLayout }, ZPushRange<PC>(stage));
     ZPipeline				pipeline        = createComputePipeline(pipelineLayout, shader);
 
@@ -692,7 +824,7 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
         const auto intCount = uint32_t(arrayBuffSize / 4u);
         BufferTexelAccess<int32_t> access(arrayBuffer, uint32_t(arrayBuffSize / 4u), 1u, 1u);
         for (uint32_t i = 0u; i < intCount; ++i)
-            access.at(i, 0u, 0u) = 1;
+            access.at(i, 0u, 0u) = params.fillValue;
     }
 
 	{
@@ -705,8 +837,22 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
     std::size_t watchOffset = 1824; UNREF(watchOffset);
     std::size_t lastHandledOffset = 0; UNREF(lastHandledOffset);
     PrettyPrinter pp;
-    if (params.monitor)
+    std::vector<uint32_t> monitorIndices;
+    if (params.monitor.length())
     {
+        std::set<uint32_t> miSet;
+        strings miStrings = splitString(params.monitor, ',');
+        for (add_cref<std::string> miString : miStrings)
+        {
+            bool miStatus = false;
+            const uint32_t miValue = fromText(miString, 0u, miStatus);
+            if (miStatus) miSet.insert(miValue);
+        }
+        if (miSet.empty())
+            monitorIndices.push_back(0u);
+        else for (auto miValue : miSet)
+            monitorIndices.push_back(miValue);
+
         pp.getCursor(0) << "Idx" << std::endl;
         pp.getCursor(1) << "Action" << std::endl;
         pp.getCursor(2) << "Field name" << std::endl;
@@ -714,6 +860,8 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
         pp.getCursor(4) << "Size" << std::endl;
         pp.getCursor(5) << "Offset" << std::endl;
         pp.getCursor(6) << "Pad" << std::endl;
+        pp.getCursor(7) << "Stride" << std::endl;
+        pp.getCursor(8) << "InArray" << std::endl;
     }
     auto serializeOrDeserializeMonitor = [&](add_cref<INode::SDParams> cb) -> void
     {
@@ -723,9 +871,24 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
             return ' ';
         };
         UNREF(number);
-        if (cb.whenAction == INode::SDAction::Serialize)
+        if (cb.whenAction == INode::SDAction::Serialize
+            || cb.whenAction == INode::SDAction::SerializeArray
+            || cb.whenAction == INode::SDAction::SerializeStruct
+            || cb.whenAction == INode::SDAction::SerializeVector
+            || cb.whenAction == INode::SDAction::SerializeMatrix)
         {
-            const char* action = cb.action == INode::SDAction::UpdatePadBefore ? "update pad" : "serialize";
+            const char* action =
+                cb.action == INode::SDAction::UpdatePadBefore || cb.action == INode::SDAction::UpdatePadAfter
+                ? "update pad"
+                : cb.whenAction == INode::SDAction::SerializeArray
+                    ? "serialize[]"
+                    : cb.whenAction == INode::SDAction::SerializeStruct
+                        ? "serialize{}"
+                        : cb.whenAction == INode::SDAction::SerializeMatrix
+                            ? "serializeMat"
+                            : cb.whenAction == INode::SDAction::DeserializeVector
+                                ? "serializeVec"
+                                : "serialize";
             pp.getCursor(0) << std::setfill('0') << std::setw(2) << cb.fieldIndex << std::setfill(' ') << ')' << std::endl;
             pp.getCursor(1) << action << std::endl;
             pp.getCursor(2) << cb.fieldType << std::endl;
@@ -734,6 +897,10 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
             pp.getCursor(5) << cb.offset << std::endl;
             if (cb.pad) pp.getCursor(6) << cb.pad;
             pp.getCursor(6) << std::endl;
+            if (cb.stride) pp.getCursor(7) << cb.stride;
+            pp.getCursor(7) << std::endl;
+            if (cb.inArray) pp.getCursor(8) << " * ";
+            pp.getCursor(8) << std::endl;
             /*
             if (watchOffset >= cb.offset && watchOffset < lastHandledOffset)
             {
@@ -744,51 +911,165 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
             lastHandledOffset = cb.offset;
         }
     };
-    INode::SDCallback sdCallback = serializeOrDeserializeMonitor;
+    auto logPadding = [](size_t stride, size_t pad, size_t offset, uint32_t index, INode::SDCallback cb)
+    {
+        if (pad == 0 || cb == nullptr) return;
+        INode::SDParams sdp{};
+        sdp.whenAction  = INode::SDAction::SerializeStruct;
+        sdp.action      = INode::SDAction::UpdatePadAfter;
+        sdp.fieldIndex  = index;
+        sdp.fieldType   = "root[" + std::to_string(index) + "]";
+        sdp.offset      = offset - pad;
+        sdp.stride      = stride;
+        sdp.alignment   = stride;
+        sdp.pad         = pad;
+        cb(sdp);
+    };
     {
         std::vector<std::byte> resultData(lm.getBindingElementCount(arrayBinding));
         lm.readBinding(arrayBinding, resultData);
         std::vector<std::byte> expectedData(resultData.size());
         const uint32_t intCount = uint32_t(expectedData.size() / sizeof(int32_t));
         const auto expectedRange = makeStdBeginEnd<int32_t>(expectedData.data(), intCount);
-        std::fill(expectedRange.first, expectedRange.second, 1);
+        std::fill(expectedRange.first, expectedRange.second, params.fillValue);
 
+        const std::string sep1(3, '=');
+        const std::string sep2(3, '-');
         float seed = testSeed;
-        std::size_t offset = arrayPadCount * arrayElemSize;
+        std::size_t serializeOffset = 0u;
+        const std::size_t padSize = arrayPadCount * arrayElemSize;
+        std::size_t deserializeOffset = padSize;
         std::vector<INodePtr> result(openArrayLength), expected(openArrayLength);
         for (uint32_t i = 0; i < openArrayLength; ++i)
         {
+            INode::SDCallback sdcb = nullptr;
+            if (monitorIndices.end() != std::find(monitorIndices.begin(), monitorIndices.end(), i))
+            {
+                pp.getCursor(0) << sep1 << std::endl; pp.getCursor(0) << std::endl; pp.getCursor(0) << sep2 << std::endl;// idx
+                pp.getCursor(1) << sep1 << std::endl; pp.getCursor(1) << "Serialize" << std::endl; pp.getCursor(1) << sep2 << std::endl; // action
+                pp.getCursor(2) << sep1 << std::endl; pp.getCursor(2) << "Element " << i << std::endl; pp.getCursor(2) << sep2 << std::endl;// field anme
+                pp.getCursor(3) << sep1 << std::endl; pp.getCursor(3) << std::endl; pp.getCursor(3) << sep2 << std::endl; // alignment
+                pp.getCursor(4) << sep1 << std::endl; pp.getCursor(4) << std::endl; pp.getCursor(4) << sep2 << std::endl; // size
+                pp.getCursor(5) << sep1 << std::endl; pp.getCursor(5) << std::endl; pp.getCursor(5) << sep2 << std::endl; // offset
+                pp.getCursor(6) << sep1 << std::endl; pp.getCursor(6) << std::endl; pp.getCursor(6) << sep2 << std::endl; // pad
+                pp.getCursor(7) << sep1 << std::endl; pp.getCursor(7) << std::endl; pp.getCursor(7) << sep2 << std::endl; // stride
+                pp.getCursor(8) << sep1 << std::endl; pp.getCursor(8) << std::endl; pp.getCursor(8) << sep2 << std::endl; // inArray
+
+                sdcb = serializeOrDeserializeMonitor;
+            }
+
             expected[i] = gen_z->clone();
             expected[i]->loop(seed);
-            sg.serializeStruct(expected[i], expectedData.data() + offset, -1,
-                                (params.monitor && i == 0 ? sdCallback : nullptr));
+            sg::INode::Control controlSerialize(
+                expectedData.data() + padSize,
+                params.checkAddress ? (expectedData.data() + padSize + arrayElemSize) : nullptr);
+            sg.serializeStructWithOffset(expected[i], expectedData.data() + padSize, serializeOffset,
+                                            -1, sdcb, controlSerialize);
+            const size_t pad = sg::Node<sg::INodePtr>::updateOffsetWithPadding(nullptr, arrayElemSize, serializeOffset);
+            logPadding(arrayElemSize, pad, serializeOffset, i, sdcb);
 
             result[i] = gen_z->clone();
-            sg.deserializeStruct(resultData.data() + offset, result[i]);
+            sg::INode::Control controlDeserialize(nullptr, nullptr);
+            sg.deserializeStruct(resultData.data() + deserializeOffset, result[i], true);
 
-            offset = offset + arrayElemSize;
+            deserializeOffset = deserializeOffset + arrayElemSize;
         }
 
-        if (params.monitor)
+        if (params.monitor.length())
         {
-            pp.merge({ 0,1,2,3,4,5,6 }, std::cout, 2u, true);
+            pp.merge({ 0,1,2,5,3,4,6,7,8 }, std::cout, 2u, true);
+            std::cout << std::endl;
         }
 
+        auto tryFloatOrInt = [&](uint32_t value) -> float
+        {
+            const float asFloat = *reinterpret_cast<add_ptr<float>>(&value);
+            if ((asFloat >= testSeed) && (asFloat < ((testSeed + float(visitCount)) * float(openArrayLength))))
+                return asFloat;
+            return static_cast<float>(value);
+        };
+
+        // -dump-memory <[off_in_dw[,len[,chunk[,dec]]]]>
         if (params.dumpMemory[1])
         {
-            /*
-            const uint32_t dataSize = data_count(result);
-            if (params.dumpMemory[0] < dataSize)
+            const auto baseAlignmentDwordCount = arrayElemSize / 4u;
+            const auto firstArrayElemOffsetDWord = arrayPadCount * baseAlignmentDwordCount;
+            size_t offset = params.dumpMemory[0] < 0 ? firstArrayElemOffsetDWord : size_t(params.dumpMemory[0]);
+            if (offset < intCount)
             {
-                const uint32_t chunk = params.dumpMemory[2] < 8u ? 8u : params.dumpMemory[2];
+                const size_t chunkSize =
+                    params.dumpMemory[2] < 4 || params.dumpMemory[2] > 16 ? 16u : size_t(params.dumpMemory[2]);
+                const size_t availableCount = intCount - offset;
+                const size_t dumpCount = std::min(size_t(params.dumpMemory[1]), availableCount);
+
+                auto dumpData = [&](add_cptr<std::byte> dataPtr, add_ref<std::ostream> out) -> void
+                {
+                    PrettyPrinter dumpPrinter;
+                    auto expectedDwordPtr = reinterpret_cast<add_cptr<uint32_t>>(dataPtr + offset * 4u);
+                    for (size_t x = 0, z = 0; x < dumpCount; x += chunkSize) {
+                        dumpPrinter.getCursor(0) << (offset + x) << '/' << (z * 4) << ')' << std::endl;
+                        for (size_t y = 0; y < chunkSize && z < dumpCount; ++y, ++z) {
+                            dumpPrinter.getCursor(uint32_t(y + 1))
+                                << std::uppercase << std::hex << std::setw(2) << std::setfill('0')
+                                << tryFloatOrInt(expectedDwordPtr[x + y]) << std::endl;
+                        }
+                    }
+                    dumpPrinter.merge(out, 2, true);
+                    out << std::endl;
+                };
+
+                std::cout << "\nDump expected data in dwords "
+                    << "- start: " << offset
+                    << ", count: " << dumpCount
+                    << ", available: " << availableCount << std::endl;
+                dumpData(expectedData.data(), std::cout);
+
+                std::cout << "\nDump result data in dwords "
+                    << "- start: " << offset
+                    << ", count: " << dumpCount
+                    << ", available: " << availableCount << std::endl;
+                dumpData(resultData.data(), std::cout);
             }
             else
             {
-                std::cout << "WARNING: Offset " << params.dumpMemory[1] << " exceeds data length " << result.size()
-                    << ", no data will be displayed\n";
+                std::cout << "\nWARNING: Offset " << offset
+                    << " exceeds data dword length " << intCount << ", no data will be displayed\n";
             }
-            */
-            ASSERTFALSE("dumpMemory not implemented yet");
+        }
+
+        if (params.printComposite.size())
+        {
+            INodePtr resultArray = sg.makeArrayField(result, false, "root");
+            INodePtr expectedArray = sg.makeArrayField(expected, false, "root");
+            std::stringstream messageLog;
+            std::stringstream expectedPathLog, expectedValueLog;
+            std::stringstream resultPathLog, resultValueLog;
+            const bool r = printField(params, messageLog,
+                                        expectedArray, expectedPathLog, expectedValueLog,
+                                        resultArray, resultPathLog, resultValueLog);
+
+            std::cout << "Composite field access from " << params.printComposite << std::endl;
+            std::cout << "Expected: ";
+            std::copy(std::istreambuf_iterator<char>(expectedPathLog), std::istreambuf_iterator<char>(),
+                        std::ostreambuf_iterator<char>(std::cout));
+            std::cout << " = ";
+            std::copy(std::istreambuf_iterator<char>(expectedValueLog), std::istreambuf_iterator<char>(),
+                        std::ostreambuf_iterator<char>(std::cout));
+            std::cout << std::endl;
+
+            std::cout << "Result:   ";
+            std::copy(std::istreambuf_iterator<char>(resultPathLog), std::istreambuf_iterator<char>(),
+                        std::ostreambuf_iterator<char>(std::cout));
+            std::cout << " = ";
+            std::copy(std::istreambuf_iterator<char>(resultValueLog), std::istreambuf_iterator<char>(),
+                        std::ostreambuf_iterator<char>(std::cout));
+            std::cout << std::endl;
+
+            if (r == false) {
+                std::copy(std::istreambuf_iterator<char>(messageLog), std::istreambuf_iterator<char>(),
+                            std::ostreambuf_iterator<char>(std::cout));
+                std::cout << std::endl;
+            }
         }
 
         if (params.fieldByField >= 0)
@@ -812,21 +1093,29 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
             {
                 std::cout << "Mismatch in field: " << msg
                     << ", expected " << expectedValue << " got " << resultValue << std::endl;
-                return 1;
             }
         }
-        else
+        // Always do dword by dword comparison
         {
-            auto resultDWords = reinterpret_cast<add_cptr<int32_t>>(resultData.data());
-            auto expectedDWords = reinterpret_cast<add_cptr<int32_t>>(expectedData.data());
+            std::cout << "\nStatistics:\n";
+            const auto logicalSizeDwordCount = logicalSize / 4u;
+            const auto baseAlignmentDwordCount = arrayElemSize / 4u;
+            const auto firstArrayElemOffsetDWord = arrayPadCount * baseAlignmentDwordCount;
+            std::cout << "DWord count per array elem is " << logicalSizeDwordCount << std::endl;
+            std::cout << "DWord count per storage buffer alignment is " << (params.minStorageBufferOffsetAlignment / 4u) << std::endl;
+            std::cout << "Dword count per array elem alignment is " << baseAlignmentDwordCount << std::endl;
+            std::cout << "Array starts from dword " << firstArrayElemOffsetDWord << std::endl << std::endl;
+
+            auto resultDWords = reinterpret_cast<add_cptr<uint32_t>>(resultData.data());
+            auto expectedDWords = reinterpret_cast<add_cptr<uint32_t>>(expectedData.data());
             for (uint32_t i = 0u; i < intCount; ++i)
             {
                 if (resultDWords[i] != expectedDWords[i]) {
-                    const auto intsInLogicalSize = logicalSize / 4u;
-                    std::cout << "DWord count per array elem is " << intsInLogicalSize << std::endl;
-                    std::cout << "Mismatch at dword " << i << std::hex;
-                    std::cout << ", expected 0x" << expectedDWords[i];
-                    std::cout << " got 0x" << resultDWords[i] << std::dec << std::endl;
+                    std::cout << "Mismatch at dword " << i;
+                    std::cout << ", expected hex: 0x" << std::hex << expectedDWords[i] << std::dec
+                        << " float: " << tryFloatOrInt(expectedDWords[i]);
+                    std::cout << ", got hex: 0x" << std::hex << resultDWords[i] << std::dec
+                        << " float: " << tryFloatOrInt(resultDWords[i]) <<  std::endl;
                     return 1;
                 }
             }

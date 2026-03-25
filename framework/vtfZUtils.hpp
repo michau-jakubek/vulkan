@@ -66,7 +66,7 @@ ZPhysicalDevice	getPhysicalDeviceByIndex	(ZInstance									instance,
 											 uint32_t									physicalDeviceIndex);
 ZPhysicalDevice selectPhysicalDevice		(const int									proposedDeviceIndex,
 											 ZInstance									instance,
-											 add_cref<strings>							requiredExtensions,
+											 add_cref<strings>							requiredExtensions = {},
 											 ZSurfaceKHR								surface = ZSurfaceKHR());
 
 strings			upgradeDeviceExtensions (add_cref<strings> desiredExtensions);

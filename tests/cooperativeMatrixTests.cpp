@@ -165,9 +165,9 @@ TriLogicInt prepareTests(add_cref<TestRecord> record, add_ref<CommandLine> cmdLi
 	}
 
 	ZInstance					instance = createInstance(
-		record.name, getAllocationCallbacks(), gf.layers, upgradeInstanceExtensions(strings()), Version(1, 3));
+		record.name, getAllocationCallbacks(), gf.layers, strings(), Version(1, 3));
 	ZPhysicalDevice				physicalDevice = selectPhysicalDevice(
-		make_signed(gf.physicalDeviceIndex), instance, upgradeDeviceExtensions(strings()));
+		make_signed(gf.physicalDeviceIndex), instance);
 
 	VkPhysicalDeviceVulkan12Features vulkanMemoryModel = makeVkStruct();
 	VkPhysicalDeviceCooperativeMatrixFeaturesKHR cooperativeMatrix = makeVkStruct(&vulkanMemoryModel);
@@ -891,7 +891,7 @@ ZShaderModule buildSpirvProgram(ZDevice device, add_cref<CoopParams> params)
 
 	add_cref<VkCooperativeMatrixPropertiesKHR> conf = params.getSelectedConfiguration();
 
-	std::string AType, BType, CRType;
+	std::string AType, BType, CType, RType;
 	std::set<std::string> capabilityList;
 	std::set<std::string> extensionList;
 
@@ -916,10 +916,10 @@ ZShaderModule buildSpirvProgram(ZDevice device, add_cref<CoopParams> params)
 		}
 	}
 
-	const VkComponentTypeKHR matList[]{ conf.AType, conf.BType, conf.CType };
-	std::string* matTypes[]{ &AType, &BType, &CRType };
+	const VkComponentTypeKHR matList[]{ conf.AType, conf.BType, conf.CType, conf.ResultType };
+	std::string* matTypes[]{ &AType, &BType, &CType, &RType };
 
-	for (uint32_t i = 0u; i < 3u; ++i)
+	for (uint32_t i = 0u; i < ARRAY_LENGTH(matTypes); ++i)
 	{
 		const Value v(matList[i]);
 		const auto [typeName, typeDef] = v.getSpirvNames();
@@ -952,6 +952,11 @@ ZShaderModule buildSpirvProgram(ZDevice device, add_cref<CoopParams> params)
 		}
 	}
 
+	const std::string matR_defs =
+		"%matR_type = OpTypeCooperativeMatrixKHR " + RType + " %uint_3 %M %N %uint_2\n"
+		"%matR_null = OpConstantNull %matR_type\n"
+		"%matR_ptr = OpTypePointer Function %matR_type\n";
+
 	const std::map<std::string, std::string> variables{
 		{"TypeList", typeList.str()},
 		{"AStride", std::to_string(Value(conf.AType).size())},
@@ -960,7 +965,12 @@ ZShaderModule buildSpirvProgram(ZDevice device, add_cref<CoopParams> params)
 		{"RStride", std::to_string(Value(conf.ResultType).size())},
 		{"AType", AType},
 		{"BType", BType},
-		{"CRType", CRType},
+		{"CType", CType},
+		{"RType", RType},
+		{"matR_*",        (conf.ResultType == conf.CType) ? std::string() : matR_defs},
+		{"mat(C|R)_type", (conf.ResultType == conf.CType) ? "%matC_type"  : "%matR_type"},
+		{"mat(C|R)_null", (conf.ResultType == conf.CType) ? "%matC_null"  : "%matR_null"},
+		{"mat(C|R)_ptr",  (conf.ResultType == conf.CType) ? "%matC_ptr"   : "%matR_ptr"},
 		{"Capabilities", capabilities.str()},
 		{"Extensions", extensions.str()},
 		{"Operands", operands.str()}

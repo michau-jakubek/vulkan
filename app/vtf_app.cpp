@@ -38,9 +38,9 @@ int VTF_API_CALL VTF_API_RunTest (add_cptr<char> multiStringCommandLine)
 	std::string testName;
 	TestRecord testRecord;
 	vtf::TriLogicInt testResult;
-	vtf::CommandLine cmd(std::string(multiStringCommandLine,
-									*vtf::multiStringLength(multiStringCommandLine, 1024)),
-									"VTF_AS_DLL");
+	vtf::strings argv = vtf::parseMultiString(
+		std::string(multiStringCommandLine, *vtf::multiStringLength(multiStringCommandLine, 1024)));
+	vtf::CommandLine cmd(argv[0], vtf::span::make_span(argv, 1u, (argv.size() - 1)), "VTF_AS_DLL");
 	const int res = parseParams(cmd, testRecord, testName, performTest);
 	if (res == 0 && performTest)
 	{

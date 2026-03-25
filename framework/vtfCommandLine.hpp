@@ -4,6 +4,7 @@
 #include "vtfCUtils.hpp"
 #include "vtfVkUtils.hpp"
 #include "vtfVector.hpp"
+#include "vtfTemplateUtils.hpp"
 #include "demangle.hpp"
 
 #include <functional>
@@ -206,6 +207,9 @@ struct _OptionParserImpl
 	auto	getOptionByName (add_cref<Option> option) const ->_OptIPtr;
 	void	printParams (add_cref<std::string> header, add_ref<std::ostream> str, bool twoNewLines = false) const;
 	void	iterateOptions (add_cref<CommandLine> cmdLine, OnIterateOption onIterateOption) const;
+	template<class X> auto getOptionByNameT(add_cref<Option> option) const -> std::shared_ptr<OptionT<X>> {
+		return std::dynamic_pointer_cast<OptionT<X>>(getOptionByName(option));
+	}
 
 protected:
 	void	addHelpOpts ();
@@ -407,15 +411,16 @@ class CommandLine
 	std::string m_appName;
 	const std::string m_userData;
 
-	void makeAnchors (int argc, char** argv);
+	void makeAnchors (int argc, char** argv, bool skipAppName);
 	int consumeOptions (const uint32_t first, const uint32_t count,
 		add_cref<Option> opt, add_cref<std::vector<Option>> opts, add_ref<strings> values,
 		add_cref<strings> breakValues, add_ref<int> depth);
 
 public:
 	CommandLine (int argc, char** argv, add_cref<std::string> userData = {});
-	CommandLine (add_cref<strings> input, add_cref<std::string> userData = {});
-	CommandLine (add_cref<std::string> multiString, add_cref<std::string> userData = {});
+	CommandLine (add_cref<std::string> appName, add_cref<strings> input, add_cref<std::string> userData = {});
+	CommandLine(add_cref<std::string> appName, add_cref<span::span<std::string>> input, add_cref<std::string> userData = {});
+	CommandLine (add_cref<std::string> appName, add_cref<std::string> multiString, add_cref<std::string> userData = {});
 	int  consumeOptions (add_cref<Option> opt, add_cref<std::vector<Option>> opts,
 						 add_ref<strings> values, add_cref<strings> breakValues = {});
 	void iterateOptions (add_cref<std::vector<Option>> opts, OnIterateOption onIterateOption) const;
@@ -423,7 +428,7 @@ public:
 	add_cref<std::string> getUserData () const;
 	std::string getParams () const; // parameters only separated by space
 	strings     getStrings () const; // Everything, including executable name
-	std::string getMultiString () const; // Everything, separating by '\0', endings with '\0'
+	std::string getMultiString (bool includeAppName = true) const; // Everything, separating by '\0', endings with 2*'\0'
 	uint32_t    getAllTokenCount () const { return data_count(m_anchors); }
 	uint32_t    getConsumedTokenCount () const;
 	strings     getUnconsumedTokens () const;

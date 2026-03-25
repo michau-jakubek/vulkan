@@ -1,6 +1,7 @@
 #include "vtfPrettyPrinter.hpp"
 #include "vtfVkUtils.hpp"
 #include "vtfFormatUtils.hpp"
+#include <numeric>
 
 namespace vtf
 {
@@ -57,6 +58,14 @@ PrettyPrinter::Cursor PrettyPrinter::getCursor (uint32_t cursor)
 			m_cursors.emplace_back();
 	}
 	return m_cursors[cursor];
+}
+
+PrettyPrinter::Cursor PrettyPrinter::merge(
+	Cursor out, uint32_t space, bool fitIndividualColumn) const
+{
+	std::vector<uint32_t> mask(m_cursors.size());
+	std::iota(mask.begin(), mask.end(), 0u);
+	return merge(mask, out, space, fitIndividualColumn);
 }
 
 PrettyPrinter::Cursor PrettyPrinter::merge (

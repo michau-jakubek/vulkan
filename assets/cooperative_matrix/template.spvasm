@@ -71,19 +71,26 @@ ${TypeList}
 
   %matA_type = OpTypeCooperativeMatrixKHR ${AType} %uint_3 %M %K %uint_0
   %matA_null = OpConstantNull %matA_type
-%_ptr_Function_13 = OpTypePointer Function %matA_type
-         %15 = OpTypeFunction %void %_ptr_Function_13
+   %matA_ptr = OpTypePointer Function %matA_type
+%loadMatA_type = OpTypeFunction %void %matA_ptr
 
   %matB_type = OpTypeCooperativeMatrixKHR ${BType} %uint_3 %K %N %uint_1
   %matB_null = OpConstantNull %matB_type
-%_ptr_Function_21 = OpTypePointer Function %matB_type
-         %23 = OpTypeFunction %void %_ptr_Function_21
+   %matB_ptr = OpTypePointer Function %matB_type
+%loadMatB_type = OpTypeFunction %void %matB_ptr
 
- %matCR_type = OpTypeCooperativeMatrixKHR ${CRType} %uint_3 %M %N %uint_2
- %matCR_null = OpConstantNull %matCR_type
-%_ptr_Function_28 = OpTypePointer Function %matCR_type
-         %30 = OpTypeFunction %void %_ptr_Function_28
-         %34 = OpTypeFunction %matCR_type
+ %matC_type = OpTypeCooperativeMatrixKHR ${CType} %uint_3 %M %N %uint_2
+ %matC_null = OpConstantNull %matC_type
+  %matC_ptr = OpTypePointer Function %matC_type
+%loadMatC_type = OpTypeFunction %void %matC_ptr
+
+; if (RType != CType) {
+;     %matR_type = OpTypeCooperativeMatrixKHR ${RType} %uint_3 %M %N %uint_2
+;     %matR_null = OpConstantNull %matR_type
+;     %matR_ptr = OpTypePointer Function %matR_type
+; }
+${matR_*}
+%genMatR_type = OpTypeFunction ${mat(C|R)_type}
 
          %PC = OpTypeStruct %uint %uint %uint %uint %uint   ; Block
 %_ptr_PushConstant_PC = OpTypePointer PushConstant %PC
@@ -104,7 +111,7 @@ ${TypeList}
          %77 = OpSpecConstantOp %uint IAdd %N %uint_0
          %81 = OpSpecConstantOp %uint IAdd %N %uint_0
 
-%_runtimearr_cdata = OpTypeRuntimeArray ${CRType}  ; ArrayStride ${CStride}
+%_runtimearr_cdata = OpTypeRuntimeArray ${CType}  ; ArrayStride ${CStride}
       %DataC = OpTypeStruct %_runtimearr_cdata     ; Block
 %_ptr_StorageBuffer_DataC = OpTypePointer StorageBuffer %DataC
         %__2 = OpVariable %_ptr_StorageBuffer_DataC StorageBuffer   ; Binding 2, DescriptorSet 0
@@ -113,17 +120,19 @@ ${TypeList}
 
 %_ptr_StorageBuffer_AType = OpTypePointer StorageBuffer ${AType}
 %_ptr_StorageBuffer_BType = OpTypePointer StorageBuffer ${BType}
-%_ptr_StorageBuffer_CRType = OpTypePointer StorageBuffer ${CRType}
+%_ptr_StorageBuffer_CType = OpTypePointer StorageBuffer ${CType}
+%_ptr_StorageBuffer_RType = OpTypePointer StorageBuffer ${RType}
 
-%_ptr_Private_13 = OpTypePointer Private %matA_type
-          %A = OpVariable %_ptr_Private_13 Private
-%_ptr_Private_21 = OpTypePointer Private %matB_type
-          %B = OpVariable %_ptr_Private_21 Private
-%_ptr_Private_28 = OpTypePointer Private %matCR_type
-          %C = OpVariable %_ptr_Private_28 Private
-          %R = OpVariable %_ptr_Private_28 Private
+%_ptr_Private_A = OpTypePointer Private %matA_type
+          %A = OpVariable %_ptr_Private_A Private
+%_ptr_Private_B = OpTypePointer Private %matB_type
+          %B = OpVariable %_ptr_Private_B Private
+%_ptr_Private_C = OpTypePointer Private %matC_type
+          %C = OpVariable %_ptr_Private_C Private
+%_ptr_Private_R = OpTypePointer Private ${mat(C|R)_type} ; (RType == CType) ? %matC_type : %matR_type
+          %R = OpVariable %_ptr_Private_R Private
 
-%_runtimearr_rdata = OpTypeRuntimeArray ${CRType}  ; ArrayStride ${RStride}
+%_runtimearr_rdata = OpTypeRuntimeArray ${RType}  ; ArrayStride ${RStride}
       %DataR = OpTypeStruct %_runtimearr_rdata     ; Block
 %_ptr_StorageBuffer_DataR = OpTypePointer StorageBuffer %DataR
         %__3 = OpVariable %_ptr_StorageBuffer_DataR StorageBuffer   ; Binding 3, DescriptorSet 0
@@ -135,27 +144,27 @@ ${TypeList}
                ; Function main
        %main = OpFunction %void None %3
           %5 = OpLabel
-      %param = OpVariable %_ptr_Function_13 Function
-    %param_0 = OpVariable %_ptr_Function_21 Function
-    %param_1 = OpVariable %_ptr_Function_28 Function
-        %130 = OpFunctionCall %void %loadMatrix_A %param
-        %131 = OpLoad %matA_type %param
+    %param_0 = OpVariable %matA_ptr Function
+    %param_1 = OpVariable %matB_ptr Function
+    %param_2 = OpVariable %matC_ptr Function
+        %130 = OpFunctionCall %void %loadMatA_def %param_0
+        %131 = OpLoad %matA_type %param_0
                OpStore %A %131
-        %133 = OpFunctionCall %void %loadMatrix_B %param_0
-        %134 = OpLoad %matB_type %param_0
+        %133 = OpFunctionCall %void %loadMatB_def %param_1
+        %134 = OpLoad %matB_type %param_1
                OpStore %B %134
-        %136 = OpFunctionCall %void %loadMatrix_C %param_1
-        %137 = OpLoad %matCR_type %param_1
+        %136 = OpFunctionCall %void %loadMatC_def %param_2
+        %137 = OpLoad %matC_type %param_2
                OpStore %C %137
-        %139 = OpFunctionCall %matCR_type %genOutputMatrix_
+        %139 = OpFunctionCall ${mat(C|R)_type} %genMatR_def
                OpStore %R %139
 
-        %140 = OpLoad %matCR_type %R
-        %145 = OpAccessChain %_ptr_StorageBuffer_CRType %__3 %int_0 %uint_0
-               OpCooperativeMatrixStoreKHR %145 %140 %int_0 %146 MakePointerAvailable|NonPrivatePointer %uint_5
+       %matR = OpLoad ${mat(C|R)_type} %R
+     %p_sb_R = OpAccessChain %_ptr_StorageBuffer_RType %__3 %int_0 %uint_0
+               OpCooperativeMatrixStoreKHR %p_sb_R %matR %int_0 %146 MakePointerAvailable|NonPrivatePointer %uint_5
 
-       %matC = OpLoad %matCR_type %C
-     %p_sb_C = OpAccessChain %_ptr_StorageBuffer_CRType %__2 %int_0 %uint_0
+       %matC = OpLoad %matC_type %C
+     %p_sb_C = OpAccessChain %_ptr_StorageBuffer_CType %__2 %int_0 %uint_0
                OpCooperativeMatrixStoreKHR %p_sb_C %matC %int_0 %100 MakePointerAvailable|NonPrivatePointer %uint_5
 
        %matB = OpLoad %matB_type %B
@@ -169,9 +178,9 @@ ${TypeList}
                OpReturn
                OpFunctionEnd
 
-               ; Function loadMatrix_A
-%loadMatrix_A = OpFunction %void None %15
-        %mtx = OpFunctionParameter %_ptr_Function_13
+               ; Function loadMatA
+%loadMatA_def = OpFunction %void None %loadMatA_type
+       %mtxA = OpFunctionParameter %matA_ptr
          %18 = OpLabel
          %42 = OpAccessChain %_ptr_PushConstant_uint %_ %int_0
          %43 = OpLoad %uint %42
@@ -181,20 +190,20 @@ ${TypeList}
                OpSelectionMerge %50 None
                OpBranchConditional %48 %49 %60
          %49 = OpLabel
-               OpStore %mtx %matA_null ; %59
+               OpStore %mtxA %matA_null ; %59
                OpBranch %50
          %60 = OpLabel
          %61 = OpAccessChain %_ptr_StorageBuffer_AType %__0 %int_0 %uint_0
          %63 = OpCooperativeMatrixLoadKHR %matA_type %61 %int_0 %62 MakePointerVisible|NonPrivatePointer %uint_5
-               OpStore %mtx %63
+               OpStore %mtxA %63
                OpBranch %50
          %50 = OpLabel
                OpReturn
                OpFunctionEnd
 
-               ; Function loadMatrix_B
-%loadMatrix_B = OpFunction %void None %23
-      %mtx_0 = OpFunctionParameter %_ptr_Function_21
+               ; Function loadMatB
+%loadMatB_def = OpFunction %void None %loadMatB_type
+       %mtxB = OpFunctionParameter %matB_ptr
          %26 = OpLabel
          %64 = OpAccessChain %_ptr_PushConstant_uint %_ %int_0
          %65 = OpLoad %uint %64
@@ -204,20 +213,20 @@ ${TypeList}
                OpSelectionMerge %71 None
                OpBranchConditional %69 %70 %79
          %70 = OpLabel
-               OpStore %mtx_0 %matB_null ; %78
+               OpStore %mtxB %matB_null ; %78
                OpBranch %71
          %79 = OpLabel
          %80 = OpAccessChain %_ptr_StorageBuffer_BType %__1 %int_0 %uint_0
          %82 = OpCooperativeMatrixLoadKHR %matB_type %80 %int_0 %81 MakePointerVisible|NonPrivatePointer %uint_5
-               OpStore %mtx_0 %82
+               OpStore %mtxB %82
                OpBranch %71
          %71 = OpLabel
                OpReturn
                OpFunctionEnd
 
-               ; Function loadMatrix_C
-%loadMatrix_C = OpFunction %void None %30
-      %mtx_1 = OpFunctionParameter %_ptr_Function_28
+               ; Function loadMatC
+%loadMatC_def = OpFunction %void None %loadMatC_type
+       %mtxC = OpFunctionParameter %matC_ptr
          %33 = OpLabel
          %83 = OpAccessChain %_ptr_PushConstant_uint %_ %int_0
          %84 = OpLoad %uint %83
@@ -227,21 +236,21 @@ ${TypeList}
                OpSelectionMerge %90 None
                OpBranchConditional %88 %89 %98
          %89 = OpLabel
-               OpStore %mtx_1 %matCR_null ; %97
+               OpStore %mtxC %matC_null ; %97
                OpBranch %90
          %98 = OpLabel
-         %99 = OpAccessChain %_ptr_StorageBuffer_CRType %__2 %int_0 %uint_0
-        %101 = OpCooperativeMatrixLoadKHR %matCR_type %99 %int_0 %100 MakePointerVisible|NonPrivatePointer %uint_5
-               OpStore %mtx_1 %101
+         %99 = OpAccessChain %_ptr_StorageBuffer_CType %__2 %int_0 %uint_0
+        %101 = OpCooperativeMatrixLoadKHR %matC_type %99 %int_0 %100 MakePointerVisible|NonPrivatePointer %uint_5
+               OpStore %mtxC %101
                OpBranch %90
          %90 = OpLabel
                OpReturn
                OpFunctionEnd
 
-               ; Function genOutputMatrix_
-%genOutputMatrix_ = OpFunction %matCR_type None %34
+               ; Function genMatR
+%genMatR_def = OpFunction ${mat(C|R)_type} None %genMatR_type
          %36 = OpLabel
-        %res = OpVariable %_ptr_Function_28 Function
+       %mtxR = OpVariable ${mat(C|R)_ptr} Function
         %102 = OpAccessChain %_ptr_PushConstant_uint %_ %int_0
         %103 = OpLoad %uint %102
         %105 = OpAccessChain %_ptr_PushConstant_uint %_ %int_4
@@ -250,16 +259,16 @@ ${TypeList}
                OpSelectionMerge %109 None
                OpBranchConditional %107 %108 %121
         %108 = OpLabel
-               OpStore %res %matCR_null ; %120
+               OpStore %mtxR ${mat(C|R)_null} ; %120
                OpBranch %109
         %121 = OpLabel
         %122 = OpLoad %matA_type %A
         %123 = OpLoad %matB_type %B
-        %124 = OpLoad %matCR_type %C
-        %125 = OpCooperativeMatrixMulAddKHR %matCR_type %122 %123 %124 ${Operands}
-               OpStore %res %125
+        %124 = OpLoad %matC_type %C
+        %125 = OpCooperativeMatrixMulAddKHR ${mat(C|R)_type} %122 %123 %124 ${Operands}
+               OpStore %mtxR %125
                OpBranch %109
         %109 = OpLabel
-        %126 = OpLoad %matCR_type %res
+        %126 = OpLoad ${mat(C|R)_type} %mtxR
                OpReturnValue %126
                OpFunctionEnd

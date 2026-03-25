@@ -24,6 +24,8 @@ class PrettyPrinter
 public:
 	using Cursor = Cursor_;
 	Cursor getCursor (uint32_t cursor); 
+	Cursor merge (Cursor out, uint32_t space = 4u,
+					bool fitIndividualColumn = false) const;
 	// cursor indices or INVALID_UINT32 to break line
 	Cursor merge (add_cref<std::vector<uint32_t>> cursorMask,
 					Cursor out, uint32_t space = 4u,

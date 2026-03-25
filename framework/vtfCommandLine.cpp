@@ -403,41 +403,64 @@ CommandLine::CommandLine (int argc, char** argv, add_cref<std::string> userData)
 	, m_appName()
 	, m_userData(userData)
 {
-	makeAnchors(argc, argv);
+	makeAnchors(argc, argv, true);
 }
 
-CommandLine::CommandLine (add_cref<strings> input, add_cref<std::string> userData)
+CommandLine::CommandLine (add_cref<std::string> appName, add_cref<strings> input, add_cref<std::string> userData)
 	: m_anchors()
 	, m_commandLine()
-	, m_appName()
+	, m_appName(appName)
 	, m_userData(userData)
 {
+	ASSERTMSG(appName.length(), "Program name must not be empty");
 	const uint32_t argc = data_count(input);
 	std::vector<add_ptr<char>> argv(argc);
 
-	for (uint32_t arg = 0u; arg < argc; ++arg)
+	for (uint32_t arg = 0u; arg < argc; ++arg) {
+		ASSERTMSG(input[arg].length(), "Parameter ", arg, " must not be empty");
 		argv[arg] = const_cast<add_ptr<char>>(input[arg].c_str());
+	}
 
-	makeAnchors(make_signed(argc), argv.data());
+	makeAnchors(make_signed(argc), argv.data(), false);
 }
 
-CommandLine::CommandLine (add_cref<std::string> multiString, add_cref<std::string> userData)
-	: CommandLine(parseMultiString(multiString), userData)
+CommandLine::CommandLine(add_cref<std::string> appName, add_cref<span::span<std::string>> input, add_cref<std::string> userData)
+	: m_anchors()
+	, m_commandLine()
+	, m_appName(appName)
+	, m_userData(userData)
+{
+	ASSERTMSG(appName.length(), "Program name must not be empty");
+	const size_t argc = input.size();
+	std::vector<add_ptr<char>> argv(argc);
+
+	for (size_t arg = 0u; arg < argc; ++arg) {
+		ASSERTMSG(input[arg].length(), "Parameter ", arg, " must not be empty");
+		argv[arg] = const_cast<add_ptr<char>>(input[arg].c_str());
+	}
+
+	makeAnchors(int(argc), argv.data(), false);
+}
+
+CommandLine::CommandLine (add_cref<std::string> appName, add_cref<std::string> multiString, add_cref<std::string> userData)
+	: CommandLine(appName, parseMultiString(multiString), userData)
 {
 }
 
-void CommandLine::makeAnchors (int argc, char** argv)
+void CommandLine::makeAnchors (int argc, char** argv, bool skipAppName)
 {
-	m_anchors.resize(make_unsigned(argc - 1));
-
-	m_appName.assign(argv[0]);
+	const int skip = skipAppName ? 1 : 0;
+	m_anchors.resize(make_unsigned(argc - skip));
 	std::vector<uint32_t> lengths(m_anchors.size());
 
 	for (uint32_t i = 0; i < make_unsigned(argc); ++i)
 	{
-		if (0u == i) continue; // skipp program name
+		if (0u == i && skipAppName) {
+			m_appName.assign(argv[0]);
+			continue;
+		}
 
-		lengths[i - 1] = uint32_t(std::strlen(argv[i]));
+		lengths[i - skip] = uint32_t(std::strlen(argv[i]));
 		m_commandLine.append(argv[i]);
 	}
 
@@ -446,12 +469,12 @@ void CommandLine::makeAnchors (int argc, char** argv)
 
 	for (uint32_t i = 0; i < make_unsigned(argc); ++i)
 	{
-		if (0u == i) continue; // skipp program name
+		if (0u == i && skipAppName) continue; // skipp program name
 
-		m_anchors[i - 1].view = cmdLine.substr(offset, lengths[i - 1]);
-		m_anchors[i - 1].consumed = false;
+		m_anchors[i - skip].view = cmdLine.substr(offset, lengths[i - skip]);
+		m_anchors[i - skip].consumed = false;
 
-		offset += lengths[i - 1];
+		offset += lengths[i - skip];
 	}
 
 	ASSERTION(m_commandLine.length() == offset);
@@ -505,19 +528,21 @@ strings CommandLine::getStrings () const
 	return ss;
 }
 
-std::string CommandLine::getMultiString () const
+std::string CommandLine::getMultiString (bool includeAppName) const
 {
 	std::string result;
 
 	// count needed size in advance (optimization)
-	size_t total = (m_appName.length() + 1u) + 1u; // ending \0
+	size_t total = (includeAppName ? (m_appName.length() + 1u) : 0u) + 1u; // ending \0
 	for (add_cref<Anchor> a : m_anchors)
 		total += a.view.size() + 1u;
 
 	result.reserve(total);
 
-	result.append(m_appName.data(), m_appName.length());
-	result.push_back('\0');
+	if (includeAppName) {
+		result.append(m_appName.data(), m_appName.length());
+		result.push_back('\0');
+	}
 
 	// build final multi-string
 	for (add_cref<Anchor> a : m_anchors) {
