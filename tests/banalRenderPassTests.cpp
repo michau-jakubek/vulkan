@@ -52,6 +52,7 @@ TriLogicInt prepareTests(add_cref<TestRecord> record, add_ref<CommandLine> cmdLi
 
 TriLogicInt runTests(add_ref<VulkanContext> canvas, add_cref<Params> params)
 {
+	add_cref<ZDeviceInterface>	di = canvas.device.getInterface();
 	ProgramCollection			programs(canvas.device, params.assets);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
@@ -174,12 +175,12 @@ TriLogicInt runTests(add_ref<VulkanContext> canvas, add_cref<Params> params)
 			auto rpbi = commandBufferBeginRenderPass(cmd, framebuffer0);
 			commandBufferBindPipeline(cmd, pipeline0);
 			commandBufferPushConstants(cmd, layout0, pc0);
-			vkCmdDraw(**cmd, vertexInput.getVertexCount(0), 1, 0, 0);
+            VTF_CALL_CHECK(di.vkCmdDraw, **cmd, vertexInput.getVertexCount(0), 1u, 0u, 0u);
 			commandBufferNextSubpass(rpbi);
 			commandBufferBindPipeline(cmd, pipeline1);
 			commandBufferBindVertexBuffers(cmd, vertexInput);
 			commandBufferPushConstants(cmd, layout1, pc1);
-			vkCmdDraw(**cmd, vertexInput.getVertexCount(0), 1, 0, 0);
+            VTF_CALL_CHECK(di.vkCmdDraw, **cmd, vertexInput.getVertexCount(0), 1u, 0u, 0u);
 			commandBufferEndRenderPass(rpbi);
 		}
 		commandBufferPipelineBarriers(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -188,7 +189,7 @@ TriLogicInt runTests(add_ref<VulkanContext> canvas, add_cref<Params> params)
 			auto rpbi = commandBufferBeginRenderPass(cmd, framebuffer2);
 			commandBufferBindPipeline(cmd, pipeline2);
 			commandBufferPushConstants(cmd, layout2, pc2);
-			vkCmdDraw(**cmd, vertexInput.getVertexCount(0), 1, 0, 0);
+            VTF_CALL_CHECK(di.vkCmdDraw, **cmd, vertexInput.getVertexCount(0), 1u, 0u, 0u);
 			commandBufferEndRenderPass(rpbi);
 		}
 	}

@@ -21,7 +21,6 @@
 namespace
 {
 using namespace vtf;
-using namespace sg;
 
 struct Params
 {

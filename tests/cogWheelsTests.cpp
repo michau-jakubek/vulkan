@@ -398,6 +398,7 @@ void copyByStaging(const std::vector<X>& src, ZBuffer dst, uint32_t startIndex, 
 	const auto dstSize = bufferGetSize(dst);
 
 	ZDevice device = dst.getParam<ZDevice>();
+	add_cref<ZDeviceInterface> di = device.getInterface();
 	ZBuffer staging = createBuffer<X>(device, elemsPerChunk);
 	ZBufferMemoryBarrier host(staging, VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT);
 
@@ -412,7 +413,7 @@ void copyByStaging(const std::vector<X>& src, ZBuffer dst, uint32_t startIndex, 
 		copy.dstOffset = chunk * chunkOptimalSize + dstOffset;
 		copy.size = chunkOptimalSize;
 		OneShotCommandBuffer cmd(device, queue);
-		vkCmdCopyBuffer(*(ZCommandBuffer)cmd, *staging, *dst, 1u, &copy);
+		VTF_CALL_CHECK(di.vkCmdCopyBuffer, *(ZCommandBuffer)cmd, *staging, *dst, 1u, &copy);
 	}
 
 	const uint32_t chunkRestSize = uint32_t(data_byte_length(src) % chunkOptimalSize);
@@ -427,7 +428,7 @@ void copyByStaging(const std::vector<X>& src, ZBuffer dst, uint32_t startIndex, 
 		copy.dstOffset = numChunks * chunkOptimalSize + dstOffset;
 		copy.size = chunkRestSize;
 		OneShotCommandBuffer cmd(device, queue);
-		vkCmdCopyBuffer(*(ZCommandBuffer)cmd, *staging, *dst, 1u, &copy);
+		VTF_CALL_CHECK(di.vkCmdCopyBuffer, *(ZCommandBuffer)cmd, *staging, *dst, 1u, &copy);
 	}
 }
 
@@ -552,6 +553,8 @@ createVertexAndIndexBuffers (add_ref<VertexInput> input, add_cref<Params> params
 
 TriLogicInt runTests(Canvas& cs, add_cref<Params> params)
 {
+	add_cref<ZDeviceInterface>	di(cs.device.getInterface());
+
 	VertexInput vertexInput(cs.device);
 	GearOutlineInfo bigGearInfo, smallGearInfo;
 	ZBuffer vertexBuffer, indexBuffer;
@@ -601,26 +604,26 @@ TriLogicInt runTests(Canvas& cs, add_cref<Params> params)
 		commandBufferBindPipeline(cmdBuffer, pipeline);
 		commandBufferBindVertexBuffers(cmdBuffer, vertexInput, { vertexBuffer });
 		commandBufferBindIndexBuffer(cmdBuffer, indexBuffer);
-		commandBufferSetScissor(cmdBuffer, sc);
-		commandBufferSetViewport(cmdBuffer, sc);
+		commandBufferSetViewportAndScissor(cmdBuffer, sc);
 		commandBufferResetQueryPool(cmdBuffer, queryPool);
 
 		auto qpbi = commandBufferBeginQuery(cmdBuffer, queryPool, 0);
 			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer);
 
-				vkCmdDrawIndexed(*cmdBuffer, bigGearInfo.front.second, 1,  bigGearInfo.front.first, 0, 0);
-				vkCmdDrawIndexed(*cmdBuffer, bigGearInfo.back.second,  1,  bigGearInfo.back.first, 0, 0);
-				vkCmdDrawIndexed(*cmdBuffer, bigGearInfo.surf.second,  1,  bigGearInfo.surf.first, 0, 0);
+                VTF_CALL_CHECK(di.vkCmdDrawIndexed, *cmdBuffer, bigGearInfo.front.second, 1u,  bigGearInfo.front.first, 0, 0u);
+                VTF_CALL_CHECK(di.vkCmdDrawIndexed, *cmdBuffer, bigGearInfo.back.second,  1u,  bigGearInfo.back.first, 0, 0u);
+                VTF_CALL_CHECK(di.vkCmdDrawIndexed, *cmdBuffer, bigGearInfo.surf.second,  1u,  bigGearInfo.surf.first, 0, 0u);
 
-				vkCmdDrawIndexed(*cmdBuffer, smallGearInfo.front.second, 3, smallGearInfo.front.first, 0, 1);
-				vkCmdDrawIndexed(*cmdBuffer, smallGearInfo.back.second,  3, smallGearInfo.back.first, 0, 1);
-				vkCmdDrawIndexed(*cmdBuffer, smallGearInfo.surf.second,  3, smallGearInfo.surf.first, 0, 1);
+                VTF_CALL_CHECK(di.vkCmdDrawIndexed, *cmdBuffer, smallGearInfo.front.second, 3u, smallGearInfo.front.first, 0, 1u);
+                VTF_CALL_CHECK(di.vkCmdDrawIndexed, *cmdBuffer, smallGearInfo.back.second,  3u, smallGearInfo.back.first, 0, 1u);
+                VTF_CALL_CHECK(di.vkCmdDrawIndexed, *cmdBuffer, smallGearInfo.surf.second,  3u, smallGearInfo.surf.first, 0, 1u);
 
 			commandBufferEndRenderPass(rpbi);
 		commandBufferEndQuery(qpbi);
 
-		vkCmdCopyQueryPoolResults(*cmdBuffer, *queryPool, 0, 1, *queryResults, 0, sizeof(uint64_t),
-									VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+		VTF_CALL_CHECK(di.vkCmdCopyQueryPoolResults,
+                                    *cmdBuffer, *queryPool, 0u, 1u, *queryResults, 0u, sizeof(uint64_t),
+                                    uint32_t(VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT));
 
 		commandBufferMakeImagePresentationReady(cmdBuffer, framebufferGetImage(framebuffer));
 		commandBufferEnd(cmdBuffer);

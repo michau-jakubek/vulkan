@@ -100,8 +100,7 @@ void	commandBuffervSetRenderingInputAttachmentIndices (ZCommandBuffer cmd,
 														  add_cptr<std::vector<uint32_t>> pDepthInputAttachmentIndex = {},
 														  add_cptr<std::vector<uint32_t>> pStencilInputAttachmentIndex = {},
 														  std::optional<bool> useKHRversion = {});
-void				 commandBufferSetViewport (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain);
-void				 commandBufferSetScissor (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain);
+void				 commandBufferSetViewportAndScissor (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain);
 void				 commandBufferSetDefaultDynamicStates (ZCommandBuffer cmdBuffer, add_cref<VertexInput> vertexInput,
 															add_cref<VkViewport> viewport, uint32_t attachmentCount = 1u,
 															add_cptr<VkRect2D> pScissor = nullptr);
@@ -218,7 +217,9 @@ void commandBufferPipelineBarrierVecs (
 
 	pushBarriers(memBarriers, imgBarriers, bufBarriers, barriers, otherBarriers...);
 
-	vkCmdPipelineBarrier(*cmd, srcStageMask, dstStageMask, VK_DEPENDENCY_BY_REGION_BIT,
+	add_cref<ZDeviceInterface> di = cmd.getParam<ZDevice>().getInterface();
+	VTF_CALL_CHECK(di.vkCmdPipelineBarrier, *cmd,
+							srcStageMask, dstStageMask, VK_DEPENDENCY_BY_REGION_BIT,
 							data_count(memBarriers), data_or_null(memBarriers),
 							data_count(bufBarriers), data_or_null(bufBarriers),
 							data_count(imgBarriers), data_or_null(imgBarriers));
@@ -240,10 +241,12 @@ void commandBufferPipelineBarriers (ZCommandBuffer cmd,
 		0u, 0u, 0u
 	};
 	pushBarriers(info, std::forward<Barrier>(barrier), std::forward<Barriers>(barriers)...);
-	vkCmdPipelineBarrier(*cmd, srcStageMask, dstStageMask, VK_DEPENDENCY_BY_REGION_BIT,
-						 info.memoryBarrierCount, (info.memoryBarrierCount ? memoryBarriers : nullptr),
-						 info.bufferBarrierCount, (info.bufferBarrierCount ? bufferBarriers : nullptr),
-						 info.imageBarrierCount, (info.imageBarrierCount ? imageBarriers : nullptr));
+	add_cref<ZDeviceInterface> di = cmd.getParam<ZDevice>().getInterface();
+	VTF_CALL_CHECK(di.vkCmdPipelineBarrier, *cmd,
+						srcStageMask, dstStageMask, VK_DEPENDENCY_BY_REGION_BIT,
+						info.memoryBarrierCount, (info.memoryBarrierCount ? memoryBarriers : nullptr),
+						info.bufferBarrierCount, (info.bufferBarrierCount ? bufferBarriers : nullptr),
+						info.imageBarrierCount, (info.imageBarrierCount ? imageBarriers : nullptr));
 }
 
 template<class Barrier, class... Barriers>

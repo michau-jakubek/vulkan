@@ -3,7 +3,7 @@
 
 #include "vtfVkUtils.hpp"
 
-constexpr vtf::Version CurrentVtfVersion(1, 3, 11, 3);
+constexpr vtf::Version CurrentVtfVersion(1, 4, 1, 1);
 
 // 2024-04-10, 1.1.0.0, "Add versioning"
 // 2024-04-15, 1.1.1.0, "Some fixes in int_compute test."
@@ -54,5 +54,6 @@ constexpr vtf::Version CurrentVtfVersion(1, 3, 11, 3);
 // 2026-03-17, 1.3.11.1, "RayTracing (rejtrejsing) experimental - part V - a bit closer"
 // 2026-03-25, 1.3.11.2, "Add tinygltf support"
 // 2026-04-12, 1.3.11.3, "Some minor fixes"
+// 2026-05-05, 1.4.1.1,  "Remove static Vulkan library dependencies"
 
 #endif  // __MAIN_HPP_INCLUDED__

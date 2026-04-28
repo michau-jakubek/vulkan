@@ -681,7 +681,7 @@ offlineGenerator(
 
 TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 {
-	add_cref<ZDeviceInterface> di = ctx.device.getInterface(); UNREF(di);
+	add_cref<ZDeviceInterface> di = ctx.device.getInterface();
 
 	VertexInput	vertexInput(ctx.device);
 	genVertices(vertexInput);
@@ -903,7 +903,7 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 				//(*di.vkCmdSetRenderingAttachmentLocations)(**cmd, &rali);
 				commandBufferSetRenderingAttachmentLocations(*cmd, renderingAttachmentLocations, params.KHR);
 			}
-			vkCmdDraw(**cmd, vertexInput.getVertexCount(0), 1u, 0u, 0u);
+			VTF_CALL_CHECK(di.vkCmdDraw, **cmd, vertexInput.getVertexCount(0), 1u, 0u, 0u);
 
 			commandBufferPipelineBarrierVecs(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, transitLocalReadBarriers);
@@ -942,7 +942,7 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 			//(*di.vkCmdSetRenderingInputAttachmentIndices)(**cmd, &riai);
 			commandBuffervSetRenderingInputAttachmentIndices(cmd, renderingInputAttachmentIndices, {}, {}, params.KHR);
 		}
-		vkCmdDraw(**cmd, vertexInput.getVertexCount(0), 1u, 0u, 0u);
+		VTF_CALL_CHECK(di.vkCmdDraw, **cmd, vertexInput.getVertexCount(0), 1u, 0u, 0u);
 		commandBufferEndRendering(cmd);
 	}
 

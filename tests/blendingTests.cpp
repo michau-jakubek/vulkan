@@ -125,13 +125,11 @@ typedef std::tuple<TestParams, OptionParserStateX, std::string> TestParamsState;
 
 bool doesFormatSupportBlending (ZPhysicalDevice device, VkFormat format)
 {
-	VkFormatProperties	properties{};
 	const VkFormatFeatureFlags features = VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
 										| VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT
 										| VK_FORMAT_FEATURE_TRANSFER_SRC_BIT
 										| VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
-	vkGetPhysicalDeviceFormatProperties(*device, format, &properties);
-
+	const VkFormatProperties	properties = formatGetProperties(device, format);
 	return ((properties.optimalTilingFeatures & features) == features);
 }
 
@@ -1709,20 +1707,20 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 					commandBufferBeginRendering(displayCmd,
 												TestParams::defaultExtent.width,
 												TestParams::defaultExtent.height, { colorAttachment });
-					vkCmdDrawIndexed(*displayCmd, 12, 1, 0, 0, 0);  // dst color sample
-					vkCmdDrawIndexed(*displayCmd, 12, 1, 18, 0, 1); // src color sample
-					vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 0);  // dst color blending area
-					if (useDualBlend) { vkCmdDrawIndexed(*displayCmd, 6, 1, 30, 0, 2); } // src1 color sample
+                    VTF_CALL_CHECK(di.vkCmdDrawIndexed, *displayCmd, 12u, 1u, 0u, 0, 0u);  // dst color sample
+                    VTF_CALL_CHECK(di.vkCmdDrawIndexed, *displayCmd, 12u, 1u, 18u, 0, 1u); // src color sample
+                    VTF_CALL_CHECK(di.vkCmdDrawIndexed, *displayCmd, 6u, 1u, 12u, 0, 0u);  // dst color blending area
+                    if (useDualBlend) { di.vkCmdDrawIndexed(*displayCmd, 6u, 1u, 30u, 0, 2u); } // src1 color sample
 					commandBufferEndRendering(displayCmd);
 				}
 				else
 				{
 					commandBufferBindPipeline(displayCmd, backgroundPipeline);
 					auto rpbi = commandBufferBeginRenderPass(displayCmd, colorFB);
-					vkCmdDrawIndexed(*displayCmd, 12, 1, 0, 0, 0);  // dst color sample
-					vkCmdDrawIndexed(*displayCmd, 12, 1, 18, 0, 1); // src color sample
-					vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 0);  // dst color blending area
-					if (useDualBlend) { vkCmdDrawIndexed(*displayCmd, 6, 1, 30, 0, 2); } // src1 color sample
+                    VTF_CALL_CHECK(di.vkCmdDrawIndexed, *displayCmd, 12u, 1u, 0u, 0, 0u);  // dst color sample
+                    VTF_CALL_CHECK(di.vkCmdDrawIndexed, *displayCmd, 12u, 1u, 18u, 0, 1u); // src color sample
+                    VTF_CALL_CHECK(di.vkCmdDrawIndexed, *displayCmd, 6u, 1u, 12u, 0, 0u);  // dst color blending area
+                    if (useDualBlend) { di.vkCmdDrawIndexed(*displayCmd, 6u, 1u, 30u, 0, 2u); } // src1 color sample
 					commandBufferEndRenderPass(rpbi);
 				}
 			}
@@ -1738,20 +1736,20 @@ TriLogicInt runTests (add_ref<Canvas> ctx, add_cref<std::string> assets,
 					add_cref<VkExtent3D> colorSize = imageGetExtent(colorImage);
 					const VkPipelineColorBlendAttachmentState state = currParams.getState();
 					commandBufferSetDefaultDynamicStates(displayCmd, vertexInput, makeViewport(currParams.defaultExtent));
-					di.vkCmdSetColorBlendEnableEXT(*displayCmd, 0u, 1u, makeQuickPtr(VK_TRUE));
-					di.vkCmdSetColorBlendEquationEXT(*displayCmd, 0u, 1u, makeQuickPtr(makeColorBlendEquationExt(state)));
-					di.vkCmdSetColorWriteMaskEXT(*displayCmd, 0u, 1u, &state.colorWriteMask);
-					di.vkCmdSetBlendConstants(*displayCmd, currParams.constColor.getData());
+					VTF_CALL_CHECK(di.vkCmdSetColorBlendEnableEXT, *displayCmd, 0u, 1u, makeQuickPtr(VK_TRUE));
+					VTF_CALL_CHECK(di.vkCmdSetColorBlendEquationEXT, *displayCmd, 0u, 1u, makeQuickPtr(makeColorBlendEquationExt(state)));
+					VTF_CALL_CHECK(di.vkCmdSetColorWriteMaskEXT, *displayCmd, 0u, 1u, &state.colorWriteMask);
+					VTF_CALL_CHECK(di.vkCmdSetBlendConstants, *displayCmd, currParams.constColor.getData());
 					commandBufferBindShaders(displayCmd, { soCommonVert, blendShader });
 					commandBufferBeginRendering(displayCmd, colorSize.width, colorSize.height, { colorAttachment });
-					vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 1);
+                    VTF_CALL_CHECK(di.vkCmdDrawIndexed, *displayCmd, 6u, 1u, 12u, 0, 1u);
 					commandBufferEndRendering(displayCmd);
 				}
 				else
 				{
 					commandBufferBindPipeline(displayCmd, blendPipeline);
 					auto rpbi = commandBufferBeginRenderPass(displayCmd, colorFB);
-					vkCmdDrawIndexed(*displayCmd, 6, 1, 12, 0, 1);
+                    VTF_CALL_CHECK(di.vkCmdDrawIndexed, *displayCmd, 6u, 1u, 12u, 0, 1u);
 					commandBufferEndRenderPass(rpbi);
 				}
 			}

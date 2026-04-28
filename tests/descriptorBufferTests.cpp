@@ -314,6 +314,7 @@ void makeVertices (add_ref<VertexInput> input)
 
 TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 {
+	add_cref<ZDeviceInterface> di = canvas.device.getInterface();
 	add_ref<ProgressRecorder> recorder = canvas.device.getParam<ZPhysicalDevice>()
 											.getParam<ZInstance>()
 											.getParamRef<ProgressRecorder>();
@@ -480,10 +481,9 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 			commandBufferBindPipeline(cmd, graphPline, useDescriptorSet);
 		else commandBufferBindDescriptorBuffers(cmd, graphPline, { desc0Buffer, desc1Buffer });
 		commandBufferBindVertexBuffers(cmd, vertexInput);
-		vkCmdSetViewport(*cmd, 0, 1, &swapchain.viewport);
-		vkCmdSetScissor(*cmd, 0, 1, &swapchain.scissor);
+		commandBufferSetViewportAndScissor(cmd, swapchain);
 		auto rpbi = commandBufferBeginRenderPass(cmd, framebuffer);
-			vkCmdDraw(*cmd, vertexInput.getVertexCount(0), 2, 0, 0);
+            VTF_CALL_CHECK(di.vkCmdDraw, *cmd, vertexInput.getVertexCount(0), 2u, 0u, 0u);
 		commandBufferEndRenderPass(rpbi);
 		imageCopyToBuffer(cmd, stoImage, outStoBuffer,
 			VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_NONE,

@@ -3,6 +3,7 @@
 #include "vtfBacktrace.hpp"
 #include "vtfThreadSafeLogger.hpp"
 #include "vtfStructUtils.hpp"
+#include "vtfPlatformDriver.hpp"
 
 #include <string_view>
 
@@ -45,38 +46,26 @@ void makeDebugCreateInfo (VkDebugUtilsMessengerCreateInfoEXT& result, void* pUse
 	result.pUserData		= pUserData;
 }
 
-void createDebugMessenger (ZInstance instance, VkAllocationCallbacksPtr callbacks, const VkDebugUtilsMessengerCreateInfoEXT& info, VkDebugUtilsMessengerEXT& messenger)
+void createDebugMessenger (add_cref<ZInstanceInterface> ii, VkInstance i, VkAllocationCallbacksPtr callbacks, const VkDebugUtilsMessengerCreateInfoEXT& info, VkDebugUtilsMessengerEXT& messenger)
 {
-	auto createDebugUtilsMessengerEXT =	 (PFN_vkCreateDebugUtilsMessengerEXT)
-			vkGetInstanceProcAddr(*instance, "vkCreateDebugUtilsMessengerEXT");
-	ASSERTION(createDebugUtilsMessengerEXT != nullptr);
-
 	ASSERTION(messenger == VK_NULL_HANDLE);
-	VKASSERT(createDebugUtilsMessengerEXT(*instance, &info, callbacks, &messenger));
+    VKASSERT(VTF_CALL_CHECK(ii.vkCreateDebugUtilsMessengerEXT, i, &info, callbacks, &messenger));
 }
 
-void destroyDebugMessenger (ZInstance instance, VkAllocationCallbacksPtr callbacks, VkDebugUtilsMessengerEXT& messenger)
+void destroyDebugMessenger (add_cref<ZInstanceInterface> ii, VkInstance i, VkAllocationCallbacksPtr callbacks, add_ref<VkDebugUtilsMessengerEXT> messenger)
 {
 	if (messenger != VK_NULL_HANDLE)
 	{
-		auto destroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)
-				vkGetInstanceProcAddr(*instance, "vkDestroyDebugUtilsMessengerEXT");
-		ASSERTION(destroyDebugUtilsMessengerEXT != nullptr);
-		ASSERTION(messenger != VK_NULL_HANDLE);
-		destroyDebugUtilsMessengerEXT(*instance, messenger, callbacks);
+        VTF_CALL_CHECK(ii.vkDestroyDebugUtilsMessengerEXT, i, messenger, callbacks);
 
 		if (getGlobalAppFlags().verbose)
-		{
+            {
 			std::cout << "[INFO] Calling vkDestroyDebugUtilsMessengerEXT "
-					  << instance << " VkDebugUtilsMessengerEXT " << messenger << std::endl;
+                      << i << " VkDebugUtilsMessengerEXT " << messenger << std::endl;
 		}
-	}
-	messenger = VK_NULL_HANDLE;
-}
 
-void destroyDebugMessenger (ZInstance i)
-{
-	destroyDebugMessenger(i, i.getParam<VkAllocationCallbacksPtr>(), i.getParamRef<VkDebugUtilsMessengerEXT>());
+        messenger = VK_NULL_HANDLE;
+	}
 }
 
 void makeDebugCreateInfo (VkDebugReportCallbackCreateInfoEXT& result, void* pUserData, void* pNext, bool enableDebugPrintf)
@@ -91,38 +80,26 @@ void makeDebugCreateInfo (VkDebugReportCallbackCreateInfoEXT& result, void* pUse
 	result.pUserData	= pUserData;
 }
 
-void createDebugReport (ZInstance instance, VkAllocationCallbacksPtr callbacks, const VkDebugReportCallbackCreateInfoEXT& info, VkDebugReportCallbackEXT& report)
+void createDebugReport (add_cref<ZInstanceInterface> ii, VkInstance i, VkAllocationCallbacksPtr callbacks, const VkDebugReportCallbackCreateInfoEXT& info, VkDebugReportCallbackEXT& report)
 {
-	auto createDebugReportCallbackEXT =	 (PFN_vkCreateDebugReportCallbackEXT)
-			vkGetInstanceProcAddr(*instance, "vkCreateDebugReportCallbackEXT");
-	ASSERTION(createDebugReportCallbackEXT != nullptr);
-
 	ASSERTION(report == VK_NULL_HANDLE);
-	VKASSERT(createDebugReportCallbackEXT(*instance, &info, callbacks, &report));
+    VKASSERT(VTF_CALL_CHECK(ii.vkCreateDebugReportCallbackEXT, i, &info, callbacks, &report));
 }
 
-void destroyDebugReport (ZInstance instance, VkAllocationCallbacksPtr callbacks, VkDebugReportCallbackEXT& report)
+void destroyDebugReport (add_cref<ZInstanceInterface> ii, VkInstance i, VkAllocationCallbacksPtr callbacks, add_ref<VkDebugReportCallbackEXT> report)
 {
 	if (report != VK_NULL_HANDLE)
 	{
-		auto destroyDebugReportCallbackEXT = (PFN_vkDestroyDebugReportCallbackEXT)
-				vkGetInstanceProcAddr(*instance, "vkDestroyDebugReportCallbackEXT");
-		ASSERTION(destroyDebugReportCallbackEXT != nullptr);
-		ASSERTION(report != VK_NULL_HANDLE);
-		destroyDebugReportCallbackEXT(*instance, report, callbacks);
+        VTF_CALL_CHECK(ii.vkDestroyDebugReportCallbackEXT, i, report, callbacks);
 
 		if (getGlobalAppFlags().verbose)
 		{
 			std::cout << "[INFO] Calling vkDestroyDebugReportCallbackEXT "
-					  << instance << " VkDebugReportCallbackEXT " << report << std::endl;
+                      << i << " VkDebugReportCallbackEXT " << report << std::endl;
 		}
-	}
-	report = VK_NULL_HANDLE;
-}
 
-void destroyDebugReport (ZInstance i)
-{
-	destroyDebugReport(i, i.getParam<VkAllocationCallbacksPtr>(), i.getParamRef<VkDebugReportCallbackEXT>());
+        report = VK_NULL_HANDLE;
+	}
 }
 
 static const char* VUID_Undefined = "VUID_Undefined";

@@ -449,8 +449,8 @@ CommandLine::CommandLine (add_cref<std::string> appName, add_cref<std::string> m
 
 void CommandLine::makeAnchors (int argc, char** argv, bool skipAppName)
 {
-	const int skip = skipAppName ? 1 : 0;
-	m_anchors.resize(make_unsigned(argc - skip));
+    const uint32_t skip = skipAppName ? 1 : 0;
+    m_anchors.resize(make_unsigned(argc) - skip);
 	std::vector<uint32_t> lengths(m_anchors.size());
 
 	for (uint32_t i = 0; i < make_unsigned(argc); ++i)

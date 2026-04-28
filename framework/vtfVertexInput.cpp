@@ -10,8 +10,7 @@ namespace vtf
 
 void assertVertexBinding (add_cref<ZDevice> device, uint32_t binding)
 {
-	VkPhysicalDeviceProperties p;
-	vkGetPhysicalDeviceProperties(*device.getParam<ZPhysicalDevice>(), &p);
+	add_cref<VkPhysicalDeviceProperties> p = device.getParam<ZPhysicalDevice>().getParamRef<VkPhysicalDeviceProperties>();
 	ASSERTMSG(binding < p.limits.maxVertexInputBindings, "Binding exceeds maxVertexInput limit");
 }
 
@@ -147,6 +146,7 @@ VertexBinding::Location VertexBinding::addAttributes_ (const AttrFwd* fwd, const
 	const ZBufferUsageFlags		usage		= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 	const ZMemoryPropertyFlags	props		(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	ZDevice						device		= vertexInput.device;
+	add_cref<ZDeviceInterface>	di			= device.getInterface();
 	const Location				location	= static_cast<Location>(m_descriptions.size());
 	uint32_t					offset		= m_descriptions.empty() ? 0 : (m_descriptions.back().offset + m_descriptions.back().sizeOf);
 
@@ -179,13 +179,15 @@ VertexBinding::Location VertexBinding::addAttributes_ (const AttrFwd* fwd, const
 	const uint8_t*		inputSource		= nullptr;
 
 	ZDeviceMemory	newMemory	= bufferGetMemory(newBuffer, 0u);
-	VKASSERT(vkMapMemory(*device, *newMemory, 0, newBufferSize, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&dst)));
+	VKASSERT(VTF_CALL_CHECK(di.vkMapMemory,
+        *device, *newMemory, 0u, newBufferSize, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&dst)));
 
 	if (oldStride)
 	{
 		const VkDeviceSize	oldBufferSize	= elementCount * oldStride;
 		ZDeviceMemory oldMemory = bufferGetMemory(m_buffer, 0u);
-		VKASSERT(vkMapMemory(*device, *oldMemory, 0, oldBufferSize, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&bindingSource)));
+		VKASSERT(VTF_CALL_CHECK(di.vkMapMemory,
+            *device, *oldMemory, 0u, oldBufferSize, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&bindingSource)));
 
 		/*
 		VkMappedMemoryRange	range{};
@@ -232,12 +234,12 @@ VertexBinding::Location VertexBinding::addAttributes_ (const AttrFwd* fwd, const
 	range.size		= newBufferSize;
 	VKASSERT2(vkFlushMappedMemoryRanges(*device, 1, &range));
 	*/
-	vkUnmapMemory(*device, *newMemory);
+	VTF_CALL_CHECK(di.vkUnmapMemory, *device, *newMemory);
 
 	if (oldStride)
 	{
 		ZDeviceMemory oldMemory = bufferGetMemory(m_buffer, 0u);
-		vkUnmapMemory(*device, *oldMemory);
+		VTF_CALL_CHECK(di.vkUnmapMemory, *device, *oldMemory);
 	}
 
 	this->stride = newStride;
@@ -441,6 +443,12 @@ std::vector<VkDeviceSize> VertexInput::getVertexOffsets	() const
 void VertexInput::clear ()
 {
 	m_freeBindings.clear();
+}
+
+template<> std::vector<Vec2> VertexInput::fullQuad<Vec2>()
+{
+	return { { -1, -1 }, { +1, -1 }, { +1, +1 },
+			 { +1, +1 }, { -1, +1 }, { -1, -1 } };
 }
 
 template<> ZBuffer createIndexBuffer<uint32_t> (ZDevice device, uint32_t indexCount)

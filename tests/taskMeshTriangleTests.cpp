@@ -84,10 +84,9 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 	{
 		commandBufferBegin(cmdBuffer);
 			commandBufferBindPipeline(cmdBuffer, pipeline);
-			vkCmdSetViewport(*cmdBuffer, 0, 1, &swapchain.viewport);
-			vkCmdSetScissor(*cmdBuffer, 0, 1, &swapchain.scissor);
+			commandBufferSetViewportAndScissor(cmdBuffer, swapchain);
 			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer);
-				di.vkCmdDrawMeshTasksEXT(*cmdBuffer, 1u, 1u, 1u);
+				VTF_CALL_CHECK(di.vkCmdDrawMeshTasksEXT, *cmdBuffer, 1u, 1u, 1u);
 			commandBufferEndRenderPass(rpbi);
 			commandBufferMakeImagePresentationReady(cmdBuffer, framebufferGetImage(framebuffer));
 		commandBufferEnd(cmdBuffer);

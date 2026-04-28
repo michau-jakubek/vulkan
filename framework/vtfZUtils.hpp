@@ -28,7 +28,7 @@ namespace vtf
 
 class VertexInput;
 
-Version			getVulkanImplVersion (std::optional<ZInstance> instance = {});
+Version getVulkanImplVersion (std::optional<ZInstance> instance = {});
 
 #if VTF_AS_DLL
 struct VtfAppSharedObject
@@ -110,11 +110,14 @@ ZPhysicalDevice	deviceGetPhysicalDevice (ZDevice device);
 VkResult		deviceWaitIdle (ZDevice device, bool raiseException = true);
 ZInstance		deviceGetInstance (ZPhysicalDevice device);
 ZInstance		deviceGetInstance (ZDevice device);
-ZQueue			deviceGetNextQueue			(ZDevice device, VkQueueFlags queueFlags, bool mustSupportSurface);
-uint32_t		queueGetFamilyIndex			(ZQueue queue);
-uint32_t		queueGetIndex				(ZQueue queue);
-VkQueueFlags	queueGetFlags				(ZQueue queue);
-bool			queueSupportSwapchain		(ZQueue queue);
+uint32_t		findQueueFamilyIndex	(ZPhysicalDevice device, VkQueueFlagBits bit);
+ZQueue			deviceGetNextQueue		(ZDevice device, VkQueueFlags queueFlags, bool mustSupportSurface);
+uint32_t		queueGetFamilyIndex		(ZQueue queue);
+uint32_t		queueGetIndex			(ZQueue queue);
+VkQueueFlags	queueGetFlags			(ZQueue queue);
+bool			queueSupportSwapchain	(ZQueue queue);
+uint32_t		enumerateSwapchainImages (ZDevice device, VkSwapchainKHR swapchain, add_ref<std::vector<VkImage>> images);
+std::vector<uint32_t> findSurfaceSupportedQueueFamilyIndices (VkPhysicalDevice physDevice, ZSurfaceKHR surface);
 
 struct ZException
 {
@@ -185,7 +188,9 @@ bool			pointInTriangle2D (const Vec3& p, const Vec3& p0, const Vec3& p1, const V
 bool			pointInTriangle2D (const Vec4& p, const Vec4& p0, const Vec4& p1, const Vec4& p2, bool bar = false);
 
 uint32_t enumeratePhysicalDevices (ZInstance instance, std::vector<VkPhysicalDevice>& devices);
-std::ostream& printPhysicalDevice (ZInstance instance, VkPhysicalDevice device, std::ostream& str, uint32_t deviceIndex);
+add_ref<std::ostream> printPhysicalDevice (ZInstance instance, VkPhysicalDevice device,
+											add_ref<std::ostream> str, uint32_t deviceIndex = INVALID_UINT32);
+add_ref<std::ostream> printPhysicalDevices (ZInstance instance, add_ref<std::ostream> str);
 strings enumerateDeviceExtensions(ZInstance instance, VkPhysicalDevice device, const strings& layerNames);
 
 

@@ -41,11 +41,9 @@ void GlfwInitializerFinalizer::init (ZInstance instance)
 	UNREF(instance);
 	if (!m_initialized)
 	{
-#ifdef VULKAN_CUSTOM_DRIVER
-		PFN_vkGetInstanceProcAddr proc = getDriverGetInstanceProcAddr();
-		ASSERTMSG(proc, "vkGetInstanceProcAddr() failed");
-		glfwInitVulkanLoader(proc);
-#endif // VULKAN_CUSTOM_DRIVER
+		const auto vkGetInstanceProcAddr = getDriverGetInstanceProcAddr();
+		ASSERTMSG(vkGetInstanceProcAddr, "vkGetInstanceProcAddr() failed");
+		glfwInitVulkanLoader(vkGetInstanceProcAddr);
 		ASSERTMSG(GLFW_TRUE == glfwInit(), "Failed to initialize GLFW library");
 		m_initialized = true;
 	}
@@ -339,19 +337,21 @@ Canvas::SurfaceDetails::SurfaceDetails ()
 // Called once from Canvas::construct() within Canvas constructor body.
 void Canvas::SurfaceDetails::update (ZPhysicalDevice physDevice, ZSurfaceKHR surfaceKHR)
 {
-	VKASSERT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*physDevice, *surfaceKHR, &caps));
+	add_cref<ZInstanceInterface> ii = physDevice.getParam<ZInstance>().getInterface();
+
+	VKASSERT(VTF_CALL_CHECK(ii.vkGetPhysicalDeviceSurfaceCapabilitiesKHR, *physDevice, *surfaceKHR, &caps));
 
 	uint32_t formatCount = 0;;
-	VKASSERT(vkGetPhysicalDeviceSurfaceFormatsKHR(*physDevice, *surfaceKHR, &formatCount, nullptr));
+	VKASSERT(VTF_CALL_CHECK(ii.vkGetPhysicalDeviceSurfaceFormatsKHR, *physDevice, *surfaceKHR, &formatCount, nullptr));
 	ASSERTION(formatCount != 0);
 	formats.resize(formatCount);
-	VKASSERT(vkGetPhysicalDeviceSurfaceFormatsKHR(*physDevice, *surfaceKHR, &formatCount, formats.data()));
+	VKASSERT(VTF_CALL_CHECK(ii.vkGetPhysicalDeviceSurfaceFormatsKHR, *physDevice, *surfaceKHR, &formatCount, formats.data()));
 
 	uint32_t presentModeCount = 0;
-	VKASSERT(vkGetPhysicalDeviceSurfacePresentModesKHR(*physDevice, *surfaceKHR, &presentModeCount, nullptr));
+	VKASSERT(VTF_CALL_CHECK(ii.vkGetPhysicalDeviceSurfacePresentModesKHR, *physDevice, *surfaceKHR, &presentModeCount, nullptr));
 	ASSERTION(presentModeCount != 0);
 	modes.resize(presentModeCount);
-	VKASSERT(vkGetPhysicalDeviceSurfacePresentModesKHR(*physDevice, *surfaceKHR, &presentModeCount, modes.data()));
+	VKASSERT(VTF_CALL_CHECK(ii.vkGetPhysicalDeviceSurfacePresentModesKHR, *physDevice, *surfaceKHR, &presentModeCount, modes.data()));
 }
 
 uint32_t Canvas::SurfaceDetails::selectFormat (ZPhysicalDevice physDevice, VkFormatFeatureFlags formatFlags)
@@ -362,8 +362,7 @@ uint32_t Canvas::SurfaceDetails::selectFormat (ZPhysicalDevice physDevice, VkFor
 	for (uint32_t i = 0; i < uint32_t(formats.size()); ++i)
 	{
 		add_cref<VkSurfaceFormatKHR> format (formats.at(i));
-		VkFormatProperties properties;
-		vkGetPhysicalDeviceFormatProperties(*physDevice, format.format, &properties);
+		const VkFormatProperties properties = formatGetProperties(physDevice, format.format);
 		if ((formatFlags & properties.optimalTilingFeatures) != 0)
 			return i;
 	}
@@ -479,11 +478,13 @@ Canvas::Swapchain::~Swapchain ()
 {
 	if (VK_NULL_HANDLE != m_handle)
 	{
-		vkDeviceWaitIdle(*canvas.device);
+		add_cref<ZDeviceInterface> di = canvas.device.getInterface();
+
+		VTF_CALL_CHECK(di.vkDeviceWaitIdle, *canvas.device);
 
 		destroyFramebuffers();
 
-		vkDestroySwapchainKHR(*canvas.device, m_handle, canvas.callbacks);
+		VTF_CALL_CHECK(di.vkDestroySwapchainKHR, *canvas.device, m_handle, canvas.callbacks);
 		m_handle = VK_NULL_HANDLE;
 	}
 
@@ -507,7 +508,7 @@ void Canvas::Swapchain::createFramebuffers (uint32_t minImageCount, ZRenderPass 
 	ASSERTMSG(m_handle, "Swapchain must have a handle");
 
 	std::vector<VkImage>		presentImages;
-	const uint32_t				imageCount = enumerateSwapchainImages(*canvas.device, m_handle, presentImages);
+	const uint32_t				imageCount = enumerateSwapchainImages(canvas.device, m_handle, presentImages);
 	ASSERTION(imageCount >= minImageCount);
 	minImageCount = std::min(minImageCount, imageCount);
 	m_framebuffers.resize(imageCount);
@@ -520,7 +521,9 @@ void Canvas::Swapchain::createFramebuffers (uint32_t minImageCount, ZRenderPass 
 void Canvas::Swapchain::recreate (ZRenderPass rp, uint32_t acquirableImageCount, uint32_t hintWidth, uint32_t hintHeight, bool force)
 {
 	VkSurfaceCapabilitiesKHR caps;
-	VKASSERT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*canvas.physicalDevice, *canvas.surface, &caps));
+	add_cref<ZInstanceInterface> ii = canvas.physicalDevice.getParam<ZInstance>().getInterface();
+	VKASSERT(VTF_CALL_CHECK(ii.vkGetPhysicalDeviceSurfaceCapabilitiesKHR,
+								*canvas.physicalDevice, *canvas.surface, &caps));
 
 	if (caps.currentExtent.width == INVALID_UINT32 || caps.currentExtent.height == INVALID_UINT32)
 	{
@@ -617,14 +620,14 @@ void Canvas::Swapchain::recreate (ZRenderPass rp, uint32_t acquirableImageCount,
 	destroyFramebuffers();
 
 	add_cref<ZDeviceInterface> di = canvas.device.getInterface();
-	VKASSERT(di.vkCreateSwapchainKHR(*canvas.device, &swapchainCreateInfo, canvas.callbacks, &m_handle));
+	VKASSERT(VTF_CALL_CHECK(di.vkCreateSwapchainKHR, *canvas.device, &swapchainCreateInfo, canvas.callbacks, &m_handle));
 
 	// destroying the old swapchain
 	if (swapchainCreateInfo.oldSwapchain != VK_NULL_HANDLE)
 	{
 		++m_refreshCount;
-		VKASSERT(vkDeviceWaitIdle(*canvas.device));
-		di.vkDestroySwapchainKHR(*canvas.device, swapchainCreateInfo.oldSwapchain, canvas.callbacks);
+		VKASSERT(VTF_CALL_CHECK(di.vkDeviceWaitIdle, *canvas.device));
+		VTF_CALL_CHECK(di.vkDestroySwapchainKHR, *canvas.device, swapchainCreateInfo.oldSwapchain, canvas.callbacks);
 	}
 
 	createFramebuffers(m_framebufferCount, rp, imageUsage);
@@ -635,7 +638,8 @@ void Canvas::Swapchain::recreate (ZRenderPass rp, uint32_t acquirableImageCount,
 void Canvas::updateExtent ()
 {
 	VkSurfaceCapabilitiesKHR caps;
-	VKASSERT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*physicalDevice, *surface, &caps));
+	add_cref<ZInstanceInterface> ii = physicalDevice.getParam<ZInstance>().getInterface();
+	VKASSERT(VTF_CALL_CHECK(ii.vkGetPhysicalDeviceSurfaceCapabilitiesKHR, *physicalDevice, *surface, &caps));
 	m_width = caps.currentExtent.width;
 	m_height = caps.currentExtent.height;
 }
@@ -679,6 +683,7 @@ add_ptr<Canvas::BackBuffer> Canvas::acquireBackBuffer (
 		buffer = &buffers.data()[m_currentFrame];
 	}
 
+	add_cref<ZDeviceInterface> di = device.getInterface();
 	VkResult res = VK_ERROR_UNKNOWN;
 	do
 	{
@@ -693,9 +698,11 @@ add_ptr<Canvas::BackBuffer> Canvas::acquireBackBuffer (
 		 * (https://vulkan.lunarg.com/doc/view/1.3.243.0/linux/1.3-extensions/vkspec.html#VUID-vkAcquireNextImageKHR-surface-07783)
 		 */
 		const auto timeout = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::seconds(5)).count();
-		res = vkAcquireNextImageKHR(*device,
+		res = VTF_CALL_CHECK(di.vkAcquireNextImageKHR,
+									*device,
 									swapchain.handle,
-									timeout, *buffer->acquireSemaphore,
+                                    uint64_t(timeout),
+                                    *buffer->acquireSemaphore,
 									(VkFence)VK_NULL_HANDLE,
 									&buffer->imageIndex);
 
@@ -753,7 +760,8 @@ bool Canvas::presentBackBuffer (add_cref<BackBuffer>				buffer,
 	}
 	else
 	{
-		res = vkQueuePresentKHR(*presentQueue, &presentInfo);
+		add_cref<ZDeviceInterface> di = device.getInterface();
+		res = VTF_CALL_CHECK(di.vkQueuePresentKHR, *presentQueue, &presentInfo);
 	}
 
 	ASSERTMSG(nullptr == readyBuffersStackMutex, "readyBuffersStackMutex must be null - not implemented yet");
@@ -780,6 +788,8 @@ void Canvas::render	(add_ref<Swapchain>					swapchain,
 					 add_ptr<std::condition_variable>	readyBufferCondition,
 					 OnCommandRecording					onCommandRecording)
 {
+	add_cref<ZDeviceInterface> di = device.getInterface();
+
 	add_ptr<BackBuffer>	pBuffer = acquireBackBuffer(backBuffers, buffersQueueMutex, swapchain, backBufferCount);
 	add_ref<BackBuffer> buffer(*pBuffer);
 
@@ -845,8 +855,8 @@ void Canvas::render	(add_ref<Swapchain>					swapchain,
 		}
 
 		ZQueue queue = buffer.blitCommand.getParam<ZCommandPool>().getParam<ZQueue>();
-		VKASSERT(vkQueueSubmit(*queue, 1u, &blitSubmitInfo, *buffer.renderFence));
-		VKASSERT(vkWaitForFences(*device, 1u, buffer.renderFence.ptr(), VK_TRUE, INVALID_UINT64));
+		VKASSERT(VTF_CALL_CHECK(di.vkQueueSubmit, *queue, 1u, &blitSubmitInfo, *buffer.renderFence));
+		VKASSERT(VTF_CALL_CHECK(di.vkWaitForFences, *device, 1u, buffer.renderFence.ptr(), VK_TRUE, INVALID_UINT64));
 		resetFence(buffer.renderFence);
 	}
 	else
@@ -878,10 +888,10 @@ void Canvas::render	(add_ref<Swapchain>					swapchain,
 		}
 		ZQueue queue = buffer.renderCommand.getParam<ZCommandPool>().getParam<ZQueue>();
 		VkFence submitFence = style.submitRenderWithFence ? *buffer.renderFence : VK_NULL_HANDLE;
-		VKASSERT(vkQueueSubmit(*queue, 1u, &renderSubmitInfo, submitFence));
+		VKASSERT(VTF_CALL_CHECK(di.vkQueueSubmit, *queue, 1u, &renderSubmitInfo, submitFence));
 		if (style.submitRenderWithFence)
 		{
-			VKASSERT(vkWaitForFences(*device, 1u, buffer.renderFence.ptr(), VK_TRUE, INVALID_UINT64));
+			VKASSERT(VTF_CALL_CHECK(di.vkWaitForFences, *device, 1u, buffer.renderFence.ptr(), VK_TRUE, INVALID_UINT64));
 			resetFence(buffer.renderFence);
 		}
 	}
@@ -1134,7 +1144,8 @@ int Canvas::run (OnCommandRecording				onCommandRecording,
 		}
 	}
 
-	vkQueueWaitIdle(*presentQueue);
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	VTF_CALL_CHECK(di.vkQueueWaitIdle, *presentQueue);
 
 	/*
 	* Depends on VK_KHR_PRESENT_WAIT_EXTENSION_NAME, "VK_KHR_present_wait"

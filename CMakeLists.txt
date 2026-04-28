@@ -82,7 +82,6 @@ endif()
 
 # Cached variables only for Cmake-GUI
 set(VULKAN_INCLUDE_DIR "" CACHE STRING "Directory with Vulkan includes")
-set(VULKAN_LIB_PATH    "" CACHE STRING "Full path to Vulkan link library")
 set(GLFW3_INCLUDE_DIR  "" CACHE STRING "Directory with GLFW v3 includes")
 set(GLFW3_LIB_PATH     "" CACHE STRING "Full path to GLFW v3 link library")
 
@@ -102,24 +101,20 @@ if (VULKAN_SDK)
 	set (CMAKE_PREFIX_PATH "${VULKAN_SDK};${CMAKE_PREFIX_PATH}")
 	find_package(Vulkan REQUIRED)
 	get_target_property(VULKAN_INCLUDE_DIR Vulkan::Vulkan INTERFACE_INCLUDE_DIRECTORIES)
-	get_target_property(VULKAN_LIB_PATH Vulkan::Vulkan IMPORTED_LOCATION)
 	message(STATUS "Found Vulkan SDK in ${VULKAN_SDK}")
-	message(STATUS "Set VULKAN_LIB_PATH to ${VULKAN_LIB_PATH}")
 	message(STATUS "Set VULKAN_INCLUDE_DIR to ${VULKAN_INCLUDE_DIR}")
-else()
-	include(cmake/vulkan_paths.cmake)
 endif()
+
 include(cmake/glfw_paths.cmake)
 
-if(NOT EXISTS "${VULKAN_INCLUDE_DIR}" OR NOT EXISTS "${VULKAN_LIB_PATH}"
-	OR NOT EXISTS "${GLFW3_INCLUDE_DIR}" OR NOT EXISTS "${GLFW3_LIB_PATH}")
+if(NOT EXISTS "${VULKAN_INCLUDE_DIR}" OR NOT EXISTS "${GLFW3_INCLUDE_DIR}" OR NOT EXISTS "${GLFW3_LIB_PATH}")
 message(FATAL_ERROR "--- Some of the following do not exist: ---\n"
 		"VULKAN_INCLUDE_DIR=${VULKAN_INCLUDE_DIR}\n"
-		"VULKAN_LIB_PATH=${VULKAN_LIB_PATH}\n"
+		#"VULKAN_LIB_PATH=${VULKAN_LIB_PATH}\n"
 		"GLFW3_INCLUDE_DIR=${GLFW3_INCLUDE_DIR}\n"
 		"GLFW3_LIB_PATH=${GLFW3_LIB_PATH}\n"
 		"--- Try also: ---\n"
-		"LOOK_FOR_VULKAN=<Vulkan path> [HINT_FOR_VULKAN=[subdir[, ...]]]\n"
+		"VULKAN_SDK=<Vulkan SDK path>\n"
 		"LOOK_FOR_GLFW3=<GLFW3 path> [HINT_FOR_GLFW3=[subdir[, ...]]]\n")
 endif()
 
@@ -131,17 +126,24 @@ endif()
 include_directories(${VULKAN_INCLUDE_DIR})
 include_directories(${GLFW3_INCLUDE_DIR})
 
-get_filename_component(ABS_VULKAN_LIB_PATH ${VULKAN_LIB_PATH} REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
+#get_filename_component(ABS_VULKAN_LIB_PATH ${VULKAN_LIB_PATH} REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
 get_filename_component(ABS_GLFW3_LIB_PATH ${GLFW3_LIB_PATH} REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
-set(COMMON_LIBS ${ADDITIONAL_LIBS} ${ABS_VULKAN_LIB_PATH} ${ABS_GLFW3_LIB_PATH})
+set(COMMON_LIBS ${ADDITIONAL_LIBS} ${ABS_GLFW3_LIB_PATH})
 
 if ("${VULKAN_DRIVER}" STREQUAL "")
 	if (WIN32)
 		set(VULKAN_DRIVER "vulkan-1.dll")
 	else()
-		#get_filename_component(VULKAN_DRIVER ${VULKAN_LIB_PATH} NAME)
-		set(VULKAN_DRIVER ${ABS_VULKAN_LIB_PATH})
+		set(VULKAN_DRIVER "libvulkan.so")
 	endif()
+endif()
+
+if (VTF_SAFETY_CRITICAL)
+	add_definitions(-DVTF_SAFETY_CRITICAL=1)
+	message(STATUS "Define preprocessor constant: VTF_SAFETY_CRITICAL=1")
+else()
+	add_definitions(-DVTF_SAFETY_CRITICAL=0)
+	message(STATUS "Define preprocessor constant: VTF_SAFETY_CRITICAL=0")
 endif()
 
 include(getvkhver/getvkhver.cmake)

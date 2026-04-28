@@ -468,6 +468,8 @@ void commandBufferPushConstants (
 TriLogicInt performTest (add_ref<Canvas> cs, add_cref<std::string> assets,
 						 add_cref<TestConfig> config, add_cref<GlobalAppFlags> flags)
 {
+	add_cref<ZDeviceInterface> di = cs.device.getInterface();
+
 	ProgramCollection		programs(cs.device, assets);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, (config.float32 ? "fshader.frag" : "dshader.frag"));
@@ -541,10 +543,9 @@ TriLogicInt performTest (add_ref<Canvas> cs, add_cref<std::string> assets,
 			commandBufferBindPipeline(cmdBuffer, pipeline);
 			commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
 			commandBufferPushConstants(config, cmdBuffer, pipelineLayout, vui);
-			vkCmdSetViewport(*cmdBuffer, 0, 1, &swapchain.viewport);
-			vkCmdSetScissor(*cmdBuffer, 0, 1, &swapchain.scissor);
+			commandBufferSetViewportAndScissor(cmdBuffer, swapchain);
 			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer);
-				vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1, 0, 0);
+                VTF_CALL_CHECK(di.vkCmdDraw, *cmdBuffer, vertexInput.getVertexCount(0), 1u, 0u, 0u);
 			commandBufferEndRenderPass(rpbi);
 		commandBufferEnd(cmdBuffer);
 	};

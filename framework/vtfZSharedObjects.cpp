@@ -3,7 +3,6 @@
 
 namespace vtf
 {
-int k;
 
 #if VTF_AS_DLL
 static std::map<std::pair<uint32_t, uint32_t>, std::shared_ptr<VtfAppSharedObject>> m_vtfAppsharedObjects;
@@ -31,7 +30,7 @@ ZDevice getSharedDevice()
 		ZPhysicalDevice phys = getSharedPhysicalDevice();
 		ZInstance instance = phys.getParam<ZInstance>();
 
-		std::vector<ZDeviceQueueCreateInfo> qs(2, {});
+        std::vector<ZDeviceQueueCreateInfo> qs(2);
 
 		qs[0].queueFlags = VK_QUEUE_GRAPHICS_BIT;
 		qs[0].queueFamilyIndex = p->graphicsQueueFamilyIndex;
@@ -97,6 +96,7 @@ ZPhysicalDevice getSharedPhysicalDevice()
 #endif // VTF_AS_DLL
 }
 
+extern void onZInstanceDestroying(void_ptr pZInstance);
 ZInstance getSharedInstance()
 {
 #if VTF_AS_DLL
@@ -119,6 +119,7 @@ ZInstance getSharedInstance()
 			, ProgressRecorder()
 			, VkDebugUtilsMessengerEXT(VK_NULL_HANDLE)
 			, VkDebugReportCallbackEXT(VK_NULL_HANDLE)
+            , OnZDeletableDestroing(onZInstanceDestroying)
 		);
 
 		struct AInstance : public ZInstance {

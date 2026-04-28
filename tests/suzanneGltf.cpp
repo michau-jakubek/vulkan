@@ -313,6 +313,7 @@ TriLogicInt runTest(add_ref<Canvas> ctx, add_cref<Params> params)
     int drawTrigger = 1;
     ctx.events().setDefault(drawTrigger);
 
+    add_cref<ZDeviceInterface> di = ctx.device.getInterface();
     auto onCommandRecording = [&](add_ref<Canvas> cs, add_cref<Canvas::Swapchain> swapchain,
                                     ZCommandBuffer cmd, ZFramebuffer framebuffer)
     {
@@ -322,10 +323,9 @@ TriLogicInt runTest(add_ref<Canvas> ctx, add_cref<Params> params)
 		commandBufferBindPipeline(cmd, pipeline);
         commandBufferBindVertexBuffers(cmd, vi);
         commandBufferBindIndexBuffer(cmd, indexBuffer);
-        commandBufferSetScissor(cmd, swapchain);
-        commandBufferSetViewport(cmd, swapchain);
+        commandBufferSetViewportAndScissor(cmd, swapchain);
         auto rpbi = commandBufferBeginRenderPass(cmd, framebuffer);
-            vkCmdDrawIndexed(*cmd, indexCount, 1u, 0u, 0u, 0u);
+            VTF_CALL_CHECK(di.vkCmdDrawIndexed, *cmd, indexCount, 1u, 0u, 0, 0u);
 		commandBufferEndRenderPass(rpbi);
 		commandBufferEnd(cmd);
     };

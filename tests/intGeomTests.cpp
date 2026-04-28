@@ -286,6 +286,8 @@ createVertexAndIndexBuffers (add_ref<VertexInput> input, add_cref<Params> params
 
 TriLogicInt runTests (Canvas& cs, add_cref<Params> params)
 {
+	add_cref<ZDeviceInterface>	di(cs.device.getInterface());
+
 	VertexInput vertexInput(cs.device);
 	uint32_t indexCount = 0;
 	ZBuffer vertexBuffer, indexBuffer;
@@ -322,18 +324,18 @@ TriLogicInt runTests (Canvas& cs, add_cref<Params> params)
 		commandBufferBindPipeline(cmdBuffer, pipeline);
 		commandBufferBindVertexBuffers(cmdBuffer, vertexInput, { vertexBuffer });
 		commandBufferBindIndexBuffer(cmdBuffer, indexBuffer);
-		commandBufferSetScissor(cmdBuffer, sc);
-		commandBufferSetViewport(cmdBuffer, sc);
+		commandBufferSetViewportAndScissor(cmdBuffer, sc);
 		commandBufferResetQueryPool(cmdBuffer, queryPool);
 
 		auto qpbi = commandBufferBeginQuery(cmdBuffer, queryPool, 0);
 			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer);
-				vkCmdDrawIndexed(*cmdBuffer, indexCount, 1, 0, 0, 0);
+                VTF_CALL_CHECK(di.vkCmdDrawIndexed, *cmdBuffer, indexCount, 1u, 0u, 0, 0u);
 			commandBufferEndRenderPass(rpbi);
 		commandBufferEndQuery(qpbi);
 
-		vkCmdCopyQueryPoolResults(*cmdBuffer, *queryPool, 0, 1, *queryResults, 0, sizeof(uint64_t),
-									VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+		VTF_CALL_CHECK(di.vkCmdCopyQueryPoolResults,
+                                    *cmdBuffer, *queryPool, 0u, 1u, *queryResults, 0u, sizeof(uint64_t),
+                                    VkFlags(VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT));
 
 		commandBufferMakeImagePresentationReady(cmdBuffer, framebufferGetImage(framebuffer));
 		commandBufferEnd(cmdBuffer);

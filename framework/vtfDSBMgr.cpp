@@ -443,7 +443,9 @@ void DescriptorSetBindingManager::updateDescriptorSet (
 		}
 	}
 
-	vkUpdateDescriptorSets(*device,
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	VTF_CALL_CHECK(di.vkUpdateDescriptorSets,
+		*device,
 		1u,				// descriptorWriteCount
 		&writeParams,	// pDescriptorWrites
 		0u,				// copyCount,
@@ -488,12 +490,14 @@ void DescriptorSetBindingManager::updateDescriptorSet (
 		writeParams.descriptorType = *mutableVariant;
 	}
 
-	vkUpdateDescriptorSets(*device,
-						   1u,				// descriptorWriteCount
-						   &writeParams,	// pDescriptorWrites
-						   0u,				// copyCount,
-						   nullptr			// copyParams
-						   );
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	VTF_CALL_CHECK(di.vkUpdateDescriptorSets,
+						*device,
+						1u,				// descriptorWriteCount
+						&writeParams,	// pDescriptorWrites
+						0u,				// copyCount,
+						nullptr			// copyParams
+					);
 }
 void DescriptorSetBindingManager::updateDescriptorSet (ZDescriptorSet ds, uint32_t binding, ZSampler sampler)
 {
@@ -521,7 +525,9 @@ void DescriptorSetBindingManager::updateDescriptorSet (ZDescriptorSet ds, uint32
 		b.sampler = sampler;
 	}
 
-	vkUpdateDescriptorSets(*device,
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	VTF_CALL_CHECK(di.vkUpdateDescriptorSets,
+							*device,
 							1u,				// descriptorWriteCount
 							&writeParams,	// pDescriptorWrites
 							0u,				// copyCount,
@@ -561,7 +567,9 @@ void DescriptorSetBindingManager::updateDescriptorSet (
 		b.view = view;
 	}
 
-	vkUpdateDescriptorSets(*device,
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	VTF_CALL_CHECK(di.vkUpdateDescriptorSets,
+							*device,
 							1u,				// descriptorWriteCount
 							&writeParams,	// pDescriptorWrites
 							0u,				// copyCount,
@@ -678,8 +686,10 @@ ZPipelineLayout DescriptorSetBindingManager::createPipelineLayout_ (add_cref<ZPu
 	pipelineLayoutInfo.pushConstantRangeCount	= data_count(ranges);
 	pipelineLayoutInfo.pPushConstantRanges		= data_or_null(ranges);
 
-	VKASSERTMSG(vkCreatePipelineLayout(*device, &pipelineLayoutInfo, callbacks, pipelineLayout.setter()),
-										"failed to create pipeline layout!");
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	VKASSERTMSG(VTF_CALL_CHECK(di.vkCreatePipelineLayout,
+									*device, &pipelineLayoutInfo, callbacks, pipelineLayout.setter()),
+									"failed to create pipeline layout!");
 
 	pipelineLayout.getParamRef<bool>() = enableDescriptorBuffer;
 
@@ -951,7 +961,7 @@ ZBuffer DescriptorSetBindingManager::createDescriptorBuffer (ZDescriptorSetLayou
 	deviceGetPhysicalProperties2(device.getParam<ZPhysicalDevice>(), &dbp);
 
 	VkDeviceSize layoutSize = 0u;
-	di.vkGetDescriptorSetLayoutSizeEXT(*device, *dsLayout, &layoutSize);
+	VTF_CALL_CHECK(di.vkGetDescriptorSetLayoutSizeEXT, *device, *dsLayout, &layoutSize);
 	ASSERTMSG(layoutSize, "vkGetDescriptorSetLayoutSizeEXT - layout size must not be zero");
 	layoutSize = ROUNDUP(layoutSize, dbp.descriptorBufferOffsetAlignment);
 	//const uint32_t bindingSize = uint32_t(layoutSize);
@@ -966,7 +976,8 @@ ZBuffer DescriptorSetBindingManager::createDescriptorBuffer (ZDescriptorSetLayou
 
 	uint8_t* data = nullptr;
 	ZDeviceMemory memory = bufferGetMemory(descBuffer, 0);
-	VKASSERT(vkMapMemory(*device, *memory, 0, layoutSize, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&data)));
+	VKASSERT(VTF_CALL_CHECK(di.vkMapMemory,
+                            *device, *memory, 0u, layoutSize, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&data)));
 	std::fill_n(data, layoutSize, '\0');
 
 	for (add_cref<VkDescriptorSetLayoutBindingAndType> b : m_extbindings)
@@ -981,7 +992,7 @@ ZBuffer DescriptorSetBindingManager::createDescriptorBuffer (ZDescriptorSetLayou
 		size_t						writeDescriptorSize	= 0;
 
 		getInfo.type = b.descriptorType;
-		di.vkGetDescriptorSetLayoutBindingOffsetEXT(*device, *dsLayout, b.binding, &descriptorOffset);
+		VTF_CALL_CHECK(di.vkGetDescriptorSetLayoutBindingOffsetEXT, *device, *dsLayout, b.binding, &descriptorOffset);
 
 		if (descriptorTypeOnList(b.descriptorType, {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER}))
 		{
@@ -1060,10 +1071,10 @@ ZBuffer DescriptorSetBindingManager::createDescriptorBuffer (ZDescriptorSetLayou
 		}
 
 		ASSERTMSG((descriptorOffset + writeDescriptorSize) <= layoutSize, "");
-		di.vkGetDescriptorEXT(*device, &getInfo, writeDescriptorSize, (data + descriptorOffset));
+		VTF_CALL_CHECK(di.vkGetDescriptorEXT, *device, &getInfo, writeDescriptorSize, (data + descriptorOffset));
 	}
 
-	vkUnmapMemory(*device, *memory);
+	VTF_CALL_CHECK(di.vkUnmapMemory, *device, *memory);
 
 	return descBuffer;
 }

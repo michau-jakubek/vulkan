@@ -149,20 +149,13 @@ static const ZBufferUsageFlags ZBufferUsageUniformFlags(VK_BUFFER_USAGE_UNIFORM_
 static const ZMemoryPropertyFlags ZMemoryPropertyDeviceFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 static const ZMemoryPropertyFlags ZMemoryPropertyHostFlags(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-uint32_t		findQueueFamilyIndex (VkPhysicalDevice phDevice, VkQueueFlagBits bit);
-uint32_t		findSurfaceSupportedQueueFamilyIndex (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR);
-std::vector<uint32_t> findSurfaceSupportedQueueFamilyIndices (VkPhysicalDevice physDevice, ZSurfaceKHR surface);
-bool			hasFormatsAndModes (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR);
 std::string		vkResultToString (VkResult res);
 strings			enumerateInstanceLayers ();
 strings			enumerateInstanceExtensions (const char* layerName);
 strings			enumerateInstanceExtensions (const strings& layerNames = {});
-strings			enumerateDeviceExtensions (VkPhysicalDevice device, const strings& layerNames = {});
-uint32_t		enumeratePhysicalDevices (VkInstance instance, std::vector<VkPhysicalDevice>& devices);
-uint32_t		enumerateSwapchainImages (VkDevice device, VkSwapchainKHR swapchain, std::vector<VkImage>& images);
-std::ostream&	printPhysicalDevices (VkInstance instance, std::ostream& str);
-std::ostream&	printPhysicalDevice (VkPhysicalDevice device, std::ostream& str, uint32_t deviceIndex = INVALID_UINT32);
-std::ostream&   printPhysicalDevice (add_cref<VkPhysicalDeviceProperties> props, std::ostream& str, uint32_t deviceIndex = INVALID_UINT32);
+strings			enumerateDeviceExtensions (VkInstance, VkPhysicalDevice, add_cref<strings> layerNames = {});
+
+add_ref<std::ostream> printPhysicalDevice (add_cref<VkPhysicalDeviceProperties> props, add_ref<std::ostream> str, uint32_t deviceIndex = INVALID_UINT32);
 add_ref<std::ostream> printPhysicalDeviceFeatures (add_cref<VkPhysicalDeviceFeatures>, add_ref<std::ostream> str, uint32_t indent);
 
 uint32_t		computePixelByteSize (VkFormat format);

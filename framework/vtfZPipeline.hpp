@@ -199,11 +199,12 @@ ZPipeline createComputePipeline (
 
 ZPipelineLayout	pipelineGetLayout (ZPipeline pipeline);
 
-ZPipelineCache createPipelineCache(
+ZPipelineCache createPipelineCache (
 	ZDevice						device,
 	add_cref<std::string>		cacheFileName,
-	VkPipelineCacheCreateFlags	flags = VkPipelineCacheCreateFlags(0),
-	bool						forceReset = false);
+	bool						createEmpty = true,
+	bool						saveOnDestroy = true,
+	VkPipelineCacheCreateFlags	flags = VkPipelineCacheCreateFlags(0));
 
 } // namespace vtf
 

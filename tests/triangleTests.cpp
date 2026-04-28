@@ -103,6 +103,7 @@ TriLogicInt prepareTests (const TestRecord& record, add_ref<CommandLine> cmdLine
 
 TriLogicInt runTriangeSingleThread (Canvas& cs, const std::string& assets, bool infinityRepeat, bool vulkan12)
 {
+	add_cref<ZDeviceInterface>	di			(cs.device.getInterface());
 	LayoutManager				pl			(cs.device);
 	ProgramCollection			programs	(cs.device, assets);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
@@ -147,10 +148,9 @@ TriLogicInt runTriangeSingleThread (Canvas& cs, const std::string& assets, bool 
 		commandBufferBegin(cmdBuffer);
 			commandBufferBindPipeline(cmdBuffer, mainThreadPipeline);
 			commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
-			vkCmdSetViewport(*cmdBuffer, 0, 1, &swapchain.viewport);
-			vkCmdSetScissor(*cmdBuffer, 0, 1, &swapchain.scissor);
+			commandBufferSetViewportAndScissor(cmdBuffer, swapchain);
 			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer);
-				vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1, 0, 0);
+                VTF_CALL_CHECK(di.vkCmdDraw, *cmdBuffer, vertexInput.getVertexCount(0), 1u, 0u, 0u);
 			commandBufferEndRenderPass(rpbi);
 		commandBufferEnd(cmdBuffer);
 	};
@@ -167,6 +167,7 @@ TriLogicInt runTriangleMultipleThreads (Canvas& cs, const std::string& assets, c
 		return (1);
 	}
 
+	add_cref<ZDeviceInterface>	di(cs.device.getInterface());
 	ProgramCollection			programs(cs.device, assets);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
@@ -219,7 +220,7 @@ TriLogicInt runTriangleMultipleThreads (Canvas& cs, const std::string& assets, c
 			commandBufferBindPipeline(cmdBuffer, threadsData[threadID].pipeline);
 			commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
 			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, threadsData[threadID].framebuffer);
-				vkCmdDraw(*cmdBuffer, 3, 1, 0, 0);
+                VTF_CALL_CHECK(di.vkCmdDraw, *cmdBuffer, 3u, 1u, 0u, 0u);
 			commandBufferEndRenderPass(rpbi);
 		commandBufferEnd(cmdBuffer);
 

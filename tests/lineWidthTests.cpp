@@ -213,6 +213,7 @@ int verifyImage (ZCommandPool commandPool, ZImage image, add_cref<TestParams> pa
 
 TriLogicInt runTestSingleThread (add_ref<Canvas> cs, add_cref<std::string> assets, add_cref<TestParams> params)
 {
+	add_cref<ZDeviceInterface>	di(cs.device.getInterface());
 	ProgramCollection			programs(cs.device, assets);
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
@@ -279,13 +280,13 @@ TriLogicInt runTestSingleThread (add_ref<Canvas> cs, add_cref<std::string> asset
 			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, srcFramebuffer);
 
 				commandBufferBindPipeline(cmdBuffer, vertPipeline);
-				vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1, 0, 0);
+                VTF_CALL_CHECK(di.vkCmdDraw, *cmdBuffer, vertexInput.getVertexCount(0), 1u, 0u, 0u);
 
 				commandBufferNextSubpass(rpbi);
 
-				vkCmdSetLineWidth(*cmdBuffer, float(params.horizontalWidth));
+				VTF_CALL_CHECK(di.vkCmdSetLineWidth, *cmdBuffer, float(params.horizontalWidth));
 				commandBufferBindPipeline(cmdBuffer, horzPipeline);
-				vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(1), 1, 0, 0);
+                VTF_CALL_CHECK(di.vkCmdDraw, *cmdBuffer, vertexInput.getVertexCount(1), 1u, 0u, 0u);
 
 			commandBufferEndRenderPass(rpbi);
 

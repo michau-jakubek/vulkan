@@ -8,9 +8,10 @@ namespace vtf
 uint32_t findMemoryTypeIndex (ZDevice device, uint32_t memoryTypeBits, VkMemoryPropertyFlags properties)
 {
 	auto physicalDevice = device.getParam<ZPhysicalDevice>();
+	add_cref<ZInstanceInterface> ii = physicalDevice.getParam<ZInstance>().getInterface();
 
 	VkPhysicalDeviceMemoryProperties memProperties;
-	vkGetPhysicalDeviceMemoryProperties(*physicalDevice, &memProperties);
+	VTF_CALL_CHECK(ii.vkGetPhysicalDeviceMemoryProperties, *physicalDevice, &memProperties);
 
 	for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
 		if ((memoryTypeBits & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
@@ -27,10 +28,11 @@ std::vector<ZDeviceMemory> createMemory (ZDevice device, add_cref<VkMemoryRequir
 {
 	auto						callbacks		= device.getParam<VkAllocationCallbacksPtr>();
 	const uint32_t				chunkCount		= (uint32_t)(sparse ? ROUNDUP(desiredSize, requirements.alignment) / requirements.alignment : 1u);
-	const VkDeviceSize			allocationSize = sparse ? requirements.alignment : ROUNDUP(requirements.size, requirements.alignment);
+	const VkDeviceSize			allocationSize	= sparse ? requirements.alignment : ROUNDUP(requirements.size, requirements.alignment);
 	const uint32_t				memoryTypeIndex = findMemoryTypeIndex(device, requirements.memoryTypeBits, properties);
 	//add_ptr<void>				pNext			{ /* VkExternalMemoryBufferCreateInfo, VkExternalMemoryImageCreateInfo */ };
 	std::vector<ZDeviceMemory>	allocations		(chunkCount);
+	add_cref<ZDeviceInterface>	di				= device.getInterface();
 
 	VkExternalMemoryImageCreateInfo ici{};
 	VkExternalMemoryBufferCreateInfo ibi{};
@@ -50,7 +52,8 @@ std::vector<ZDeviceMemory> createMemory (ZDevice device, add_cref<VkMemoryRequir
 		allocInfo.allocationSize = allocationSize;
 		allocInfo.memoryTypeIndex = memoryTypeIndex;
 
-		VKASSERTMSG(vkAllocateMemory(*device, &allocInfo, callbacks, &memory), "failed to allocate buffer memory!");
+		VKASSERTMSG(VTF_CALL_CHECK(di.vkAllocateMemory,
+			*device, &allocInfo, callbacks, &memory), "failed to allocate buffer memory!");
 
 		ZDistType<SizeSecond, VkDeviceSize> chunkSize = allocationSize;
 		if (false == sparse)
@@ -66,16 +69,16 @@ std::vector<ZDeviceMemory> createMemory (ZDevice device, add_cref<VkMemoryRequir
 
 add_ptr<uint8_t> mapMemory (ZDeviceMemory memory)
 {
+	add_cref<ZDeviceInterface> di = memory.getParam<ZDevice>().getInterface();
 	const VkMemoryPropertyFlags	props = memory.getParam<VkMemoryPropertyFlags>();
 	ASSERTION(props & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
 	ZDevice			device	= memory.getParam<ZDevice>();
 	VkDeviceSize	size	= memory.getParam<VkDeviceSize>();
 	uint8_t**		pointer	= &memory.getParamRef<add_ptr<uint8_t>>();
-	if (vkMapMemory(*device, *memory, 0, size, (VkMemoryMapFlags)0, reinterpret_cast<void**>(pointer)) != VK_SUCCESS)
-	{
-		throw std::runtime_error("failed to map memory");
-	}
+	VKASSERTMSG(VTF_CALL_CHECK(di.vkMapMemory,
+        *device, *memory, 0u, size, (VkMemoryMapFlags)0, reinterpret_cast<void**>(pointer)),
+		"Failed to map memory");
 
 	return memory.getParam<add_ptr<uint8_t>>();
 }
@@ -83,26 +86,29 @@ add_ptr<uint8_t> mapMemory (ZDeviceMemory memory)
 void unmapMemory (ZDeviceMemory memory)
 {
 	ZDevice	device = memory.getParam<ZDevice>();
-	vkUnmapMemory(*device, *memory);
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	VTF_CALL_CHECK(di.vkUnmapMemory, *device, *memory);
 	memory.getParamRef<add_ptr<uint8_t>>() = nullptr;
 }
 
 void flushMemory (ZDeviceMemory memory)
 {
-	ZDevice			device	= memory.getParam<ZDevice>();
-	VkDeviceSize	size	= memory.getParam<VkDeviceSize>();
+	ZDevice						device	= memory.getParam<ZDevice>();
+	add_cref<ZDeviceInterface>	di		= device.getInterface();
+	VkDeviceSize				size	= memory.getParam<VkDeviceSize>();
 
 	VkStruct<VkMappedMemoryRange>	range;
 	range.memory	= *memory;
 	range.offset	= 0u;
-	range.size	= size;
+	range.size		= size;
 
-	vkFlushMappedMemoryRanges(*device, 1u, &range);
+	VTF_CALL_CHECK(di.vkFlushMappedMemoryRanges, *device, 1u, &range);
 }
 
 void invalidateMemory (ZDeviceMemory memory)
 {
 	ZDevice			device	= memory.getParam<ZDevice>();
+	add_cref<ZDeviceInterface> di = device.getInterface();
 	VkDeviceSize	size	= memory.getParam<VkDeviceSize>();
 
 	VkStruct<VkMappedMemoryRange>	range;
@@ -110,7 +116,7 @@ void invalidateMemory (ZDeviceMemory memory)
 	range.offset	= 0u;
 	range.size		= size;
 
-	vkInvalidateMappedMemoryRanges(*device, 1u, &range);
+	VTF_CALL_CHECK(di.vkInvalidateMappedMemoryRanges, *device, 1u, &range);
 }
 
 Alloc::Alloc (add_cref<std::vector<ZDeviceMemory>> allocs)

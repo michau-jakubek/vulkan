@@ -58,7 +58,8 @@ ZCommandPool commandBufferGetCommandPool (ZCommandBuffer commandBuffer)
 
 void commandBufferReset (ZCommandBuffer commandBuffer)
 {
-	vkResetCommandBuffer(*commandBuffer, VkCommandBufferResetFlagBits(0));
+	add_cref<ZDeviceInterface> di = commandBuffer.getParam<ZDevice>().getInterface();
+	VTF_CALL_CHECK(di.vkResetCommandBuffer, *commandBuffer, VkCommandBufferResetFlagBits(0));
 }
 
 void commandBufferEnd (ZCommandBuffer commandBuffer)
@@ -114,7 +115,8 @@ void commandBufferExecuteCommands (ZCommandBuffer primary, std::initializer_list
 			"\"secondaryCommands\" elements must be secondary command buffers");
 	}
 
-	vkCmdExecuteCommands(*primary, static_cast<uint32_t>(secondaryCommands.size()), commands);
+	add_cref<ZDeviceInterface> di = primary.getParam<ZDevice>().getInterface();
+	VTF_CALL_CHECK(di.vkCmdExecuteCommands, *primary, static_cast<uint32_t>(secondaryCommands.size()), commands);
 }
 
 VkResult commandBufferSubmitAndWait (ZCommandBuffer commandBuffer, ZFence hintFence, uint64_t timeout, bool assertWaitResult)
@@ -190,7 +192,8 @@ void commandBufferBindVertexBuffers (ZCommandBuffer cmd, add_cref<VertexInput> i
 			vertexOffsets[j] = *i;
 		else break;
 	}
-	vkCmdBindVertexBuffers(*cmd, 0, static_cast<uint32_t>(count), vertexBuffers.data(), vertexOffsets.data());
+	add_cref<ZDeviceInterface> di = cmd.getParam<ZDevice>().getInterface();
+    VTF_CALL_CHECK(di.vkCmdBindVertexBuffers, *cmd, 0u, static_cast<uint32_t>(count), vertexBuffers.data(), vertexOffsets.data());
 }
 
 void commandBufferSetVertexInputEXT (ZCommandBuffer cmd, add_cref<VertexInput> input)
@@ -200,7 +203,8 @@ void commandBufferSetVertexInputEXT (ZCommandBuffer cmd, add_cref<VertexInput> i
 	if (di.vkCmdSetVertexInputEXT)
 	{
 		ZVertexInput2EXT ext(input);
-		di.vkCmdSetVertexInputEXT(*cmd,
+		VTF_CALL_CHECK(di.vkCmdSetVertexInputEXT,
+			*cmd,
 			data_count(ext.bindingDescriptions),
 			data_or_null(ext.bindingDescriptions),
 			data_count(ext.attributeDescriptions),
@@ -219,7 +223,8 @@ void commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkDeviceS
 	else if (type == type_index_with_default::make<uint16_t>())
 		indexType = VK_INDEX_TYPE_UINT16;
 	else { ASSERTFALSE("Unknown index type"); }
-	vkCmdBindIndexBuffer(*cmd, *buffer, offset, indexType);
+	add_cref<ZDeviceInterface> di = cmd.getParam<ZDevice>().getInterface();
+	VTF_CALL_CHECK(di.vkCmdBindIndexBuffer, *cmd, *buffer, offset, indexType);
 }
 
 void commandBufferBindDescriptorBuffers (
@@ -343,6 +348,7 @@ static void commandBufferPushConstants (
 	add_cptr<add_cptr<void>>	pValues,
 	add_cref<std::vector<VkPushConstantRange>>	ranges)
 {
+	add_cref<ZDeviceInterface> di = cmd.getParam<ZDevice>().getInterface();
 	if (ranges.size() == count)
 	{
 		for (uint32_t i = 0u; i < data_count(ranges); ++i)
@@ -369,7 +375,7 @@ static void commandBufferPushConstants (
 				break;
 			}
 #endif
-			vkCmdPushConstants(*cmd, *layout, r.stageFlags, r.offset, r.size, pValues[i]);
+			VTF_CALL_CHECK(di.vkCmdPushConstants, *cmd, *layout, r.stageFlags, r.offset, r.size, pValues[i]);
 		}
 	}
 }
@@ -407,7 +413,8 @@ void commandBufferDispatch (ZCommandBuffer cmd, const UVec3& workGroupCount)
 			&& (workGroupCount.y() <= props.limits.maxComputeWorkGroupCount[1])
 			&& (workGroupCount.z() <= props.limits.maxComputeWorkGroupCount[2]),
 			"Too much worgroup count passed to dispatch function");
-	vkCmdDispatch(*cmd, workGroupCount.x(), workGroupCount.y(), workGroupCount.z());
+	add_cref<ZDeviceInterface> di = cmd.getParam<ZDevice>().getInterface();
+	VTF_CALL_CHECK(di.vkCmdDispatch, *cmd, workGroupCount.x(), workGroupCount.y(), workGroupCount.z());
 }
 
 extern uint32_t frameBufferTransitAttachments (ZRenderPass, ZFramebuffer, uint32_t subpass, std::optional<bool> initialLayout = {});
@@ -638,14 +645,11 @@ void commandBufferSetRenderingAttachmentLocations (
 	}
 }
 
-void commandBufferSetViewport (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain)
+void commandBufferSetViewportAndScissor (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain)
 {
-	vkCmdSetViewport(*cmd, 0u, 1u, &swapchain.viewport);
-}
-
-void commandBufferSetScissor (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain)
-{
-	vkCmdSetScissor(*cmd, 0u, 1u, &swapchain.scissor);
+	add_cref<ZDeviceInterface> di = cmd.getParam<ZDevice>().getInterface();
+	VTF_CALL_CHECK(di.vkCmdSetViewport, *cmd, 0u, 1u, &swapchain.viewport);
+	VTF_CALL_CHECK(di.vkCmdSetScissor, *cmd, 0u, 1u, &swapchain.scissor);
 }
 
 void commandBufferSetDefaultDynamicStates (
@@ -768,7 +772,8 @@ void commandBufferDrawIndirect (ZCommandBuffer cmd, ZBuffer buffer)
 	ASSERTMSG((buffer.getParamRef<VkBufferCreateInfo>().usage & VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT),
 			  "Buffer must created with usage bit VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT set");
 	const VkDeviceSize size	= buffer.getParam<VkDeviceSize>();
-	vkCmdDrawIndirect(*cmd, *buffer, 0u, uint32_t(size / sizeof(VkDrawIndirectCommand)),
+	add_cref<ZDeviceInterface> di = cmd.getParam<ZDevice>().getInterface();
+	VTF_CALL_CHECK(di.vkCmdDrawIndirect, *cmd, *buffer, 0u, uint32_t(size / sizeof(VkDrawIndirectCommand)),
 										uint32_t(sizeof(VkDrawIndirectCommand)));
 }
 
@@ -781,25 +786,29 @@ void commandBufferDrawIndexedIndirect (ZCommandBuffer cmd, ZBuffer buffer)
 	ASSERTMSG((buffer.getParamRef<VkBufferCreateInfo>().usage & VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT),
 			  "Buffer must created with usage bit VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT set");
 	const VkDeviceSize size	= buffer.getParam<VkDeviceSize>();
-	vkCmdDrawIndexedIndirect(*cmd, *buffer, 0u, uint32_t(size / sizeof(VkDrawIndexedIndirectCommand)),
+	add_cref<ZDeviceInterface> di = cmd.getParam<ZDevice>().getInterface();
+	VTF_CALL_CHECK(di.vkCmdDrawIndexedIndirect, *cmd, *buffer, 0u, uint32_t(size / sizeof(VkDrawIndexedIndirectCommand)),
 												uint32_t(sizeof(VkDrawIndexedIndirectCommand)));
 }
 
 void commandBufferResetQueryPool (ZCommandBuffer cmd, ZQueryPool queryPool)
 {
 	const uint32_t queryCount = queryPool.getParam<uint32_t>();
-	vkCmdResetQueryPool(*cmd, *queryPool, 0u, queryCount);
+	add_cref<ZDeviceInterface> di = cmd.getParam<ZDevice>().getInterface();
+	VTF_CALL_CHECK(di.vkCmdResetQueryPool, *cmd, *queryPool, 0u, queryCount);
 }
 
 ZQueryPoolBeginInfo commandBufferBeginQuery (ZCommandBuffer cmd, ZQueryPool pool, uint32_t query, VkQueryControlFlags flags)
 {
-	vkCmdBeginQuery(*cmd, *pool, query, flags);
+	add_cref<ZDeviceInterface> di = cmd.getParam<ZDevice>().getInterface();
+	VTF_CALL_CHECK(di.vkCmdBeginQuery, *cmd, *pool, query, flags);
 	return { cmd, pool, query };
 }
 
 void commandBufferEndQuery (add_cref<ZQueryPoolBeginInfo> queryPoolBeginInfo)
 {
-	vkCmdEndQuery(*queryPoolBeginInfo.cmd, *queryPoolBeginInfo.pool, queryPoolBeginInfo.query);
+	add_cref<ZDeviceInterface> di = queryPoolBeginInfo.cmd.getParam<ZDevice>().getInterface();
+	VTF_CALL_CHECK(di.vkCmdEndQuery, *queryPoolBeginInfo.cmd, *queryPoolBeginInfo.pool, queryPoolBeginInfo.query);
 }
 
 void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image, add_cref<VkClearColorValue> clearValue, VkImageLayout finalLayout)
@@ -817,7 +826,8 @@ void commandBufferClearColorImage (ZCommandBuffer cmd, ZImage image,
 	ZImageMemoryBarrier verify(image, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_NONE,
 								finalLayout, range);
 	commandBufferPipelineBarriers(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, prepare);
-	vkCmdClearColorImage(*cmd, *image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1u, &range);
+	add_cref<ZDeviceInterface> di = cmd.getParam<ZDevice>().getInterface();
+	VTF_CALL_CHECK(di.vkCmdClearColorImage, *cmd, *image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1u, &range);
 	commandBufferPipelineBarriers(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, verify);
 }
 
@@ -863,10 +873,11 @@ void commandBufferBlitImage (ZCommandBuffer cmd, ZImage srcImage, ZImage dstImag
 	blitRegion.dstOffsets[1].x = make_signed(dstImageExtent.width);
 	blitRegion.dstOffsets[1].y = make_signed(dstImageExtent.height);
 
-	vkCmdBlitImage(*cmd,
+	add_cref<ZDeviceInterface> di = cmd.getParam<ZDevice>().getInterface();
+	VTF_CALL_CHECK(di.vkCmdBlitImage, *cmd,
 				   *srcImage, imageGetLayout(srcImage),
 				   *dstImage, imageGetLayout(dstImage),
-				   1, &blitRegion,
+                   1u, &blitRegion,
 				   filter);
 }
 

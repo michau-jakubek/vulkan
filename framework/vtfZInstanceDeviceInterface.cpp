@@ -12,12 +12,6 @@ static ZCommonInterface commonInterface;
 
 ZInstanceSingleton::~ZInstanceSingleton ()
 {
-	add_ptr<ZInstance> me = static_cast<add_ptr<ZInstance>>(this);
-	if (me->use_count() == 1 && me->has_handle())
-	{
-		destroyDebugMessenger(*me);
-		destroyDebugReport(*me);
-	}
 }
 
 const ZInstanceInterface& ZInstanceSingleton::initInterface (VkInstance instance)

@@ -88,6 +88,8 @@ set(tests_files
 	deviceCrashTests.hpp
 	suzanneGltf.cpp
 	suzanneGltf.hpp
+	smileAITests.cpp
+	smileAITests.hpp
     )
 
 if(ENABLE_DAEMON_TEST)

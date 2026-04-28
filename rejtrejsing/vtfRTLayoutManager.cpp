@@ -30,6 +30,7 @@ bool RTLayoutManager::isDescryptorTypeSupported(VkDescriptorType type) const
 
 void RTLayoutManager::updateDescriptorSet (ZDescriptorSet descriptorSet)
 {
+	add_cref<ZDeviceInterface> di = device.getInterface();
 	DescriptorSetBindingManager::updateDescriptorSet(descriptorSet);
 
 	for (add_cref<ExtBinding> b : m_extbindings)
@@ -52,7 +53,8 @@ void RTLayoutManager::updateDescriptorSet (ZDescriptorSet descriptorSet)
 		write.descriptorType = b.descriptorType;
 		write.pNext = &asInfo;
 
-		vkUpdateDescriptorSets(*device,
+		VTF_CALL_CHECK(di.vkUpdateDescriptorSets,
+			*device,
 			1u,		// descriptorWriteCount
 			&write,	// pDescriptorWrites
 			0u,		// copyCount,

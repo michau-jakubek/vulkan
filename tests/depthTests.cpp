@@ -286,8 +286,7 @@ TriLogicInt runTests(add_ref<Canvas> canvas, add_cref<Params> params)
 		commandBufferBegin(cmd);
 		commandBufferBindVertexBuffers(cmd, vertexInput);
 		commandBufferPushConstants(cmd, pipelineLayout, pc);
-		di.vkCmdSetViewport(*cmd, 0, 1, &sc.viewport);
-		di.vkCmdSetScissor(*cmd, 0, 1, &sc.scissor);
+		commandBufferSetViewportAndScissor(cmd, sc);
 			auto rpbi = commandBufferBeginRenderPass(cmd, fb);
 				commandBufferBindPipeline(cmd, pipeline0);
 				di.vkCmdDraw(*cmd, vertexInput.getVertexCount(0), 1, 0, 0);

@@ -10,9 +10,8 @@ struct DriverInitializer
     DriverInitializer ();
     ~DriverInitializer ();
 
-    void operator ()(const std::string& customVtfDriver, uint32_t verboseMode);
+    void operator ()(const std::string& customVkDriver, uint32_t verboseMode);
 
-    static auto isCustomDriver() -> bool;
     static auto getPlatformDriverFileName(bool& success) -> std::string;
     static auto getPlatformDriverProc(const char* procName) -> std::add_pointer_t<void>;
 
@@ -21,16 +20,16 @@ struct DriverInitializer
     {
         return reinterpret_cast<Signature>(getPlatformDriverProc(procName));
     }
-    template<class Signature, class DriverProc, class Device>
-    static Signature getPlatformDeviceProc(Signature, DriverProc dp, Device device, const char* procName)
+    template<class Signature, class GetDeviceProcAddr, class Device>
+    static Signature getPlatformDeviceProc(Signature, GetDeviceProcAddr dpa, Device device, const char* procName)
     {
-        auto pfnVkGetDeviceProcAddr = getPlatformDriverProc(dp, "vkGetDeviceProcAddr");
+        auto pfnVkGetDeviceProcAddr = getPlatformDriverProc(dpa, "vkGetDeviceProcAddr");
         return (Signature)((*pfnVkGetDeviceProcAddr)(device, procName));
     }
-    template<class Signature, class DriverProc, class Instance>
-    static Signature getPlatformInstanceProc(Signature, DriverProc dp, Instance instance, const char* procName)
+    template<class Signature, class GetInstanceProcAddr, class Instance>
+    static Signature getPlatformInstanceProc(Signature, GetInstanceProcAddr ipa, Instance instance, const char* procName)
     {
-        auto pfnVkGetInstanceProcAddr = getPlatformDriverProc(dp, "vkGetInstanceProcAddr");
+        auto pfnVkGetInstanceProcAddr = getPlatformDriverProc(ipa, "vkGetInstanceProcAddr");
         return (Signature)((*pfnVkGetInstanceProcAddr)(instance, procName));
     }
 

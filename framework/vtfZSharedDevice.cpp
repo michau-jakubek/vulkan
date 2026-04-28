@@ -54,9 +54,12 @@ SharedDevice::SharedDevice (add_cptr<char> name, bool graphical)
 
 SharedDevice::~SharedDevice()
 {
+    /*
+     * TODO Remove entire SharedDevice
 	ZInstance i = getParam<ZPhysicalDevice>().getParam<ZInstance>();
 	destroyDebugMessenger(i, m_callbacks, m_debugMessenger);
 	destroyDebugReport(i, m_callbacks, m_debugReport);
+    */
 }
 
 } // namespace vtf

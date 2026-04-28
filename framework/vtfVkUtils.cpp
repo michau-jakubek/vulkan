@@ -1,6 +1,7 @@
 #include "vtfVkUtils.hpp"
 #include "vtfZUtils.hpp"
 #include "vtfFormatUtils.hpp"
+#include "vtfPlatformDriver.hpp"
 #include "vtfVulkanDriver.hpp"
 #include "vulkan/vulkan_to_string.hpp"
 
@@ -43,62 +44,6 @@ std::ostream& operator<< (std::ostream& str, add_cref<VkPrimitiveTopology> topo)
 std::ostream& operator<< (std::ostream& str, add_cref<VkShaderStageFlagBits> stage)
 {
 	return str << vk::to_string(static_cast<vk::ShaderStageFlagBits>(stage));
-}
-
-uint32_t findQueueFamilyIndex (VkPhysicalDevice phDevice, VkQueueFlagBits bit)
-{
-	uint32_t queueFamilyCount = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(phDevice, &queueFamilyCount, nullptr);
-
-	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-	vkGetPhysicalDeviceQueueFamilyProperties(phDevice, &queueFamilyCount, queueFamilies.data());
-
-	for (uint32_t index = 0; index < queueFamilyCount; ++index)
-	{
-		if (bit & queueFamilies[index].queueFlags)
-			return index;
-	}
-
-	return INVALID_UINT32;
-}
-
-uint32_t findSurfaceSupportedQueueFamilyIndex (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR)
-{
-	uint32_t queueFamilyCount = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(physDevice, &queueFamilyCount, nullptr);
-	for (uint32_t index = 0; index < queueFamilyCount; ++index)
-	{
-		VkBool32 presentSupport = false;
-		VKASSERT(vkGetPhysicalDeviceSurfaceSupportKHR(physDevice, index, surfaceKHR, &presentSupport));
-		if (presentSupport) return index;
-	}
-	return INVALID_UINT32;
-}
-
-std::vector<uint32_t> findSurfaceSupportedQueueFamilyIndices (VkPhysicalDevice physDevice, ZSurfaceKHR surface)
-{
-	std::vector<uint32_t> indices;
-	if (surface.has_handle())
-	{
-		uint32_t queueFamilyCount = 0;
-		vkGetPhysicalDeviceQueueFamilyProperties(physDevice, &queueFamilyCount, nullptr);
-		for (uint32_t index = 0; index < queueFamilyCount; ++index)
-		{
-			VkBool32 presentSupport = false;
-			VKASSERT(vkGetPhysicalDeviceSurfaceSupportKHR(physDevice, index, *surface, &presentSupport));
-			if (presentSupport) indices.emplace_back(index);
-		}
-	}
-	return indices;
-}
-
-bool hasFormatsAndModes (VkPhysicalDevice physDevice, VkSurfaceKHR surfaceKHR)
-{
-	uint32_t formatCount		= 0;
-	uint32_t presentModeCount	= 0;
-	VKASSERT(vkGetPhysicalDeviceSurfaceFormatsKHR(physDevice, surfaceKHR, &formatCount, nullptr));
-	VKASSERT(vkGetPhysicalDeviceSurfacePresentModesKHR(physDevice, surfaceKHR, &presentModeCount, nullptr));
-	return (formatCount != 0) && (presentModeCount != 0);
 }
 
 strings enumerateInstanceLayers ()
@@ -156,18 +101,21 @@ strings enumerateInstanceExtensions (const strings& layerNames)
 	return extensions;
 }
 
-static strings enumerateDeviceExtensions (VkPhysicalDevice device, const char* layerName)
+static strings enumerateDeviceExtensions (VkInstance instance, VkPhysicalDevice device, const char* layerName)
 {
 	strings		extensions;
 	uint32_t	extensionCount = 0;
 
-	VKASSERT(vkEnumerateDeviceExtensionProperties(device, layerName, &extensionCount, nullptr));
+	auto vkEnumerateDeviceExtensionProperties = DriverInitializer::getPlatformInstanceProc(
+		PFN_vkEnumerateDeviceExtensionProperties(), PFN_vkGetInstanceProcAddr(),
+			instance, "vkEnumerateDeviceExtensionProperties");
+	VKASSERT(VTF_CALL_CHECK(vkEnumerateDeviceExtensionProperties, device, layerName, &extensionCount, nullptr));
 
 	if (extensionCount)
 	{
 		extensions.resize(extensionCount);
 		std::vector<VkExtensionProperties> props(extensionCount);
-		VKASSERT(vkEnumerateDeviceExtensionProperties(device, layerName, &extensionCount, props.data()));
+		VKASSERT(VTF_CALL_CHECK(vkEnumerateDeviceExtensionProperties, device, layerName, &extensionCount, props.data()));
 		std::transform(props.begin(), props.end(), extensions.begin(),
 					   [](VkExtensionProperties& p){return std::string(p.extensionName);});
 	}
@@ -175,32 +123,14 @@ static strings enumerateDeviceExtensions (VkPhysicalDevice device, const char* l
 	return extensions;
 }
 
-strings enumerateDeviceExtensions (VkPhysicalDevice device, const strings& layerNames)
+strings enumerateDeviceExtensions (VkInstance instance, VkPhysicalDevice device, add_cref<strings> layerNames)
 {
-	strings extensions = enumerateDeviceExtensions(device, nullptr);
+	strings extensions = enumerateDeviceExtensions(instance, device, nullptr);
 	for (const auto& layerName : layerNames)
 	{
-		mergeStringsDistinct(extensions, enumerateDeviceExtensions(device, layerName.c_str()));
+		mergeStringsDistinct(extensions, enumerateDeviceExtensions(instance, device, layerName.c_str()));
 	}
 	return extensions;
-}
-
-uint32_t enumeratePhysicalDevices (VkInstance instance, std::vector<VkPhysicalDevice>& devices)
-{
-	uint32_t deviceCount = 0;
-	VKASSERT(vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr));
-	devices.resize(deviceCount, VkPhysicalDevice(0));
-	VKASSERT(vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()));
-	return deviceCount;
-}
-
-uint32_t enumerateSwapchainImages (VkDevice device, VkSwapchainKHR swapchain, std::vector<VkImage>& images)
-{
-	uint32_t imageCount = 0;
-	VKASSERT(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr));
-	images.resize(imageCount);
-	VKASSERT(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, images.data()));
-	return imageCount;
 }
 
 add_ref<std::ostream> printPhysicalDeviceFeatures (
@@ -267,9 +197,9 @@ add_ref<std::ostream> printPhysicalDeviceFeatures (
 	return str;
 }
 
-std::ostream& printPhysicalDevice (
+add_ref<std::ostream> printPhysicalDevice (
     add_cref<VkPhysicalDeviceProperties> props,
-    std::ostream&                        str,
+    add_ref<std::ostream>                str,
     uint32_t                             deviceIndex)
 {
     const Version apiVersion = Version::fromUint(props.apiVersion);
@@ -305,39 +235,6 @@ std::ostream& printPhysicalDevice (
 	str << ", Driver version: (" << driverMajorVersion << ", "
 		<< driverMinorVersion << ", " << driverPatchVersion << ")\n\n";
     return str;
-}
-
-std::ostream& printPhysicalDevice (
-    VkPhysicalDevice    device,
-    std::ostream&       str,
-    uint32_t            deviceIndex)
-{
-    VkPhysicalDeviceProperties p;
-    vkGetPhysicalDeviceProperties(device, &p);
-    printPhysicalDevice(p, str, deviceIndex);
-    return str;
-}
-
-std::ostream& printPhysicalDevices (
-    VkInstance      instance,
-    std::ostream&   str)
-{
-	std::vector<VkPhysicalDevice> devices;
-	enumeratePhysicalDevices(instance, devices);
-
-	const uint32_t deviceCount = static_cast<uint32_t>(devices.size());
-
-	if (deviceCount == 0) {
-		str << "Unable to find any device with Vulkan support!" << std::endl;
-	}
-	else {
-		str << "Found " << deviceCount << " physicalDevices" << std::endl;
-		for (uint32_t i = 0; i < deviceCount; ++i)
-		{
-            printPhysicalDevice(devices[i], str, i);
-		}
-	}
-	return str;
 }
 
 uint32_t computeMipLevelCount (uint32_t width, uint32_t height)

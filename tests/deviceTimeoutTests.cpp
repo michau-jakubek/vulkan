@@ -159,6 +159,8 @@ int runTest (add_ref<VulkanContext> ctx, add_cref<Params> params,
 {
 	UNREF(exeCount);
 
+	add_cref<ZDeviceInterface>	di		= ctx.device.getInterface();
+
 	const time_point	t0				= std::chrono::steady_clock::now();
 	LayoutManager		lm				(ctx.device);
 	Programs			programs		(ctx.device, params.assets);
@@ -241,7 +243,7 @@ int runTest (add_ref<VulkanContext> ctx, add_cref<Params> params,
 
 	VkResult secondResult = params.deviceLost
 		? commandBufferSubmitAndWait(cmd, devLostFence, INVALID_UINT64, false)
-		: vkQueueWaitIdle(*ctx.computeQueue);
+		: VTF_CALL_CHECK(di.vkQueueWaitIdle, *ctx.computeQueue);
 	const time_point t4 = std::chrono::steady_clock::now();
 	std::cout << "To put the command buffer into idle state took "
 		<< std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3).count()

@@ -437,12 +437,15 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 													? *settings.m_pipelineCache
 													: VkPipelineCache(VK_NULL_HANDLE);
 	ZDevice						device			= settings.m_layout.getParam<ZDevice>();
+	add_cref<ZDeviceInterface>	di				= device.getInterface();
 	auto						callbacks		= settings.m_layout.getParam<VkAllocationCallbacksPtr>();
-	const VkResult				createStatus	= vkCreateGraphicsPipelines	(*device,
-																			 pipelineCache,
-																			 1u, &info,
-																			 callbacks,
-																			 &pipelineHandle);
+	const VkResult				createStatus	=
+		VTF_CALL_CHECK(di.vkCreateGraphicsPipelines,
+							*device,
+							pipelineCache,
+							1u, &info,
+							callbacks,
+							&pipelineHandle);
 	dumpPipeline(pipelineHandle, info, std::cout);
 
 	VKASSERT(createStatus);
@@ -735,6 +738,7 @@ ZPipeline createComputePipelineImpl (
 	add_ref<ZSpecializationInfo>	info)
 {
 	ZDevice									aDevice		= layout.getParam<ZDevice>();
+	add_cref<ZDeviceInterface>				di			= aDevice.getInterface();
 	const VkAllocationCallbacksPtr			callbacks	= aDevice.getParam<VkAllocationCallbacksPtr>();
 	ZPhysicalDevice							aPhysDevice	= aDevice.getParam<ZPhysicalDevice>();
 
@@ -774,7 +778,7 @@ ZPipeline createComputePipelineImpl (
 								 VK_PIPELINE_BIND_POINT_COMPUTE, ci.flags,
 								 {/*ray-tracing shaders*/}, {/*uint32_t:ray-tracing pipeline shader group order*/},
 								 {/*uint32_t:ray-tracing pipeline shader group count*/});
-	VKASSERTMSG(vkCreateComputePipelines(*aDevice, cache, 1u, &ci, callbacks,
+	VKASSERTMSG(VTF_CALL_CHECK(di.vkCreateComputePipelines, *aDevice, cache, 1u, &ci, callbacks,
 				computePipeline.setter("vkCreateComputePipelines")), "Unable to create compute pipeline");
 
 	return computePipeline;
@@ -791,14 +795,17 @@ ZPipelineLayout	pipelineGetLayout (ZPipeline pipeline)
 	return pipeline.getParam<ZPipelineLayout>();
 }
 
-ZPipelineCache createPipelineCache (ZDevice device, add_cref<std::string> cacheFileName,
-									VkPipelineCacheCreateFlags flags, bool forceReset)
+ZPipelineCache createPipelineCache (
+	ZDevice device,
+	add_cref<std::string> cacheFileName,
+	bool createEmpty, bool saveOnDestroy,
+	VkPipelineCacheCreateFlags flags)
 {
 	VkPipelineCacheCreateInfo pcci{};
 	pcci.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
 	pcci.flags = flags;
 
-	if (forceReset)
+	if (createEmpty)
 	{
 		pcci.initialDataSize = 0u;
 		pcci.pInitialData = nullptr;
@@ -822,8 +829,9 @@ ZPipelineCache createPipelineCache (ZDevice device, add_cref<std::string> cacheF
 	}
 
 	auto callbacks = device.getParam<VkAllocationCallbacksPtr>();
-	ZPipelineCache	cache(VK_NULL_HANDLE, device, callbacks, cacheFileName);
-	VKASSERT(vkCreatePipelineCache(*device, &pcci, callbacks, cache.setter()));
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	ZPipelineCache	cache(VK_NULL_HANDLE, device, callbacks, cacheFileName, saveOnDestroy);
+	VKASSERT(VTF_CALL_CHECK(di.vkCreatePipelineCache, *device, &pcci, callbacks, cache.setter()));
 
 	return cache;
 }

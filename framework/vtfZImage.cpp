@@ -56,12 +56,12 @@ ZSampler createSampler (
 	const VkAllocationCallbacksPtr	callbacks	= device.getParam<VkAllocationCallbacksPtr>();
 	VkFilter						filter		= VK_FILTER_NEAREST;
 	VkSamplerMipmapMode				mipMapMode	= VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	add_cref<ZDeviceInterface>		di			= device.getInterface();
 
 	if (filterLinearORnearest)
 	{
-		VkFormatProperties				formatProperties;
+		const VkFormatProperties formatProperties = formatGetProperties(physDevice, format);
 		// test if image format supports linear blitting
-		vkGetPhysicalDeviceFormatProperties(*physDevice, format, &formatProperties);
 		if (formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)
 		{
 			filter		= VK_FILTER_LINEAR;
@@ -109,7 +109,8 @@ ZSampler createSampler (
 	samplerInfo.unnormalizedCoordinates	= normalized ? VK_FALSE : VK_TRUE;
 
 	ZSampler sampler(VK_NULL_HANDLE, device, callbacks, samplerInfo);
-	VKASSERTMSG(vkCreateSampler(*device, &samplerInfo, callbacks, sampler.setter()), "Failed to create sampler");
+	VKASSERTMSG(VTF_CALL_CHECK(di.vkCreateSampler,
+		*device, &samplerInfo, callbacks, sampler.setter()), "Failed to create sampler");
 
 	return sampler;
 }
@@ -142,7 +143,11 @@ ZImage createImage (ZDevice device, VkFormat format, VkImageType type, uint32_t 
 	const VkImageTiling			tiling	= VK_IMAGE_TILING_OPTIMAL;
 	const VkImageCreateFlags	flags	= (layers == 6u) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : VkImageCreateFlagBits(0);
 	VkImageFormatProperties		props	{};
-	ZPhysicalDevice phys = device.getParam<ZPhysicalDevice>();
+
+	ZPhysicalDevice				phys = device.getParam<ZPhysicalDevice>();
+	add_cref<ZInstanceInterface> ii = phys.getParam<ZInstance>().getInterface();
+	add_cref<ZDeviceInterface>	di = device.getInterface();
+
 	if (getGlobalAppFlags().verbose)
 	{
 		const char newLine = '\n';
@@ -159,7 +164,8 @@ ZImage createImage (ZDevice device, VkFormat format, VkImageType type, uint32_t 
 				  << "       Layers: " << layers
 				  << std::endl;
 	}
-	VKASSERTMSG(vkGetPhysicalDeviceImageFormatProperties(*phys, format, type, tiling, effectiveUsage, flags, &props),
+	VKASSERTMSG(VTF_CALL_CHECK(ii.vkGetPhysicalDeviceImageFormatProperties,
+		*phys, format, type, tiling, effectiveUsage, flags, &props),
 		"Unable to create an image with specified parameters, Format: ", formatGetString(format));
 	// TODO:
 	// VkExtent3D            maxExtent;
@@ -187,14 +193,14 @@ ZImage createImage (ZDevice device, VkFormat format, VkImageType type, uint32_t 
 	imageInfo.sharingMode	= VK_SHARING_MODE_EXCLUSIVE;
 
 	VkImage	image = VK_NULL_HANDLE;
-	VKASSERT(vkCreateImage(*device, &imageInfo, callbacks, &image));
+	VKASSERT(VTF_CALL_CHECK(di.vkCreateImage, *device, &imageInfo, callbacks, &image));
 
 	VkMemoryRequirements memRequirements;
-	vkGetImageMemoryRequirements(*device, image, &memRequirements);
+	VTF_CALL_CHECK(di.vkGetImageMemoryRequirements, *device, image, &memRequirements);
 
 	auto allocations = createMemory(device, memRequirements, properties(), memRequirements.size, false, deviceAddress);
 
-	VKASSERT(vkBindImageMemory(*device, image, *allocations.at(0), 0));
+    VKASSERT(VTF_CALL_CHECK(di.vkBindImageMemory, *device, image, *allocations.at(0), 0u));
 
 	return ZImage::create(image, device, callbacks, imageInfo, allocations.at(0), memRequirements.size);
 }
@@ -237,7 +243,8 @@ ZNonDeletableImage ZNonDeletableImage::create (VkImage image, ZDevice device,
 	ASSERTMSG(image != VK_NULL_HANDLE, "Image handle must not be null");
 
 	VkMemoryRequirements memRequirements;
-	vkGetImageMemoryRequirements(*device, image, &memRequirements);
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	VTF_CALL_CHECK(di.vkGetImageMemoryRequirements, *device, image, &memRequirements);
 
 	return ZNonDeletableImage(image, device, imageInfo, memRequirements.size);
 }
@@ -418,6 +425,7 @@ ZImage createCubeImageAndLoadFromFiles	(ZDevice device, ZCommandPool commandPool
 
 	ZImage image = createImage(device, dataFormat, VK_IMAGE_TYPE_2D, width, height, usage,
 							   VK_SAMPLE_COUNT_1_BIT, 1u, 6u, 1u, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	add_cref<ZDeviceInterface> di = device.getInterface();
 
 	{
 		auto oneShotCommand	= createOneShotCommandBuffer(commandPool);
@@ -438,7 +446,8 @@ ZImage createCubeImageAndLoadFromFiles	(ZDevice device, ZCommandPool commandPool
 		for (uint32_t layer = 0; layer < 6; ++layer)
 		{
 			region.imageSubresource.baseArrayLayer = layer;
-			vkCmdCopyBufferToImage(*oneShotCommand->commandBuffer, *buffers[layer], *image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
+			VTF_CALL_CHECK(di.vkCmdCopyBufferToImage,
+				*oneShotCommand->commandBuffer, *buffers[layer], *image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
 		}
 
 		ZImageMemoryBarrier after(image, VK_ACCESS_TRANSFER_WRITE_BIT, finalAccess, finalLayout);
@@ -505,7 +514,8 @@ ZImageView createImageView (ZImage image, VkFormat format,
 	viewInfo.components			= components;
 	viewInfo.subresourceRange	= subresourceRange;
 
-	VKASSERTMSG(vkCreateImageView(*device, &viewInfo, callbacks, &imageView), "");
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	VKASSERTMSG(VTF_CALL_CHECK(di.vkCreateImageView, *device, &viewInfo, callbacks, &imageView), "");
 
 	return ZImageView::create(imageView, device, callbacks, viewInfo, image);
 }
@@ -682,8 +692,11 @@ void imageCopyToBuffer (ZCommandBuffer commandBuffer,
 		}
 	}
 
+	add_cref<ZDeviceInterface> di = commandBuffer.getParam<ZDevice>().getInterface();
+
 	commandBufferPipelineBarriers(commandBuffer, srcStage, VK_PIPELINE_STAGE_TRANSFER_BIT, preBufferBarrier, preImageBarrier);
-	vkCmdCopyImageToBuffer(*commandBuffer, *image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, *buffer, data_count(regions), data_or_null(regions));
+	VTF_CALL_CHECK(di.vkCmdCopyImageToBuffer, *commandBuffer,
+		*image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, *buffer, data_count(regions), data_or_null(regions));
 	commandBufferPipelineBarriers(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, dstStage, postImageBarrier, postBufferBarrier);
 }
 
@@ -765,8 +778,10 @@ void imageCopyToBuffer2 (ZCommandBuffer commandBuffer,
 	ZBufferMemoryBarrier2	preBuffer(buffer, srcBufferAccess, srcStage, A::TRANSFER_WRITE_BIT, S::TRANSFER_BIT);
 	ZBufferMemoryBarrier2	postBuffer(buffer, A::TRANSFER_WRITE_BIT, S::TRANSFER_BIT, dstBufferAccess, dstStage);
 
+	add_cref<ZDeviceInterface> di = commandBuffer.getParam<ZDevice>().getInterface();
+
 	commandBufferPipelineBarriers2(commandBuffer, preImage, preBuffer);
-	vkCmdCopyImageToBuffer2(*commandBuffer, &info);
+	VTF_CALL_CHECK(di.vkCmdCopyImageToBuffer2, *commandBuffer, &info);
 	commandBufferPipelineBarriers2(commandBuffer, postImage, postBuffer);
 }
 
@@ -829,10 +844,13 @@ void imageCopyToImage (ZCommandBuffer cmdBuffer, ZImage srcImage, ZImage dstImag
 		}
 	}
 
+	add_cref<ZDeviceInterface> di = cmdBuffer.getParam<ZDevice>().getInterface();
+
 	commandBufferPipelineBarriers(cmdBuffer, srcStage, VK_PIPELINE_STAGE_TRANSFER_BIT, preSrcBarrier, preDstBarrier);
-	vkCmdCopyImage(*cmdBuffer, *srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-							   *dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-							   data_count(regions), data_or_null(regions));
+	VTF_CALL_CHECK(di.vkCmdCopyImage, *cmdBuffer,
+								*srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+								*dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+								data_count(regions), data_or_null(regions));
 	commandBufferPipelineBarriers(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, dstStage, postSrcBarrier, postDstBarrier);
 }
 
@@ -913,8 +931,10 @@ void imageCopyToImage2 (ZCommandBuffer cmdBuffer, ZImage srcImage, ZImage dstIma
 	copyInfo.regionCount	= data_count(regions);
 	copyInfo.pRegions		= data_or_null(regions);
 
+	add_cref<ZDeviceInterface> di = cmdBuffer.getParam<ZDevice>().getInterface();
+
 	commandBufferPipelineBarriers2(cmdBuffer, preSrcBarrier, preDstBarrier);
-	vkCmdCopyImage2(*cmdBuffer, &copyInfo);
+	VTF_CALL_CHECK(di.vkCmdCopyImage2, *cmdBuffer, &copyInfo);
 	commandBufferPipelineBarriers2(cmdBuffer, postSrcBarrier, postDstBarrier);
 }
 

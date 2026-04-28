@@ -1,6 +1,10 @@
 #include <iostream>
 #include <cstdint>
-#include <vulkan/vulkan_core.h>
+#if VTF_SAFETY_CRITICAL
+  #include <vulkan/vulkan_sc_core.h>
+#else
+  #include <vulkan/vulkan_core.h>
+#endif
 
 int main()
 {

@@ -6,7 +6,6 @@
 #include "vtfStructUtils.hpp"
 #include "vtfZImage.hpp"
 #include "vtfZBuffer.hpp"
-#include "vtfZBuffer.hpp"
 #include "vtfZDeviceMemory.hpp"
 #include "vtfZCommandBuffer.hpp"
 #include "vtfDebugMessenger.hpp"
@@ -14,6 +13,7 @@
 #include "vtfThreadSafeLogger.hpp"
 #include "vtfProgressRecorder.hpp"
 #include "vtfVulkanDriver.hpp"
+#include "vtfPlatformDriver.hpp"
 
 #include <memory>
 
@@ -86,7 +86,8 @@ ZShaderModule createShaderModule (
 
     std::vector<uint32_t> code2;
 
-	VKASSERT(vkCreateShaderModule(*device, &createInfo, callbacks, &shaderModule));
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	VKASSERT(VTF_CALL_CHECK(di.vkCreateShaderModule, *device, &createInfo, callbacks, &shaderModule));
 
 	// If this is RT shader then last tuple consists of <shader-collection-id, shader-group-index>
 	return ZShaderModule::create(shaderModule, device, callbacks, stage, entryName,
@@ -130,7 +131,8 @@ ZFramebuffer createFramebuffer (ZRenderPass renderPass, uint32_t width, uint32_t
 	framebufferInfo.height			= height;
 	framebufferInfo.layers			= 1;
 
-	VKASSERT(vkCreateFramebuffer(*device, &framebufferInfo, allocationCallbacks, &framebuffer));
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	VKASSERT(VTF_CALL_CHECK(di.vkCreateFramebuffer, *device, &framebufferInfo, allocationCallbacks, &framebuffer));
 
 	return ZFramebuffer::create(framebuffer, device, allocationCallbacks, width, height, renderPass, attachments, attachmentCount);
 }
@@ -177,12 +179,12 @@ Version getVulkanImplVersion (std::optional<ZInstance> instance)
 {
 	Version version(1, 0);
 	VkInstance i = instance.has_value() ? **instance : VK_NULL_HANDLE;
-	PFN_vkEnumerateInstanceVersion pfnEnumerateInstanceVerion =
-		reinterpret_cast<PFN_vkEnumerateInstanceVersion>(vkGetInstanceProcAddr(i, "vkEnumerateInstanceVersion"));
-	if (pfnEnumerateInstanceVerion)
+	auto vkEnumerateInstanceVerion = DriverInitializer::getPlatformInstanceProc(
+		PFN_vkEnumerateInstanceVersion(), PFN_vkGetInstanceProcAddr(), i, "vkEnumerateInstanceVersion");
+	if (vkEnumerateInstanceVerion)
 	{
 		uint32_t tmp = 0;
-		(*pfnEnumerateInstanceVerion)(&tmp);
+		(*vkEnumerateInstanceVerion)(&tmp);
 		version.update(tmp);
 	}
 	return version;
@@ -191,6 +193,21 @@ Version getVulkanImplVersion (std::optional<ZInstance> instance)
 strings upgradeInstanceExtensions (add_cref<strings> desiredExtensions)
 {
 	return desiredExtensions;
+}
+
+void onZInstanceDestroying(void_ptr pZInstance)
+{
+    auto p = reinterpret_cast<add_ptr<ZInstance>>(pZInstance);
+    if (p->use_count() == 1 && p->has_handle())
+    {
+        add_cref<ZInstanceInterface> ii = p->getInterface();
+        const VkInstance i = p->operator*();
+        const auto callbacks = p->getParam<VkAllocationCallbacksPtr>();
+        add_ref<VkDebugUtilsMessengerEXT> messenger = p->getParamRef<VkDebugUtilsMessengerEXT>();
+        add_ref<VkDebugReportCallbackEXT> report = p->getParamRef<VkDebugReportCallbackEXT>();
+        destroyDebugMessenger(ii, i, callbacks, messenger);
+        destroyDebugReport(ii, i, callbacks, report);
+    }
 }
 
 ZInstance createInstance (
@@ -214,7 +231,8 @@ ZInstance createInstance (
 		, logger
 		, ProgressRecorder()
 		, VkDebugUtilsMessengerEXT(VK_NULL_HANDLE)
-		, VkDebugReportCallbackEXT(VK_NULL_HANDLE));
+        , VkDebugReportCallbackEXT(VK_NULL_HANDLE)
+        , OnZDeletableDestroing(onZInstanceDestroying));
 	add_ref<strings>			requiredLayers = instance.getParamRef<ZDistType<RequiredLayers, strings>>();
 	add_ref<strings>			availableLayers = instance.getParamRef<ZDistType<AvailableLayers, strings>>();
 	add_ref<strings>			availableExtensions = instance.getParamRef<ZDistType<AvailableLayerExtensions, strings>>();
@@ -437,11 +455,13 @@ ZInstance createInstance (
 
 	if (utilsRequired)
 	{
-		createDebugMessenger(instance, callbacks, debugMessengerInfo, instance.getParamRef<VkDebugUtilsMessengerEXT>());
+        createDebugMessenger(instance.getInterface(), *instance, callbacks,
+                             debugMessengerInfo, instance.getParamRef<VkDebugUtilsMessengerEXT>());
 	}
 	if (reportRequired)
 	{
-		createDebugReport(instance, callbacks, debugReportInfo, instance.getParamRef<VkDebugReportCallbackEXT>());
+        createDebugReport(instance.getInterface(), *instance, callbacks,
+                          debugReportInfo, instance.getParamRef<VkDebugReportCallbackEXT>());
 	}
 
 	instance.verbose(getGlobalAppFlags().verbose != 0);
@@ -456,9 +476,10 @@ ZPhysicalDevice	getPhysicalDeviceByIndex (ZInstance instance, uint32_t physicalD
 	ASSERTMSG(physicalDeviceIndex < deviceCount, "Failed to find GPUs with Vulkan support!");
 	VkPhysicalDevice			physDevice	= devices.at(physicalDeviceIndex);
 	add_cref<strings>			layers		= instance.getParamRef<ZDistType<RequiredLayers, strings>>();
-	const strings				extensions	= enumerateDeviceExtensions(devices.at(physicalDeviceIndex), layers);
+	const strings				extensions	= enumerateDeviceExtensions(*instance, devices.at(physicalDeviceIndex), layers);
 	VkPhysicalDeviceProperties	deviceProps	{};
-	vkGetPhysicalDeviceProperties(physDevice, &deviceProps);
+	add_cref<ZInstanceInterface> ii = instance.getInterface();
+	VTF_CALL_CHECK(ii.vkGetPhysicalDeviceProperties, physDevice, &deviceProps);
 	auto dev = ZPhysicalDevice::create(physDevice, instance.getParam<VkAllocationCallbacksPtr>(), instance,
 		physicalDeviceIndex, {/* TODO */}, extensions, deviceProps);
 	dev.verbose(getGlobalAppFlags().verbose != 0);
@@ -797,7 +818,6 @@ ZInstance deviceGetInstance(ZDevice device)
 	return deviceGetInstance(deviceGetPhysicalDevice(device));
 }
 
-
 ZQueue deviceGetNextQueue (ZDevice device, VkQueueFlags queueFlags, bool mustSupportSurface)
 {
 	UNREF(device);
@@ -812,6 +832,7 @@ ZQueue deviceGetNextQueue (ZDevice device, VkQueueFlags queueFlags, bool mustSup
 	};
 	add_ref<std::vector<ZDeviceQueueCreateInfo>> infos =
 		device.getParamRef<std::vector<ZDeviceQueueCreateInfo>>();
+	add_cref<ZDeviceInterface> di = device.getInterface();
 	for (add_ref<ZDeviceQueueCreateInfo> info : infos)
 	{
 		const bool allowSupportSurface = mustSupportSurface ? info.surfaceSupport : true;
@@ -822,7 +843,7 @@ ZQueue deviceGetNextQueue (ZDevice device, VkQueueFlags queueFlags, bool mustSup
 			{
 				info.queues.reset(queueIndex);
 				VkQueue handle = VK_NULL_HANDLE;
-				vkGetDeviceQueue(*device, info.queueFamilyIndex, queueIndex, &handle);
+				VTF_CALL_CHECK(di.vkGetDeviceQueue, *device, info.queueFamilyIndex, queueIndex, &handle);
 				ZQueue q = ZQueue::create(handle, info.queueFamilyIndex, queueIndex, info.queueFlags, device, info.surfaceSupport);
 				q.verbose(getGlobalAppFlags().verbose != 0);
 				return q;
@@ -830,6 +851,25 @@ ZQueue deviceGetNextQueue (ZDevice device, VkQueueFlags queueFlags, bool mustSup
 		}
 	}
 	return ZQueue();
+}
+
+uint32_t findQueueFamilyIndex(ZPhysicalDevice device, VkQueueFlagBits bit)
+{
+	add_cref<ZInstanceInterface> ii = device.getParam<ZInstance>().getInterface();
+
+	uint32_t queueFamilyCount = 0;
+	VTF_CALL_CHECK(ii.vkGetPhysicalDeviceQueueFamilyProperties, *device, &queueFamilyCount, nullptr);
+
+	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+	VTF_CALL_CHECK(ii.vkGetPhysicalDeviceQueueFamilyProperties, *device, &queueFamilyCount, queueFamilies.data());
+
+	for (uint32_t index = 0; index < queueFamilyCount; ++index)
+	{
+		if (bit & queueFamilies[index].queueFlags)
+			return index;
+	}
+
+	return INVALID_UINT32;
 }
 
 add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (add_cref<ZDevice> device)
@@ -846,10 +886,11 @@ VkPhysicalDeviceProperties deviceGetPhysicalProperties2 (add_cref<ZPhysicalDevic
 {
 	ASSERTMSG(device.has_handle(), "Device must have handle");
 	VkPhysicalDeviceProperties2 props = makeVkStruct(pNext);
-	auto fn = deviceGetInstance(device).getInterface().vkGetPhysicalDeviceProperties2KHR;
+	add_cref<ZInstanceInterface> ii = deviceGetInstance(device).getInterface();
+	auto fn = ii.vkGetPhysicalDeviceProperties2KHR;
 	if (fn)
 		fn(*device, &props);
-	else vkGetPhysicalDeviceProperties2(*device, &props);
+	else VTF_CALL_CHECK(ii.vkGetPhysicalDeviceProperties2, *device, &props);
 	return props.properties;
 }
 
@@ -893,6 +934,36 @@ bool queueSupportSwapchain (ZQueue queue)
 	return queue.has_handle() ? queue.getParamRef<bool>() : false;
 }
 
+uint32_t enumerateSwapchainImages (ZDevice device, VkSwapchainKHR swapchain, add_ref<std::vector<VkImage>> images)
+{
+	add_cref<ZDeviceInterface> di = device.getInterface();
+
+	uint32_t imageCount = 0;
+	VKASSERT(VTF_CALL_CHECK(di.vkGetSwapchainImagesKHR, *device, swapchain, &imageCount, nullptr));
+	images.resize(imageCount);
+	VKASSERT(VTF_CALL_CHECK(di.vkGetSwapchainImagesKHR, *device, swapchain, &imageCount, images.data()));
+	return imageCount;
+}
+
+std::vector<uint32_t> findSurfaceSupportedQueueFamilyIndices(VkPhysicalDevice physDevice, ZSurfaceKHR surface)
+{
+	add_cref<ZInstanceInterface> ii = surface.getParamRef<ZInstance>().getInterface();
+	std::vector<uint32_t> indices;
+	if (surface.has_handle())
+	{
+		uint32_t queueFamilyCount = 0;
+		VTF_CALL_CHECK(ii.vkGetPhysicalDeviceQueueFamilyProperties, physDevice, &queueFamilyCount, nullptr);
+		for (uint32_t index = 0; index < queueFamilyCount; ++index)
+		{
+			VkBool32 presentSupport = false;
+			VKASSERT(VTF_CALL_CHECK(ii.vkGetPhysicalDeviceSurfaceSupportKHR,
+									physDevice, index, *surface, &presentSupport));
+			if (presentSupport) indices.emplace_back(index);
+		}
+	}
+	return indices;
+}
+
 ZFence createFence (ZDevice device, bool signaled)
 {
 	VkFence handle = VK_NULL_HANDLE;
@@ -908,8 +979,9 @@ ZFence createFence (ZDevice device, bool signaled)
 
 VkResult waitForFence (ZFence fence, uint64_t timeout, bool assertOnFail)
 {
-	VkDevice device = *fence.getParam<ZDevice>();
-	const VkResult res = vkWaitForFences(device, 1, fence.ptr(), VK_TRUE, timeout);
+	ZDevice device = fence.getParam<ZDevice>();
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	const VkResult res = VTF_CALL_CHECK(di.vkWaitForFences, *device, 1u, fence.ptr(), VK_TRUE, timeout);
 	if (assertOnFail) VKASSERT(res);
 	return res;
 }
@@ -920,13 +992,14 @@ void waitForFences (std::initializer_list<ZFence> fences, uint64_t timeout)
 	{
 		auto b = fences.begin();
 		const ZDevice device = b->getParam<ZDevice>();
+		add_cref<ZDeviceInterface> di = device.getInterface();
 		std::vector<VkFence> handles(count);
 		for (auto i = b; i != fences.end(); ++i)
 		{
 			ASSERTION(device == i->getParam<ZDevice>());
 			handles[make_unsigned(std::distance(b, i))] = **i;
 		}
-		VKASSERT(vkWaitForFences(*device, count, handles.data(), VK_TRUE, timeout));
+		VKASSERT(VTF_CALL_CHECK(di.vkWaitForFences, *device, count, handles.data(), VK_TRUE, timeout));
 	}
 }
 
@@ -936,21 +1009,22 @@ void waitForFences (std::vector<ZFence> fences, uint64_t timeout)
 	{
 		auto b = fences.begin();
 		const ZDevice device = b->getParam<ZDevice>();
+		add_cref<ZDeviceInterface> di = device.getInterface();
 		std::vector<VkFence> handles(count);
 		for (auto i = b; i != fences.end(); ++i)
 		{
 			ASSERTION(device == i->getParam<ZDevice>());
 			handles[make_unsigned(std::distance(b, i))] = **i;
 		}
-		VKASSERT(vkWaitForFences(*device, count, handles.data(), VK_TRUE, timeout));
+		VKASSERT(VTF_CALL_CHECK(di.vkWaitForFences, *device, count, handles.data(), VK_TRUE, timeout));
 	}
 }
 
 void resetFence (ZFence fence)
 {
-	VkDevice device = *fence.getParam<ZDevice>();
-	add_cref<ZDeviceInterface> di = fence.getParam<ZDevice>().getInterface();
-	VKASSERT(di.vkResetFences(device, 1, fence.ptr()));
+	ZDevice device = fence.getParam<ZDevice>();
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	VKASSERT(VTF_CALL_CHECK(di.vkResetFences, *device, 1u, fence.ptr()));
 }
 
 void resetFences (std::initializer_list<ZFence> fences)
@@ -959,14 +1033,14 @@ void resetFences (std::initializer_list<ZFence> fences)
 	{
 		auto b = fences.begin();
 		const ZDevice device = b->getParam<ZDevice>();
+		add_cref<ZDeviceInterface> di = device.getInterface();
 		std::vector<VkFence> handles(count);
 		for (auto i = b; i != fences.end(); ++i)
 		{
 			ASSERTION(device == i->getParam<ZDevice>());
 			handles[make_unsigned(std::distance(b, i))] = **i;
 		}
-		add_cref<ZDeviceInterface> di = fences.begin()->getParam<ZDevice>().getInterface();
-		VKASSERT(di.vkResetFences(*device, count, handles.data()));
+		VKASSERT(VTF_CALL_CHECK(di.vkResetFences, *device, count, handles.data()));
 	}
 }
 
@@ -976,21 +1050,21 @@ void resetFences (std::vector<ZFence> fences)
 	{
 		auto b = fences.begin();
 		const ZDevice device = b->getParam<ZDevice>();
+		add_cref<ZDeviceInterface> di = device.getInterface();
 		std::vector<VkFence> handles(count);
 		for (auto i = b; i != fences.end(); ++i)
 		{
 			ASSERTION(device == i->getParam<ZDevice>());
 			handles[make_unsigned(std::distance(b, i))] = **i;
 		}
-		add_cref<ZDeviceInterface> di = fences[0].getParam<ZDevice>().getInterface();
-		VKASSERT(di.vkResetFences(*device, count, handles.data()));
+		VKASSERT(VTF_CALL_CHECK(di.vkResetFences, *device, count, handles.data()));
 	}
 }
 
 bool fenceStatus (ZFence fence)
 {
 	add_cref<ZDeviceInterface> di = fence.getParam<ZDevice>().getInterface();
-	const VkResult res = di.vkGetFenceStatus(*fence.getParamRef<ZDevice>(), *fence);
+	const VkResult res = VTF_CALL_CHECK(di.vkGetFenceStatus, *fence.getParamRef<ZDevice>(), *fence);
 	const bool status = res == VK_SUCCESS;
 	ASSERTION(res != VK_ERROR_DEVICE_LOST);
 	return status;
@@ -1004,7 +1078,8 @@ ZSemaphore createSemaphore (ZDevice device)
 	VkSemaphoreCreateInfo semInfo = makeVkStruct();
 	semInfo.flags = VkSemaphoreCreateFlags(0);
 
-	VKASSERT(vkCreateSemaphore(*device, &semInfo, callbacks, &handle));
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	VKASSERT(VTF_CALL_CHECK(di.vkCreateSemaphore, *device, &semInfo, callbacks, &handle));
 
 	return ZSemaphore::create(handle, device, callbacks);
 }
@@ -1020,8 +1095,8 @@ ZQueryPool createQueryPool (ZDevice device, VkQueryType type, VkQueryPipelineSta
 	queryPoolInfo.queryType				= type;
 	queryPoolInfo.pipelineStatistics	= stats;
 	queryPoolInfo.queryCount			= count;
-	//add_cref<ZDeviceInterface> di = device.getInterface();
-	VKASSERT(vkCreateQueryPool(*device, &queryPoolInfo, callbacks, &queryPool));
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	VKASSERT(VTF_CALL_CHECK(di.vkCreateQueryPool, *device, &queryPoolInfo, callbacks, &queryPool));
 	// VUID - vkCmdCopyQueryPoolResults - None - 09402(ERROR / SPEC) : msgNum : -1161729443 - Validation Error :
 	// [VUID - vkCmdCopyQueryPoolResults - None - 09402] Object 0 : type = VK_OBJECT_TYPE_QUERY_POOL;
 	// | MessageID = 0xbac16a5d | vkCmdCopyQueryPoolResults() :
@@ -1050,7 +1125,7 @@ VkFormat selectBestDepthStencilFormat (ZPhysicalDevice					device,
 	VkFormatProperties	props;
 	for (auto i = formats.begin(); i != formats.end(); ++i)
 	{
-		vkGetPhysicalDeviceFormatProperties(*device, *i, &props);
+		props = formatGetProperties(device, *i);
 
 		VkFormatFeatureFlags features = 0;
 		switch (imageTiling)
@@ -1116,10 +1191,10 @@ uint32_t enumeratePhysicalDevices (ZInstance instance, std::vector<VkPhysicalDev
 	return deviceCount;
 }
 
-std::ostream& printPhysicalDevice (
+add_ref<std::ostream> printPhysicalDevice (
 	ZInstance instance,
 	VkPhysicalDevice device,
-	std::ostream& str,
+	add_ref<std::ostream> str,
 	uint32_t deviceIndex)
 {
 	VkPhysicalDeviceProperties props{};
@@ -1127,18 +1202,41 @@ std::ostream& printPhysicalDevice (
 	return printPhysicalDevice(props, str, deviceIndex);
 }
 
+add_ref<std::ostream> printPhysicalDevices (
+	ZInstance				instance,
+	add_ref<std::ostream>	str)
+{
+	std::vector<VkPhysicalDevice> devices;
+	enumeratePhysicalDevices(instance, devices);
+
+	const uint32_t deviceCount = static_cast<uint32_t>(devices.size());
+
+	if (deviceCount == 0) {
+		str << "Unable to find any device with Vulkan support!" << std::endl;
+	}
+	else {
+		str << "Found " << deviceCount << " physicalDevices" << std::endl;
+		for (uint32_t i = 0; i < deviceCount; ++i)
+		{
+			printPhysicalDevice(instance, devices[i], str, i);
+		}
+	}
+	return str;
+}
+
 static strings enumerateDeviceExtensions(ZInstance instance, VkPhysicalDevice device, const char* layerName)
 {
 	strings		extensions;
 	uint32_t	extensionCount = 0;
 
-	VKASSERT(instance.getInterface().vkEnumerateDeviceExtensionProperties(device, layerName, &extensionCount, nullptr));
+	add_cref<ZInstanceInterface> ii = instance.getInterface();
+	VKASSERT(VTF_CALL_CHECK(ii.vkEnumerateDeviceExtensionProperties, device, layerName, &extensionCount, nullptr));
 
 	if (extensionCount)
 	{
 		extensions.resize(extensionCount);
 		std::vector<VkExtensionProperties> props(extensionCount);
-		VKASSERT(instance.getInterface().vkEnumerateDeviceExtensionProperties(device, layerName, &extensionCount, props.data()));
+		VKASSERT(VTF_CALL_CHECK(ii.vkEnumerateDeviceExtensionProperties, device, layerName, &extensionCount, props.data()));
 		std::transform(props.begin(), props.end(), extensions.begin(),
 			[](VkExtensionProperties& p) {return std::string(p.extensionName); });
 	}

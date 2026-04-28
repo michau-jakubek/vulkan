@@ -488,7 +488,8 @@ VkComponentMapping makeComponentMapping (const ZFormatInfo& info)
 VkFormatProperties	formatGetProperties	(ZPhysicalDevice device, VkFormat format)
 {
 	VkFormatProperties	p{};
-	vkGetPhysicalDeviceFormatProperties(*device, format, &p);
+	add_cref<ZInstanceInterface> ii = device.getParam<ZInstance>().getInterface();
+	VTF_CALL_CHECK(ii.vkGetPhysicalDeviceFormatProperties, *device, format, &p);
 	return p;
 }
 

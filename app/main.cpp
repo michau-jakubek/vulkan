@@ -139,9 +139,6 @@ int parseParams (
 		setGlobalAppFlags(globalAppFlags);
 	}
 
-#ifndef VULKAN_CUSTOM_DRIVER
-	vkGetInstanceProcAddr(nullptr, "vkGetInstanceProcAddr");
-#endif
 	mainDriverInitlializer(globalAppFlags.vulkanDriver, globalAppFlags.verbose);
 
 #if SYSTEM_OS_WINDOWS
@@ -203,7 +200,7 @@ int parseParams (
 	if (cmd.consumeOptions(devList, options, sink, allTestNames) > 0)
 	{
 		ZInstance instance = createInstance("test", getAllocationCallbacks());
-		printPhysicalDevices(*instance, std::cout);
+		printPhysicalDevices(instance, std::cout);
 		return 0;
 	}
 
@@ -651,9 +648,9 @@ void printUsage (std::ostream& str)
 	str << "  -dprintf:                 enable Debug Printf feature" << std::endl;
 	str << "                            #extension GL_EXT_debug_printf : enable and debugPrintfEXT(...)" << std::endl;
 	str << "  -bt:                      enable backtrace" << std::endl;
-	str << "  -driver <file>            change Vulkan driver. By defaault for Windows it is vulkan-1.dll and\n"
-		   "                            for Linux is a library which you built with this app. To enable this functionality\n"
-		   "                            remeber to enable VULKAN_CUSTOM_DRIVER." << std::endl;
+	str << "  -driver <file>            change Vulkan driver. By default for Windows it is vulkan-1.dll\n"
+		   "                            and for Linux is libvulkan.so. You might change default value by\n"
+		   "                            setting the VULKAN_DRIVER cmake configuration parameter." << std::endl;
 	str << "Compiler options:" << std::endl;
 	str << "  -vulkan <version>:        (major * 10 + minor), default is 10 aka vulkan1.0" << std::endl;
 	str << "  -spirv <version>:         (major * 10 + minor), default is 10 aka spirv1.0" << std::endl;

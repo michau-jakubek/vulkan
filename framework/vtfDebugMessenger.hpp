@@ -5,14 +5,12 @@
 
 namespace vtf
 {
-void			makeDebugCreateInfo		(VkDebugUtilsMessengerCreateInfoEXT& result, void* pUserData, void* pNext = nullptr, bool enableDebugPrintf = false);
-void			makeDebugCreateInfo		(VkDebugReportCallbackCreateInfoEXT& result, void* pUserData, void* pNext = nullptr, bool enableDebugPrintf = false);
-void			createDebugMessenger	(ZInstance, VkAllocationCallbacksPtr, const VkDebugUtilsMessengerCreateInfoEXT&, VkDebugUtilsMessengerEXT&);
-void			destroyDebugMessenger	(ZInstance, VkAllocationCallbacksPtr, VkDebugUtilsMessengerEXT&);
-void			createDebugReport		(ZInstance, VkAllocationCallbacksPtr, const VkDebugReportCallbackCreateInfoEXT&, VkDebugReportCallbackEXT&);
-void			destroyDebugReport		(ZInstance, VkAllocationCallbacksPtr, VkDebugReportCallbackEXT&);
-void			destroyDebugMessenger	(ZInstance);
-void			destroyDebugReport		(ZInstance);
+void makeDebugCreateInfo    (VkDebugUtilsMessengerCreateInfoEXT& result, void* pUserData, void* pNext = nullptr, bool enableDebugPrintf = false);
+void makeDebugCreateInfo	(VkDebugReportCallbackCreateInfoEXT& result, void* pUserData, void* pNext = nullptr, bool enableDebugPrintf = false);
+void createDebugMessenger	(add_cref<ZInstanceInterface>, VkInstance, VkAllocationCallbacksPtr, const VkDebugUtilsMessengerCreateInfoEXT&, VkDebugUtilsMessengerEXT&);
+void destroyDebugMessenger	(add_cref<ZInstanceInterface>, VkInstance, VkAllocationCallbacksPtr, add_ref<VkDebugUtilsMessengerEXT>);
+void createDebugReport		(add_cref<ZInstanceInterface>, VkInstance, VkAllocationCallbacksPtr, const VkDebugReportCallbackCreateInfoEXT&, VkDebugReportCallbackEXT&);
+void destroyDebugReport		(add_cref<ZInstanceInterface>, VkInstance, VkAllocationCallbacksPtr, add_ref<VkDebugReportCallbackEXT>);
 
 } // namespace vtf
 

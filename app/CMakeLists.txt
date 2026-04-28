@@ -58,8 +58,3 @@ target_include_directories(vtf BEFORE PRIVATE ${GLFW3_INCLUDE_DIR})
 target_link_libraries(vtf ${vtf_libs})
 add_dependencies(vtf vtf_git_version)
 
-if (${DETECTED_COMPILER} EQUAL ${DETECTED_COMPILER_MSVC})
-    set_property(TARGET vtf PROPERTY LINK_FLAGS "/DELAYLOAD:${VULKAN_DRIVER}")
-    target_link_libraries(vtf ${vtf_libs} delayimp)
-endif()
-
