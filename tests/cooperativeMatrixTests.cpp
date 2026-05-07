@@ -15,7 +15,8 @@ using namespace vtf;
 constexpr Option optionBuildAlways		{ "--build-always", 0 };
 constexpr Option optionVariant			{ "-v", 1 };
 constexpr Option optionConfiguration	{ "-c", 1 };
-constexpr Option optionUseSpirvShader	{ "-s", 0 };
+constexpr Option optionUseSpirvShader	{ "--s", 0 };
+constexpr Option optionForceSaturating	{ "--force-saturating", 0 };
 OptionParser<CoopParams> CoopParams::getParser()
 {
 	OptionFlags					flags(OptionFlag::PrintDefault);
@@ -28,6 +29,9 @@ OptionParser<CoopParams> CoopParams::getParser()
 		"Build always", { false }, flags);
 	parser.addOption(&CoopParams::useSpirvShader, optionUseSpirvShader,
 		"Use SPPIR-V shader instead of GLSL", { false }, flags);
+	parser.addOption(&CoopParams::forceSaturating, optionForceSaturating,
+		"Force add SaturatingAccumulation to OpCooperativeMatrixMulAddKHR, "
+		"even if it doesn't exist in processed configuration", { false }, flags);
 	return parser;
 }
 const char* VkComponentTypeToString(VkComponentTypeKHR type) {
@@ -841,6 +845,7 @@ void printParams(add_cref<CoopParams> params, add_ref<std::ostream> str, bool pr
 		str << "MSize: " << conf.MSize << std::endl
 			<< "KSize: " << conf.KSize << std::endl
 			<< "NSize: " << conf.NSize << std::endl;
+		str << "SaturatingAccumulation: " << (conf.saturatingAccumulation ? "ON" : "off") << std::endl;
 	}
 	str << "buildAlways: " << std::boolalpha << params.buildAlways << std::noboolalpha << std::endl;
 	str << "useSpirvShader: " << std::boolalpha << params.useSpirvShader << std::noboolalpha << std::endl;
@@ -950,6 +955,11 @@ ZShaderModule buildSpirvProgram(ZDevice device, add_cref<CoopParams> params)
 				operands << '|';
 			operands << op;
 		}
+	}
+	if (conf.saturatingAccumulation || params.forceSaturating) {
+		if (operands.tellp())
+			operands << '|';
+		operands << "SaturatingAccumulationKHR";
 	}
 
 	const std::string matR_defs =

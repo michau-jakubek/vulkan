@@ -33,30 +33,22 @@ struct Params
 	{
 		Ok, Warning, Error, Help
 	};
-	int		width;
-	int		height;
-	float	gl_PointSize;
-	struct Flags {
-		uint32_t mBuildAlways       : 1;
-		uint32_t mDemoteWholeQuad   : 1;
-		uint32_t mSingleTriangle    : 1;
-		uint32_t mColorGroup	    : 1;
-		uint32_t mUseSimulateHelper : 1;
-		uint32_t mPad : 28;
-	} flags{ 0, 0, 0, 0, 0, 0 };
-	constexpr bool	buildAlways		    () const { return (flags.mBuildAlways		!= 0); }
-	constexpr bool	demoteWholeQuad	    () const { return (flags.mDemoteWholeQuad	!= 0); }
-	constexpr bool	singleTriangle	    () const { return (flags.mSingleTriangle	!= 0); }
-	constexpr bool	useSimulateHelper	() const { return (flags.mUseSimulateHelper	!= 0); }
-	constexpr bool	colorGroup		    () const { return (flags.mColorGroup		!= 0); }
-	Params ();
+	int		width				= 16;
+	int		height				= 16;
+	float	gl_PointSize		= 1.0f;
+	bool	buildAlways		    = false;
+	bool	demoteWholeQuad	    = false;
+	bool	singleTriangle	    = false;
+	bool	useSimulateHelper	= false;
+	bool	colorGroup		    = false;
+	static OptionParser<Params> makeParser(add_ref<Params>);
 	std::tuple<Status, Params, std::string>
 	static parseCommandLine (add_ref<CommandLine> cmdLine);
 	void print (add_ref<std::ostream> log) const;
 	void usage (add_ref<std::ostream> log) const;
 };
 
-TriLogicInt runDemoteInvocationsSingleThread (Canvas& canvas, const std::string& assets, add_cref<Params> params);
+TriLogicInt runTests (Canvas& canvas, const std::string& assets, add_cref<Params> params);
 TriLogicInt prepareTests (const TestRecord& record, add_ref<CommandLine> cmdLine)
 {
 	const Version reqSpirv(1,3);
@@ -73,12 +65,15 @@ TriLogicInt prepareTests (const TestRecord& record, add_ref<CommandLine> cmdLine
 		caps.addExtension(VK_EXT_SHADER_SUBGROUP_BALLOT_EXTENSION_NAME).checkSupported();
 		caps.addExtension(VK_EXT_SHADER_DEMOTE_TO_HELPER_INVOCATION_EXTENSION_NAME).checkSupported();
 
-		deviceCheckProperties(caps.physicalDevice,
-			&VkPhysicalDeviceSubgroupProperties::supportedStages, false,
-			VK_SHADER_STAGE_FRAGMENT_BIT, true, "supportedStages doesn't contain VK_SHADER_STAGE_FRAGMENT_BIT");
+		VkPhysicalDeviceSubgroupProperties subgroupProps = makeVkStruct();
+		deviceGetPhysicalProperties2(caps.physicalDevice, &subgroupProps);
+		ASSERTMSG(subgroupProps.supportedStages & VK_SHADER_STAGE_FRAGMENT_BIT,
+					"supportedStages doesn't contain VK_SHADER_STAGE_FRAGMENT_BIT");
 
 		caps.addUpdateFeatureIf(&DemoteFeatures::shaderDemoteToHelperInvocation)
 			.checkSupported("shaderDemoteToHelperInvocation");
+
+		caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::geometryShader).checkSupported("geometryShader");
 	};
 	auto [status, params, err] = Params::parseCommandLine(cmdLine);
 	switch (status)
@@ -102,119 +97,62 @@ TriLogicInt prepareTests (const TestRecord& record, add_ref<CommandLine> cmdLine
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
 	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFatures, gf.apiVer);
 
-	return runDemoteInvocationsSingleThread(cs, record.assets, params);
+	return runTests(cs, record.assets, params);
 }
 
-Params::Params ()
-	: width				(16)
-	, height			(16)
-	, gl_PointSize		(1.0f)
+constexpr Option optWidth{ "-fw", 1 };
+constexpr Option optHeight{ "-fh", 1 };
+constexpr Option optPointSize{ "-ps", 1 };
+constexpr Option optBuildAlways{ "--build-always", 0 };
+constexpr Option optDemoteQuad{ "--demote-quad", 0 };
+constexpr Option optColorQroup{ "--color-group", 0 };
+constexpr Option optSingleTriangle{ "--single-triangle", 0 };
+constexpr Option optUseSimulateHelper{ "--simulate-helper", 0 };
+OptionParser<Params> Params::makeParser(add_ref<Params> ps)
 {
+	OptionParser<Params> p(ps);
+	OptionFlags flagsNone = OptionFlag::None;
+	OptionFlags flagsDefault = OptionFlag::PrintDefault;
+	p.addOption(&Params::width, optWidth, "frame width in pixels", { 16 }, flagsDefault);
+	p.addOption(&Params::height, optHeight, "frame width in pixels", { 16 }, flagsDefault);
+	p.addOption(&Params::gl_PointSize, optPointSize, "gl_PointSize", { 1.0f }, flagsDefault);
+	p.addOption(&Params::singleTriangle, optSingleTriangle, "use single triangle instead of two", { false }, flagsNone);
+	p.addOption(&Params::colorGroup, optColorQroup, "use color per subgroup instead of per triangle", { false }, flagsNone);
+	p.addOption(&Params::demoteWholeQuad, optDemoteQuad, "demote whole quad instead of pixel", { false }, flagsNone);
+	p.addOption(&Params::useSimulateHelper, optUseSimulateHelper,
+		"simulate helper invocation behaviour instead of using built-in gl_HelperInvocation and helperInvocation()",
+		{ false }, flagsNone);
+	p.addOption(&Params::buildAlways, optBuildAlways, "force to build shaders each time the programi is run", { false }, flagsNone);
+	return p;
 }
 std::tuple<Params::Status, Params, std::string>
 Params::parseCommandLine (add_ref<CommandLine> cmdLine)
 {
-	bool status;
-	strings sink;
-	std::stringstream errorMessage;
-
-	Option	optHelp1	{ "-help", 0 };
-	Option	optHelp2	{ "--help", 0 };
-	Option	optWidth	{ "-w", 1 };
-	Option	optHeight	{ "-h", 1 };
-	Option	optPointSize	{"-ps", 1 };
-	Option	optBuildAlways	{ "-build-always", 0 };
-	Option	optDemoteQuad	{ "-demote-quad", 0 };
-	Option	optColorQroup	{ "-color-group", 0 };
-	Option	optSingleTriangle	{ "-single-triangle", 0 };
-	Option	optUseSimulateHelper{ "-simulate-helper", 0 };
-	std::vector<Option> options { optHelp1, optHelp2,
-		optPointSize, optBuildAlways, optWidth, optHeight, optDemoteQuad, optUseSimulateHelper, optSingleTriangle, optColorQroup };
-
 	Params result;
-	Params::Status parseStatus = Ok;
-
-	if ((cmdLine.consumeOptions(optHelp1, options, sink) > 0)
-		|| (cmdLine.consumeOptions(optHelp2, options, sink) > 0))
+	OptionParser<Params> p = Params::makeParser(result);
+	p.parse(cmdLine);
+	add_cref<OptionParserState> state = p.getState();
+	if (state.hasHelp)
 	{
 		return { Params::Status::Help, result, std::string() };
 	}
-
-	result.flags.mBuildAlways		= (cmdLine.consumeOptions(optBuildAlways, options, sink) > 0) ? 1 : 0;
-	result.flags.mDemoteWholeQuad	= (cmdLine.consumeOptions(optDemoteQuad, options, sink) > 0) ? 1 : 0;
-	result.flags.mSingleTriangle	= (cmdLine.consumeOptions(optSingleTriangle, options, sink) > 0) ? 1 : 0;
-	result.flags.mColorGroup		= (cmdLine.consumeOptions(optColorQroup, options, sink) > 0) ? 1 : 0;
-	result.flags.mUseSimulateHelper	= (cmdLine.consumeOptions(optUseSimulateHelper, options, sink) > 0) ? 1 : 0;
-
-	auto consumeOption = [&](auto field, const Option& opt) -> void
+	if (state.hasWarnings || state.hasErrors)
 	{
-		if (consumeOptions(opt, options, args, sink) > 0)
-		{
-			const auto value = fromText(sink.back(), result.*field, status);
-			if (!status)
-			{
-				parseStatus = Warning;
-				errorMessage << "WARNING: Unable to parse " << std::quoted(opt.name)
-							 << " from " << std::quoted(sink.back())
-							 << ", applied default " << result.*field << std::endl;
-			}
-			else if (value <= 0)
-			{
-				parseStatus = Warning;
-				errorMessage << "WARNING: " << std::quoted(opt.name) << "must be positive value"
-							 << ", applied default " << result.*field << std::endl;
-			}
-			else result.*field = value;
-		}
-	};
-
-	consumeOption(&Params::width, optWidth);
-	consumeOption(&Params::height, optHeight);
-	consumeOption(&Params::gl_PointSize, optPointSize);
-
-	if (!args.empty())
-	{
-		parseStatus = Error;
-		errorMessage << "ERROR: Unknown parameter " << std::quoted(args.at(0)) << std::endl;
+		return { state.hasErrors ? Params::Status::Error : Params::Status::Warning, result, state.messagesText() };
 	}
-
-	return { parseStatus, result, errorMessage.str() };
+	return { Params::Status::Ok, result, std::string() };
 }
 void Params::print (add_ref<std::ostream> log) const
 {
-	log << "Params:\n"
-		<< "  gl_PointSize:    " << gl_PointSize << std::endl
-		<< "  color-group:     " << boolean(colorGroup()) << std::endl
-		<< "  build-always:    " << boolean(buildAlways()) << std::endl
-		<< "  single-triangle: " << boolean(singleTriangle()) << std::endl
-		<< "  demote-quad:     " << boolean(demoteWholeQuad()) << std::endl
-		<< "  simulate-helper: " << boolean(useSimulateHelper()) << std::endl
-		<< "  width:           " << width << std::endl
-		<< "  height:          " << height
-		<< std::endl;
+	Params printParams(*this);
+	OptionParser<Params> p = Params::makeParser(printParams);
+	p.printOptions(log);
 }
 void Params::usage (add_ref<std::ostream> log) const
 {
 	log << "Requirements:\n"
 		<< "  Minimum SPIR-V 1.3 must be present\n"
 		<< "  shaderDemoteToHelperInvocation feature must be enabled\n"
-		<< "Parameters:\n"
-		<< "  [-help]             print this help\n"
-		<< "  [--help]            print this help\n"
-		<< "  [-w <width>]        default " << width << std::endl
-		<< "  [-h <height>]       default " << height << std::endl
-		<< "  [-ps <float>]       gl_PointSize, default " << gl_PointSize << std::endl
-		<< "  [-single-triangle]  use single triangle instead of two, default "
-								 	<< boolean(singleTriangle()) << std::endl
-		<< "  [-color-group]      use color pre subgroup instead of per triangle, default "
-								 	<< boolean(colorGroup()) << std::endl
-		<< "  [-build-always]     force to build shaders, default "
-								 	<< boolean(buildAlways()) << std::endl
-		<< "  [-demote-quad]      demote whole quad instead of pixel, default "
-								 	<< boolean(demoteWholeQuad()) << std::endl
-		<< "  [-simulate-helper]  simulate helper invocation behaviour instead of using\n"
-		<< "                      built-in gl_HelperInvocation and helperInvocation(),\n"
-		<< "                      default is " << boolean(useSimulateHelper()) << std::endl
 		<< "Navigation keys:\n"	  
 		<< "  Mouse Left:         select and print info\n"
 		<< "  Mouse Right:        select and demote underlying invocation or quad\n"
@@ -224,6 +162,7 @@ void Params::usage (add_ref<std::ostream> log) const
 		<< "  i                   print info\n"
 		<< "  Escape:             quit this app"
 		<< std::endl;
+	print(log);
 }
 
 #define NUM_SUBGROUPS			0
@@ -383,7 +322,7 @@ UserData::PushConstant::Flags::Flags (bool performDemoting,
 									  bool useColorGroup)
 	: mPerformDemoting	    (performDemoting ? 1 : 0)
 	, mDemoteWholeQuad	    (demoteWholeQuad ? 1 : 0)
-	, mValidQuad		    (false)
+	, mValidQuad		    (0)
 	, mUseSimulateHelper	(useSimulateHelper ? 1 : 0)
 	, mUseColorGroup	    (useColorGroup ? 1 : 0)
 	, mPad				    (0)
@@ -395,7 +334,7 @@ UserData::PushConstant::PushConstant (add_cref<Params> params, uint32_t primitiv
 	, drvSize			(static_cast<uint32_t>(sizeof(DerivativeEntry) / sizeof(uint32_t)))
 	, gl_PointSize		(params.gl_PointSize)
 	, primitiveStride	(primitiveCount)
-	, flags				(false, params.demoteWholeQuad(), params.useSimulateHelper(), params.colorGroup())
+	, flags				(false, params.demoteWholeQuad, params.useSimulateHelper, params.colorGroup)
 {
 }
 UserData::UserData (add_cref<Params>		params,
@@ -1101,8 +1040,9 @@ void printInfo (add_ref<VulkanContext>, add_ref<UserData> ui)
 	}
 }
 
-TriLogicInt runDemoteInvocationsSingleThread (Canvas& cs, const std::string& assets, add_cref<Params> params)
+TriLogicInt runTests (Canvas& cs, const std::string& assets, add_cref<Params> params)
 {
+	add_cref<ZDeviceInterface>	di			(cs.device.getInterface());
 	PostponedJobs				jobs		{};
 	ostream_ref					log			(std::cout);
 	LayoutManager				lm			(cs.device);
@@ -1110,7 +1050,7 @@ TriLogicInt runDemoteInvocationsSingleThread (Canvas& cs, const std::string& ass
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
 	const GlobalAppFlags		flags		(getGlobalAppFlags());
-	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, flags.genSpirvDisassembly, params.buildAlways());
+	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, flags.genSpirvDisassembly, params.buildAlways);
 
 	ZShaderModule				vertShaderModule	= programs.getShader(VK_SHADER_STAGE_VERTEX_BIT);
 	ZShaderModule				fragShaderModule	= programs.getShader(VK_SHADER_STAGE_FRAGMENT_BIT);
@@ -1119,12 +1059,12 @@ TriLogicInt runDemoteInvocationsSingleThread (Canvas& cs, const std::string& ass
 	{
 		const float X = 1.0f;
 		const float Y = 1.0f;
-		const float RX = params.singleTriangle() ? 3.5f : 1.0f;
-		const float BY = params.singleTriangle() ? 3.5f : 1.0f;
+		const float RX = params.singleTriangle ? 3.5f : 1.0f;
+		const float BY = params.singleTriangle ? 3.5f : 1.0f;
 		const std::vector<Vec2>	triangle1	{ { -X, +BY },   { -X, -Y }, { +RX, -Y } };
 		const std::vector<Vec2> triangle2	{ { +RX, -Y },  { +RX, +BY }, { -X, +BY } };
 		std::vector<Vec2>		vertices(triangle1);
-		if (!params.singleTriangle()) vertices.insert(vertices.end(), triangle2.begin(), triangle2.end());
+		if (!params.singleTriangle) vertices.insert(vertices.end(), triangle2.begin(), triangle2.end());
 		vertexInput.binding(0).addAttributes(vertices);
 	}
 	const uint32_t				primitiveStride		= vertexInput.getVertexCount(0) / 3;
@@ -1172,7 +1112,7 @@ TriLogicInt runDemoteInvocationsSingleThread (Canvas& cs, const std::string& ass
 			commandBufferPushConstants(cmdBuffer, pipelineLayout, userData.mPushConstant);
 			commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
 			auto rpbi = commandBufferBeginRenderPass(cmdBuffer, srcFramebuffer);
-				vkCmdDraw(*cmdBuffer, vertexInput.getVertexCount(0), 1, 0, 0);
+				VTF_CALL_CHECK(di.vkCmdDraw, *cmdBuffer, vertexInput.getVertexCount(0), 1u, 0u, 0u);
 			commandBufferEndRenderPass(rpbi);
 			commandBufferPipelineBarriers(cmdBuffer,
 										  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,

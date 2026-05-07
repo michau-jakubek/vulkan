@@ -44,10 +44,10 @@ set(tests_files
     ${daemon_test_files}
     subgroupMatrixTests.cpp
     subgroupMatrixTests.hpp
-	#topologyTests.cpp
-	#topologyTests.hpp
-	#demoteInvocationsTests.cpp
-	#demoteInvocationsTests.hpp
+	topologyTests.cpp
+	topologyTests.hpp
+	demoteInvocationsTests.cpp
+	demoteInvocationsTests.hpp
     blendingTests.cpp
     blendingTests.hpp
 	sparseBufferTests.cpp

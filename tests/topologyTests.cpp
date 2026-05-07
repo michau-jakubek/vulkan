@@ -31,8 +31,13 @@ struct Params
 	float		minusY;
 	float		pointSize;
 	VkBool32	ccwFronFace;
+	VkBool32	ctsCases;
+	VkBool32	restart;
+	VkBool32	printIndices;
 	VkPrimitiveTopology topo;
 	std::vector<Vec2> vertices;
+	uint32_t	width = 16;
+	uint32_t	height = 16;
 	Params ();
 	void print (add_ref<std::ostream> log) const;
 };
@@ -45,6 +50,9 @@ Params::Params ()
 	, minusY		(-1.0f)
 	, pointSize		(1.0f)
 	, ccwFronFace	(VK_FALSE)
+	, ctsCases		(VK_FALSE)
+	, restart		(VK_FALSE)
+	, printIndices	(VK_FALSE)
 	, topo			(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
 	, vertices		(defaultCwVertices)
 {
@@ -105,10 +113,30 @@ Params readCommandLine (add_cref<strings> cmdLineParams, add_cref<Params> defaul
 	Option	optMinusX { "-x", 1 };
 	Option	optMinusY { "-y", 1 };
 	Option	optPointSize { "-ps", 1 };
-	Option	optFronFace { "-ccw", 0 };
-	std::vector<Option>	options { optTopo, optPlusX, optPlusY, optMinusX, optMinusY, optPointSize, optFronFace };
+	Option	optFronFace { "--ccw", 0 };
+	Option  optCtsCases { "--cts", 0 };
+	Option  optRestart { "--restart", 0 };
+	Option	optPrintIndices{ "--print-indices", 0 };
+	std::vector<Option>	options { optTopo, optPlusX, optPlusY, optMinusX, optMinusY,
+									optPointSize, optFronFace, optCtsCases, optRestart,
+									optPrintIndices };
 
 	Params	resultParams = defaultParams;
+
+	if (consumeOptions(optCtsCases, options, args, sink) > 0)
+	{
+		resultParams.ctsCases = VK_TRUE;
+	}
+
+	if (consumeOptions(optRestart, options, args, sink) > 0)
+	{
+		resultParams.restart = VK_TRUE;
+	}
+
+	if (consumeOptions(optPrintIndices, options, args, sink) > 0)
+	{
+		resultParams.printIndices = VK_TRUE;
+	}
 
 	if (consumeOptions(optFronFace, options, args, sink) > 0)
 	{
@@ -192,8 +220,11 @@ Params printUsage (std::ostream& log)
 		<< "  [-y float]        y-area range, default is " << p.minusY << nl
 		<< "  [+y float]        y-area range, default is " << p.plusY << nl
 		<< "  [-ps float]       point size, default is " << p.pointSize << nl
-		<< "  [-ccw] (standalone) use VK_FRONT_FACE_COUNTER_CLOCKWISE\n"
+		<< "  [--ccw]           use VK_FRONT_FACE_COUNTER_CLOCKWISE\n"
 		<< "                      default is VK_FRONT_FACE_CLOCKWISE\n"
+		<< "  [--cts]           enable CTS cases\n"
+		<< "  [--restart]       enable primitive restart\n"
+		<< "  [--print-indices]\n"
 		<< "  [-t topology]     topology, default is " << int(p.topo) << nl
 		<< "     VK_PRIMITIVE_TOPOLOGY_POINT_LIST                    = 0\n"
 		<< "     VK_PRIMITIVE_TOPOLOGY_LINE_LIST                     = 1\n"
@@ -224,17 +255,17 @@ Params printUsage (std::ostream& log)
 	return p;
 }
 
-TriLogicInt runTopologyTestsSingleThread (add_ref<Canvas> canvas, add_cref<std::string> assets, add_cref<Params> params);
+TriLogicInt runTopologyTests (add_ref<Canvas> canvas, add_cref<std::string> assets, add_cref<Params> params);
+TriLogicInt runCtsCaseSecondaryInherited (add_ref<Canvas> canvas, add_cref<std::string> assets, add_cref<Params> params);
 
-bool isTopologyList(const VkPrimitiveTopology topo)
-{
+bool isTopologyList (const VkPrimitiveTopology topo)
+ {
 	return topo == VK_PRIMITIVE_TOPOLOGY_POINT_LIST
 		|| topo == VK_PRIMITIVE_TOPOLOGY_LINE_LIST
 		|| topo == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
 		|| topo == VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY
 		|| topo == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY;
 }
-
 TriLogicInt prepareTests (const TestRecord& record, add_ref<CommandLine> cmdLine)
 {
 	add_cref<GlobalAppFlags> gf = getGlobalAppFlags();
@@ -242,9 +273,9 @@ TriLogicInt prepareTests (const TestRecord& record, add_ref<CommandLine> cmdLine
 	canvasStyle.surfaceFormatFlags |= (VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT);
 
 	bool parseResult = true;
-	bool featuresAvailable = true;
 	std::ostream& log = std::cout;
 	const Params defaultParams = printUsage(log);
+	const strings cmdLineParams = cmdLine.getUnconsumedTokens();
 	const Params params = readCommandLine(cmdLineParams, defaultParams, log, parseResult);
 	const bool geometryRequired =	params.topo == VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY
 								||	params.topo == VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY
@@ -255,37 +286,31 @@ TriLogicInt prepareTests (const TestRecord& record, add_ref<CommandLine> cmdLine
 		return {};
 	}
 
-	std::ostringstream							errorCollection;
-
 	auto onEnablingFeatures = [&](add_ref<DeviceCaps> caps) -> void
 	{
 		if (geometryRequired)
 		{
-			featuresAvailable &= caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::geometryShader);
-			if (!featuresAvailable)
-				errorCollection << "[ERROR] VkPhysicalDeviceFeatures.geometryShader not supported by device\n";
+			caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::geometryShader).checkSupported("geometryShader");
 		}
 
-		if (isTopologyList(params.topo))
+		if (params.restart)
 		{
-			caps.requiredExtension.emplace_back(VK_EXT_PRIMITIVE_TOPOLOGY_LIST_RESTART_EXTENSION_NAME);
-			if (!caps.addUpdateFeatureIf(&VkPhysicalDevicePrimitiveTopologyListRestartFeaturesEXT
-				::primitiveTopologyListRestart))
-				throw std::runtime_error("[ERROR] primitiveTopologyListRestart not supported by device");
+			if (isTopologyList(params.topo))
+			{
+				caps.requiredExtension.emplace_back(VK_EXT_PRIMITIVE_TOPOLOGY_LIST_RESTART_EXTENSION_NAME);
+				caps.addUpdateFeatureIf(&VkPhysicalDevicePrimitiveTopologyListRestartFeaturesEXT
+					::primitiveTopologyListRestart).checkSupported("primitiveTopologyListRestart");
+			}
 		}
 
-		featuresAvailable &= caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::pipelineStatisticsQuery);
+		caps.addUpdateFeatureIf(&VkPhysicalDeviceFeatures::pipelineStatisticsQuery).checkSupported("pipelineStatisticsQuery");
 	};
 
 	Canvas cs(record.name, gf.layers, {}, {}, canvasStyle, onEnablingFeatures, gf.apiVer, gf.debugPrintfEnabled);
-	if (!featuresAvailable)
-	{
-		errorCollection.flush();
-		std::cout << errorCollection.str();
-		return 1;
-	}
 
-	return runTopologyTestsSingleThread (cs, record.assets, params);
+	return params.ctsCases
+		? runCtsCaseSecondaryInherited(cs, record.assets, params)
+		: runTopologyTests (cs, record.assets, params);
 }
 
 struct UserData
@@ -505,11 +530,12 @@ std::array<ZShaderModule, 6> buildProgram (ZDevice device, add_cref<std::string>
 	return shaders;
 }
 
-TriLogicInt runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> assets, add_cref<Params> params)
+TriLogicInt runTopologyTests (add_ref<Canvas> cs, add_cref<std::string> assets, add_cref<Params> params)
 {
 	params.print(std::cout);
 
-	LayoutManager				lm(cs.device);
+	add_cref<ZDeviceInterface>	di				(cs.device.getInterface());
+	LayoutManager				lm				(cs.device);
 
 	auto						shaders			= buildProgram(cs.device, assets);
 	ZShaderModule				vertShaderModule= shaders[0];
@@ -578,7 +604,7 @@ TriLogicInt runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> asse
 														vertShaderModule, fragShaderModule,
 														makeExtent2D(100,100), vertexInput.binding(0), gpp::SubpassIndex(0),
 														VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR,
-														params.topo, frontFace, gpp::PrimitiveRestart(true));
+														params.topo, frontFace, gpp::PrimitiveRestart(params.restart));
 	ZPipeline					linesPipeline		= createGraphicsPipeline(pipelineLayout, renderPassA,
 														vertShaderModule, fragShaderModule,
 														makeExtent2D(100,100), vertexInput.binding(0), gpp::SubpassIndex(0),
@@ -604,28 +630,28 @@ TriLogicInt runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> asse
 		commandBufferBegin(cmdBuffer);
 			commandBufferBindVertexBuffers(cmdBuffer, vertexInput, {vertexBuffer});
 			commandBufferBindIndexBuffer(cmdBuffer, indexBuffer);
-			commandBufferSetScissor(cmdBuffer, sc);
-			commandBufferSetViewport(cmdBuffer, sc);
+			commandBufferSetViewportAndScissor(cmdBuffer, sc);
 			commandBufferResetQueryPool(cmdBuffer, queryPool);
 
 			auto qpbi = commandBufferBeginQuery(cmdBuffer, queryPool, 0);
 				auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer);
 					commandBufferBindPipeline(cmdBuffer, primitivePipeline);
 					//vkCmdDraw(*cmdBuffer, userData.pointCount, 1u, 0u, 0u);
-					vkCmdDrawIndexed(*cmdBuffer, userData.pointCount, 1, 0, 0, 0);
+					VTF_CALL_CHECK(di.vkCmdDrawIndexed, *cmdBuffer, userData.pointCount, 1u, 0u, 0, 0u);
 					// Skip next subpass
 				commandBufferEndRenderPass(rpbi);
 			commandBufferEndQuery(qpbi);
 
-			vkCmdCopyQueryPoolResults(*cmdBuffer, *queryPool, 0, 1, *queryResults, 0, sizeof(uint64_t), 
-										VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+			VTF_CALL_CHECK(di.vkCmdCopyQueryPoolResults, *cmdBuffer,
+								*queryPool, 0, 1, *queryResults, 0, sizeof(uint64_t),
+								VkFlags(VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT));
 			
 			rpbi = commandBufferBeginRenderPass(cmdBuffer, renderPassA, framebuffer);
 				commandBufferBindPipeline(cmdBuffer, linesPipeline);
-				vkCmdDraw(*cmdBuffer, userData.pointCount, 1u, 0u, 1u);
+				VTF_CALL_CHECK(di.vkCmdDraw, *cmdBuffer, userData.pointCount, 1u, 0u, 1u);
 				commandBufferNextSubpass(rpbi);
 				commandBufferBindPipeline(cmdBuffer, pointsPipeline);
-				vkCmdDraw(*cmdBuffer, userData.pointCount, 1u, 0u, 2u);
+				VTF_CALL_CHECK(di.vkCmdDraw, *cmdBuffer, userData.pointCount, 1u, 0u, 2u);
 			commandBufferEndRenderPass(rpbi);
 
 		commandBufferEnd(cmdBuffer);
@@ -634,18 +660,340 @@ TriLogicInt runTopologyTestsSingleThread (Canvas& cs, add_cref<std::string> asse
 	auto onAfterRecording = [&](add_ref<Canvas>)
 	{
 		bufferRead(queryResults, userData.queryResult);
-		/*
-		std::vector<uint32_t> x(20);
-		bufferRead(indexBuffer, x);
-		std::cout << "( " << userData.pointCount << " ) ";
-		for (int i = 0; i < 20; ++i)
-			//std::cout << (x[i] == INVALID_UINT32 ? make_signed(x[i]) : (-1)) << ' ';
-		std::cout << x[i] << ' ';
-		std::cout << std::endl;
-		*/
 	};
 
 	return cs.run(onCommandRecording, renderPass, std::ref(userData.drawTrigger), {}, onAfterRecording);
+}
+
+ZBuffer generatePrimitives(add_ref<VertexInput> vi, add_cref<Params> params)
+{
+	const bool isPoints = (params.topo == VK_PRIMITIVE_TOPOLOGY_POINT_LIST);
+	const bool isLineStripAdj =
+		(params.topo == VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY);
+	const bool isTriStripAdj =
+		(params.topo == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY);
+	const bool isLines =
+		(params.topo == VK_PRIMITIVE_TOPOLOGY_LINE_LIST ||
+			params.topo == VK_PRIMITIVE_TOPOLOGY_LINE_STRIP || isLineStripAdj);
+	const bool isTriFan = (params.topo == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN);
+	const float quarterWidth = (2.0f / static_cast<float>(params.width)) * 0.25f;
+	const float quarterHeight = (2.0f / static_cast<float>(params.height)) * 0.25f;
+	const float marginW = ((isPoints || isLines) ? quarterWidth : 0.0f);
+	const float marginH = (isPoints ? quarterHeight : 0.0f);
+
+	const uint32_t m_blockCount = 1u;
+	// These coordinates will be used with different topologies, so we try to avoid drawing points on the edges.
+	const float left = -1.0f + marginW;
+	const float right = 1.0f - marginW;
+	const float center = (left + right) / 2.0f;
+	const float top = -1.0f + marginH;
+	const float bottom = -1.0f + 2.0f / static_cast<float>(m_blockCount) - marginH;
+	const float middle = (top + bottom) / 2.0f;
+
+	const auto red = Vec4(1, 0, 0, 1); // tcu::RGBA::red().toVec();
+	const auto green = Vec4(0, 1, 0, 1); // tcu::RGBA::green().toVec();
+	const auto blue = Vec4(0, 0, 1, 1); //  tcu::RGBA::blue().toVec();
+	const auto gray = Vec4(1, 1, 0, 1); // tcu::RGBA::gray().toVec();
+
+	const bool triListSkip = false; // (params.topo == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST && params.clearOp == CLEAR_SKIP);
+
+	std::vector<Vec4> v, c;
+	// --- TOP LEFT VERTICES ---
+	// For line strips with adjacency, everything is drawn with a single draw call, but we add a first and a last
+	// adjacency point so the strip looks like the non-adjacency case.
+	if (isLineStripAdj)
+		v.emplace_back(-2.0f, -2.0f, 1.0f, 1.0f), c.push_back(red);
+	v.emplace_back(left, top, 1.0f, 1.0f), c.push_back(red);
+	v.emplace_back(left, middle, 1.0f, 1.0f), c.push_back(red);
+	// For triangle fans we'll revert the order of the first 2 vertices in each quadrant so they form a proper fan
+	// covering the whole quadrant.
+	if (isTriFan)
+	{
+		std::swap(v.at(v.size() - 1), v.at(v.size() - 2));
+		std::swap(c.at(c.size() - 1), c.at(c.size() - 2));
+	}
+	v.emplace_back(center, top, 1.0f, 1.0f), c.push_back(red);
+	if (triListSkip)
+	{
+		v.emplace_back(center, top, 1.0f, 1.0f), c.push_back((red));
+		v.emplace_back(left, middle, 1.0f, 1.0f), c.push_back((red));
+	}
+	v.emplace_back(center, middle, 1.0f, 1.0f), c.push_back((red));
+
+	// --- BOTTOM LEFT VERTICES ---
+	v.emplace_back(left, middle, 1.0f, 1.0f), c.push_back((green));
+	v.emplace_back(left, bottom, 1.0f, 1.0f), c.push_back((green));
+	if (isTriFan)
+	{
+		std::swap(v.at(v.size() - 1), v.at(v.size() - 2));
+		std::swap(c.at(c.size() - 1), c.at(c.size() - 2));
+	}
+	v.emplace_back(center, middle, 1.0f, 1.0f), c.push_back((green));
+	if (triListSkip)
+	{
+		v.emplace_back(center, middle, 1.0f, 1.0f), c.push_back((green));
+		v.emplace_back(left, bottom, 1.0f, 1.0f), c.push_back((green));
+	}
+	v.emplace_back(center, bottom, 1.0f, 1.0f), c.push_back((green));
+
+	// --- TOP RIGHT VERTICES ---
+	v.emplace_back(center, top, 1.0f, 1.0f), c.push_back((blue));
+	v.emplace_back(center, middle, 1.0f, 1.0f), c.push_back((blue));
+	if (isTriFan)
+	{
+		std::swap(v.at(v.size() - 1), v.at(v.size() - 2));
+		std::swap(c.at(c.size() - 1), c.at(c.size() - 2));
+	}
+	v.emplace_back(right, top, 1.0f, 1.0f), c.push_back((blue));
+	if (triListSkip)
+	{
+		v.emplace_back(right, top, 1.0f, 1.0f), c.push_back((blue));
+		v.emplace_back(center, middle, 1.0f, 1.0f), c.push_back((blue));
+	}
+	v.emplace_back(right, middle, 1.0f, 1.0f), c.push_back((blue));
+
+	// --- BOTTOM RIGHT VERTICES ---
+	v.emplace_back(center, middle, 1.0f, 1.0f), c.push_back((gray));
+	v.emplace_back(center, bottom, 1.0f, 1.0f), c.push_back((gray));
+	if (isTriFan)
+	{
+		std::swap(v.at(v.size() - 1), v.at(v.size() - 2));
+		std::swap(c.at(c.size() - 1), c.at(c.size() - 2));
+	}
+	v.emplace_back(right, middle, 1.0f, 1.0f), c.push_back((gray));
+	if (triListSkip)
+	{
+		v.emplace_back(right, middle, 1.0f, 1.0f), c.push_back((gray));
+		v.emplace_back(center, bottom, 1.0f, 1.0f), c.push_back((gray));
+	}
+	v.emplace_back(right, bottom, 1.0f, 1.0f), c.push_back((gray));
+	if (isLineStripAdj)
+		v.emplace_back(2.0f, 2.0f, 1.0f, 1.0f), c.push_back((red));
+
+	vi.binding(0).addAttributes(v, c);
+
+	ZBuffer indexBuffer;
+	if (params.restart)
+	{
+		std::vector<uint32_t> i;
+		const uint32_t firstVertex = isLineStripAdj ? 1u : 0u;
+		constexpr uint32_t restartVal = INVALID_UINT32;
+		const uint32_t segmentCount = 4u;
+		const uint32_t vps = 4u;
+
+		for (uint32_t seg = 0; seg < segmentCount; ++seg)
+		{
+			uint32_t base = firstVertex + seg * vps;
+
+			if (isTriStripAdj)
+			{
+				// Schema: [A, V0, A, V1, A, V2, A, V3]
+				// If A then neighbor (duplicating V)
+				i.push_back(base + 0); i.push_back(base + 0); // Adj, Geom
+				i.push_back(base + 1); i.push_back(base + 1); // Adj, Geom
+				i.push_back(base + 2); i.push_back(base + 2); // Adj, Geom
+				i.push_back(base + 3); i.push_back(base + 3); // Adj, Geom
+			}
+			else if (isLineStripAdj)
+			{
+				// Schema: [Adj, V0, V1, Adj]
+				i.push_back(base - 1); // previous Adj
+				i.push_back(base + 0);
+				i.push_back(base + 1);
+				i.push_back(base + 2);
+				i.push_back(base + 3);
+				i.push_back(base + 4); // next Adj
+			}
+			else if (params.topo == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN)
+			{
+				// Invert pivot - drawing as COUNTER_CLOCKWISE
+				i.push_back(base + 1);
+				i.push_back(base + 0);
+				i.push_back(base + 3);
+				i.push_back(base + 2);
+			}
+			else
+			{
+				for (uint32_t vx = 0; vx < vps; ++vx)
+					i.push_back(base + vx);
+			}
+
+			if (seg < segmentCount - 1u)
+				i.push_back(restartVal);
+		}
+		indexBuffer = createBuffer<uint32_t>(vi.device, data_count(i), ZBufferUsageFlags(VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
+		bufferWrite(indexBuffer, i);
+	}
+	return indexBuffer;
+}
+std::array<ZShaderModule, 2> genShaders(ZDevice device, add_cref<std::string> assets, add_cref<Params>)
+{
+	ProgramCollection pc(device, assets);
+	pc.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "cts.vert");
+	pc.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "cts.frag");
+	pc.buildAndVerify(true);
+	return
+	{
+		pc.getShader(VK_SHADER_STAGE_VERTEX_BIT),
+		pc.getShader(VK_SHADER_STAGE_FRAGMENT_BIT),
+	};
+}
+void draw(add_ref<Canvas> cs, ZImage img, add_cref<Params> params);
+TriLogicInt runCtsCaseSecondaryInherited (add_ref<Canvas> cs, add_cref<std::string> assets, add_cref<Params> params)
+{
+	const VkPrimitiveTopology restartTopologies[] = {
+		VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,
+		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN,
+		VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY,
+		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY,
+	};
+	if (const auto rtp = std::find(std::begin(restartTopologies), std::end(restartTopologies), params.topo);
+		rtp == std::end(restartTopologies))
+	{
+		std::ostringstream msg;
+		msg << "Input topology " << params.topo << " must be one of ";
+		for (uint32_t i = 0; i < ARRAY_LENGTH_CAST(restartTopologies, uint32_t); ++i) {
+			if (ARRAY_LENGTH_CAST(restartTopologies, uint32_t) - 1 == i)
+				msg << " or ";
+			else if (i)
+				msg << ", ";
+			msg << restartTopologies[i];
+		}
+		msg << std::endl;
+		ASSERTFALSE(msg.str());
+	}
+
+	add_cref<ZDeviceInterface>	di					= cs.device.getInterface();
+	ZCommandPool				cmdPool				= createCommandPool(cs.device, cs.graphicsQueue);
+	LayoutManager				lm					(cs.device, cmdPool);
+	VertexInput					vi					(cs.device);
+	ZBuffer						indexBuffer			= generatePrimitives(vi, params);
+	const uint32_t				indexCount			= params.restart ? bufferGetElementCount<uint32_t>(indexBuffer) : 0u;
+	auto						[vs, fs]			= genShaders(cs.device, assets, params);
+
+	const uint32_t				queryCount			= 6;
+	const VkFormat				format				= VK_FORMAT_R32G32B32A32_SFLOAT;
+	const VkClearValue			clearColor			{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
+	const std::vector<RPA>		colors				{ RPA(AttachmentDesc::Color, format, clearColor,
+															VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) };
+	const ZAttachmentPool		attachmentPool		(colors);
+	const ZSubpassDescription2	subpass				({ RPAR(0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) });
+	ZRenderPass					renderPass			= createRenderPass(cs.device, attachmentPool, subpass);
+	ZImage						image				= cs.createColorImage2D(format, params.width, params.height);
+	ZImageView					view				= createImageView(image);
+	ZFramebuffer				frameBuffer			= createFramebuffer(renderPass, params.width, params.height, { view });
+	ZPipelineLayout				pipelineLayout		= lm.createPipelineLayout();
+	const VkFrontFace			frontFace			= params.ccwFronFace ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
+	ZPipeline					renderPipeline		= createGraphicsPipeline(pipelineLayout, renderPass,
+															vi, vs, fs, makeExtent2D(params.width, params.height),
+															params.topo, gpp::PrimitiveRestart(params.restart),
+															frontFace);
+	ZQueryPool					queryPool			= createQueryPool(cs.device, VK_QUERY_TYPE_PIPELINE_STATISTICS,
+														VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_VERTICES_BIT
+														| VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_PRIMITIVES_BIT, queryCount);
+	ZBuffer						queryResults		= createBuffer<uint64_t[queryCount]>(cs.device);
+
+	ZCommandBuffer				priCmd				= allocateCommandBuffer(cmdPool);
+	std::vector<ZCommandBuffer> secCmds				(queryCount);
+	for (uint32_t q = 0; q < queryCount; ++q)
+	{
+		secCmds[q] = allocateCommandBuffer(cmdPool, false);
+	}
+	{
+		std::vector<uint64_t> queryData(queryCount);
+		std::fill(queryData.begin(), queryData.end(), INVALID_UINT64);
+		bufferWrite(queryResults, queryData);
+	}
+
+	commandBufferBegin(priCmd);
+	commandBufferBindVertexBuffers(priCmd, vi);
+	if (params.restart)
+		commandBufferBindIndexBuffer(priCmd, indexBuffer);
+	commandBufferBindPipeline(priCmd, renderPipeline);
+	commandBufferResetQueryPool(priCmd, queryPool);
+		auto qpbi = commandBufferBeginQuery(priCmd, queryPool, 0);
+			auto rpbi = commandBufferBeginRenderPass(priCmd, frameBuffer);
+				if (params.restart)
+					di.vkCmdDrawIndexed(*priCmd, indexCount, 1u, 0u, 0, 0u);
+				else
+					di.vkCmdDraw(*priCmd, vi.getVertexCount(0), 1u, 0u, 0u);
+			commandBufferEndRenderPass(rpbi);
+		commandBufferEndQuery(qpbi);
+	di.vkCmdCopyQueryPoolResults(
+		*priCmd, *queryPool, 0u, 1u, *queryResults, 0u, sizeof(uint64_t),
+			uint32_t(VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT));
+	commandBufferEnd(priCmd);
+	commandBufferSubmitAndWait(priCmd);
+
+	std::cout << "Applied topology: " << params.topo << std::endl;
+
+	if (params.printIndices && params.restart)
+	{
+		std::vector<VecX<float, 8>> vertices;
+		bufferRead(vi.binding(0).getBuffer(), vertices);
+
+		std::vector<uint32_t> indices;
+		bufferRead(indexBuffer, indices);
+		ASSERTMSG(indices.size() == indexCount, "Invalid index count");
+		ASSERTMSG(vertices.size() != 0 && vertices.size() <= indices.size(), "Invalid vertex count");
+
+		std::cout << "Indices that was used to draw (" << indexCount << "):\n";
+		for (uint32_t i = 0; i < indexCount; ++i)
+		{
+			if (i) std::cout << ", ";
+			const uint32_t id = indices[i];
+			if (id == INVALID_UINT32)
+				std::cout << "-1";
+			else
+			{
+				ASSERTMSG(id < vertices.size(), "Index (", id, ") of bounds (", vertices.size(), ")");
+				std::cout << '[' << id << "]" << vertices[id].cast<Vec2>()
+					<< '{' << vertices[id][4] << ',' << vertices[id][5] << ',' << vertices[id][6] << '}';
+			}
+		}
+		std::cout << std::endl;
+	}
+
+	std::vector<uint64_t> queryData;
+	bufferRead(queryResults, queryData);
+	std::cout << "Vertices: " << queryData[0] << ", primitives: " << queryData[1] << std::endl;
+
+	draw(cs, image, params);
+
+	return queryData[0] ? 0 : 1;
+}
+
+void draw(add_ref<Canvas> cs, ZImage img, add_cref<Params> params)
+{
+	const VkFormat				format			= cs.surfaceFormat;
+	const VkClearValue			clearColor		{ { { 0.5f, 0.5f, 0.5f, 0.5f } } };
+	const std::vector<RPA>		colors			{ RPA(AttachmentDesc::Presentation, format, clearColor,
+														VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) };
+	const ZAttachmentPool		attachmentPool	(colors);
+	const ZSubpassDescription2	subpass			({ RPAR(0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) });
+	ZRenderPass					renderPass		= createRenderPass(cs.device, attachmentPool, subpass);
+
+	{
+		std::ostringstream title;
+		title << params.topo;
+		glfwSetWindowTitle(*cs.window, title.str().c_str());
+	}
+
+	auto onCommandRecording = [&](add_ref<Canvas>, add_cref<Canvas::Swapchain>,
+		ZCommandBuffer cmd, ZFramebuffer fb)
+		{
+			commandBufferBegin(cmd);
+			commandBufferBlitImageWithBarriers(cmd, img, framebufferGetImage(fb),
+				VK_ACCESS_NONE, VK_ACCESS_NONE,
+				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+				VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_FILTER_NEAREST);
+			commandBufferEnd(cmd);
+		};
+
+	int drawTrigger = 1;
+	cs.events().setDefault(drawTrigger);
+	cs.run(onCommandRecording, renderPass, std::ref(drawTrigger));
 }
 
 } // unnamed namespace

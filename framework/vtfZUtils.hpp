@@ -78,34 +78,9 @@ ZDevice			createLogicalDevice	(ZPhysicalDevice		physDevice,
 add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (add_cref<ZDevice> device);
 add_cref<VkPhysicalDeviceProperties> deviceGetPhysicalProperties (add_cref<ZPhysicalDevice> device);
 VkPhysicalDeviceProperties			 deviceGetPhysicalProperties2 (add_cref<ZPhysicalDevice> device, add_ptr<void> pNext = nullptr);
-template<typename  PropertiesType, typename FieldType, typename MaskType>
-FieldType deviceCheckProperties (
-	ZPhysicalDevice dev,
-	FieldType PropertiesType::* pField,
-	bool anyBit = true,
-	MaskType mask = {},
-	bool exceptionOnFail = true,
-	add_cptr<char> fieldNameAndDescription = {})
-{
-	PropertiesType pp = makeVkStruct();
-	VkPhysicalDeviceProperties2 p2 = makeVkStruct(&pp);
-	vkGetPhysicalDeviceProperties2(*dev, &p2);
-	const FieldType fieldValue = pp.*pField;
-	if (exceptionOnFail) {
-		ASSERTMSG(anyBit
-			? std::bitset<sizeof(FieldType) * 8>(fieldValue).any()
-			: ((fieldValue & FieldType(mask)) == FieldType(mask)),
-				demangledName<PropertiesType>(), "::",
-					(fieldNameAndDescription ? fieldNameAndDescription : ""));
-	}
-	return fieldValue;
-}
-add_cref<VkPhysicalDeviceLimits>
-				deviceGetPhysicalLimits (add_cref<ZDevice> device);
-add_cref<VkPhysicalDeviceLimits>
-				deviceGetPhysicalLimits (add_cref<ZPhysicalDevice> device);
-VkPhysicalDeviceFeatures2
-				deviceGetPhysicalFeatures2 (ZPhysicalDevice device, void* pNext = nullptr);
+add_cref<VkPhysicalDeviceLimits>	 deviceGetPhysicalLimits (add_cref<ZDevice> device);
+add_cref<VkPhysicalDeviceLimits>	 deviceGetPhysicalLimits (add_cref<ZPhysicalDevice> device);
+VkPhysicalDeviceFeatures2			 deviceGetPhysicalFeatures2 (ZPhysicalDevice device, void* pNext = nullptr);
 ZPhysicalDevice	deviceGetPhysicalDevice (ZDevice device);
 VkResult		deviceWaitIdle (ZDevice device, bool raiseException = true);
 ZInstance		deviceGetInstance (ZPhysicalDevice device);

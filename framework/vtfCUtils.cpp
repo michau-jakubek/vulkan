@@ -201,7 +201,8 @@ std::string subst_variables (const std::string& templateStr, const vtf::string_t
 	{
 		std::string var("${" + kv->first + '}');
 		std::string::size_type pos = result.find(var);
-		if (validateVariableExistence) ASSERTION(std::string::npos != pos);
+		if (validateVariableExistence)
+			ASSERTMSG(std::string::npos != pos, "Unknown variable ", var);
 		while (std::string::npos != pos)
 		{
 			result.replace(pos, var.length(), kv->second);

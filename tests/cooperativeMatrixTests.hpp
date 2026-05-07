@@ -25,6 +25,7 @@ struct CoopParams
 	bool buildAlways = false;
 	bool useSpirvShader = false;
 	bool allConfigurations = false;
+	bool forceSaturating = false;
 	OptionParser<CoopParams> getParser();
 };
 

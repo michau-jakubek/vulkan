@@ -1,0 +1,279 @@
+; SPIR-V
+; Version: 1.3
+; Generator: Khronos Glslang Reference Front End; 11
+; Bound: 150
+; Schema: 0
+               OpCapability Shader
+${Capabilities}
+               OpCapability VulkanMemoryModel
+               OpCapability CooperativeMatrixKHR
+${Extensions}
+               OpExtension "SPV_KHR_cooperative_matrix"
+               OpExtension "SPV_KHR_vulkan_memory_model"
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical Vulkan
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+
+               ; Annotations
+               OpDecorate %M SpecId 1
+               OpDecorate %K SpecId 2
+               OpDecorate %N SpecId 3
+               OpDecorate %SAT SpecId 4
+               OpDecorate %PC Block
+               OpMemberDecorate %PC 0 Offset 0
+               OpMemberDecorate %PC 1 Offset 4
+               OpMemberDecorate %PC 2 Offset 8
+               OpMemberDecorate %PC 3 Offset 12
+               OpMemberDecorate %PC 4 Offset 16
+               OpDecorate %_runtimearr_adata ArrayStride ${AStride}
+               OpDecorate %DataA Block
+               OpMemberDecorate %DataA 0 Offset 0
+               OpDecorate %__0 Binding 0
+               OpDecorate %__0 DescriptorSet 0
+               OpDecorate %_runtimearr_bdata ArrayStride ${BStride}
+               OpDecorate %DataB Block
+               OpMemberDecorate %DataB 0 Offset 0
+               OpDecorate %__1 Binding 1
+               OpDecorate %__1 DescriptorSet 0
+               OpDecorate %_runtimearr_cdata ArrayStride ${CStride}
+               OpDecorate %DataC Block
+               OpMemberDecorate %DataC 0 Offset 0
+               OpDecorate %__2 Binding 2
+               OpDecorate %__2 DescriptorSet 0
+               OpDecorate %_runtimearr_rdata ArrayStride ${RStride}
+               OpDecorate %DataR Block
+               OpMemberDecorate %DataR 0 Offset 0
+               OpDecorate %__3 Binding 3
+               OpDecorate %__3 DescriptorSet 0
+               OpDecorate %147 SpecId 0
+               OpDecorate %gl_WorkGroupSize BuiltIn WorkgroupSize
+
+               ; Types, variables and constants
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+       %bool = OpTypeBool
+       %uint = OpTypeInt 32 0
+        %int = OpTypeInt 32 1
+${TypeList}
+     %uint_0 = OpConstant %uint 0
+     %uint_1 = OpConstant %uint 1
+     %uint_2 = OpConstant %uint 2
+     %uint_3 = OpConstant %uint 3
+     %uint_5 = OpConstant %uint 5
+      %int_0 = OpConstant %int 0
+      %int_1 = OpConstant %int 1
+      %int_2 = OpConstant %int 2
+      %int_3 = OpConstant %int 3
+      %int_4 = OpConstant %int 4
+          %M = OpSpecConstant %int 1                ; SpecId 1
+          %K = OpSpecConstant %int 1                ; SpecId 2
+          %N = OpSpecConstant %int 1                ; SpecId 3
+        %SAT = OpSpecConstant %int 0                ; SpecId 4
+
+  %matA_type = OpTypeCooperativeMatrixKHR ${AType} %uint_3 %M %K %uint_0
+  %matA_null = OpConstantNull %matA_type
+   %matA_ptr = OpTypePointer Function %matA_type
+%loadMatA_type = OpTypeFunction %void %matA_ptr
+
+  %matB_type = OpTypeCooperativeMatrixKHR ${BType} %uint_3 %K %N %uint_1
+  %matB_null = OpConstantNull %matB_type
+   %matB_ptr = OpTypePointer Function %matB_type
+%loadMatB_type = OpTypeFunction %void %matB_ptr
+
+ %matC_type = OpTypeCooperativeMatrixKHR ${CType} %uint_3 %M %N %uint_2
+ %matC_null = OpConstantNull %matC_type
+  %matC_ptr = OpTypePointer Function %matC_type
+%loadMatC_type = OpTypeFunction %void %matC_ptr
+
+; if (RType != CType) {
+;     %matR_type = OpTypeCooperativeMatrixKHR ${RType} %uint_3 %M %N %uint_2
+;     %matR_null = OpConstantNull %matR_type
+;     %matR_ptr = OpTypePointer Function %matR_type
+; }
+${matR_*}
+%genMatR_type = OpTypeFunction ${mat(C|R)_type}
+
+         %PC = OpTypeStruct %uint %uint %uint %uint %uint   ; Block
+%_ptr_PushConstant_PC = OpTypePointer PushConstant %PC
+          %_ = OpVariable %_ptr_PushConstant_PC PushConstant
+%_ptr_PushConstant_uint = OpTypePointer PushConstant %uint
+
+%_runtimearr_adata = OpTypeRuntimeArray ${AType}     ; ArrayStride ${AStride}
+      %DataA = OpTypeStruct %_runtimearr_adata       ; Block
+%_ptr_StorageBuffer_DataA = OpTypePointer StorageBuffer %DataA
+        %__0 = OpVariable %_ptr_StorageBuffer_DataA StorageBuffer   ; Binding 0, DescriptorSet 0
+
+%_runtimearr_bdata = OpTypeRuntimeArray ${BType}   ; ArrayStride ${BStride}
+      %DataB = OpTypeStruct %_runtimearr_bdata     ; Block
+%_ptr_StorageBuffer_DataB = OpTypePointer StorageBuffer %DataB
+        %__1 = OpVariable %_ptr_StorageBuffer_DataB StorageBuffer   ; Binding 1, DescriptorSet 0
+
+%_runtimearr_cdata = OpTypeRuntimeArray ${CType}  ; ArrayStride ${CStride}
+      %DataC = OpTypeStruct %_runtimearr_cdata     ; Block
+%_ptr_StorageBuffer_DataC = OpTypePointer StorageBuffer %DataC
+        %__2 = OpVariable %_ptr_StorageBuffer_DataC StorageBuffer   ; Binding 2, DescriptorSet 0
+
+%_ptr_StorageBuffer_AType = OpTypePointer StorageBuffer ${AType}
+%_ptr_StorageBuffer_BType = OpTypePointer StorageBuffer ${BType}
+%_ptr_StorageBuffer_CType = OpTypePointer StorageBuffer ${CType}
+%_ptr_StorageBuffer_RType = OpTypePointer StorageBuffer ${RType}
+
+%_ptr_Private_A = OpTypePointer Private %matA_type
+          %A = OpVariable %_ptr_Private_A Private
+%_ptr_Private_B = OpTypePointer Private %matB_type
+          %B = OpVariable %_ptr_Private_B Private
+%_ptr_Private_C = OpTypePointer Private %matC_type
+          %C = OpVariable %_ptr_Private_C Private
+%_ptr_Private_R = OpTypePointer Private ${mat(C|R)_type} ; (RType == CType) ? %matC_type : %matR_type
+          %R = OpVariable %_ptr_Private_R Private
+
+%_runtimearr_rdata = OpTypeRuntimeArray ${RType}  ; ArrayStride ${RStride}
+      %DataR = OpTypeStruct %_runtimearr_rdata     ; Block
+%_ptr_StorageBuffer_DataR = OpTypePointer StorageBuffer %DataR
+        %__3 = OpVariable %_ptr_StorageBuffer_DataR StorageBuffer   ; Binding 3, DescriptorSet 0
+        %147 = OpSpecConstant %uint 1               ; SpecId 0
+     %v3uint = OpTypeVector %uint 3
+%gl_WorkGroupSize = OpSpecConstantComposite %v3uint %147 %uint_1 %uint_1    ; BuiltIn WorkgroupSize
+
+               ; Function main
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+    %param_0 = OpVariable %matA_ptr Function
+    %param_1 = OpVariable %matB_ptr Function
+    %param_2 = OpVariable %matC_ptr Function
+        %130 = OpFunctionCall %void %loadMatA_def %param_0
+        %131 = OpLoad %matA_type %param_0
+               OpStore %A %131
+        %133 = OpFunctionCall %void %loadMatB_def %param_1
+        %134 = OpLoad %matB_type %param_1
+               OpStore %B %134
+        %136 = OpFunctionCall %void %loadMatC_def %param_2
+        %137 = OpLoad %matC_type %param_2
+               OpStore %C %137
+        %139 = OpFunctionCall ${mat(C|R)_type} %genMatR_def
+               OpStore %R %139
+
+       %matR = OpLoad ${mat(C|R)_type} %R
+     %p_sb_R = OpAccessChain %_ptr_StorageBuffer_RType %__3 %int_0 %uint_0
+               OpCooperativeMatrixStoreKHR %p_sb_R %matR %int_0 %N MakePointerAvailable|NonPrivatePointer %uint_5
+
+       %matC = OpLoad %matC_type %C
+     %p_sb_C = OpAccessChain %_ptr_StorageBuffer_CType %__2 %int_0 %uint_0
+               OpCooperativeMatrixStoreKHR %p_sb_C %matC %int_0 %N MakePointerAvailable|NonPrivatePointer %uint_5
+
+       %matB = OpLoad %matB_type %B
+     %p_sb_B = OpAccessChain %_ptr_StorageBuffer_BType %__1 %int_0 %uint_0
+               OpCooperativeMatrixStoreKHR %p_sb_B %matB %int_0 %N MakePointerAvailable|NonPrivatePointer %uint_5
+
+       %matA = OpLoad %matA_type %A
+     %p_sb_A = OpAccessChain %_ptr_StorageBuffer_AType %__0 %int_0 %uint_0
+               OpCooperativeMatrixStoreKHR %p_sb_A %matA %int_0 %K MakePointerAvailable|NonPrivatePointer %uint_5
+
+               OpReturn
+               OpFunctionEnd
+
+               ; Function loadMatA
+%loadMatA_def = OpFunction %void None %loadMatA_type
+       %mtxA = OpFunctionParameter %matA_ptr
+         %18 = OpLabel
+         %42 = OpAccessChain %_ptr_PushConstant_uint %_ %int_0
+         %43 = OpLoad %uint %42
+         %45 = OpAccessChain %_ptr_PushConstant_uint %_ %int_1
+         %46 = OpLoad %uint %45
+         %48 = OpIEqual %bool %43 %46
+               OpSelectionMerge %50 None
+               OpBranchConditional %48 %49 %60
+         %49 = OpLabel
+               OpStore %mtxA %matA_null ; %59
+               OpBranch %50
+         %60 = OpLabel
+         %61 = OpAccessChain %_ptr_StorageBuffer_AType %__0 %int_0 %uint_0
+         %63 = OpCooperativeMatrixLoadKHR %matA_type %61 %int_0 %K MakePointerVisible|NonPrivatePointer %uint_5
+               OpStore %mtxA %63
+               OpBranch %50
+         %50 = OpLabel
+               OpReturn
+               OpFunctionEnd
+
+               ; Function loadMatB
+%loadMatB_def = OpFunction %void None %loadMatB_type
+       %mtxB = OpFunctionParameter %matB_ptr
+         %26 = OpLabel
+         %64 = OpAccessChain %_ptr_PushConstant_uint %_ %int_0
+         %65 = OpLoad %uint %64
+         %67 = OpAccessChain %_ptr_PushConstant_uint %_ %int_2
+         %68 = OpLoad %uint %67
+         %69 = OpIEqual %bool %65 %68
+               OpSelectionMerge %71 None
+               OpBranchConditional %69 %70 %79
+         %70 = OpLabel
+               OpStore %mtxB %matB_null ; %78
+               OpBranch %71
+         %79 = OpLabel
+         %80 = OpAccessChain %_ptr_StorageBuffer_BType %__1 %int_0 %uint_0
+         %82 = OpCooperativeMatrixLoadKHR %matB_type %80 %int_0 %N MakePointerVisible|NonPrivatePointer %uint_5
+               OpStore %mtxB %82
+               OpBranch %71
+         %71 = OpLabel
+               OpReturn
+               OpFunctionEnd
+
+               ; Function loadMatC
+%loadMatC_def = OpFunction %void None %loadMatC_type
+       %mtxC = OpFunctionParameter %matC_ptr
+         %33 = OpLabel
+         %83 = OpAccessChain %_ptr_PushConstant_uint %_ %int_0
+         %84 = OpLoad %uint %83
+         %86 = OpAccessChain %_ptr_PushConstant_uint %_ %int_3
+         %87 = OpLoad %uint %86
+         %88 = OpIEqual %bool %84 %87
+               OpSelectionMerge %90 None
+               OpBranchConditional %88 %89 %98
+         %89 = OpLabel
+               OpStore %mtxC %matC_null ; %97
+               OpBranch %90
+         %98 = OpLabel
+         %99 = OpAccessChain %_ptr_StorageBuffer_CType %__2 %int_0 %uint_0
+        %101 = OpCooperativeMatrixLoadKHR %matC_type %99 %int_0 %N MakePointerVisible|NonPrivatePointer %uint_5
+               OpStore %mtxC %101
+               OpBranch %90
+         %90 = OpLabel
+               OpReturn
+               OpFunctionEnd
+
+               ; Function genMatR
+%genMatR_def = OpFunction ${mat(C|R)_type} None %genMatR_type
+         %36 = OpLabel
+       %mtxR = OpVariable ${mat(C|R)_ptr} Function
+        %102 = OpAccessChain %_ptr_PushConstant_uint %_ %int_0
+        %103 = OpLoad %uint %102
+        %105 = OpAccessChain %_ptr_PushConstant_uint %_ %int_4
+        %106 = OpLoad %uint %105
+        %107 = OpIEqual %bool %103 %106
+               OpSelectionMerge %109 None
+               OpBranchConditional %107 %108 %121
+        %108 = OpLabel
+               OpStore %mtxR ${mat(C|R)_null} ; %120
+               OpBranch %109
+        %121 = OpLabel
+        %122 = OpLoad %matA_type %A
+        %123 = OpLoad %matB_type %B
+        %124 = OpLoad %matC_type %C
+      %isSat = OpIEqual %bool %SAT %int_1
+               OpSelectionMerge %lbl_merge_sat None
+               OpBranchConditional %isSat %lbl_sat %lbl_nosat
+    %lbl_sat = OpLabel
+    %res_sat = OpCooperativeMatrixMulAddKHR ${mat(C|R)_type} %122 %123 %124 ${Operands}${Saturating}
+               OpBranch %lbl_merge_sat
+  %lbl_nosat = OpLabel
+  %res_nosat = OpCooperativeMatrixMulAddKHR ${mat(C|R)_type} %122 %123 %124 ${Operands}
+               OpBranch %lbl_merge_sat
+%lbl_merge_sat = OpLabel
+               %res = OpPhi ${mat(C|R)_type} %res_sat %lbl_sat %res_nosat %lbl_nosat
+               OpStore %mtxR %res
+               OpBranch %109
+        %109 = OpLabel
+        %126 = OpLoad ${mat(C|R)_type} %mtxR
+               OpReturnValue %126
+               OpFunctionEnd
