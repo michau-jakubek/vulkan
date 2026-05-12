@@ -40,7 +40,10 @@ struct ZSpecializationInfo : protected VkSpecializationInfo
 	{
 		appendEntries(entries...);
 	}
+    uint32_t addEntries (add_cref<ZSpecializationInfo> entries);
 
+    bool        getEntry    (uint32_t index, add_ref<VkSpecializationMapEntry>,
+                                             add_ref<std::vector<uint8_t>> data) const;
 	uint32_t	entryCount	() const { return data_count(m_entries); }
 	bool		empty		() const { return m_entries.empty(); }
 	void		clear		();

@@ -124,7 +124,9 @@ public:
 	uint32_t					getAttributeCount	() const;
 	void						clear				();
 
-	template<class Vec234> static std::vector<Vec234> fullQuad();
+	template<class Vec234> static std::vector<Vec234> fullQuadFan(float z = 0.0f, bool ccw = false);
+	template<class Vec234> static std::vector<Vec234> fullQuadList(float z = 0.0f, bool ccw = false);
+	template<class Vec234> static std::vector<Vec234> fullQuadStrip(float z = 0.0f, bool ccw = false);
 
 protected:
 	std::vector<VertexBinding>	m_freeBindings;

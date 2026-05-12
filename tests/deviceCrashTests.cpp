@@ -5,20 +5,14 @@
 #include "vtfDSBMgr.hpp"
 #include "vtfZPipeline.hpp"
 #include "vtfZCommandBuffer.hpp"
-#include "vtfFloat16.hpp"
 #include "vtfZUtils.hpp"
 #include "vtfVertexInput.hpp"
-#include <numeric>
-#include <random>
-#include "demangle.hpp"
-#include "vtfStructGenerator.hpp"
-#include "vtfPrettyPrinter.hpp"
 #include "vtfCommandLine.hpp"
 
 namespace
 {
 using namespace vtf;
-using namespace sg;
+//using namespace sg;
 
 constexpr Option optionPreserveInstance{ "--preserve-instance", 0 };
 constexpr Option optionBuildAlways{ "--build-always", 0 };
@@ -146,7 +140,7 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_ref<ZShaderModule> module,
         uint32_t dataValue1, dataValue2, dataIndex1, dataIndex2;
     } const pc { dataValue1, dataValue2, dataIndex1, dataIndex2 };
     ZPipelineLayout			pipelineLayout  = lm.createPipelineLayout({ dsLayout }, ZPushRange<PC>(stage));
-    ZPipeline				pipeline        = createComputePipeline(pipelineLayout, shader);
+    ZPipeline				pipeline        = createComputePipeline(shader, pipelineLayout);
 
 	{
 		OneShotCommandBuffer cmd(ctx.device, ctx.computeQueue);
@@ -154,7 +148,7 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_ref<ZShaderModule> module,
         commandBufferPushConstants(cmd, pipelineLayout, pc);
 		commandBufferDispatch(cmd);
         {
-            ZPipeline				pip = createComputePipeline(pipelineLayout, shader);
+            ZPipeline				pip = createComputePipeline(shader, pipelineLayout);
             commandBufferBindPipeline(cmd, pip);
         }
         cmd.endRecordingAndSubmit();

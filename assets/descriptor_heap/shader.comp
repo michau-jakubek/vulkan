@@ -1,0 +1,17 @@
+#version 450
+
+layout(local_size_x = 64) in;
+
+layout(set = 0, binding = 0) uniform InData  { uint inData[64]; };
+layout(set = 0, binding = 1) buffer  OutData { uint outData[64]; };
+
+layout(push_constant) uniform PushData { layout(offset = 8) uint addend; };
+
+void main()
+{
+	const uint i = gl_GlobalInvocationID.x;
+	if (i < 64u)
+	{
+		outData[i] = inData[i] + addend;
+	}
+}

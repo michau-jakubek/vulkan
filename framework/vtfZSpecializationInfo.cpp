@@ -15,6 +15,35 @@ void ZSpecializationInfo::appendEntry (VkSpecializationMapEntry newEntry, add_cp
 	pushEntry(newEntry, data, false);
 }
 
+bool ZSpecializationInfo::getEntry (
+    uint32_t index,
+    add_ref<VkSpecializationMapEntry> entry,
+    add_ref<std::vector<uint8_t>> data) const
+{
+    if (index < m_entries.size())
+    {
+        entry = m_entries.at(index);
+        data.resize(entry.size);
+        std::fill(data.begin(), data.end(), 0u);
+        std::copy_n(std::next(m_data.begin(), entry.offset), entry.size, data.begin());
+        return true;
+    }
+    return false;
+}
+
+uint32_t ZSpecializationInfo::addEntries (add_cref<ZSpecializationInfo> entries)
+{
+    std::vector<uint8_t> data;
+    VkSpecializationMapEntry entry;
+    const uint32_t count = entries.entryCount();
+    for (uint32_t i = 0u; i < count; ++i)
+    {
+        entries.getEntry(i, entry, data);
+        pushEntry(entry, data.data(), false);
+    }
+    return count;
+}
+
 void ZSpecializationInfo::pushEntry (VkSpecializationMapEntry newEntry, add_cptr<void> data, bool insert)
 {
 	for (add_cref<VkSpecializationMapEntry> entry : m_entries)

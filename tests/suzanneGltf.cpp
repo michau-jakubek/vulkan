@@ -288,7 +288,7 @@ TriLogicInt runTest(add_ref<Canvas> ctx, add_cref<Params> params)
 
     ZPipeline pipeline = createGraphicsPipeline(pLayout, renderPass, vert, frag,
                                                 vi, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_VIEWPORT,
-        ZCullModeFlags(VK_CULL_MODE_NONE), VK_FRONT_FACE_COUNTER_CLOCKWISE);
+                                                VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
 
 	auto updateUniforms = [&](add_cref<Canvas> cs)
     {

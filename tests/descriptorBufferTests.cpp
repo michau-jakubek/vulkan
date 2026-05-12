@@ -409,7 +409,7 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 	ZDescriptorSetLayout	ds1Layout	= set1.createDescriptorSetLayout(useDescriptorSet, layoutFlags);
 
 	ZPipelineLayout			pLayout		= set0.createPipelineLayout({ds0Layout, ds1Layout});
-	ZPipeline				compPline	= createComputePipeline(pLayout, compShader);
+    ZPipeline				compPline	= createComputePipeline(compShader, pLayout);
 	ZBuffer					desc0Buffer	= useDescriptorSet ? ZBuffer() : set0.createDescriptorBuffer(ds0Layout);
 	ZBuffer					desc1Buffer = useDescriptorSet ? ZBuffer() : set1.createDescriptorBuffer(ds1Layout);
 	ZRenderPass				renderPass	= createSinglePresentationRenderPass(canvas.device, canvas.surfaceFormat,

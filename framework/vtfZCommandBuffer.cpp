@@ -252,6 +252,48 @@ void commandBufferBindDescriptorBuffers (
 															indices.data(), offsets.data());
 }
 
+#if DESCRIPTOR_HEAP_AVAILABLE
+void commandBufferBindResourceHeap (
+	ZCommandBuffer	cmd,
+	ZBuffer			heapBuffer)
+{
+	ZDevice						device	= cmd.getParamRef<ZDevice>();
+	add_cref<ZDeviceInterface>	di		= device.getInterface();
+	ASSERTMSG(di.vkCmdBindResourceHeapEXT, "vkCmdBindResourceHeapEXT() must not be null");
+
+	VkPhysicalDeviceDescriptorHeapPropertiesEXT dhp = makeVkStruct();
+	deviceGetPhysicalProperties2(device.getParam<ZPhysicalDevice>(), &dhp);
+
+	const VkDeviceSize alignment	= dhp.resourceHeapAlignment ? dhp.resourceHeapAlignment : VkDeviceSize(1);
+	const VkDeviceSize reservedRange = ROUNDUP(dhp.minResourceHeapReservedRange, alignment);
+
+	VkBindHeapInfoEXT bindInfo		= makeVkStruct();
+	bindInfo.heapRange.address		= bufferGetAddress(heapBuffer);
+	bindInfo.heapRange.size			= bufferGetSize(heapBuffer);
+	bindInfo.reservedRangeOffset	= 0u;
+	bindInfo.reservedRangeSize		= reservedRange;
+
+	VTF_CALL_CHECK(di.vkCmdBindResourceHeapEXT, *cmd, &bindInfo);
+}
+
+void commandBufferPushData (
+	ZCommandBuffer	cmd,
+	uint32_t		offset,
+	add_cptr<void>	data,
+	std::size_t		size)
+{
+	add_cref<ZDeviceInterface>	di = cmd.getParamRef<ZDevice>().getInterface();
+	ASSERTMSG(di.vkCmdPushDataEXT, "vkCmdPushDataEXT() must not be null");
+
+	VkPushDataInfoEXT info	= makeVkStruct();
+	info.offset				= offset;
+	info.data.address		= data;
+	info.data.size			= size;
+
+	VTF_CALL_CHECK(di.vkCmdPushDataEXT, *cmd, &info);
+}
+#endif // DESCRIPTOR_HEAP_AVAILABLE
+
 static bool verifyPushConstants (
 	std::size_t										count,
 	add_cptr<std::size_t>							sizes,
@@ -578,7 +620,7 @@ void commandBufferEndRendering (ZCommandBuffer cmd)
 	cmd.getParamRef<ZDevice>().getInterface().vkCmdEndRendering(*cmd);
 }
 
-void commandBuffervSetRenderingInputAttachmentIndices (
+void commandBufferSetRenderingInputAttachmentIndices (
 	ZCommandBuffer cmd,
 	add_cref<std::vector<uint32_t>> indices,
 	add_cptr<std::vector<uint32_t>> pDepthInputAttachmentIndex,
@@ -593,16 +635,25 @@ void commandBuffervSetRenderingInputAttachmentIndices (
 
 	ZDevice device = cmd.getParam<ZDevice>();
 	ZPhysicalDevice physDevice = device.getParam<ZPhysicalDevice>();
-	ZInstance instance = physDevice.getParam<ZInstance>();
-	add_cref<ZDeviceInterface> di = device.getInterface();
-	add_cref<ZInstanceInterface> ii = instance.getInterface(); UNREF(ii);
 
 	if (useKHRversion.has_value())
 	{
-		add_cptr<char> fun = *useKHRversion ? "vkCmdSetRenderingInputAttachmentIndicesKHR" : "vkCmdSetRenderingInputAttachmentIndices";
-		const auto pfn = *useKHRversion ? di.vkCmdSetRenderingInputAttachmentIndicesKHR : di.vkCmdSetRenderingInputAttachmentIndices;
-		ASSERTMSG(pfn != nullptr, fun, " must not be nullptr");
-		(*pfn)(*cmd, &riai);
+		if (*useKHRversion)
+		{
+			const auto pfn = DriverInitializer::getPlatformDeviceProc(
+				PFN_vkCmdSetRenderingInputAttachmentIndicesKHR(), PFN_vkGetDeviceProcAddr(),
+					*device, "vkCmdSetRenderingInputAttachmentIndicesKHR");
+			ASSERTMSG(pfn != nullptr, "vkCmdSetRenderingInputAttachmentIndicesKHR must not be nullptr");
+			(*pfn)(*cmd, &riai);
+		}
+		else
+		{
+			const auto pfn = DriverInitializer::getPlatformDeviceProc(
+				PFN_vkCmdSetRenderingInputAttachmentIndices(), PFN_vkGetDeviceProcAddr(),
+				*device, "vkCmdSetRenderingInputAttachmentIndices");
+			ASSERTMSG(pfn != nullptr, "vkCmdSetRenderingInputAttachmentIndices must not be nullptr");
+			(*pfn)(*cmd, &riai);
+		}
 	}
 	else
 	{
@@ -610,7 +661,7 @@ void commandBuffervSetRenderingInputAttachmentIndices (
 		const uint32_t major = VK_VERSION_MAJOR(props.apiVersion);
 		const uint32_t minor = VK_VERSION_MINOR(props.apiVersion);
 		const bool KHR = major == 1u && minor < 4u;
-		commandBuffervSetRenderingInputAttachmentIndices(cmd, indices, pDepthInputAttachmentIndex, pStencilInputAttachmentIndex, KHR);
+		commandBufferSetRenderingInputAttachmentIndices(cmd, indices, pDepthInputAttachmentIndex, pStencilInputAttachmentIndex, KHR);
 	}
 }
 
@@ -624,16 +675,25 @@ void commandBufferSetRenderingAttachmentLocations (
 
 	ZDevice device = cmd.getParam<ZDevice>();
 	ZPhysicalDevice physDevice = device.getParam<ZPhysicalDevice>();
-	ZInstance instance = physDevice.getParam<ZInstance>();
-	add_cref<ZDeviceInterface> di = device.getInterface();
-	add_cref<ZInstanceInterface> ii = instance.getInterface(); UNREF(ii);
 
 	if (useKHRversion.has_value())
 	{
-		add_cptr<char> fun = *useKHRversion ? "vkCmdSetRenderingAttachmentLocationsKHR" : "vkCmdSetRenderingAttachmentLocations";
-		auto pfn = *useKHRversion ? di.vkCmdSetRenderingAttachmentLocationsKHR : di.vkCmdSetRenderingAttachmentLocations;
-		ASSERTMSG(pfn != nullptr, fun, " must not be nullptr");
-		(*pfn)(*cmd, &rali);
+		if (*useKHRversion)
+		{
+			const auto pfn = DriverInitializer::getPlatformDeviceProc(
+				PFN_vkCmdSetRenderingAttachmentLocationsKHR(), PFN_vkGetDeviceProcAddr(),
+				*device, "vkCmdSetRenderingAttachmentLocationsKHR");
+			ASSERTMSG(pfn != nullptr, "vkCmdSetRenderingAttachmentLocationsKHR must not be nullptr");
+			(*pfn)(*cmd, &rali);
+		}
+		else
+		{
+			const auto pfn = DriverInitializer::getPlatformDeviceProc(
+				PFN_vkCmdSetRenderingAttachmentLocations(), PFN_vkGetDeviceProcAddr(),
+				*device, "vkCmdSetRenderingAttachmentLocations");
+			ASSERTMSG(pfn != nullptr, "vkCmdSetRenderingAttachmentLocations must not be nullptr");
+			(*pfn)(*cmd, &rali);
+		}
 	}
 	else
 	{

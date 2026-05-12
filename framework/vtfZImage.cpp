@@ -577,6 +577,14 @@ VkImageLayout imageResetLayout (ZImage image, VkImageLayout layout)
 	return oldLayout;
 }
 
+void imageResetLayout (add_ref<std::vector<ZImage>> images, VkImageLayout layout)
+{
+	for (add_ref<ZImage> i : images)
+	{
+		i.getParamRef< VkImageCreateInfo>().initialLayout = layout;
+	}
+}
+
 VkImageLayout imageResetLayout (ZImageView view, VkImageLayout layout)
 {
 	return imageResetLayout(view.getParam<ZImage>(), layout);

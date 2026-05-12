@@ -42,6 +42,7 @@ ZImage				imageViewGetImage (ZImageView view);
 VkImageLayout		imageGetLayout	 (ZImage image);
 VkImageLayout		imageResetLayout (ZImage image, VkImageLayout layout);
 VkImageLayout		imageResetLayout (ZImageView view, VkImageLayout layout);
+void				imageResetLayout (add_ref<std::vector<ZImage>> images, VkImageLayout layout);
 auto				imageGetCreateInfo (add_cref<ZImage> image) -> add_cref<VkImageCreateInfo>;
 add_cref<VkExtent3D> imageGetExtent (add_cref<ZImage> image);
 VkFormat			imageGetFormat	(ZImage image);

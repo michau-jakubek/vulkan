@@ -260,8 +260,8 @@ TriLogicInt runTests(add_ref<VulkanContext> ctx, add_cref<Params> params)
 	ZDescriptorSet			descSetBar		= LayoutManager::getDescriptorSet(dsBarLayout);
 	ZPipelineLayout			plFooLayout		= lmFoo.createPipelineLayout({ dsFooLayout }, small_pushc);
 	ZPipelineLayout			plBarLayout		= lmBar.createPipelineLayout({ dsBarLayout }, small_pushc);
-	ZPipeline				pipelineFoo		= createComputePipeline(plFooLayout, spirvShader, {}, UVec3(1u));
-	ZPipeline				pipelineBar		= createComputePipeline(plBarLayout, spirvShader, {}, UVec3(1u));
+    ZPipeline				pipelineFoo		= createComputePipeline(spirvShader, plFooLayout, UVec3(1u));
+    ZPipeline				pipelineBar		= createComputePipeline(spirvShader, plBarLayout, UVec3(1u));
 
 	lmFoo.updateDescriptorSet(descSetFoo, bindingFoo, fooBuffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 	lmFoo.updateDescriptorSet(descSetFoo, bindingBar, barBuffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);

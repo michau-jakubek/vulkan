@@ -118,88 +118,44 @@ ZImageMemoryBarrier makeImageMemoryBarrier (ZImage image, VkAccessFlags srcAcces
 void pushBarriers (add_ref<BarriersInfo>) { }
 void pushKnownBarrier (add_ref<BarriersInfo> info, add_cref<ZMemoryBarrier> barrier)
 {
-	info.pMemoryBarriers[info.memoryBarrierCount++] = barrier();
+	if (info.memoryBarrierCount < info.memoryBarriers.size())
+		info.memoryBarriers[info.memoryBarrierCount++] = barrier();
+	else {
+		info.memoryBarriers.push_back(barrier());
+		++info.memoryBarrierCount;
+	}
+}
+void pushKnownBarrier (add_ref<BarriersInfo> info, add_cref<std::vector<ZMemoryBarrier>> barriers)
+{
+	for (add_cref<ZMemoryBarrier> b : barriers) pushKnownBarrier(info, b);
 }
 
 void pushKnownBarrier (add_ref<BarriersInfo> info, add_cref<ZBufferMemoryBarrier> barrier)
 {
-	info.pBufferBarriers[info.bufferBarrierCount++] = barrier();
-	for (uint32_t i = 0; i < info.bufferBarrierCount; ++i)
-	for (uint32_t j = i + 1; j < info.bufferBarrierCount; ++j)
-	{
-		ASSERTMSG(info.pBufferBarriers[i].buffer != info.pBufferBarriers[j].buffer,
-				  "Buffer barriers must have different buffer handles, try different sizes or offsets");
+	if (info.bufferBarrierCount < info.bufferBarriers.size())
+		info.bufferBarriers[info.bufferBarrierCount++] = barrier();
+	else {
+		info.bufferBarriers.push_back(barrier());
+		++info.bufferBarrierCount;
 	}
 }
+void pushKnownBarrier (add_ref<BarriersInfo> info, add_cref<std::vector<ZBufferMemoryBarrier>> barriers)
+{
+	for (add_cref<ZBufferMemoryBarrier> b : barriers) pushKnownBarrier(info, b);
+}
+
 void pushKnownBarrier (add_ref<BarriersInfo> info, add_ref<ZImageMemoryBarrier> barrier)
 {
-	info.pImageBarriers[info.imageBarrierCount++] = barrier();
-	for (uint32_t i = 0; i < info.imageBarrierCount; ++i)
-	for (uint32_t j = i + 1; j < info.imageBarrierCount; ++j)
-	{
-		ASSERTMSG(info.pImageBarriers[i].image != info.pImageBarriers[j].image,
-				  "Image barriers must have different image handles, try different layers or mip levels");
+	if (info.imageBarrierCount < info.imageBarriers.size())
+		info.imageBarriers[info.imageBarrierCount++] = barrier();
+	else {
+		info.imageBarriers.push_back(barrier());
+		++info.imageBarrierCount;
 	}
 }
-
-void pushBarriers(
-	add_ref<std::vector<VkMemoryBarrier>>,
-	add_ref<std::vector<VkImageMemoryBarrier>>,
-	add_ref<std::vector<VkBufferMemoryBarrier>>)
+void pushKnownBarrier (add_ref<BarriersInfo> info, add_ref<std::vector<ZImageMemoryBarrier>> barriers)
 {
-}
-
-void pushKnownBarriers(
-	add_ref<std::vector<VkMemoryBarrier>>		dstBarriers,
-	add_ref<std::vector<VkImageMemoryBarrier>>,
-	add_ref<std::vector<VkBufferMemoryBarrier>>,
-	add_cref<std::vector<ZMemoryBarrier>>		srcBarriers)
-{
-	std::transform(srcBarriers.begin(), srcBarriers.end(), std::back_inserter(dstBarriers),
-		[](add_cref<ZMemoryBarrier> barrier) { return barrier(); });
-}
-
-void pushKnownBarriers(
-	add_ref<std::vector<VkMemoryBarrier>>,
-	add_ref<std::vector<VkImageMemoryBarrier>>	dstBarriers,
-	add_ref<std::vector<VkBufferMemoryBarrier>>,
-	add_cref<std::vector<ZImageMemoryBarrier>>	srcBarriers)
-{
-	for (add_cref<ZImageMemoryBarrier> srcBarrier : srcBarriers)
-	{
-		if (srcBarrier.getImage().has_handle())
-			dstBarriers.push_back(ZImageMemoryBarrier(srcBarrier)());
-	}
-
-	const uint32_t size = data_count(dstBarriers);
-	for (uint32_t i = 0; i < size; ++i)
-	for (uint32_t j = i + 1; j < size; ++j)
-	{
-		ASSERTMSG(dstBarriers[i].image != dstBarriers[j].image,
-			"Image barriers must have different image handles, try different layers or mip levels");
-	}
-}
-
-void pushKnownBarriers(
-	add_ref<std::vector<VkMemoryBarrier>>,
-	add_ref<std::vector<VkImageMemoryBarrier>>,
-	add_ref<std::vector<VkBufferMemoryBarrier>>	dstBarriers,
-	add_cref<std::vector<ZBufferMemoryBarrier>>	srcBarriers)
-{
-	for (add_cref<ZBufferMemoryBarrier> srcBarrier : srcBarriers)
-	{
-		if (srcBarrier.getBuffer().has_handle())
-			dstBarriers.push_back(srcBarrier());
-	}
-
-	const uint32_t size = data_count(dstBarriers);
-	for (uint32_t i = 0; i < size; ++i)
-		for (uint32_t j = i + 1; j < size; ++j)
-		{
-			ASSERTMSG(dstBarriers[i].buffer != dstBarriers[j].buffer,
-				"Buffer barriers must have different buffer handles, try different sizes or offsets");
-		}
-
+	for (add_ref<ZImageMemoryBarrier> b : barriers) pushKnownBarrier(info, b);
 }
 
 } // namespace vtf

@@ -1079,5 +1079,153 @@ ZBuffer DescriptorSetBindingManager::createDescriptorBuffer (ZDescriptorSetLayou
 	return descBuffer;
 }
 
+// Physical byte offset at which createDescriptorHeap() stores the descriptor for binding 'heapIndex',
+// derived from how the mapping tells the shader to find it (placement is identity: index == heapIndex).
+static VkDeviceSize descriptorHeapSlotOffset (add_cref<VkDescriptorSetAndBindingMappingEXT> m, uint32_t heapIndex)
+{
+	switch (m.source)
+	{
+	case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT:
+		return static_cast<VkDeviceSize>(m.sourceData.constantOffset.heapOffset);
+	case VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_PUSH_INDEX_EXT:
+		return static_cast<VkDeviceSize>(m.sourceData.pushIndex.heapOffset)
+				+ static_cast<VkDeviceSize>(heapIndex) * m.sourceData.pushIndex.heapIndexStride;
+	default:
+		ASSERTFALSE("createDescriptorHeap() supports HEAP_WITH_CONSTANT_OFFSET / HEAP_WITH_PUSH_INDEX sources only");
+		return 0;
+	}
+}
+
+#if DESCRIPTOR_HEAP_AVAILABLE
+DescriptorHeapMappings DescriptorSetBindingManager::getDescriptorHeapMappings (uint32_t descriptorSet, VkDescriptorMappingSourceEXT source) const
+{
+	ASSERTMSG(source == VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT
+				|| source == VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_PUSH_INDEX_EXT,
+		"getDescriptorHeapMappings() supports HEAP_WITH_CONSTANT_OFFSET / HEAP_WITH_PUSH_INDEX sources only");
+
+	VkPhysicalDeviceDescriptorHeapPropertiesEXT dhp = makeVkStruct();
+	deviceGetPhysicalProperties2(device.getParam<ZPhysicalDevice>(), &dhp);
+
+	const VkDeviceSize bufferDescriptorSize = dhp.bufferDescriptorSize;
+	ASSERTMSG(bufferDescriptorSize, "bufferDescriptorSize must not be zero");
+	const VkDeviceSize slotStride = ROUNDUP(bufferDescriptorSize, std::max<VkDeviceSize>(dhp.bufferDescriptorAlignment, 1u));
+	const VkDeviceSize baseOffset = ROUNDUP(dhp.minResourceHeapReservedRange, std::max<VkDeviceSize>(dhp.resourceHeapAlignment, 1u));
+
+	DescriptorHeapMappings mappings;
+	mappings.reserve(m_extbindings.size());
+
+	uint32_t index = 0u;
+	for (add_cref<VkDescriptorSetLayoutBindingAndType> b : m_extbindings)
+	{
+		ASSERTMSG(descriptorTypeOnList(b.descriptorType, {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER}),
+			"getDescriptorHeapMappings() supports buffer bindings only, got ",
+			vk::to_string(static_cast<vk::DescriptorType>(b.descriptorType)));
+
+		VkDescriptorSetAndBindingMappingEXT mapping = makeVkStruct();
+		mapping.descriptorSet	= descriptorSet;
+		mapping.firstBinding	= b.binding;
+		mapping.bindingCount	= 1u;
+		mapping.resourceMask	= (b.descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+									? VkSpirvResourceTypeFlagsEXT(VK_SPIRV_RESOURCE_TYPE_UNIFORM_BUFFER_BIT_EXT)
+									: VkSpirvResourceTypeFlagsEXT(VK_SPIRV_RESOURCE_TYPE_READ_WRITE_STORAGE_BUFFER_BIT_EXT);
+		mapping.source			= source;
+
+		if (source == VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_PUSH_INDEX_EXT)
+		{
+			mapping.sourceData.pushIndex.heapOffset					= static_cast<uint32_t>(baseOffset);
+			mapping.sourceData.pushIndex.pushOffset					= index * static_cast<uint32_t>(sizeof(uint32_t));
+			mapping.sourceData.pushIndex.heapIndexStride			= static_cast<uint32_t>(slotStride);
+			mapping.sourceData.pushIndex.heapArrayStride			= 0u;
+			mapping.sourceData.pushIndex.pEmbeddedSampler			= nullptr;
+			mapping.sourceData.pushIndex.useCombinedImageSamplerIndex = VK_FALSE;
+			mapping.sourceData.pushIndex.samplerHeapOffset			= 0u;
+			mapping.sourceData.pushIndex.samplerPushOffset			= 0u;
+			mapping.sourceData.pushIndex.samplerHeapIndexStride		= 0u;
+			mapping.sourceData.pushIndex.samplerHeapArrayStride		= 0u;
+		}
+		else
+		{
+			mapping.sourceData.constantOffset.heapOffset			= static_cast<uint32_t>(baseOffset + (slotStride * index));
+			mapping.sourceData.constantOffset.heapArrayStride		= 0u;
+			mapping.sourceData.constantOffset.pEmbeddedSampler		= nullptr;
+			mapping.sourceData.constantOffset.samplerHeapOffset		= 0u;
+			mapping.sourceData.constantOffset.samplerHeapArrayStride	= 0u;
+		}
+		mappings.push_back(mapping);
+
+		index += 1u;
+	}
+
+	return mappings;
+}
+
+ZBuffer DescriptorSetBindingManager::createDescriptorHeap (add_cref<DescriptorHeapMappings> mappings)
+{
+	assertDoubledBindings();
+
+	add_cref<ZDeviceInterface> di = device.getInterface();
+	ASSERTMSG(di.vkWriteResourceDescriptorsEXT, "vkWriteResourceDescriptorsEXT() must not be null");
+	ASSERTMSG(mappings.size() == m_extbindings.size(),
+		"createDescriptorHeap() expects one mapping per binding, got ", mappings.size(), " for ", m_extbindings.size());
+
+	VkPhysicalDeviceDescriptorHeapPropertiesEXT dhp = makeVkStruct();
+	deviceGetPhysicalProperties2(device.getParam<ZPhysicalDevice>(), &dhp);
+
+	const VkDeviceSize bufferDescriptorSize = dhp.bufferDescriptorSize;
+	ASSERTMSG(bufferDescriptorSize, "bufferDescriptorSize must not be zero");
+	const VkDeviceSize slotStride = ROUNDUP(bufferDescriptorSize, std::max<VkDeviceSize>(dhp.bufferDescriptorAlignment, 1u));
+
+	VkDeviceSize heapEnd = ROUNDUP(dhp.minResourceHeapReservedRange, std::max<VkDeviceSize>(dhp.resourceHeapAlignment, 1u));
+	for (uint32_t i = 0u; i < static_cast<uint32_t>(mappings.size()); ++i)
+	{
+		heapEnd = std::max(heapEnd, descriptorHeapSlotOffset(mappings[i], i) + slotStride);
+	}
+	const VkDeviceSize heapSize = ROUNDUP(heapEnd, std::max<VkDeviceSize>(dhp.resourceHeapAlignment, 1u));
+
+	ZBufferUsageFlags usage(VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+							VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT);
+	ZBuffer heapBuffer = createBuffer(device, heapSize, usage, ZMemoryPropertyHostFlags);
+
+	uint8_t* data = nullptr;
+	ZDeviceMemory memory = bufferGetMemory(heapBuffer, 0);
+	VKASSERT(VTF_CALL_CHECK(di.vkMapMemory,
+							*device, *memory, 0u, heapSize, (VkMemoryMapFlags)0, reinterpret_cast<void**>(&data)));
+	std::fill_n(data, heapSize, '\0');
+
+	uint32_t index = 0u;
+	for (add_cref<VkDescriptorSetLayoutBindingAndType> b : m_extbindings)
+	{
+		add_cref<VkDescriptorSetAndBindingMappingEXT> mapping = mappings.at(index);
+		ASSERTMSG(mapping.firstBinding == b.binding,
+			"createDescriptorHeap() mapping/binding mismatch: ", mapping.firstBinding, " vs ", b.binding);
+		const VkDeviceSize slotOffset = descriptorHeapSlotOffset(mapping, index);
+		index += 1u;
+
+		VkDeviceAddressRangeEXT addressRange{};
+		if (false == b.isNull)
+		{
+			ZBuffer buffer = b.buffer;
+			addressRange.address = bufferGetAddress(buffer, b.binding, b.descriptorType);
+			addressRange.size = bufferGetSize(buffer);
+		}
+
+		VkResourceDescriptorInfoEXT resourceInfo = makeVkStruct();
+		resourceInfo.type = b.descriptorType;
+		resourceInfo.data.pAddressRange = &addressRange;
+
+		VkHostAddressRangeEXT dst{};
+		dst.address = data + slotOffset;
+		dst.size = static_cast<size_t>(bufferDescriptorSize);
+
+		ASSERTMSG((slotOffset + bufferDescriptorSize) <= heapSize, "");
+		VKASSERT(VTF_CALL_CHECK(di.vkWriteResourceDescriptorsEXT, *device, 1u, &resourceInfo, &dst));
+	}
+
+	VTF_CALL_CHECK(di.vkUnmapMemory, *device, *memory);
+
+	return heapBuffer;
+}
+#endif // DESCRIPTOR_HEAP_AVAILABLE
+
 } // namespace vtf
 

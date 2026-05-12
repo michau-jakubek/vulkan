@@ -377,7 +377,7 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 		info.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 	}
 
-	PNextChain chain;
+	PNextChain chain, drChain;
 	std::vector<VkFormat> drFormats;
 	VkRenderingAttachmentLocationInfo	rali = makeVkStruct();
 	VkRenderingInputAttachmentIndexInfo riai = makeVkStruct();
@@ -416,13 +416,19 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 	{
 		rali.colorAttachmentCount = data_count(settings.m_drAttachmentLocations);
 		rali.pColorAttachmentLocations = settings.m_drAttachmentLocations.data();
+		drChain.append(&rali);
 		chain.append(&rali);
 	}
 	if (settings.m_drInputAttachmentIndices.size())
 	{
 		riai.colorAttachmentCount = data_count(settings.m_drInputAttachmentIndices);
 		riai.pColorAttachmentInputIndices = settings.m_drInputAttachmentIndices.data();
+		drChain.append(&riai);
 		chain.append(&riai);
+	}
+	if (settings.m_drAttachmentLocations.size() || settings.m_drInputAttachmentIndices.size())
+	{
+		drInfo.pNext = drChain.release();
 	}
 
 
@@ -457,6 +463,10 @@ ZPipeline createGraphicsPipeline (GraphicPipelineSettings& settings)
 }
 
 void updateSettings (add_ref<GraphicPipelineSettings>) { /* end of template recursion */ }
+
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, gpp::Nope)
+{
+}
 
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, ZPipelineCreateFlags createFlags)
 {
@@ -616,9 +626,9 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gp
 	settings.m_rasterizationState.lineWidth = lineWidth;
 }
 
-void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<ZCullModeFlags> cullModeFlags)
+void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, VkCullModeFlagBits cullMode)
 {
-	settings.m_rasterizationState.cullMode = cullModeFlags();
+	settings.m_rasterizationState.cullMode = cullMode;
 }
 
 void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, VkFrontFace frontFace)
@@ -682,6 +692,68 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings> settings, add_cref<gp
 	settings.m_createInfo.subpass = subpassIndex;
 }
 
+struct ComputePipelineSettings
+{
+    ZPipelineCache      pipelineCache;
+    ZPipelineLayout     pipelineLayout;
+
+    uint32_t                                        mappingCount;
+#if DESCRIPTOR_HEAP_AVAILABLE
+    add_cptr<VkDescriptorSetAndBindingMappingEXT>   pMappings;
+#endif
+
+    UVec3				localSizeValues;
+    IVec3				localSizeIndices;
+    bool                enableFullGroups;
+
+    ComputePipelineSettings()
+        : pipelineCache()
+        , pipelineLayout()
+        , mappingCount(0u)
+#if DESCRIPTOR_HEAP_AVAILABLE
+        , pMappings(nullptr)
+#endif
+        , localSizeValues(UVec3(INVALID_UINT32))
+        , localSizeIndices(IVec3(-1))
+        , enableFullGroups(false)
+    {
+    }
+};
+std::shared_ptr<ComputePipelineSettings> makeComputePipelineSettings()
+{
+    return std::make_shared<ComputePipelineSettings>();
+}
+void updateKnownSettings (add_ref<ComputePipelineSettings> s, add_ref<ZSpecializationInfo>, ZPipelineLayout layout)
+{
+    s.pipelineLayout = layout;
+}
+void updateKnownSettings (add_ref<ComputePipelineSettings> s, add_ref<ZSpecializationInfo>, ZPipelineCache cache)
+{
+    s.pipelineCache = cache;
+}
+void updateKnownSettings (add_ref<ComputePipelineSettings> s, add_ref<ZSpecializationInfo>, add_cref<IVec3> localSizeIndices)
+{
+    s.localSizeIndices = localSizeIndices;
+}
+void updateKnownSettings (add_ref<ComputePipelineSettings> s, add_ref<ZSpecializationInfo>, add_cref<UVec3> localSizeValues)
+{
+    s.localSizeValues = localSizeValues;
+}
+void updateKnownSettings (
+    add_ref<ComputePipelineSettings>,
+    add_ref<ZSpecializationInfo> specInfo,
+    add_cref<ZSpecializationInfo> update)
+{
+    specInfo.addEntries(update);
+}
+#if DESCRIPTOR_HEAP_AVAILABLE
+void updateKnownSettings (add_ref<ComputePipelineSettings> s, add_ref<ZSpecializationInfo>, add_cref<DescriptorHeapMappings> mappings)
+{
+    s.mappingCount = data_count(mappings);
+    s.pMappings = mappings.data();
+}
+#endif // DESCRIPTOR_HEAP_AVAILABLE
+
 bool computePipelineVerifyLimits (ZDevice device, add_cref<UVec3> wgSizes, bool raise)
 {
 	bool result = true;
@@ -729,21 +801,17 @@ bool computePipelineVerifyLimits (ZDevice device, add_cref<UVec3> wgSizes, bool 
 }
 
 ZPipeline createComputePipelineImpl (
-	ZPipelineLayout					layout,
-	ZShaderModule					computeShaderModule,
-	ZPipelineCache					pipelineCache,
-	add_cref<UVec3>					localSizes,
-	bool							autoLocalSizesIDs,
-	bool							enableFullGroups,
-	add_ref<ZSpecializationInfo>	info)
+    ZShaderModule                    shaderModule,
+    add_ref<ComputePipelineSettings> settings,
+    add_ref<ZSpecializationInfo>     info)
 {
-	ZDevice									aDevice		= layout.getParam<ZDevice>();
-	add_cref<ZDeviceInterface>				di			= aDevice.getInterface();
-	const VkAllocationCallbacksPtr			callbacks	= aDevice.getParam<VkAllocationCallbacksPtr>();
-	ZPhysicalDevice							aPhysDevice	= aDevice.getParam<ZPhysicalDevice>();
+    ZDevice                         device		= shaderModule.getParam<ZDevice>();
+    add_cref<ZDeviceInterface>      di			= device.getInterface();
+    const VkAllocationCallbacksPtr  callbacks	= device.getParam<VkAllocationCallbacksPtr>();
+    ZPhysicalDevice                 aPhysDevice	= device.getParam<ZPhysicalDevice>();
 
-	UNREF(enableFullGroups);
 	/*
+    UNREF(enableFullGroups);
 	VkPhysicalDeviceSubgroupSizeControlFeatures			sizeCtrlFeatures = makeVkStruct();
 	deviceGetPhysicalFeatures2(aPhysDevice, &sizeCtrlFeatures);
 
@@ -752,42 +820,86 @@ ZPipeline createComputePipelineImpl (
 	VkPipelineShaderStageRequiredSubgroupSizeCreateInfo	subgroupCreateInfo = makeVkStruct();
 	*/
 
-	if (autoLocalSizesIDs) computePipelineVerifyLimits(aDevice, localSizes, true);
+    const uint32_t localSizes_x = settings.localSizeValues.x();
+    const uint32_t localSizes_y = settings.localSizeValues.y();
+    const uint32_t localSizes_z = settings.localSizeValues.z();
+    const bool autoLocalSizesIDs = (localSizes_x != INVALID_UINT32 && localSizes_x != 0u)
+                                   || (localSizes_y != INVALID_UINT32 && localSizes_y != 0u)
+                                   || (localSizes_z != INVALID_UINT32 && localSizes_z != 0u);
+    if (localSizes_x != INVALID_UINT32 && localSizes_x != 0u)
+        info.addEntry(make_signed(localSizes_x), make_unsigned(settings.localSizeIndices.x()));
+    if (localSizes_y != INVALID_UINT32 && localSizes_y != 0u)
+        info.addEntry(make_signed(localSizes_y), make_unsigned(settings.localSizeIndices.y()));
+    if (localSizes_z != INVALID_UINT32 && localSizes_z != 0u)
+        info.addEntry(make_signed(localSizes_z), make_unsigned(settings.localSizeIndices.z()));
+    if (autoLocalSizesIDs) computePipelineVerifyLimits(device, settings.localSizeValues, true);
 
-	const VkSpecializationInfo specInfo = info();
+    void_ptr pipeCIpNext = nullptr;
+    void_ptr stageCIpNext = nullptr;
+#if VK_VERSION_1_4_AVAILABLE
+    VkPipelineCreateFlags2CreateInfo ciFlags = makeVkStruct();
+    pipeCIpNext = &ciFlags;
+#else
+    VkPipelineCreateFlags ciFlags = VkPipelineCreateFlags(0);
+#endif
 
-	VkPipelineShaderStageCreateInfo	sci = makeVkStruct();
+    const VkPipelineLayout layout  = settings.pipelineLayout.has_handle() ? *settings.pipelineLayout : VK_NULL_HANDLE;
+    const VkPipelineCache  cache   = settings.pipelineCache.has_handle() ? *settings.pipelineCache : VK_NULL_HANDLE;
+    if (layout != VK_NULL_HANDLE && settings.pipelineLayout.getParam<bool>(/*enableDescriptorBuffer*/))
+    {
+#if VK_VERSION_1_4_AVAILABLE
+        ciFlags.flags |= VK_PIPELINE_CREATE_2_DESCRIPTOR_BUFFER_BIT_EXT;
+#else
+        ciFlags |= VkPipelineCreateFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT);
+#endif
+    }
+
+#if DESCRIPTOR_HEAP_AVAILABLE
+    VkShaderDescriptorSetAndBindingMappingInfoEXT mappingInfo;
+    if (settings.pMappings)
+    {
+        ASSERTMSG(layout == VK_NULL_HANDLE, "VkPipelineLayout must be null when using ", VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
+        mappingInfo = makeVkStruct();
+        mappingInfo.mappingCount = settings.mappingCount;
+        mappingInfo.pMappings    = settings.pMappings;
+        ciFlags.flags |= VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT;
+        stageCIpNext = &mappingInfo;
+    }
+    else {
+        ASSERTMSG(layout != VK_NULL_HANDLE, "VkPipelineLayout must be null when not using VK_EXT_descriptor_heap");
+    }
+#endif
+
+    const VkSpecializationInfo specInfo = info();
+
+    VkPipelineShaderStageCreateInfo	sci = makeVkStruct(stageCIpNext);
 	sci.flags	= VkPipelineShaderStageCreateFlags(0);
 	sci.stage	= VK_SHADER_STAGE_COMPUTE_BIT;
-	sci.module	= *computeShaderModule;
-	sci.pName	= computeShaderModule.getParamRef<std::string>().c_str();
+    sci.module	= *shaderModule;
+    sci.pName	= shaderModule.getParamRef<std::string>().c_str();
 	sci.pSpecializationInfo	= info.empty() ? nullptr : &specInfo;
 
-	const VkPipelineCreateFlags ciFlags = layout.getParam<bool>(/*enableDescriptorBuffer*/)
-											? VkPipelineCreateFlags(VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT)
-											: VkPipelineCreateFlags(0);
-	VkComputePipelineCreateInfo	ci = makeVkStruct();
-	ci.flags	= ciFlags;
+
+    VkComputePipelineCreateInfo	ci = makeVkStruct(pipeCIpNext);
+#if VK_VERSION_1_4_AVAILABLE
+    ci.flags	= VkPipelineCreateFlags(0);
+#else
+    ci.flags    = ciFlags;
+#endif
 	ci.stage	= sci;
-	ci.layout	= *layout;
+    ci.layout	= layout;
 	ci.basePipelineHandle	= VK_NULL_HANDLE;
 	ci.basePipelineIndex	= 0;
 
-	VkPipelineCache cache = pipelineCache.has_handle() ? *pipelineCache : VK_NULL_HANDLE;
-	ZPipeline	computePipeline (VK_NULL_HANDLE, aDevice, callbacks, layout, ZRenderPass(),
-								 VK_PIPELINE_BIND_POINT_COMPUTE, ci.flags,
+
+    ZPipeline	computePipeline (VK_NULL_HANDLE, device, callbacks, settings.pipelineLayout, ZRenderPass(),
+                                 VK_PIPELINE_BIND_POINT_COMPUTE, ciFlags.flags,
 								 {/*ray-tracing shaders*/}, {/*uint32_t:ray-tracing pipeline shader group order*/},
 								 {/*uint32_t:ray-tracing pipeline shader group count*/});
-	VKASSERTMSG(VTF_CALL_CHECK(di.vkCreateComputePipelines, *aDevice, cache, 1u, &ci, callbacks,
+    VKASSERTMSG(VTF_CALL_CHECK(di.vkCreateComputePipelines, *device, cache, 1u, &ci, callbacks,
 				computePipeline.setter("vkCreateComputePipelines")), "Unable to create compute pipeline");
 
 	return computePipeline;
-}
-
-ZPipeline createComputePipeline (ZPipelineCache pipelineCache, ZPipelineLayout layout, ZShaderModule computeShaderModule,
-								add_ref<ZSpecializationInfo> specInfo, bool enableFullGroups)
-{
-	return createComputePipelineImpl(layout, computeShaderModule, pipelineCache, UVec3(INVALID_UINT32), false, enableFullGroups, specInfo);
 }
 
 ZPipelineLayout	pipelineGetLayout (ZPipeline pipeline)

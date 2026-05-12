@@ -4,3 +4,12 @@ external/glm
 external/tinygltf
 getvkhver/build
 
+*.cflags
+.vscode
+.aider*
+*.config
+*.creator
+*.creator.user
+*.cxxflags
+*.files
+*.includes

@@ -40,9 +40,9 @@ ZImageMemoryBarrier makeImageMemoryBarrier	(ZImage image, VkAccessFlags srcAcces
 
 struct BarriersInfo
 {
-	add_ptr<VkMemoryBarrier>		pMemoryBarriers;
-	add_ptr<VkImageMemoryBarrier>	pImageBarriers;
-	add_ptr<VkBufferMemoryBarrier>	pBufferBarriers;
+	add_ref<std::vector<VkMemoryBarrier>>		memoryBarriers;
+	add_ref<std::vector<VkImageMemoryBarrier>>	imageBarriers;
+	add_ref<std::vector<VkBufferMemoryBarrier>>	bufferBarriers;
 	uint32_t						memoryBarrierCount;
 	uint32_t						imageBarrierCount;
 	uint32_t						bufferBarrierCount;
@@ -51,6 +51,9 @@ struct BarriersInfo
 void pushKnownBarrier (add_ref<BarriersInfo> info, add_cref<ZMemoryBarrier> barrier);
 void pushKnownBarrier (add_ref<BarriersInfo> info, add_cref<ZBufferMemoryBarrier> barrier);
 void pushKnownBarrier (add_ref<BarriersInfo> info, add_ref<ZImageMemoryBarrier> barrier);
+void pushKnownBarrier (add_ref<BarriersInfo> info, add_cref<std::vector<ZMemoryBarrier>> barriers);
+void pushKnownBarrier (add_ref<BarriersInfo> info, add_cref<std::vector<ZBufferMemoryBarrier>> barriers);
+void pushKnownBarrier (add_ref<BarriersInfo> info, add_ref<std::vector<ZImageMemoryBarrier>> barriers);
 
 void pushBarriers (add_ref<BarriersInfo>);
 template<class Barrier, class... Barriers>
@@ -58,38 +61,6 @@ void pushBarriers (add_ref<BarriersInfo> info, Barrier&& barrier, Barriers&&... 
 {
 	pushKnownBarrier(info, barrier);
 	pushBarriers(info, std::forward<Barriers>(barriers)...);
-}
-
-void pushKnownBarriers (
-	add_ref<std::vector<VkMemoryBarrier>>,
-	add_ref<std::vector<VkImageMemoryBarrier>>,
-	add_ref<std::vector<VkBufferMemoryBarrier>>,
-	add_cref<std::vector<ZMemoryBarrier>>);
-void pushKnownBarriers (
-	add_ref<std::vector<VkMemoryBarrier>>,
-	add_ref<std::vector<VkImageMemoryBarrier>>,
-	add_ref<std::vector<VkBufferMemoryBarrier>>,
-	add_cref<std::vector<ZImageMemoryBarrier>>);
-void pushKnownBarriers (
-	add_ref<std::vector<VkMemoryBarrier>>,
-	add_ref<std::vector<VkImageMemoryBarrier>>,
-	add_ref<std::vector<VkBufferMemoryBarrier>>,
-	add_cref<std::vector<ZBufferMemoryBarrier>>);
-
-void pushBarriers (
-	add_ref<std::vector<VkMemoryBarrier>>,
-	add_ref<std::vector<VkImageMemoryBarrier>>,
-	add_ref<std::vector<VkBufferMemoryBarrier>>);
-template<class Barrier, class... Barriers>
-void pushBarriers (
-	add_ref<std::vector<VkMemoryBarrier>>		memBarriers,
-	add_ref<std::vector<VkImageMemoryBarrier>>	imgBarriers,
-	add_ref<std::vector<VkBufferMemoryBarrier>>	bufBarriers,
-	const std::vector<Barrier>&					barriers,
-	const std::vector<Barriers>&...				otherBarriers)
-{
-	pushKnownBarriers(memBarriers, imgBarriers, bufBarriers, barriers);
-	pushBarriers(memBarriers, imgBarriers, bufBarriers, otherBarriers...);
 }
 
 } // namespace vtf

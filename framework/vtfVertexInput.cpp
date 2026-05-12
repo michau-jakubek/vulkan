@@ -445,10 +445,68 @@ void VertexInput::clear ()
 	m_freeBindings.clear();
 }
 
-template<> std::vector<Vec2> VertexInput::fullQuad<Vec2>()
+template<class VecType> std::vector<VecType> fromVec4(add_cref<std::vector<Vec4>> v)
 {
-	return { { -1, -1 }, { +1, -1 }, { +1, +1 },
-			 { +1, +1 }, { -1, +1 }, { -1, -1 } };
+	std::vector<VecType> w(v.size());
+	std::transform(v.begin(), v.end(), w.begin(),
+		[](add_cref<Vec4> u) { return u.cast<VecType>(); });
+	return w;
+}
+
+template<> std::vector<Vec4> VertexInput::fullQuadFan<Vec4>(float z, bool ccw)
+{
+	if (ccw) {
+		return { { -1, -1, z, 1 }, { -1, +1, z, 1 }, { +1, +1, z, 1 }, { +1, -1, z, 1 } };
+	}
+	return { { -1, -1, z, 1 }, { +1, -1, z, 1 }, { +1, +1, z, 1 }, { -1, +1, z, 1 } };
+}
+
+template<> std::vector<Vec3> VertexInput::fullQuadFan<Vec3>(float z, bool ccw)
+{
+	return fromVec4<Vec3>(fullQuadFan<Vec4>(z, ccw));
+}
+
+template<> std::vector<Vec2> VertexInput::fullQuadFan<Vec2>(float z, bool ccw)
+{
+	return fromVec4<Vec2>(fullQuadFan<Vec4>(z, ccw));
+}
+
+template<> std::vector<Vec4> VertexInput::fullQuadList<Vec4>(float z, bool ccw)
+{
+	if (ccw) {
+		return { { -1, -1, z, 1 }, { -1, +1, z, 1 }, { +1, +1, z, 1 },
+			 { +1, +1, z, 1 }, { +1, -1, z, 1 }, { -1, -1, z, 1 } };
+	}
+	return { { -1, -1, z, 1 }, { +1, -1, z, 1 }, { +1, +1, z, 1 },
+			 { +1, +1, z, 1 }, { -1, +1, z, 1 }, { -1, -1, z, 1 } };
+}
+
+template<> std::vector<Vec3> VertexInput::fullQuadList<Vec3>(float z, bool ccw)
+{
+	return fromVec4<Vec3>(fullQuadList<Vec4>(z, ccw));
+}
+
+template<> std::vector<Vec2> VertexInput::fullQuadList<Vec2>(float z, bool ccw)
+{
+	return fromVec4<Vec2>(fullQuadList<Vec4>(z, ccw));
+}
+
+template<> std::vector<Vec4> VertexInput::fullQuadStrip<Vec4>(float z, bool ccw)
+{
+	if (ccw) {
+		return { { +1, -1, z, 1 }, { -1, -1, z, 1 }, { +1, +1, z, 1 }, { -1, +1, z, 1 } };
+	}
+	return { { -1, -1, z, 1 }, { +1, -1, z, 1 }, { -1, +1, z, 1 }, { +1, +1, z, 1 } };
+}
+
+template<> std::vector<Vec3> VertexInput::fullQuadStrip<Vec3>(float z, bool ccw)
+{
+	return fromVec4<Vec3>(fullQuadStrip<Vec4>(z, ccw));
+}
+
+template<> std::vector<Vec2> VertexInput::fullQuadStrip<Vec2>(float z, bool ccw)
+{
+	return fromVec4<Vec2>(fullQuadStrip<Vec4>(z, ccw));
 }
 
 template<> ZBuffer createIndexBuffer<uint32_t> (ZDevice device, uint32_t indexCount)

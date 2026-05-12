@@ -159,7 +159,7 @@ struct ZMemoryBarrier2 : protected VkMemoryBarrier2, public ZBarrierConstants
 	ZMemoryBarrier2 (add_ptr<void> pNext = nullptr);
 	ZMemoryBarrier2 (Access srcAccess, Stage srcStage,
 					 Access dstAccess, Stage dstStage, add_ptr<void> pNext = nullptr);
-	VkMemoryBarrier2 operator ()();
+	VkMemoryBarrier2 operator ()() const;
 };
 
 struct ZBufferMemoryBarrier2 : protected VkBufferMemoryBarrier2, public ZBarrierConstants
@@ -167,7 +167,7 @@ struct ZBufferMemoryBarrier2 : protected VkBufferMemoryBarrier2, public ZBarrier
 	ZBufferMemoryBarrier2 (add_ptr<void> pNext = nullptr);
 	ZBufferMemoryBarrier2 (ZBuffer buffer,	Access srcAccess, Stage srcStage,
 											Access dstAccess, Stage dstStage, add_ptr<void> pNext = nullptr);
-	VkBufferMemoryBarrier2 operator()();
+	VkBufferMemoryBarrier2 operator()() const;
 	add_cref<ZBuffer>	   buffer () const { return m_buffer; }
 protected:
 	ZBuffer	m_buffer;
@@ -191,17 +191,20 @@ protected:
 
 struct BarriersInfo2
 {
-	add_ptr<VkMemoryBarrier2>		pMemoryBarriers;
-	add_ptr<VkImageMemoryBarrier2>	pImageBarriers;
-	add_ptr<VkBufferMemoryBarrier2>	pBufferBarriers;
+	add_ref<std::vector<VkMemoryBarrier2>>			memoryBarriers;
+	add_ref<std::vector<VkImageMemoryBarrier2>>		imageBarriers;
+	add_ref<std::vector<VkBufferMemoryBarrier2>>	bufferBarriers;
 	uint32_t						memoryBarrierCount;
 	uint32_t						imageBarrierCount;
 	uint32_t						bufferBarrierCount;
 };
 
-void pushKnownBarrier (add_ref<BarriersInfo2> info, add_ref<ZMemoryBarrier2> barrier);
-void pushKnownBarrier (add_ref<BarriersInfo2> info, add_ref<ZBufferMemoryBarrier2> barrier);
+void pushKnownBarrier (add_ref<BarriersInfo2> info, add_cref<ZMemoryBarrier2> barrier);
+void pushKnownBarrier (add_ref<BarriersInfo2> info, add_cref<ZBufferMemoryBarrier2> barrier);
 void pushKnownBarrier (add_ref<BarriersInfo2> info, add_ref<ZImageMemoryBarrier2> barrier);
+void pushKnownBarrier (add_ref<BarriersInfo2> info, add_cref<std::vector<ZMemoryBarrier2>> barriers);
+void pushKnownBarrier (add_ref<BarriersInfo2> info, add_cref<std::vector<ZBufferMemoryBarrier2>> barriers);
+void pushKnownBarrier (add_ref<BarriersInfo2> info, add_ref<std::vector<ZImageMemoryBarrier2>> barriers);
 
 void pushBarriers (add_ref<BarriersInfo2>);
 template<class Barrier, class... Barriers>

@@ -115,10 +115,8 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 
 	auto [bufferShader, imageShader] = buildShaders(ctx.device, params);
 
-	ZPipeline bufferPipeline = createComputePipeline(pipelineLayout0, bufferShader, ZPipelineCache(),
-														UVec3(params.subgroupSize, 0u, 0u));
-	ZPipeline imagePipeline = createComputePipeline(pipelineLayout1, imageShader, ZPipelineCache(),
-														UVec3(params.subgroupSize, 0u, 0u));
+    ZPipeline bufferPipeline = createComputePipeline(bufferShader, pipelineLayout0, UVec3(params.subgroupSize, 0u, 0u));
+    ZPipeline imagePipeline = createComputePipeline(imageShader, pipelineLayout1, UVec3(params.subgroupSize, 0u, 0u));
 
 	{
 		OneShotCommandBuffer cmd(ctx.device, ctx.computeQueue);

@@ -76,6 +76,10 @@ void			commandBufferBindVertexBuffers (ZCommandBuffer cmd, add_cref<VertexInput>
 void			commandBufferSetVertexInputEXT (ZCommandBuffer cmd, add_cref<VertexInput> input);
 void			commandBufferBindIndexBuffer (ZCommandBuffer cmd, ZBuffer buffer, VkDeviceSize offset = 0);
 void			commandBufferBindDescriptorBuffers (ZCommandBuffer, ZPipeline, std::initializer_list<ZBuffer>);
+#if DESCRIPTOR_HEAP_AVAILABLE
+void			commandBufferBindResourceHeap (ZCommandBuffer cmd, ZBuffer heapBuffer);
+void			commandBufferPushData (ZCommandBuffer cmd, uint32_t offset, add_cptr<void> data, std::size_t size);
+#endif // DESCRIPTOR_HEAP_AVAILABLE
 void			commandBufferDispatch (ZCommandBuffer cmd, const UVec3& workGroupCount = UVec3(1,1,1));
 
 ZRenderPassBeginInfo commandBufferBeginRenderPass (ZCommandBuffer cmd, ZFramebuffer framebuffer,
@@ -95,11 +99,11 @@ void	commandBufferBeginRendering (ZCommandBuffer cmd, uint32_t width, uint32_t h
 void	commandBufferEndRendering (ZCommandBuffer cmd);
 void	commandBufferSetRenderingAttachmentLocations (ZCommandBuffer cmd, add_cref<std::vector<uint32_t>> locations,
 													  std::optional<bool> useKHRversion = {});
-void	commandBuffervSetRenderingInputAttachmentIndices (ZCommandBuffer cmd,
-														  add_cref<std::vector<uint32_t>> indices,
-														  add_cptr<std::vector<uint32_t>> pDepthInputAttachmentIndex = {},
-														  add_cptr<std::vector<uint32_t>> pStencilInputAttachmentIndex = {},
-														  std::optional<bool> useKHRversion = {});
+void	commandBufferSetRenderingInputAttachmentIndices (ZCommandBuffer cmd,
+														 add_cref<std::vector<uint32_t>> indices,
+														 add_cptr<std::vector<uint32_t>> pDepthInputAttachmentIndex = {},
+														 add_cptr<std::vector<uint32_t>> pStencilInputAttachmentIndex = {},
+														 std::optional<bool> useKHRversion = {});
 void				 commandBufferSetViewportAndScissor (ZCommandBuffer cmd, add_cref<Canvas::Swapchain> swapchain);
 void				 commandBufferSetDefaultDynamicStates (ZCommandBuffer cmdBuffer, add_cref<VertexInput> vertexInput,
 															add_cref<VkViewport> viewport, uint32_t attachmentCount = 1u,
@@ -206,33 +210,14 @@ void commandBufferMakeImagePresentationReady (ZCommandBuffer cmdBuffer, ZImage i
 											  VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
 
 template<class Barrier, class... Barriers>
-void commandBufferPipelineBarrierVecs (
-	ZCommandBuffer cmd,
-	VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask,
-	const std::vector<Barrier>& barriers, const std::vector<Barriers>&... otherBarriers)
-{
-	std::vector<VkMemoryBarrier>		memBarriers;
-	std::vector<VkImageMemoryBarrier>	imgBarriers;
-	std::vector<VkBufferMemoryBarrier>	bufBarriers;
-
-	pushBarriers(memBarriers, imgBarriers, bufBarriers, barriers, otherBarriers...);
-
-	add_cref<ZDeviceInterface> di = cmd.getParam<ZDevice>().getInterface();
-	VTF_CALL_CHECK(di.vkCmdPipelineBarrier, *cmd,
-							srcStageMask, dstStageMask, VK_DEPENDENCY_BY_REGION_BIT,
-							data_count(memBarriers), data_or_null(memBarriers),
-							data_count(bufBarriers), data_or_null(bufBarriers),
-							data_count(imgBarriers), data_or_null(imgBarriers));
-}
-
-template<class Barrier, class... Barriers>
 void commandBufferPipelineBarriers (ZCommandBuffer cmd,
 									VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask,
 									Barrier&& barrier, Barriers&&... barriers)
 {
-	VkMemoryBarrier			memoryBarriers	[sizeof...(barriers) + 1];
-	VkImageMemoryBarrier	imageBarriers	[sizeof...(barriers) + 1];
-	VkBufferMemoryBarrier	bufferBarriers	[sizeof...(barriers) + 1];
+	std::vector<VkMemoryBarrier>		memoryBarriers	(sizeof...(barriers) + 1);
+	std::vector<VkImageMemoryBarrier>	imageBarriers	(sizeof...(barriers) + 1);
+	std::vector<VkBufferMemoryBarrier>	bufferBarriers	(sizeof...(barriers) + 1);
+
 	BarriersInfo	info
 	{
 		memoryBarriers,
@@ -244,9 +229,9 @@ void commandBufferPipelineBarriers (ZCommandBuffer cmd,
 	add_cref<ZDeviceInterface> di = cmd.getParam<ZDevice>().getInterface();
 	VTF_CALL_CHECK(di.vkCmdPipelineBarrier, *cmd,
 						srcStageMask, dstStageMask, VK_DEPENDENCY_BY_REGION_BIT,
-						info.memoryBarrierCount, (info.memoryBarrierCount ? memoryBarriers : nullptr),
-						info.bufferBarrierCount, (info.bufferBarrierCount ? bufferBarriers : nullptr),
-						info.imageBarrierCount, (info.imageBarrierCount ? imageBarriers : nullptr));
+						info.memoryBarrierCount, (info.memoryBarrierCount ? memoryBarriers.data() : nullptr),
+						info.bufferBarrierCount, (info.bufferBarrierCount ? bufferBarriers.data() : nullptr),
+						info.imageBarrierCount, (info.imageBarrierCount ? imageBarriers.data() : nullptr));
 }
 
 template<class Barrier, class... Barriers>
@@ -254,9 +239,9 @@ void commandBufferPipelineBarriers2 (ZCommandBuffer		cmd,
 									 VkDependencyFlags	dependencyFlags,
 									 Barrier&& barrier, Barriers&&... barriers)
 {
-	VkMemoryBarrier2		memoryBarriers	[sizeof...(barriers) + 1];
-	VkImageMemoryBarrier2	imageBarriers	[sizeof...(barriers) + 1];
-	VkBufferMemoryBarrier2	bufferBarriers	[sizeof...(barriers) + 1];
+	std::vector<VkMemoryBarrier2>		memoryBarriers	(sizeof...(barriers) + 1);
+	std::vector<VkImageMemoryBarrier2>	imageBarriers	(sizeof...(barriers) + 1);
+	std::vector<VkBufferMemoryBarrier2>	bufferBarriers	(sizeof...(barriers) + 1);
 
 	BarriersInfo2 info
 	{

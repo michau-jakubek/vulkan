@@ -24,11 +24,10 @@ ZMemoryBarrier2::ZMemoryBarrier2 (Access srcAccess, Stage srcStage, Access dstAc
 	barrier.dstStageMask = static_cast<VkPipelineStageFlags2>(dstStage);
 }
 
-VkMemoryBarrier2 ZMemoryBarrier2::operator ()()
+VkMemoryBarrier2 ZMemoryBarrier2::operator ()() const
 {
-	return static_cast<add_ref<VkMemoryBarrier2>>(*this);
+	return static_cast<add_cref<VkMemoryBarrier2>>(*this);
 }
-
 
 ZBufferMemoryBarrier2::ZBufferMemoryBarrier2 (add_ptr<void> pNext)
 	: m_buffer ()
@@ -58,11 +57,10 @@ ZBufferMemoryBarrier2::ZBufferMemoryBarrier2 (ZBuffer buffer,	Access srcAccess, 
 	barrier.size				= buffer.getParam<VkDeviceSize>();
 }
 
-VkBufferMemoryBarrier2 ZBufferMemoryBarrier2::operator ()()
+VkBufferMemoryBarrier2 ZBufferMemoryBarrier2::operator ()() const
 {
-	return static_cast<add_ref<VkBufferMemoryBarrier2>>(*this);
+	return static_cast<add_cref<VkBufferMemoryBarrier2>>(*this);
 }
-
 
 ZImageMemoryBarrier2::ZImageMemoryBarrier2 (add_ptr<void> pNext)
 	: m_image()
@@ -113,30 +111,46 @@ VkImageMemoryBarrier2 ZImageMemoryBarrier2::operator ()()
 
 
 void pushBarriers (add_ref<BarriersInfo2>) { }
-void pushKnownBarrier (add_ref<BarriersInfo2> info, add_ref<ZMemoryBarrier2>& barrier)
+void pushKnownBarrier (add_ref<BarriersInfo2> info, add_cref<ZMemoryBarrier2>& barrier)
 {
-	info.pMemoryBarriers[info.memoryBarrierCount++] = barrier();
+	if (info.memoryBarrierCount < info.memoryBarriers.size())
+		info.memoryBarriers[info.memoryBarrierCount++] = barrier();
+	else {
+		info.memoryBarriers.push_back(barrier());
+		++info.memoryBarrierCount;
+	}
+}
+void pushKnownBarrier(add_ref<BarriersInfo2> info, add_cref<std::vector<ZMemoryBarrier2>> barriers)
+{
+	for (add_cref<ZMemoryBarrier2> b : barriers) pushKnownBarrier(info, b);
 }
 
-void pushKnownBarrier (add_ref<BarriersInfo2> info, add_ref<ZBufferMemoryBarrier2> barrier)
+void pushKnownBarrier (add_ref<BarriersInfo2> info, add_cref<ZBufferMemoryBarrier2> barrier)
 {
-	info.pBufferBarriers[info.bufferBarrierCount++] = barrier();
-	for (uint32_t i = 0; i < info.bufferBarrierCount; ++i)
-	for (uint32_t j = i + 1; j < info.bufferBarrierCount; ++j)
-	{
-		ASSERTMSG(info.pBufferBarriers[i].buffer != info.pBufferBarriers[j].buffer,
-				  "Buffer barriers must have different buffer handles, try different sizes or offsets");
+	if (info.bufferBarrierCount < info.bufferBarriers.size())
+		info.bufferBarriers[info.bufferBarrierCount++] = barrier();
+	else {
+		info.bufferBarriers.push_back(barrier());
+		++info.bufferBarrierCount;
 	}
 }
+void pushKnownBarrier(add_ref<BarriersInfo2> info, add_cref<std::vector<ZBufferMemoryBarrier2>> barriers)
+{
+	for (add_cref<ZBufferMemoryBarrier2> b : barriers) pushKnownBarrier(info, b);
+}
+
 void pushKnownBarrier (add_ref<BarriersInfo2> info, add_ref<ZImageMemoryBarrier2> barrier)
 {
-	info.pImageBarriers[info.imageBarrierCount++] = barrier();
-	for (uint32_t i = 0; i < info.imageBarrierCount; ++i)
-	for (uint32_t j = i + 1; j < info.imageBarrierCount; ++j)
-	{
-		ASSERTMSG(info.pImageBarriers[i].image != info.pImageBarriers[j].image,
-				  "Image barriers must have different image handles, try different layers or mip levels");
+	if (info.imageBarrierCount < info.imageBarriers.size())
+		info.imageBarriers[info.imageBarrierCount++] = barrier();
+	else {
+		info.imageBarriers.push_back(barrier());
+		++info.imageBarrierCount;
 	}
+}
+void pushKnownBarrier(add_ref<BarriersInfo2> info, add_ref<std::vector<ZImageMemoryBarrier2>> barriers)
+{
+	for (add_ref<ZImageMemoryBarrier2> b : barriers) pushKnownBarrier(info, b);
 }
 
 void doCommandBufferPipelineBarriers2 (ZCommandBuffer			cmd,
@@ -158,11 +172,11 @@ void doCommandBufferPipelineBarriers2 (ZCommandBuffer			cmd,
 		nullptr,													// pNext
 		dependencyFlags,											// dependencyFlags;
 		info.memoryBarrierCount,									// memoryBarrierCount
-		info.memoryBarrierCount ? info.pMemoryBarriers : nullptr,	// pMemoryBarriers
+		info.memoryBarrierCount ? info.memoryBarriers.data() : nullptr,	// pMemoryBarriers
 		info.bufferBarrierCount,									// bufferMemoryBarrierCount
-		info.bufferBarrierCount ? info.pBufferBarriers : nullptr,	// pBufferMemoryBarriers
+		info.bufferBarrierCount ? info.bufferBarriers.data() : nullptr,	// pBufferMemoryBarriers
 		info.imageBarrierCount,										// imageMemoryBarrierCount
-		info.imageBarrierCount ? info.pImageBarriers : nullptr		// pImageMemoryBarriers
+		info.imageBarrierCount ? info.imageBarriers.data() : nullptr		// pImageMemoryBarriers
 	};
 
 	di.vkCmdPipelineBarrier2(*cmd, &dependencyInfo);

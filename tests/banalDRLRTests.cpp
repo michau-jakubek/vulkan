@@ -64,6 +64,7 @@ constexpr Option optionBuildAlways				{ "--build-always", 0 };
 constexpr Option optionPrintParams				{ "--print-params", 0 };
 constexpr Option optionPrintShaders				{ "--print-shaders", 0 };
 constexpr Option optionPrintSystemLimits		{ "--print-limits", 0 };
+constexpr Option optionForceKHR					{ "--force-khr", 0 };
 constexpr Option optionSynchronization2			{ "--enable-synchronization2", 0 };
 constexpr Option optionUseShaderObjects			{ "--use-shader-objects", 0 };
 constexpr Option optionUseDescriptorBuffer		{ "--use-descriptor-buffer", 0 };
@@ -90,7 +91,7 @@ OptionParser<Params> Params::getParser()
 			return os.str();
 		};
 
-	//OptionFlags				flags(OptionFlag::None);
+	OptionFlags				flagsNone(OptionFlag::None);
 	OptionFlags				flagsDef(OptionFlag::PrintValueAsDefault);
 	add_ref<Params>			params = *this;
 	OptionParser<Params>	parser(params);
@@ -160,6 +161,8 @@ OptionParser<Params> Params::getParser()
 
 	parser.addOption(&Params::printShaders, optionPrintShaders,
 		"Print shaders to the console", { false }, OptionFlags(OptionFlag::DontPrintAsParams));
+
+	parser.addOption(&Params::KHR, optionForceKHR, "Enforce KHR functions", { false }, flagsNone);
 
 	return parser;
 }
@@ -301,6 +304,8 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_ref<CommandLine> cmdL
 		if (state.hasErrors) return {};
 	}
 
+	const bool forceKHR = parser.getOptionByName(optionForceKHR)->getTouched();
+
 	uint32_t maxColorAttachments = 0u;
 	uint32_t maxPerStageDescriptorInputAttachments = 0u;
 
@@ -309,7 +314,7 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_ref<CommandLine> cmdL
 		add_cref<VkPhysicalDeviceProperties> props = deviceGetPhysicalProperties(caps.physicalDevice);
 		const uint32_t major = VK_VERSION_MAJOR(props.apiVersion);
 		const uint32_t minor = VK_VERSION_MINOR(props.apiVersion);
-		params.KHR = major == 1u && minor < 4u;
+		params.KHR = forceKHR || (major == 1u && minor < 4u);
 
 		if (params.useShaderObjects)
 		{
@@ -374,7 +379,7 @@ TriLogicInt prepareTests (add_cref<TestRecord> record, add_ref<CommandLine> cmdL
 		params.attachmentCount = std::clamp(params.attachmentCount, 2u, attachmentsLimit);
 	};
 
-	VulkanContext ctx(record.name, gf.layers, {}, {}, onEnablingFeatures, Version(1,3), gf.debugPrintfEnabled);
+	VulkanContext ctx(record.name, gf.layers, {}, {}, onEnablingFeatures, gf.apiVer, gf.debugPrintfEnabled);
 
 	if (params.printSystemLimits)
 	{
@@ -406,8 +411,8 @@ std::pair<std::string, std::string> genShaderSources (add_cref<Params> params)
 {
 	std::ostringstream wFrag, wrFrag;
 
-	wFrag << "#version 450\n";
-	wrFrag << "#version 450\n";
+	wFrag << "#version 450\n// Writes\n";
+	wrFrag << "#version 450\n// Writes and reads\n";
 	for (uint32_t i = 0u; i < params.attachmentCount; ++i)
 	{
 		if (params.gapAttachmentIndex == i)
@@ -874,7 +879,7 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 
 		commandBufferBindVertexBuffers(cmd, vertexInput);
 
-		commandBufferPipelineBarrierVecs(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		commandBufferPipelineBarriers(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
 			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, transitGeneralInputBarriers);
 		commandBufferBindDescriptorSets(cmd, rLayout, VK_PIPELINE_BIND_POINT_GRAPHICS);
 
@@ -905,7 +910,7 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 			}
 			VTF_CALL_CHECK(di.vkCmdDraw, **cmd, vertexInput.getVertexCount(0), 1u, 0u, 0u);
 
-			commandBufferPipelineBarrierVecs(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			commandBufferPipelineBarriers(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, transitLocalReadBarriers);
 		}
 
@@ -940,7 +945,7 @@ TriLogicInt runTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 									renderingInputAttachmentIndices, params.gapAttachmentIndex);
 			}
 			//(*di.vkCmdSetRenderingInputAttachmentIndices)(**cmd, &riai);
-			commandBuffervSetRenderingInputAttachmentIndices(cmd, renderingInputAttachmentIndices, {}, {}, params.KHR);
+			commandBufferSetRenderingInputAttachmentIndices(cmd, renderingInputAttachmentIndices, {}, {}, params.KHR);
 		}
 		VTF_CALL_CHECK(di.vkCmdDraw, **cmd, vertexInput.getVertexCount(0), 1u, 0u, 0u);
 		commandBufferEndRendering(cmd);

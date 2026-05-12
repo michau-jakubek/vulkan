@@ -672,7 +672,14 @@ ZDevice createLogicalDevice	(
 	ZInstance					instance	= physDevice.getParam<ZInstance>();
 	VkAllocationCallbacksPtr	callbacks	= instance.getParam<VkAllocationCallbacksPtr>();
 	add_ref<ProgressRecorder>	recorder	= instance.getParamRef<ProgressRecorder>();
-	std::vector<const char*>	layers		(to_cstrings(instance.getParamRef<ZDistType<RequiredLayers,strings>>().get()));
+	// Since SDK 1.4.350.0
+	// Validation Error: [ VUID-VkDeviceCreateInfo-enabledLayerCount-12384 ] | MessageID = 0x5aab58fb
+	// vkCreateDevice() : pCreateInfo->enabledLayerCount is 1 (not zero).
+	//	Device Layers have never worked since Vulkan 1.0 and only Instance Layers should be used instead :
+	//   https://docs.vulkan.org/spec/latest/appendices/legacy.html#legacy-devicelayers.
+	// The Vulkan spec states : enabledLayerCount must be 0
+	// The Vulkan spec states: ppEnabledLayerNames must be NULL
+	//** std::vector<const char*>	layers		(to_cstrings(instance.getParamRef<ZDistType<RequiredLayers,strings>>().get()));
 
 	add_cref<strings>	availableExtensions(physDevice.getParamRef<ZDistType<AvailableDeviceExtensions, strings>>().get());
 	add_cref<strings>	desiredExtensions(physDevice.getParamRef<ZDistType<RequiredDeviceExtensions, strings>>().get());
@@ -709,8 +716,8 @@ ZDevice createLogicalDevice	(
 
 	createInfo.enabledExtensionCount	= data_count(extensions);
 	createInfo.ppEnabledExtensionNames	= data_or_null(extensions);
-	createInfo.enabledLayerCount		= data_count(layers);
-	createInfo.ppEnabledLayerNames		= data_or_null(layers);
+	createInfo.enabledLayerCount		= 0u;
+	createInfo.ppEnabledLayerNames		= nullptr;
 
 	DeviceCaps::Features deviceCapsFeatures(deviceCaps.updateDeviceCreateInfo(createInfo));
 

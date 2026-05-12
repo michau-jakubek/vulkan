@@ -32,7 +32,6 @@ constexpr VkPipelineColorBlendAttachmentState defaultBlendAttachmentState = {
 };
 
 using PatchControlPoints	= ZDistType<PatchControlPoints, uint32_t>;
-using CullModeFlags			= ZDistType<CullModeFlags, VkCullModeFlags>;
 using DepthTestEnable		= ZDistType<DepthTestEnable, bool>;
 using DepthWriteEnable		= ZDistType<DepthWriteEnable, bool>;
 using DepthMinBounds		= ZDistType<DepthMinBounds, float>;
@@ -79,8 +78,10 @@ using RenderingInpuAttachmentIndices	= ZDistType<RenderingInpuAttachmentIndices,
 // VkViewport	sets viewport only
 // VkRect2D		sets scissor only
 
+struct Nope {/*struct that does nothong*/};
 } // namespace gpp
 
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, gpp::Nope);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, ZPipelineCreateFlags				createFlags);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, ZShaderModule						shaderModule);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<VertexBinding>				vertexBinding);
@@ -92,7 +93,7 @@ void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::Viewpo
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::ScissorCount>			scissorCount);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, VkPolygonMode						polygonMode);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<gpp::LineWidth>			lineWidth);
-void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<ZCullModeFlags>			cullModeFlags);
+void updateKnownSettings (add_ref<GraphicPipelineSettings>, VkCullModeFlagBits					cullMode);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, VkFrontFace							frontFace);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, VkSampleCountFlagBits				sampleCount);
 void updateKnownSettings (add_ref<GraphicPipelineSettings>, add_cref<VkExtent2D>				viewportAndScissor);
@@ -131,70 +132,80 @@ void updateSettings (add_ref<GraphicPipelineSettings> settings, Y&& param, X&&..
 
 std::shared_ptr<GraphicPipelineSettings> makeGraphicsPipelineSettings (ZPipelineLayout layout);
 
-ZPipeline createGraphicsPipeline (add_ref<GraphicPipelineSettings> settings);
-
 template<class... X>
 ZPipeline createGraphicsPipeline (ZPipelineLayout layout, X&&... params)
 {
+    extern ZPipeline createGraphicsPipeline (add_ref<GraphicPipelineSettings> settings);
 	std::shared_ptr<GraphicPipelineSettings> settings = makeGraphicsPipelineSettings(layout);
 	updateSettings(*settings, std::forward<X>(params)...);
 	return createGraphicsPipeline(*settings);
 }
 
+
+struct ComputePipelineSettings;
 bool computePipelineVerifyLimits (ZDevice device, add_cref<UVec3> wgSizes, bool raise = true);
-
-ZPipeline createComputePipeline(
-	ZPipelineCache					pipelineCache,
-	ZPipelineLayout					layout,
-	ZShaderModule					computeShaderModule,
-	add_ref<ZSpecializationInfo>	specInfo,
-	bool							enableFullGroups = false);
-
-inline ZPipeline createComputePipeline(
-	ZPipelineLayout					layout,
-	ZShaderModule					computeShaderModule,
-	add_ref<ZSpecializationInfo>	specInfo,
-	bool							enableFullGroups = false)
-{
-	return createComputePipeline(ZPipelineCache(), layout, computeShaderModule, specInfo, enableFullGroups);
+std::shared_ptr<ComputePipelineSettings> makeComputePipelineSettings();
+void updateKnownSettings (add_ref<ComputePipelineSettings>, add_ref<ZSpecializationInfo>, add_cref<ZSpecializationInfo>);
+template<class EntryType> void updateKnownSettings (
+    add_ref<ComputePipelineSettings>, add_ref<ZSpecializationInfo> specInfo, add_cref<ZSpecEntry<EntryType>> entry) {
+    specInfo.addEntry(entry);
 }
-
-// Please note that if any of localSize[?] is valid value and a layout of compute shader looks like
-// layout(local_size_x_ID = X, local_size_y_ID = Y, local_size_z_ID = Z), then X,Y,Z will refer to
-// the SpecID during compute pipeline creation. Be carefull to set them properly according to their
-// index in localSize vector or left as negative value.
-template<class... EntryTypes>
-ZPipeline createComputePipeline (
-	ZPipelineLayout				layout,
-	ZShaderModule				computeShaderModule,
-	ZPipelineCache				pipelineCache = {},
-	add_cref<UVec3>				localSizes = UVec3(INVALID_UINT32),
-	ZSpecEntry<EntryTypes>&&... entries)
+#if DESCRIPTOR_HEAP_AVAILABLE
+void updateKnownSettings (add_ref<ComputePipelineSettings>, add_ref<ZSpecializationInfo>, add_cref<DescriptorHeapMappings>);
+#endif
+void updateKnownSettings (add_ref<ComputePipelineSettings>, add_ref<ZSpecializationInfo>, add_cref<UVec3> localSizeValues);
+void updateKnownSettings (add_ref<ComputePipelineSettings>, add_ref<ZSpecializationInfo>, add_cref<IVec3> localSizeIndices);
+void updateKnownSettings (add_ref<ComputePipelineSettings>, add_ref<ZSpecializationInfo>, ZPipelineLayout);
+void updateKnownSettings (add_ref<ComputePipelineSettings>, add_ref<ZSpecializationInfo>, ZPipelineCache);
+/**
+ * @brief Creates a fully configured Vulkan Compute Pipeline using a type-safe component pack.
+ *
+ * This function accepts a variable sequence of configuration components in any order.
+ * The pipeline internal structures and shader specialization constants are automatically
+ * populated based on the types provided.
+ *
+ * @note **Resource Binding Architecture**:
+ * `ZPipelineLayout` and `DescriptorHeapMappings` are mutually interchangeable configurations.
+ * Use `ZPipelineLayout` for traditional Descriptor Sets; bindings are managed automatically
+ * during pipeline dispatch or on-demand via `commandBufferBindDescriptorSets()`.
+ * Use `DescriptorHeapMappings` for modern `VK_EXT_descriptor_heap` (bindless); bindings
+ * must be explicitly locked via `commandBufferBindResourceHeap()`.
+ *
+ * @note **Workgroup Size Configuration**:
+ * - `UVec3` (values): Components are mapped to shader specialization constants matching
+ * `local_size_{x|y|z}_id` conventions, provided their value is not equal to `INVALID_UINT32`.
+ * - `IVec3` (indices): Represents the specialization constant IDs for the X, Y, and Z axes respectively.
+ * Components are applied to the corresponding dimensions only if their value is not equal to `-1` (e.g., mapping to indices 0, 1, 2).
+ *
+ * @note **Specialization Constants Evaluation**:
+ * Specialization constants are processed and appended **strictly in the order of their appearance** * in the argument list. Special care must be taken when manually assigning constant IDs
+ * to prevent overlapping or conflicting indices, unless they are managed automatically by the framework.
+ *
+ * @param shaderModule The SPIR-V compute shader stage module to be bound to the pipeline.
+ * @param params       A variable sequence of pipeline configuration components.
+ * Supported types that are recognized and processed by the engine:
+ * - `ZPipelineLayout`          : Traditional pipeline layout defining push constants and descriptor sets.
+ * - `DescriptorHeapMappings`   : Bindless descriptor heap layouts and resource mappings (VK_EXT_descriptor_heap).
+ * - `UVec3` (localSizeValues)  : Direct 3D local workgroup size dimensions (X, Y, Z).
+ * - `IVec3` (localSizeIndices) : Shader specialization indices targeting local workgroup sizes.
+ * - `ZSpecializationInfo`      : Full specialization constant data payload.
+ * - `ZSpecEntry<EntryType>`    : A single specialization constant entry (e.g., for scalar patching).
+ * - `ZPipelineCache`           : Pipeline cache object to accelerate pipeline creation.
+ *
+ * @return ZPipeline   A fully baked, ready-to-dispatch Vulkan compute pipeline.
+ */
+template<class... X> ZPipeline createComputePipeline (ZShaderModule shaderModule, X&&... params)
 {
-	ZSpecializationInfo info;
+    extern ZPipeline createComputePipelineImpl (
+        ZShaderModule                    shaderModule,
+        add_ref<ComputePipelineSettings> settings,
+        add_ref<ZSpecializationInfo>     specInfo);
 
-	// Is 'const uvec3 gl_WorkGroupSize' really unsigned?
-	// Validation layers and shader unfortunately see it as signed
-	const uint32_t localSizes_x = localSizes.x();
-	const uint32_t localSizes_y = localSizes.y();
-	const uint32_t localSizes_z = localSizes.z();
-	const bool autoLocalSizesIDs = (localSizes_x != INVALID_UINT32 && localSizes_x != 0u)
-								|| (localSizes_y != INVALID_UINT32 && localSizes_y != 0u) 
-								|| (localSizes_z != INVALID_UINT32 && localSizes_z != 0u);
-	if (localSizes_x != INVALID_UINT32 && localSizes_x != 0u)
-		info.addEntry(make_signed(localSizes_x), 0u);
-	if (localSizes_y != INVALID_UINT32 && localSizes_y != 0u)
-		info.addEntry(make_signed(localSizes_y), 1u);
-	if (localSizes_z != INVALID_UINT32 || localSizes_y != 0u)
-		info.addEntry(make_signed(localSizes_z), 2u);
+    ZSpecializationInfo specInfo;
+    auto settings = makeComputePipelineSettings();
+    (updateKnownSettings(*settings, specInfo, std::forward<X>(params)), ...);
 
-	info.addEntries(entries...);
-
-	extern ZPipeline createComputePipelineImpl(ZPipelineLayout layout, ZShaderModule computeShaderModule,
-		ZPipelineCache pipelineCache, add_cref<UVec3>, bool autoLocalSizesIDs, bool enableFullGroups,
-		add_ref<ZSpecializationInfo>);
-	return createComputePipelineImpl(layout, computeShaderModule, pipelineCache,
-										localSizes, autoLocalSizesIDs, false, info);
+    return createComputePipelineImpl(shaderModule, *settings, specInfo);
 }
 
 ZPipelineLayout	pipelineGetLayout (ZPipeline pipeline);

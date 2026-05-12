@@ -56,6 +56,11 @@ struct DescriptorBufferInfo
 };
 typedef std::variant<std::monostate, DescriptorBufferInfo, DescriptorImageInfo>	VarDescriptorInfo;
 
+#if DESCRIPTOR_HEAP_AVAILABLE
+// VK_EXT_descriptor_heap: one (set, binding) -> heap-slot mapping per binding.
+using DescriptorHeapMappings = std::vector<VkDescriptorSetAndBindingMappingEXT>;
+#endif // DESCRIPTOR_HEAP_AVAILABLE
+
 class DescriptorSetBindingManager
 {
 	friend class RTLayoutManager;
@@ -183,6 +188,19 @@ public:
 	template<class... PC__>	auto createPipelineLayout (std::initializer_list<ZDescriptorSetLayout>, const ZPushRange<PC__>&...) -> ZPipelineLayout;
 
 	ZBuffer						 createDescriptorBuffer (ZDescriptorSetLayout dsLayout);
+#if DESCRIPTOR_HEAP_AVAILABLE
+	// Computes one VkDescriptorSetAndBindingMappingEXT per buffer binding (in addBinding order).
+	// 'source' selects how the shader resolves each binding to a heap slot:
+	//   HEAP_WITH_CONSTANT_OFFSET - fixed slot i at baseOffset + i*slotStride;
+	//   HEAP_WITH_PUSH_INDEX      - slot = baseOffset + pushData[binding*4] * slotStride, i.e. the
+	//                               slot index is supplied at record time via commandBufferPushData().
+	// In both cases createDescriptorHeap() physically stores binding i at heap index i (identity), so
+	// for push-index push the binding-ordered indices {0,1,...}. The result also drives the shader
+	// stage of createComputePipelineWithResourceHeap().
+	DescriptorHeapMappings		 getDescriptorHeapMappings (uint32_t descriptorSet = 0u,
+									VkDescriptorMappingSourceEXT source = VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_CONSTANT_OFFSET_EXT) const;
+	ZBuffer						 createDescriptorHeap (add_cref<DescriptorHeapMappings> mappings);
+#endif // DESCRIPTOR_HEAP_AVAILABLE
 
 protected:	
 	typedef struct VkDescriptorSetLayoutBindingAndType : VkDescriptorSetLayoutBinding

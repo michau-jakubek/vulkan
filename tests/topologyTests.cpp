@@ -643,7 +643,7 @@ TriLogicInt runTopologyTests (add_ref<Canvas> cs, add_cref<std::string> assets, 
 			commandBufferEndQuery(qpbi);
 
 			VTF_CALL_CHECK(di.vkCmdCopyQueryPoolResults, *cmdBuffer,
-								*queryPool, 0, 1, *queryResults, 0, sizeof(uint64_t),
+                                *queryPool, 0u, 1u, *queryResults, 0u, sizeof(uint64_t),
 								VkFlags(VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT));
 			
 			rpbi = commandBufferBeginRenderPass(cmdBuffer, renderPassA, framebuffer);

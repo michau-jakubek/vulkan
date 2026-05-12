@@ -1068,7 +1068,7 @@ TriLogicInt performTests(add_ref<VulkanContext> ctx, add_cref<CoopParams> params
 
 	ZDescriptorSetLayout	dsLayout = lm.createDescriptorSetLayout();
 	ZPipelineLayout			pipeLayout = lm.createPipelineLayout({ dsLayout }, pushRange);
-	ZPipeline				pipeline = createComputePipeline(pipeLayout, shader, specInfo);
+    ZPipeline				pipeline = createComputePipeline(shader, pipeLayout, specInfo);
 
 	populateData(a_buffer, a_comp, ASize, MatrixTargets::A);
 	populateData(b_buffer, b_comp, BSize, MatrixTargets::B);

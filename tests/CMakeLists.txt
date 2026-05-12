@@ -3,14 +3,18 @@ if(NOT EXISTS ${ASSETS_PATH})
 endif()
 
 if(VTF_AS_DLL)
-set(vtf_app_hpp ../app/vtf_app.hpp ../app/vtf_app.cpp vtfLauncher.hpp)
-if(SYSTEM_OS_WINDOWS)
-	list(APPEND vtf_app_hpp vtfLauncherWin.cpp)
+    set(vtf_app_hpp ../app/vtf_app.hpp ../app/vtf_app.cpp vtfLauncher.hpp)
+    if(SYSTEM_OS_WINDOWS)
+	    list(APPEND vtf_app_hpp vtfLauncherWin.cpp)
+    else()
+	    list(APPEND vtf_app_hpp vtfLauncherLin.cpp)
+    endif()
 else()
-	list(APPEND vtf_app_hpp vtfLauncherLin.cpp)
+    set(vtf_app_hpp ../app/vtf_app.hpp)
 endif()
-else()
-set(vtf_app_hpp ../app/vtf_app.hpp)
+
+if(DESCRIPTOR_HEAP_AVAILABLE)
+    set(descriptorHeapTests_files descriptorHeapTests.cpp descriptorHeapTests.hpp)
 endif()
 
 set(tests_files
@@ -60,6 +64,7 @@ set(tests_files
 	shaderObjectComputeTests.hpp
 	descriptorBufferTests.cpp
 	descriptorBufferTests.hpp
+	${descriptorHeapTests_files}
 	intGeomTests.cpp
 	intGeomTests.hpp
 	cogWheelsTests.cpp
@@ -70,6 +75,8 @@ set(tests_files
 	taskMeshTriangleTests.hpp
 	banalDRLRTests.cpp
 	banalDRLRTests.hpp
+	simpleDRLRTests.cpp
+	simpleDRLRTests.hpp
 	banalRenderPassTests.cpp
 	banalRenderPassTests.hpp
 	mutableDescriptorTests.cpp

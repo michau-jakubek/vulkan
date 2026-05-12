@@ -818,7 +818,7 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
         int32_t visits;
     } const                 pc              { testSeed, int32_t(visitCount) };
     ZPipelineLayout			pipelineLayout  = lm.createPipelineLayout({ dsLayout }, ZPushRange<PC>(stage));
-    ZPipeline				pipeline        = createComputePipeline(pipelineLayout, shader);
+    ZPipeline				pipeline        = createComputePipeline(shader, pipelineLayout);
 
     {
         const auto intCount = uint32_t(arrayBuffSize / 4u);

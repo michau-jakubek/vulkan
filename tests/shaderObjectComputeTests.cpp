@@ -286,7 +286,7 @@ TriLogicInt performTests (add_ref<VulkanContext> ctx, add_cref<Params> params)
 	programs.buildAndVerify(params.effectiveVkVersion, params.effectiveSpvVersion,
 							gf.spirvValidate, gf.genSpirvDisassembly, params.buildAlways);
 	ZShaderModule			s3				= programs.getShader(VK_SHADER_STAGE_COMPUTE_BIT);
-	ZPipeline				pipeline		= createComputePipeline(pipelineLayout, s3, specInfo);
+    ZPipeline				pipeline		= createComputePipeline(s3, pipelineLayout, specInfo);
 
 	ZCommandPool			cmdPool			= ctx.createComputeCommandPool();
 

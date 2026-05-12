@@ -8,6 +8,9 @@
 // So do not include <vulkan/vulkan.hpp> directly,
 // instead try to include this file.
 
+// 2026-04-20, after downloading SDK 1.4.350.0, no include <vector> in <vulkan/vulkan.hpp>
+#include <vector>
+
 #define VULKAN_HPP_DISABLE_ENHANCED_MODE 1
 #if DETECTED_COMPILER == DETECTED_COMPILER_MSVC
 #include <vulkan/vulkan.hpp>

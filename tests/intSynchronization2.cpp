@@ -262,8 +262,8 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 	ZPipelineLayout		pipelineLayout	= lm.createPipelineLayout({ lm.createDescriptorSetLayout() });
 	ZPipeline			graphPipeline	= createGraphicsPipeline(pipelineLayout, renderPass,
 											extent, vertexInput, vertShader, fragShader);
-	ZPipeline			forwardPipeline = createComputePipeline(pipelineLayout, forwardShader, {}, UVec3(1));
-	ZPipeline			backwardPipeline = createComputePipeline(pipelineLayout, backwardShader, {}, UVec3(1));
+    ZPipeline			forwardPipeline = createComputePipeline(forwardShader, pipelineLayout, UVec3(1));
+    ZPipeline			backwardPipeline = createComputePipeline(backwardShader, pipelineLayout, UVec3(1));
 
 	ZBuffer				indirectBuffer	= createBuffer<VkDrawIndexedIndirectCommand>(
 												ctx.device, 1u, ZBufferUsageFlags(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT));

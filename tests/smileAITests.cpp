@@ -8,6 +8,8 @@
 #include "vtfZCommandBuffer.hpp"
 #include "vtfZRenderPass.hpp"
 
+//#define VERTICES
+
 namespace
 {
 using namespace vtf;
@@ -40,7 +42,11 @@ TriLogicInt prepareTests(add_cref<TestRecord> record, add_ref<CommandLine> cmdLi
 std::array<ZShaderModule, 2> genShaders(ZDevice device, add_cref<Params> params)
 {
 	ProgramCollection			programs(device, params.assets);
+#ifdef VERTICES
 	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "shader.vert");
+#else
+	programs.addFromFile(VK_SHADER_STAGE_VERTEX_BIT, "standalone.vert");
+#endif
 	programs.addFromFile(VK_SHADER_STAGE_FRAGMENT_BIT, "shader.frag");
 	const GlobalAppFlags		flags(getGlobalAppFlags());
 	programs.buildAndVerify(flags.vulkanVer, flags.spirvVer, flags.spirvValidate, flags.genSpirvDisassembly);
@@ -55,8 +61,13 @@ TriLogicInt runTests(add_ref<Canvas> canvas, add_cref<Params> params)
 {
 	add_cref<ZDeviceInterface>	di			= canvas.device.getInterface();
 
+#ifdef VERTICES
 	VertexInput					vertexInput(canvas.device);
-	vertexInput.binding(0).addAttributes(VertexInput::fullQuad<Vec2>());
+	vertexInput.binding(0).addAttributes(VertexInput::fullQuadStrip<Vec2>());
+  #define VERTEXINPUT vertexInput
+#else
+  #define VERTEXINPUT gpp::Nope()
+#endif
 
 	const auto					[vs, fs]	= genShaders(canvas.device, params);
 
@@ -76,7 +87,8 @@ TriLogicInt runTests(add_ref<Canvas> canvas, add_cref<Params> params)
 	ZPipelineLayout				pipelineLayout	= pl.createPipelineLayout(pushConstants);
 	ZPipelineCache				pipelineCache	= createPipelineCache(canvas.device, params.cacheFileName, true, false);
 	ZPipeline					pipeline		= createGraphicsPipeline(pipelineLayout, pipelineCache,
-																	renderPass, vertexInput, vs, fs,
+																	renderPass, VERTEXINPUT, vs, fs,
+																	VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
 																	VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
 	pipelineCache.saveToFile();
 
@@ -89,11 +101,13 @@ TriLogicInt runTests(add_ref<Canvas> canvas, add_cref<Params> params)
 		const PushConstant pc{ Vec2(cs.width, cs.height) };
 		commandBufferBegin(cmdBuffer);
 		commandBufferBindPipeline(cmdBuffer, pipeline);
+#ifdef VERTICES
 		commandBufferBindVertexBuffers(cmdBuffer, vertexInput);
+#endif
 		commandBufferSetViewportAndScissor(cmdBuffer, swapchain);
 		commandBufferPushConstants(cmdBuffer, pipelineLayout, pc);
 		auto rpbi = commandBufferBeginRenderPass(cmdBuffer, framebuffer);
-            VTF_CALL_CHECK(di.vkCmdDraw, *cmdBuffer, vertexInput.getVertexCount(0), 1u, 0u, 0u);
+            VTF_CALL_CHECK(di.vkCmdDraw, *cmdBuffer, 4u, 1u, 0u, 0u);
 		commandBufferEndRenderPass(rpbi);
 		commandBufferEnd(cmdBuffer);
 	};

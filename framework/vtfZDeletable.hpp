@@ -664,7 +664,12 @@ void vtfDestroyPipeline(void_cptr, VkDevice, VkPipeline, const VkAllocationCallb
 typedef ZDeletable<VkPipeline,
 	decltype(&vtfDestroyPipeline), &vtfDestroyPipeline,
 	swizzle_four_params, ZDeletableBase, ZDevice, VkAllocationCallbacksPtr,
-	ZPipelineLayout, ZRenderPass, VkPipelineBindPoint, VkPipelineCreateFlags,
+    ZPipelineLayout, ZRenderPass, VkPipelineBindPoint,
+#if VK_VERSION_1_4_AVAILABLE
+    VkPipelineCreateFlags2,
+#else
+    VkPipelineCreateFlags,
+#endif
 	std::vector<ZShaderModule>, // ray-tracing shaders
 	ZDistType<LayoutIdentifier, uint32_t>, // ray-tracing pipeline shader group order
 	ZDistType<Count, uint32_t> // ray-tracing pipeline shader group count

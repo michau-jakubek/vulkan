@@ -332,7 +332,7 @@ TriLogicInt runTest (add_ref<Canvas> ctx, add_cref<Params> params)
         uint32_t missIndex;
     } pc{}; UNREF(pc);
     ZPipelineLayout			pipelineLayout  = lm.createPipelineLayout({ dsLayout }, ZPushRange<PC>(VK_SHADER_STAGE_ALL));
-    //ZPipeline				cPipeline       = createComputePipeline(pipelineLayout, shader);
+    //ZPipeline				cPipeline       = createComputePipeline(shader, pipelineLayout);
     const auto              order           = rtdetails::PipelineShaderGroupOrder::fromInt(params.pipelineShaderGroupOrder);
     ZPipeline               rtPipeline      = createRayTracingPipeline(pipelineLayout, rtShaders, order);
 
