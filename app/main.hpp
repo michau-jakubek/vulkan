@@ -3,7 +3,7 @@
 
 #include "vtfVkUtils.hpp"
 
-constexpr vtf::Version CurrentVtfVersion(1, 5, 0, 0);
+constexpr vtf::Version CurrentVtfVersion(1, 5, 0, 1);
 
 // 2024-04-10, 1.1.0.0, "Add versioning"
 // 2024-04-15, 1.1.1.0, "Some fixes in int_compute test."
@@ -57,5 +57,6 @@ constexpr vtf::Version CurrentVtfVersion(1, 5, 0, 0);
 // 2026-05-05, 1.4.1.1,  "Remove static Vulkan library dependencies"
 // 2026-05-11, 1.4.1.2,  "Bring to life"
 // 2026-06-04, 1.5.0.0,  "Handle VK_EXT_descriptor_heap (experimental)"
+// 2026-06-04, 1.5.0.1,  "Fix descriptor_heap tests"
 
 #endif  // __MAIN_HPP_INCLUDED__

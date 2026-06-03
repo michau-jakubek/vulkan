@@ -140,8 +140,8 @@ TriLogicInt runTests (add_ref<Canvas> canvas, add_cref<Params> params)
 	ZBuffer				inBuffer	= createBuffer<uint32_t>(canvas.device, kElements, uniUsage);
 	ZBuffer				outBuffer	= createBuffer<uint32_t>(canvas.device, kElements, stoUsage);
 
+	std::vector<uint32_t> seed(bufferGetElementCount<uint32_t>(inBuffer));
 	{
-		std::vector<uint32_t> seed(bufferGetElementCount<uint32_t>(inBuffer));
 		std::iota(seed.begin(), seed.end(), 1u);
 		bufferWrite(inBuffer, seed);
 
