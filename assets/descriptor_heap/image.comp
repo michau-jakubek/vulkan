@@ -1,0 +1,15 @@
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) buffer InBuf { uint inData[64]; };
+layout(set = 0, binding = 1, r32ui) uniform writeonly uimage2D outImage;
+
+void main()
+{
+	const uvec2 p = gl_GlobalInvocationID.xy;
+	if (p.x < 8u && p.y < 8u)
+	{
+		imageStore(outImage, ivec2(p), uvec4(inData[p.y * 8u + p.x], 0u, 0u, 0u));
+	}
+}

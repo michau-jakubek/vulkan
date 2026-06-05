@@ -1,245 +1,69 @@
+# vtf-app: the VTF test executable. Depends on the vtf-libs package.
+#
+# vtf-libs is located via VTF_LIBS_DIR:
+#   * set       -> use the libraries at that path;
+#   * not set   -> fetch them into external/vtf-libs (download URL is a placeholder
+#                  for now; the local sibling repo simulates the eventual download).
+
 cmake_minimum_required(VERSION 3.10.2)
 
 project(vulkan-trivial-framework CXX)
 
-if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-    message(STATUS "OS is ${CMAKE_SYSTEM_NAME}")
-    set(SYSTEM_OS_LINUX 1)
-    set(SYSTEM_OS_WINDOWS 0)
-elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
-    message(STATUS "OS is ${CMAKE_SYSTEM_NAME}")
-    set(SYSTEM_OS_LINUX 0)
-    set(SYSTEM_OS_WINDOWS 1)
-endif()
-add_definitions(-DSYSTEM_OS_LINUX=${SYSTEM_OS_LINUX})
-add_definitions(-DSYSTEM_OS_WINDOWS=${SYSTEM_OS_WINDOWS})
-message(STATUS "Define preprocessor constant: SYSTEM_OS_LINUX=${SYSTEM_OS_LINUX}")
-message(STATUS "Define preprocessor constant: SYSTEM_OS_WINDOWS=${SYSTEM_OS_WINDOWS}")
+# Placeholder "remote" for vtf-libs. Defaults to the sibling repo so the split can
+# be exercised locally before a real download URL exists.
+set(VTF_LIBS_GIT_URL "${CMAKE_CURRENT_SOURCE_DIR}/../vtf-libs"
+	CACHE STRING "Location/URL of the vtf-libs repository (used only when VTF_LIBS_DIR is not set)")
 
-set(CMAKE_CXX_STANDARD 17)
-
-if (NOT WIN32)
-	set(FPIC_FLAG "-fPIC")
-endif()
-
-set(DETECTED_COMPILER_CLANG 1)
-set(DETECTED_COMPILER_GNU   2)
-set(DETECTED_COMPILER_MSVC  3)
-
-if (CHECK_MEMORY_LEAKS)
-	add_definitions(-DCHECK_MEMORY_LEAKS=1)
-endif()
-
-add_definitions(-DDETECTED_COMPILER_CLANG=${DETECTED_COMPILER_CLANG})
-add_definitions(-DDETECTED_COMPILER_GNU=${DETECTED_COMPILER_GNU})
-add_definitions(-DDETECTED_COMPILER_MSVC=${DETECTED_COMPILER_MSVC})
-
-if     (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-	add_definitions(-DDETECTED_COMPILER=${DETECTED_COMPILER_CLANG})
-	set(DETECTED_COMPILER 1)
-elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-	add_definitions(-DDETECTED_COMPILER=${DETECTED_COMPILER_GNU})
-	set(DETECTED_COMPILER 2)
-elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-	add_definitions(-DDETECTED_COMPILER=${DETECTED_COMPILER_MSVC})
-	set(DETECTED_COMPILER 3)
-else   ()
-	add_definitions(-DDETECTED_COMPILER=0)
-	set(DETECTED_COMPILER 0)
-endif  ()
-message(STATUS "Define preprocessor constant: DETECTED_COMPILER=${DETECTED_COMPILER}")
-
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules)
-
-string(TOUPPER ${CMAKE_GENERATOR} UPPER_CASE_CMAKE_GENERATOR)
-string(REGEX MATCH "VISUAL" CURRENT_GENERATOR ${UPPER_CASE_CMAKE_GENERATOR})
-if ("${CURRENT_GENERATOR}" STREQUAL "VISUAL")
-    # Globally disable terribly onerous warning C26812: Prefer 'enum class' over 'enum' (Enum.3)
-	# Warning C4127 - conditional expression is constant
-	set(COMMON_BUILD_OPTIONS "/std:c++17 /W4 /GR /wd26812 /MP")
-    set(ADDITIONAL_DEBUG_BUILD_OPTIONS "")
-    set(ADDITIONAL_RELEASE_BUILD_OPTIONS "")
-    set(ADDITIONAL_LIBS "")
-else ()
-    set(COMMON_BUILD_OPTIONS "-std=c++17 -Wall -Wextra -Wno-long-long -Wconversion -Wno-overloaded-virtual -Wpedantic ${FPIC_FLAG}")
-    set(ADDITIONAL_DEBUG_BUILD_OPTIONS "-ggdb -O0")
-    set(ADDITIONAL_RELEASE_BUILD_OPTIONS "-O2")
-    if (${SYSTEM_OS_LINUX} EQUAL 0)
-        set(ADDITIONAL_LIBS "-pthread")
-    else ()
-        set(ADDITIONAL_LIBS "-pthread -ldl -lm -lstdc++fs -lX11")
-    endif ()
-endif()
-
-string(TOUPPER "${CMAKE_BUILD_TYPE}" THIS_BUILD_TYPE)
-if("${THIS_BUILD_TYPE}" STREQUAL "DEBUG")
-    message(STATUS "Setup enabled for debugging")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_BUILD_OPTIONS} ${ADDITIONAL_DEBUG_BUILD_OPTIONS}")
+if(VTF_LIBS_DIR)
+	message(STATUS "VTF_LIBS_DIR is set: using existing vtf-libs at '${VTF_LIBS_DIR}'")
 else()
-    message(STATUS "Setup enabled for release version")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_BUILD_OPTIONS} ${ADDITIONAL_RELEASE_BUILD_OPTIONS}")
-endif()
-
-# Cached variables only for Cmake-GUI
-set(VULKAN_INCLUDE_DIR "" CACHE STRING "Directory with Vulkan includes")
-set(GLFW3_INCLUDE_DIR  "" CACHE STRING "Directory with GLFW v3 includes")
-set(GLFW3_LIB_PATH     "" CACHE STRING "Full path to GLFW v3 link library")
-
-# Unfortunately CMAKE_SURRENT_SOURCE_DIR inside of 'cmake' subdirectory doesn't point to 'cmake' directory :(
-set(PROJECT_MODULES_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_MODULES_PATH})
-find_package(Git REQUIRED)
-find_package(Python REQUIRED)
-find_package(LookForDependencies REQUIRED)
-message(STATUS "Found Python interpreter: " ${Python_EXECUTABLE})
-
-message(STATUS "Looking for VULKAN_SDK (maybe environment) variable")
-if (NOT VULKAN_SDK)
-	set (VULKAN_SDK $ENV{VULKAN_SDK})
-endif()
-if (VULKAN_SDK)
-	set (CMAKE_PREFIX_PATH "${VULKAN_SDK};${CMAKE_PREFIX_PATH}")
-	find_package(Vulkan REQUIRED)
-	get_target_property(VULKAN_INCLUDE_DIR Vulkan::Vulkan INTERFACE_INCLUDE_DIRECTORIES)
-	message(STATUS "Found Vulkan SDK in ${VULKAN_SDK}")
-	message(STATUS "Set VULKAN_INCLUDE_DIR to ${VULKAN_INCLUDE_DIR}")
-endif()
-
-include(cmake/glfw_paths.cmake)
-
-if(NOT EXISTS "${VULKAN_INCLUDE_DIR}" OR NOT EXISTS "${GLFW3_INCLUDE_DIR}" OR NOT EXISTS "${GLFW3_LIB_PATH}")
-message(FATAL_ERROR "--- Some of the following do not exist: ---\n"
-		"VULKAN_INCLUDE_DIR=${VULKAN_INCLUDE_DIR}\n"
-		#"VULKAN_LIB_PATH=${VULKAN_LIB_PATH}\n"
-		"GLFW3_INCLUDE_DIR=${GLFW3_INCLUDE_DIR}\n"
-		"GLFW3_LIB_PATH=${GLFW3_LIB_PATH}\n"
-		"--- Try also: ---\n"
-		"VULKAN_SDK=<Vulkan SDK path>\n"
-		"LOOK_FOR_GLFW3=<GLFW3 path> [HINT_FOR_GLFW3=[subdir[, ...]]]\n")
-endif()
-
-#message(STATUS "Found VULKAN_INCLUDE_DIR=${VULKAN_INCLUDE_DIR}")
-#message(STATUS "Found VULKAN_LIB_PATH=${VULKAN_LIB_PATH}")
-#message(STATUS "Found GLFW3_INCLUDE_DIR=${GLFW3_INCLUDE_DIR}")
-#message(STATUS "Found GLFW3_LIB_PATH=${GLFW3_LIB_PATH}")
-
-include_directories(${VULKAN_INCLUDE_DIR})
-include_directories(${GLFW3_INCLUDE_DIR})
-
-#get_filename_component(ABS_VULKAN_LIB_PATH ${VULKAN_LIB_PATH} REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
-get_filename_component(ABS_GLFW3_LIB_PATH ${GLFW3_LIB_PATH} REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
-set(COMMON_LIBS ${ADDITIONAL_LIBS} ${ABS_GLFW3_LIB_PATH})
-
-if ("${VULKAN_DRIVER}" STREQUAL "")
-	if (WIN32)
-		set(VULKAN_DRIVER "vulkan-1.dll")
+	set(VTF_LIBS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/vtf-libs)
+	message(STATUS "VTF_LIBS_DIR is NOT set:")
+	message(STATUS "  * vtf-libs will be obtained under '${VTF_LIBS_DIR}'")
+	message(STATUS "  * download source (VTF_LIBS_GIT_URL) = '${VTF_LIBS_GIT_URL}'")
+	message(STATUS "  * to use an existing checkout instead: -DVTF_LIBS_DIR=<path>")
+	message(STATUS "  * to change the download source:       -DVTF_LIBS_GIT_URL=<url>")
+	if(NOT EXISTS ${VTF_LIBS_DIR}/CMakeLists.txt)
+		message(STATUS "  -> fetching vtf-libs from '${VTF_LIBS_GIT_URL}' ...")
+		find_package(Git REQUIRED)
+		file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/external)
+		execute_process(
+			COMMAND ${GIT_EXECUTABLE} clone ${VTF_LIBS_GIT_URL} ${VTF_LIBS_DIR}
+			RESULT_VARIABLE VTF_LIBS_CLONE_RESULT)
+		if(NOT VTF_LIBS_CLONE_RESULT EQUAL 0)
+			message(FATAL_ERROR
+				"Failed to fetch vtf-libs into ${VTF_LIBS_DIR}.\n"
+				"Provide -DVTF_LIBS_DIR=<path> or a valid -DVTF_LIBS_GIT_URL=<url>.")
+		endif()
 	else()
-		set(VULKAN_DRIVER "libvulkan.so")
+		message(STATUS "  -> vtf-libs already present at '${VTF_LIBS_DIR}'; skipping fetch")
 	endif()
 endif()
 
-if (VTF_SAFETY_CRITICAL)
-	add_definitions(-DVTF_SAFETY_CRITICAL=1)
-	message(STATUS "Define preprocessor constant: VTF_SAFETY_CRITICAL=1")
-else()
-	add_definitions(-DVTF_SAFETY_CRITICAL=0)
-	message(STATUS "Define preprocessor constant: VTF_SAFETY_CRITICAL=0")
+get_filename_component(VTF_LIBS_DIR "${VTF_LIBS_DIR}" ABSOLUTE)
+if(NOT EXISTS ${VTF_LIBS_DIR}/CMakeLists.txt)
+	message(FATAL_ERROR "VTF_LIBS_DIR=${VTF_LIBS_DIR} does not contain a vtf-libs CMakeLists.txt")
 endif()
+message(STATUS "Using vtf-libs from ${VTF_LIBS_DIR}")
 
-include(getvkhver/getvkhver.cmake)
+# Shared toolchain / dependency setup (ships with vtf-libs).
+include(${VTF_LIBS_DIR}/cmake/VtfCommon.cmake)
 
-add_subdirectory(pdriver)
-include_directories(pdriver)
+# Build the libraries as a subproject; pull in the include paths they expose.
+set(VTF_LIBS_AS_SUBPROJECT ON)
+add_subdirectory(${VTF_LIBS_DIR} ${CMAKE_BINARY_DIR}/vtf-libs)
+include_directories(${VTF_LIBS_INCLUDE_DIRS})
 
 set(ASSETS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assets)
 
-add_subdirectory(external)
-include_directories(
-	external/stb
-	external/stl_reader
-	external/glm
-	external/tinygltf
-	)
-
-add_subdirectory(driver)
-include_directories(driver)
-
-add_subdirectory(console)
-include_directories(console)
-add_dependencies(console external)
-
-if(OFFLINE_SHADER_COMPILER)
-	add_definitions(-DOFFLINE_SHADER_COMPILER=1)
-	message(STATUS "Define preprocessor constant: OFFLINE_SHADER_COMPILER=1")
-else()
-	message(STATUS "OFFLINE_SHADER_COMPILER is OFF")
-endif()
-add_subdirectory(compiler)
-include_directories(compiler)
-
-if(VTF_AS_DLL)
-	add_definitions(-DVTF_AS_DLL=1)
-	message(STATUS "Define preprocessor constant: VTF_AS_DLL=1")
-else()
-	add_definitions(-DVTF_AS_DLL=0)
-	message(STATUS "Define preprocessor constant: VTF_AS_DLL=0")
-endif()
-
-if(RENDERDOC_APP_HEADER)
-	if(RENDERDOC_LIB)
-		add_definitions(-DRENDERDOC_LIB="${RENDERDOC_LIB}")
-		message(STATUS "Define preprocessor constant: RENDERDOC_LIB=\"${RENDERDOC_LIB}\"")
-	else()
-		if(${SYSTEM_OS_WINDOWS})
-			add_definitions(-DRENDERDOC_LIB=renderdoc.dll)
-			message(STATUS "Define preprocessor constant: RENDERDOC_LIB=renderdoc.dll")
-		else()
-			add_definitions(-DRENDERDOC_LIB=renderdoc.so)
-			message(STATUS "Define preprocessor constant: RENDERDOC_LIB=renderdoc.so")
-		endif()
-	endif()
-	add_definitions(-DRENDERDOC_APP_HEADER="${RENDERDOC_APP_HEADER}")
-	message(STATUS "Define preprocessor constant: RENDERDOC_APP_HEADER=\"${RENDERDOC_APP_HEADER}\"")
-else()
-	message(STATUS "RENDERDOC_APP_HEADER is OFF")
-endif()
-add_subdirectory(renderdoc)
-include_directories(renderdoc)
-
-add_subdirectory(framework)
-include_directories(framework)
-add_dependencies(framework external compiler)
-
-add_subdirectory(rejtrejsing)
-include_directories(rejtrejsing)
-add_dependencies(rejtrejsing external compiler)
-
-if(ENABLE_DAEMON_TEST)
-add_definitions(-DENABLE_DAEMON_TEST 1)
-add_subdirectory(daemon)
-include_directories(daemon)
-add_dependencies(daemon external)
-endif()
-
-add_subdirectory(tests)
 include_directories(tests)
+add_subdirectory(tests)
 add_dependencies(tests external)
 
 include_directories(app)
 add_subdirectory(app)
+
 if(VTF_AS_DLL)
 	include_directories(vtf-launcher)
 	add_subdirectory(vtf-launcher)
-endif()
-
-if(ENABLE_DAEMON_TEST)
-add_custom_target(copy-binaries ALL
-                    DEPENDS daemon console app
-                    COMMENT "Copy binaries ...")
-add_custom_command(TARGET copy-binaries
-                POST_BUILD
-                COMMAND ${CMAKE_COMMAND} ARGS -E echo
-                #"Copying" $<TARGET_FILE:daemon> "to" $<TARGET_FILE_DIR:app>
-                COMMAND ${CMAKE_COMMAND} ARGS -E copy
-                $<TARGET_FILE:daemon> $<TARGET_FILE_DIR:app>)
 endif()

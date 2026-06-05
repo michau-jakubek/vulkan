@@ -16,6 +16,8 @@ Together with aforementioned ones some third-party libraries are used, these are
 [Installation](help/installation.md) and [launching](help/launching.html)
 ------------------------
 
+> 💡 **Historical Note:** Up until version `1.5.0.1`, the test suite and the library were coupled together in a single repository. They have now been cleanly decoupled starting from [version 1.5.1.0](https://github.com/michau-jakubek/vulkan/releases/tag/v1.5.1.0) into this repo and [vtf-libs repo](https://github.com/michau-jakubek/vtf-libs).
+
 Shaders
 -------
 The shaders are built automatically at the first time when you are running particular test, although, there are the tests that force to build the shaders every time they are run. Shaders binaries are stored in the temprary system folder or in the location you can point as the parameter to the VTF executable. Basically the binaries are built every time their code changes. Then something kind of the checksum is calculated and if it does not match to the previous one then the shaders are rebuild.

@@ -1,9 +1,11 @@
 #version 450
 
+#extension GL_EXT_scalar_block_layout : require
+
 layout(local_size_x = 64) in;
 
-layout(set = 0, binding = 0) uniform InData  { uint inData[64]; };
-layout(set = 0, binding = 1) buffer  OutData { uint outData[64]; };
+layout(scalar, set = 0, binding = 0) uniform InData  { uint inData[64]; };
+layout(set = 0, binding = 1)         buffer  OutData { uint outData[64]; };
 
 layout(push_constant) uniform PushData { layout(offset = 8) uint addend; };
 
