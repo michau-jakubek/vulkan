@@ -3,7 +3,7 @@
 
 #include "vtfVkUtils.hpp"
 
-constexpr vtf::Version CurrentVtfVersion(1, 5, 1, 0);
+constexpr vtf::Version CurrentVtfVersion(1, 5, 2, 1);
 
 // 2024-04-10, 1.1.0.0, "Add versioning"
 // 2024-04-15, 1.1.1.0, "Some fixes in int_compute test."
@@ -59,5 +59,6 @@ constexpr vtf::Version CurrentVtfVersion(1, 5, 1, 0);
 // 2026-06-04, 1.5.0.0,  "Handle VK_EXT_descriptor_heap (experimental)"
 // 2026-06-04, 1.5.0.1,  "Fix descriptor_heap tests"
 // 2926-06-11, 1.5.1.0,  "Spit VTF into vtf-libs and vtf-app"
+// 2026-07-09, 1.5.2.1,  "Add Ray Tracing Micromap Tests"
 
 #endif  // __MAIN_HPP_INCLUDED__

@@ -4,7 +4,9 @@
 #include "allTests.hpp"
 #include "shell.hpp"
 #include "vtfCommandLine.hpp"
-
+#ifdef VTF_LIBS_VERSION_ENABLED
+#include "magic_enum.hpp"
+#endif
 #include <cstring>
 #include <string_view>
 
@@ -29,59 +31,66 @@ void TestRecord::valid () const
 	ASSERTION(call != nullptr);
 }
 
-#ifdef USE_TEST_IDENTIFIER
-template<> struct TestRecorder<ALL_TESTS_BEGIN>
-#else
-template<> struct TestRecorder<0>
-#endif
+static void assertUiqueTest (const std::vector<TestRecord>& records)
 {
-	static bool record (TestRecord& out);
-};
-
-#ifdef USE_TEST_IDENTIFIER
-bool TestRecorder<ALL_TESTS_BEGIN>::record (TestRecord&)
-#else
-bool TestRecorder<0>::record (TestRecord&)
-#endif
-{
-	throw std::runtime_error("Do not call me directly");
-}
-
-template<int Tail_> void recordTailTest (TestRecord& rec, std::vector<TestRecord>& records)
-{
-	rec.reset();
-	if (TestRecorder<Tail_>::record(rec))
+    for (auto i = 0u; i < records.size(); ++i)
 	{
-		rec.valid();
-		records.emplace_back(rec);
-	}
-	recordTailTest<Tail_-1>(rec, records);
-}
-template<> void recordTailTest<ALL_TESTS_BEGIN>(TestRecord&, std::vector<TestRecord>&) { }
-
-void assertUiqueTest (const std::vector<TestRecord>& records)
-{
-	for (auto i = records.begin(); i != records.end(); ++i)
-	{
-		std::string msg("Two or more tests with the same name detected: \'");
-		msg += i->name;
-		msg += "\'";
-		for (auto j = std::next(i); j != records.end(); ++j)
+        for (auto j = i + 1u; j < records.size(); ++j)
 		{
-			ASSERTMSG(!!std::strcmp(i->name, j->name), msg);
+            ASSERTMSG(!!std::strcmp(records[i].name, records[j].name),
+                      "Two or more tests with the same name detected: \'", records[i].name, '\"');
 		}
 	}
 }
 
-void recordAllTests (std::vector<TestRecord>& records)
+template<TestIdentifier concrete>
+void recordConcreteTest (std::vector<TestRecord>& records)
 {
-	TestRecord rec;
-#ifdef USE_TEST_IDENTIFIER
-	recordTailTest<ALL_TESTS_END>(rec, records);
-#else
-	recordTailTest<globalTestIdentifier>(rec, records);
+    TestRecord rec;
+    if (TestRecorder<concrete>::record(rec))
+    {
+        rec.valid();
+        records.emplace_back(rec);
+    }
+}
+
+#ifndef VTF_LIBS_VERSION_ENABLED
+constexpr std::array<TestIdentifier, 28> testIndentifiers = {
+    BANAL_DRLR, BANAL_RENDERPASS, BLENDING, COGWHEELS, COOPERATIVE_MATRIX,
+    DEMOTE_INVOCATIONS, DEPTH, DESCRIPTOR_BUFFER, DESCRIPTOR_HEAP, DEVICE_CRASH,
+    DEVICE_TIMEOUT, FRACTALS, LINE_WIDTH, MUTABLE_DESCRIPTOR, NOTHING_COMPUTE,
+    REJTREJSING_INTRO, SHADER_OBJECT_COMPUTE, SHADER_OBJECT_TRIANGLE, SIMPLE_DRLR,
+    SMILE_AI, SPARSE_BUFFER, STRUCT_GENERATOR, SUBGROUP_MATRIX, SUZANNE_GLTF,
+    TASK_MESH_TRIANGLE, TOPOLOGY, TRIANGLE, VARIABLE_POINTERS };
 #endif
-	assertUiqueTest(records);
+
+template <std::size_t... Is>
+constexpr void recordAllTestsImpl (
+    std::index_sequence<Is...>,
+    std::vector<TestRecord>& records)
+{
+#ifdef VTF_LIBS_VERSION_ENABLED
+    constexpr auto values = magic_enum::enum_values<TestIdentifier>();
+    (recordConcreteTest<values[Is]>(records), ...);
+#else
+    (recordConcreteTest<testIndentifiers[Is]>(records), ...);
+#endif
+}
+
+static std::vector<TestRecord> globalAllTestRecords;
+const std::vector<TestRecord>& TestRecord::allTestRecords()
+{
+    if (globalAllTestRecords.empty())
+    {
+#ifdef VTF_LIBS_VERSION_ENABLED
+        constexpr auto enumCount = magic_enum::enum_count<TestIdentifier>();
+#else
+        constexpr auto enumCount = testIndentifiers.size();
+#endif
+        recordAllTestsImpl(std::make_index_sequence<enumCount>{}, globalAllTestRecords);
+        assertUiqueTest(globalAllTestRecords);
+    }
+    return globalAllTestRecords;
 }
 
 vtf::TriLogicInt launchTest (int argc, char** argv, add_cref<std::string> testName)

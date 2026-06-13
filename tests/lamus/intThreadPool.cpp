@@ -12,6 +12,7 @@ TriLogicInt runTest (add_cref<TestRecord> record, add_ref<CommandLine> cmdLine)
 	return ThreadPool::selfTest() ? 0 : 1;
 }
 
+constexpr uint32_t INT_THREADPOOL = __COUNTER__;
 } // unnamed namespace
 
 template<> struct TestRecorder<INT_THREADPOOL>

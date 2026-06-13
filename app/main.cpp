@@ -44,8 +44,7 @@ int parseParams (
 {
 	performTest = false;
 
-	std::vector<TestRecord> allTestRecords;
-	recordAllTests(allTestRecords);
+    const std::vector<TestRecord>& allTestRecords = TestRecord::allTestRecords();
 
 	const auto allTestNames = [&] {
 		const auto sTestNames = getTestNames(allTestRecords);
@@ -682,9 +681,7 @@ void printUsage (std::ostream& str)
 		<< "        be visible either as built-in shell command or standalone executable.\n" << std::endl;
 	str << "Available test(s):" << std::endl;
 
-	std::vector<TestRecord> tests;
-	recordAllTests(tests);
-	printAvailableTests(str, tests, "\t", true);
+    printAvailableTests(str, TestRecord::allTestRecords(), "\t", true);
 }
 
 std::string constructCompleteCommand (const char* appPath)

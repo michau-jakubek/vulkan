@@ -9,9 +9,10 @@ cmake_minimum_required(VERSION 3.10.2)
 
 project(vulkan-trivial-framework CXX)
 
-# Placeholder "remote" for vtf-libs. Defaults to the sibling repo so the split can
-# be exercised locally before a real download URL exists.
-set(VTF_LIBS_GIT_URL "${CMAKE_CURRENT_SOURCE_DIR}/../vtf-libs"
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMakeTargets")
+
+set(VTF_LIBS_GIT_URL "https://github.com/michau-jakubek/vtf-libs.git"
 	CACHE STRING "Location/URL of the vtf-libs repository (used only when VTF_LIBS_DIR is not set)")
 
 if(VTF_LIBS_DIR)
@@ -51,8 +52,11 @@ include(${VTF_LIBS_DIR}/cmake/VtfCommon.cmake)
 
 # Build the libraries as a subproject; pull in the include paths they expose.
 set(VTF_LIBS_AS_SUBPROJECT ON)
+set(CMAKE_FOLDER vtf-libs)
 add_subdirectory(${VTF_LIBS_DIR} ${CMAKE_BINARY_DIR}/vtf-libs)
+unset(CMAKE_FOLDER)
 include_directories(${VTF_LIBS_INCLUDE_DIRS})
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/getvtflibsver/getvtflibsver.cmake)
 
 set(ASSETS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/assets)
 
@@ -67,3 +71,13 @@ if(VTF_AS_DLL)
 	include_directories(vtf-launcher)
 	add_subdirectory(vtf-launcher)
 endif()
+
+if(GENERATE_QTCREATOR_FILES)
+    list(APPEND CMAKE_MODULE_PATH "${VTF_LIBS_DIR}/cmake")
+    include(QtCreatorGen)
+    register_qtcreator_target(tests)
+    register_qtcreator_target(vtf)
+    finalize_qtcreator_project()
+    message(STATUS "Invoked finalize_qtcreator_project()")
+endif()
+

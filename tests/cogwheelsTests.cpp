@@ -1,4 +1,4 @@
-#include "cogWheelsTests.hpp"
+#include "cogwheelsTests.hpp"
 #include "vtfCogwheelTools.hpp"
 #include "vtfCommandLine.hpp"
 #include "vtfCanvas.hpp"

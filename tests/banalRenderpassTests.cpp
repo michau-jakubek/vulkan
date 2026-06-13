@@ -1,4 +1,4 @@
-#include "banalRenderPassTests.hpp"
+#include "banalRenderpassTests.hpp"
 #include "vtfContext.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfZUtils.hpp"

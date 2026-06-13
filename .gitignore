@@ -1,7 +1,4 @@
-external/stb
-external/stl_reader
-external/glm
-external/tinygltf
+external
 getvkhver/build
 
 *.cflags

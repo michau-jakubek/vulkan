@@ -367,6 +367,7 @@ TriLogicInt runTests (Canvas& cs, add_cref<Params> params)
 	return cs.run(onCommandRecording, renderPass, std::ref(userData.drawTrigger), {}, onAfterRecording);
 }
 
+constexpr uint32_t INT_GEOM = __COUNTER__;
 } // unnamed namespace
 
 template<> struct TestRecorder<INT_GEOM>

@@ -1,4 +1,4 @@
-#include "nothingCompute.hpp"
+#include "nothingComputeTests.hpp"
 #include "vtfBacktrace.hpp"
 #include "vtfContext.hpp"
 #include "vtfProgramCollection.hpp"
@@ -13,6 +13,10 @@
 #include "demangle.hpp"
 #include "vtfStructGenerator.hpp"
 #include "vtfPrettyPrinter.hpp"
+
+#ifdef VTF_LIBS_VERSION_ENABLED
+#include "vtf_libs_version.hpp"
+#endif
 
 namespace
 {
@@ -151,6 +155,12 @@ TriLogicInt runTest (add_ref<VulkanContext> ctx, add_cref<Params> params)
 {
     const VkShaderStageFlags stage          = VK_SHADER_STAGE_COMPUTE_BIT;
     ZShaderModule			shader          = genShader(ctx.device, params);
+
+#ifdef VTF_LIBS_VERSION_ENABLED
+    std::cout << VtfLibsCurrentVersion << std::endl;
+#else
+    std::cout << "NNNNNNNNNNNNNNN\n";
+#endif
 
     return 1;
 

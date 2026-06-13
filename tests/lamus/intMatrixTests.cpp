@@ -171,6 +171,7 @@ TriLogicInt runIntMatrixSingleThread (VulkanContext& ctx, const std::string& ass
 	return (b0 && b1 && b2 && b3) ? 0 : 1;
 }
 
+constexpr uint32_t INT_MATRIX = __COUNTER__;
 } // unnamed namespace
 
 template<> struct TestRecorder<INT_MATRIX>

@@ -1,0 +1,21 @@
+if(NOT VTF_LIBS_VERSION_ENABLED)
+  set(VTF_LIBS_VERSION_VARIANT "0")
+  set(VTF_LIBS_VERSION_MAJOR   "1")
+  set(VTF_LIBS_VERSION_MINOR   "0")
+  set(VTF_LIBS_VERSION_PATH    "0")
+
+  add_compile_definitions(VTF_LIBS_VERSION_VARIANT=${VTF_LIBS_VERSION_VARIANT})
+  add_compile_definitions(VTF_LIBS_VERSION_MAJOR=${VTF_LIBS_VERSION_MAJOR})
+  add_compile_definitions(VTF_LIBS_VERSION_MINOR=${VTF_LIBS_VERSION_MINOR})
+  add_compile_definitions(VTF_LIBS_VERSION_PATCH=${VTF_LIBS_VERSION_PATCH})
+
+  function(check_vtf_libs_version_greater_equal target_version result_var)
+      set(current_vtf_libs_version "${VTF_LIBS_VERSION_MAJOR}.${VTF_LIBS_VERSION_MINOR}.${VTF_LIBS_VERSION_PATCH}.${VTF_LIBS_VERSION_VARIANT}")
+  	if(current_vulkan_version VERSION_GREATER_EQUAL target_version)
+        set(${result_var} 1 PARENT_SCOPE)
+      else()
+        set(${result_var} 0 PARENT_SCOPE)
+      endif()
+  endfunction()
+endif()
+

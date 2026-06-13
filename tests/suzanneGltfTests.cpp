@@ -1,4 +1,4 @@
-#include "suzanneGltf.hpp"
+#include "suzanneGltfTests.hpp"
 #include "vtfZDeletable.hpp"
 #include "vtfProgramCollection.hpp"
 #include "vtfVertexInput.hpp"
@@ -19,7 +19,11 @@
 // This is because the implementation define is used to control the inclusion of the implementation
 // code in tiny_gltf.h. If tiny_gltf.h is included before the implementation define, the implementation
 // code will not be included and the functions defined in tiny_gltf.h will not be available for use.
+#ifdef VTF_LIBS_VERSION_ENABLED
+#include "vtf_tiny_gltf.hpp"
+#else
 #include "tiny_gltf.h"
+#endif
 
 namespace
 {

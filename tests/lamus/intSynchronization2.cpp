@@ -420,6 +420,7 @@ TriLogicInt runSynchronization2Tests (add_ref<VulkanContext> ctx, add_cref<Param
 	return 1;
 }
 
+constexpr uint32_t INT_SYNCHRONIZATION2 = __COUNTER__;
 } // unnamed namespace
 
 template<> struct TestRecorder<INT_SYNCHRONIZATION2>
