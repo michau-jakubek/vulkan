@@ -112,6 +112,6 @@ target_include_directories(tests
 target_link_libraries(tests pdriver driver ${tests_libs})
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateTestsInl.cmake)
-setup_tests_inl_generation(tests ${VTF_AS_DLL} "${tests_files}")
+setup_tests_inl_generation(tests ${VTF_AS_DLL} ${tests_files})
 
 

@@ -23,12 +23,12 @@ def str_to_bool(value):
     return True
 
 def main():
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 4:
         return
 
     vtf_as_dll = sys.argv[1]
     output_dir = sys.argv[2]
-    input_files = sys.argv[3:]
+    input_files = sys.argv[3].split()
 
     enum_entries = []
     for file_name in input_files:
